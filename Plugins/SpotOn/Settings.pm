@@ -1,6 +1,7 @@
 package Plugins::SpotOn::Settings;
 
 use strict;
+use warnings;
 use base qw(Slim::Web::Settings);
 
 use Slim::Utils::Prefs;
@@ -39,8 +40,10 @@ sub handler {
     $paramRef->{binaryPath}    = $helperPath    || '';
 
     if ($paramRef->{saveSettings}) {
-        $prefs->set('bitrate', $paramRef->{'pref_bitrate'} || 320);
-        # 'binary' wird von Slim::Web::Settings automatisch gespeichert (via prefs() Methode)
+        my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
+        my $bitrate = $paramRef->{'pref_bitrate'};
+        $bitrate = 320 unless $valid_bitrates{$bitrate};
+        $prefs->set('bitrate', $bitrate);
     }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);

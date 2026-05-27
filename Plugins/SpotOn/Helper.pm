@@ -1,6 +1,8 @@
 package Plugins::SpotOn::Helper;
 
 use strict;
+use warnings;
+use Config;
 use File::Spec::Functions qw(catdir);
 use JSON::XS::VersionOneAndTwo;
 
@@ -31,9 +33,14 @@ sub init {
 
 sub get {
     if ( !$helper && (my $candidate = $prefs->get('binary')) ) {
-        helperCheck($candidate);
+        my $check;
+        helperCheck($candidate, \$check);
 
-        main::INFOLOG && $helper && $log->info("Using helper from prefs: $helper");
+        if ($helper) {
+            main::INFOLOG && $log->info("Using helper from prefs: $helper");
+        } else {
+            $log->warn("Pref-path binary check failed: $check") if $check;
+        }
     }
 
     if (!$helper) {
@@ -56,7 +63,9 @@ sub helperCheck {
 
     $$check = '' unless $check && ref $check;
 
-    my $checkCmd = sprintf('%s -n "SpotOn" --check', $candidate);
+    # Shell-safe quoting to prevent command injection from user-supplied binary paths
+    (my $safe = $candidate) =~ s/'/'\\''/g;
+    my $checkCmd = sprintf("'%s' -n 'SpotOn' --check", $safe);
     $$check = `$checkCmd 2>&1`;
 
     # KRITISCH: 'spoton' nicht 'spotty' im Regex

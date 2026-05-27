@@ -1,6 +1,7 @@
 package Plugins::SpotOn::ProtocolHandler;
 
 use strict;
+use warnings;
 
 use base qw(Slim::Formats::RemoteStream);
 
@@ -22,8 +23,8 @@ sub getFormatForURL { 'flc' }
 
 sub formatOverride {
     my ($class, $song) = @_;
-    # Phase 4: updateTranscodingTable will be called here
-    return 'son';
+    # Phase 4: updateTranscodingTable will dynamically select ogg/mp3/pcm per player
+    return 'flc';
 }
 
 # Seeking requires LMS 7.9.1+

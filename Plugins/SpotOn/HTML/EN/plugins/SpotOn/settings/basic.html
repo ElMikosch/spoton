@@ -6,7 +6,7 @@
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
 		[% IF binaryPath %]
-			<p>[% binaryPath %] (v[% binaryVersion %])</p>
+			<p>[% binaryPath | html %] (v[% binaryVersion | html %])</p>
 		[% ELSE %]
 			<div style="color: red">[% 'PLUGIN_SPOTON_BINARY_MISSING' | string %]</div>
 		[% END %]

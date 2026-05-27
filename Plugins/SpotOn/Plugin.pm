@@ -1,12 +1,11 @@
 package Plugins::SpotOn::Plugin;
 
 use strict;
+use warnings;
 
 use base qw(Slim::Plugin::OPMLBased);
 
 use vars qw($VERSION);
-
-use File::Basename;
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
