@@ -54,18 +54,30 @@ sub init { }
 END
 
 # Stub: Slim::Utils::Log
+# logger() is exported as a function when modules do 'use Slim::Utils::Log'
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
-sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
+use parent 'Exporter';
+our @EXPORT_OK = qw(logger);
+# Also install logger() into caller namespace via import so bare 'logger(...)' works
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::logger"} = \&logger;
+}
+sub addLogCategory {
+    return bless { _calls => [] }, 'Slim::Utils::Log';
+}
 sub logger {
-    return bless {
-        _calls => [],
-    }, 'Slim::Utils::Log';
+    return bless { _calls => [] }, 'Slim::Utils::Log';
 }
 sub info  { push @{$_[0]->{_calls}}, ['info',  $_[1]] }
 sub warn  { push @{$_[0]->{_calls}}, ['warn',  $_[1]] }
 sub error { push @{$_[0]->{_calls}}, ['error', $_[1]] }
 sub debug { push @{$_[0]->{_calls}}, ['debug', $_[1]] }
+sub is_info  { 0 }
+sub is_debug { 0 }
 sub AUTOLOAD { }
 sub can { 1 }
 1;
@@ -73,11 +85,19 @@ END
 
 # Stub: Slim::Utils::Prefs
 # Supports preferences('server')->get('cachedir') returning the test cache dir
+# preferences() is exported as a function when modules do 'use Slim::Utils::Prefs'
 my $prefs_cache_dir = $cache_dir;
 write_stub($stub_dir, 'Slim::Utils::Prefs', <<"END");
 package Slim::Utils::Prefs;
 my %_store;
 my %_ns_store = ( server => { cachedir => '$prefs_cache_dir' } );
+
+sub import {
+    my \$class = shift;
+    my \$caller = caller;
+    no strict 'refs';
+    *{"\${caller}::preferences"} = \\\&preferences;
+}
 
 sub preferences {
     my \$ns = \$_[0] eq 'Slim::Utils::Prefs' ? \$_[1] : \$_[0];
@@ -176,16 +196,9 @@ sub sleep { CORE::sleep($_[1]) }
 1;
 END
 
-# Stub: File::Spec::Functions (pass through to real)
-write_stub($stub_dir, 'File::Spec::Functions', <<'END');
-package File::Spec::Functions;
-use parent 'Exporter';
-use File::Spec ();
-our @EXPORT_OK = qw(catdir catfile);
-*catdir  = \&File::Spec::catdir;
-*catfile = \&File::Spec::catfile;
-1;
-END
+# No stub needed for File::Spec::Functions — it's a real system module available in Perl core.
+# TokenManager.pm uses 'use File::Spec::Functions qw(catdir catfile)' which works with the
+# real module. The stub_dir is for LMS-specific modules only.
 
 # Stub: Slim::Plugin::OPMLBased (empty base class)
 write_stub($stub_dir, 'Slim::Plugin::OPMLBased', <<'END');
