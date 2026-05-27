@@ -99,9 +99,16 @@ sub handler {
             }
         }
 
-        # Account switch
+        # Account switch (WR-04).
+        # Validate that switchId is a known account before setting it as active.
+        # Without this check an attacker with a valid LMS session could set
+        # activeAccount to an arbitrary string, which could confuse code that
+        # reads the preference and assumes it points to a real account.
         if (my $switchId = $paramRef->{switchAccount}) {
-            $prefs->set('activeAccount', $switchId);
+            my $accounts = $prefs->get('accounts') || {};
+            if (exists $accounts->{$switchId}) {
+                $prefs->set('activeAccount', $switchId);
+            }
         }
     }
 
