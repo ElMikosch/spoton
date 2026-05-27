@@ -47,7 +47,11 @@ sub handler {
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
-        # Account add (D-07) — addAccount is synchronous (backtick), no callback needed
+        # Account add (D-07).
+        # addAccount uses a blocking backtick spawn and invokes $cb synchronously.
+        # $accountId and $err are captured from the callback before the if-blocks below.
+        # IMPORTANT: if addAccount is ever made truly async, the code below must move
+        # into the callback body.
         if ($paramRef->{addAccount}) {
             my $username = $paramRef->{username} // '';
             my $password = $paramRef->{password} // '';
