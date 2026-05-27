@@ -70,8 +70,17 @@ END
 my $prefs_cache_dir = $cache_dir;
 write_stub($stub_dir, 'Slim::Utils::Prefs', <<"END");
 package Slim::Utils::Prefs;
+use parent 'Exporter';
+our \@EXPORT_OK = qw(preferences);
 my %_store;
 my %_ns_store = ( server => { cachedir => '$prefs_cache_dir' } );
+
+sub import {
+    my \$class = shift;
+    my \$caller = caller;
+    no strict 'refs';
+    *{"\${caller}::preferences"} = \\&preferences;
+}
 
 sub preferences {
     my \$ns = \$_[0] eq 'Slim::Utils::Prefs' ? \$_[1] : \$_[0];
@@ -233,6 +242,23 @@ package Slim::Networking::SimpleAsyncHTTP;
 sub new { bless {}, shift }
 sub get  { }
 sub post { }
+1;
+END
+
+# Stub: Plugins::SpotOn::Helper (needed by Settings.pm)
+write_stub($stub_dir, 'Plugins::SpotOn::Helper', <<'END');
+package Plugins::SpotOn::Helper;
+sub get { return '/usr/bin/false' }
+sub init { }
+1;
+END
+
+# Stub: Plugins::SpotOn::API::TokenManager (needed by Settings.pm)
+write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
+package Plugins::SpotOn::API::TokenManager;
+sub addAccount    { my ($class, $u, $p, $cb) = @_; $cb->('stub1234', undef) }
+sub removeAccount { }
+sub getAccountIds { return () }
 1;
 END
 
