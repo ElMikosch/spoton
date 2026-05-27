@@ -31,13 +31,15 @@
 						[% IF id == activeAccount %]
 							<strong>[% 'PLUGIN_SPOTON_ACCOUNT_ACTIVE' | string %]</strong>
 						[% ELSE %]
-							<input type="submit" name="switchAccount" value="[% id | html %]"
-								onclick="[% 'PLUGIN_SPOTON_ACCOUNT_SWITCH' | string %]"/>
+							<input type="hidden" name="switchAccount" value="[% id | html %]" disabled/>
+							<input type="submit" value="[% 'PLUGIN_SPOTON_ACCOUNT_SWITCH' | string %]"
+								onclick="this.previousElementSibling.disabled=false"/>
 						[% END %]
 					</td>
 					<td>
-						<input type="submit" name="removeAccount" value="[% id | html %]"
-							onclick="[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE' | string %]"/>
+						<input type="hidden" name="removeAccount" value="[% id | html %]" disabled/>
+						<input type="submit" value="[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE' | string %]"
+							onclick="this.previousElementSibling.disabled=false"/>
 					</td>
 				</tr>
 			[% END %]
@@ -57,7 +59,7 @@
 		<label>[% 'PLUGIN_SPOTON_ACCOUNT_PASSWORD' | string %]<br/>
 			<input type="password" name="password" value="" autocomplete="current-password"/>
 		</label><br/>
-		<input type="submit" name="addAccount" value="1"
+		<input type="submit" name="addAccount" value="[% 'PLUGIN_SPOTON_ACCOUNT_ADD_BTN' | string %]"
 			class="submit" id="addAccountBtn"/>
 	[% END %]
 
