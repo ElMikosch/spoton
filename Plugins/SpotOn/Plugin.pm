@@ -10,8 +10,12 @@ use vars qw($VERSION);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(string cstring);
+use Slim::Utils::Timers;
+use Slim::Utils::Cache;
+use Time::HiRes;
 
 my $prefs = preferences('plugin.spoton');
+my $cache = Slim::Utils::Cache->new();
 
 my $log = Slim::Utils::Log->addLogCategory( {
     category     => 'plugin.spoton',
@@ -29,12 +33,30 @@ sub initPlugin {
     }
 
     $prefs->init({
-        bitrate => 320,
-        binary  => '',    # custom binary override (LMS-10, Phase 6)
+        bitrate       => 320,
+        binary        => '',    # custom binary override (LMS-10, Phase 6)
+        accounts      => {},    # hash: accountId => { username => ..., displayName => ... }
+        activeAccount => '',    # default active account ID (global fallback)
     });
 
     require Plugins::SpotOn::Helper;
     Plugins::SpotOn::Helper->init();
+
+    require Plugins::SpotOn::API::TokenManager;
+    require Plugins::SpotOn::API::Client;
+
+    # Reset API client inflight counter (Pitfall 2 prevention — stale counter on reload)
+    Plugins::SpotOn::API::Client->reset();
+
+    # Start proactive token refresh timer — T-02-15: killTimers first to prevent duplicates
+    if ( !main::SCANNER ) {
+        Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
+        Slim::Utils::Timers::setTimer(
+            $class,
+            Time::HiRes::time() + 10,
+            \&_refreshAllTokens
+        );
+    }
 
     $VERSION = $class->_pluginDataFor('version');
 
@@ -58,6 +80,12 @@ sub initPlugin {
     );
 }
 
+# _refreshAllTokens()
+# Thin timer callback wrapper — Slim::Utils::Timers passes $class as first arg.
+sub _refreshAllTokens {
+    Plugins::SpotOn::API::TokenManager->refreshAllTokens();
+}
+
 sub handleFeed {
     my ($client, $callback, $args) = @_;
 
@@ -71,12 +99,76 @@ sub handleFeed {
         return;
     }
 
-    # Phase 1 Placeholder
-    $callback->({
-        items => [{
-            name => cstring($client, 'PLUGIN_SPOTON_NAME'),
+    my @items;
+
+    # Rate-limit hint (D-12): show when Spotify API is throttled
+    if ( $cache->get(Plugins::SpotOn::API::Client->RATE_LIMIT_CACHE_KEY()) ) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_RATE_LIMIT_HINT'),
             type => 'textarea',
-        }]
+        };
+    }
+
+    # Account switcher (D-05, AUTH-06): first real item when account is configured
+    my $activeName = Plugins::SpotOn::API::TokenManager->getActiveAccountName($client);
+    if ($activeName) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_ACTIVE_ACCOUNT', $activeName),
+            url  => \&_accountSwitcherFeed,
+            type => 'link',
+        };
+    } else {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_ACCOUNT_NONE'),
+            type => 'textarea',
+        };
+    }
+
+    $callback->({ items => \@items });
+}
+
+# _accountSwitcherFeed()
+# Lists all configured accounts with selection triggering menu refresh.
+sub _accountSwitcherFeed {
+    my ($client, $callback, $args) = @_;
+
+    my $accounts  = $prefs->get('accounts') || {};
+    my $activeId  = $prefs->client($client)->get('activeAccount')
+                 || $prefs->get('activeAccount')
+                 || '';
+
+    my @items;
+    for my $id (sort keys %{$accounts}) {
+        my $name    = $accounts->{$id}{displayName} || $accounts->{$id}{username} || $id;
+        my $isActive = ($id eq $activeId);
+        push @items, {
+            name        => $name . ($isActive ? ' *' : ''),
+            url         => \&_switchAccount,
+            passthrough => [{ accountId => $id }],
+            type        => 'link',
+            nextWindow  => 'refreshOrigin',
+        };
+    }
+
+    $callback->({ items => \@items });
+}
+
+# _switchAccount()
+# Updates per-client activeAccount preference and refreshes origin menu.
+sub _switchAccount {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $accountId = $passthrough && $passthrough->[0] ? $passthrough->[0]{accountId} : undef;
+
+    if ($accountId && $client) {
+        $prefs->client($client)->set('activeAccount', $accountId);
+        # Also update global default if none is set yet
+        $prefs->set('activeAccount', $accountId) unless $prefs->get('activeAccount');
+    }
+
+    $callback->({
+        items      => [{ name => 'OK', type => 'textarea', showBriefly => 1 }],
+        nextWindow => 'refreshOrigin',
     });
 }
 
