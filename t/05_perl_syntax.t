@@ -16,6 +16,8 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/ProtocolHandler.pm",
     "$project_dir/Plugins/SpotOn/Helper.pm",
     "$project_dir/Plugins/SpotOn/Settings.pm",
+    "$project_dir/Plugins/SpotOn/API/TokenManager.pm",
+    "$project_dir/Plugins/SpotOn/API/Client.pm",
 );
 
 # Check which files actually exist
@@ -96,8 +98,15 @@ sub to_json   { }
 END
 
 # Stub: Slim::Utils::Log (provides logger(), addLogCategory())
+# import() exports logger() into caller namespace so bare logger(...) calls work in API modules
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::logger"} = \&logger;
+}
 sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
 sub logger { return bless {}, 'Slim::Utils::Log' }
 sub AUTOLOAD { }
@@ -106,14 +115,63 @@ sub can { 1 }
 END
 
 # Stub: Slim::Utils::Prefs (provides preferences())
+# import() exports preferences() into caller namespace so bare preferences(...) calls work
 write_stub($stub_dir, 'Slim::Utils::Prefs', <<'END');
 package Slim::Utils::Prefs;
-sub preferences { return bless {}, 'Slim::Utils::Prefs' }
+my %_store;
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::preferences"} = \&preferences;
+}
+sub preferences {
+    my $ns = ($_[0] eq 'Slim::Utils::Prefs') ? $_[1] : $_[0];
+    return bless { _ns => $ns }, 'Slim::Utils::Prefs';
+}
 sub init { }
-sub get  { }
-sub set  { }
+sub get  { $_store{$_[0]->{_ns}}{$_[1]} }
+sub set  { $_store{$_[0]->{_ns}}{$_[1]} = $_[2] }
+sub client { return bless { _ns => $_[0]->{_ns} . '_client' }, 'Slim::Utils::Prefs' }
 sub setChange { }
 sub AUTOLOAD { }
+1;
+END
+
+# Stub: Slim::Utils::Timers (needed by TokenManager, Client, and Plugin)
+write_stub($stub_dir, 'Slim::Utils::Timers', <<'END');
+package Slim::Utils::Timers;
+sub setTimer   { }
+sub killTimers { }
+1;
+END
+
+# Stub: Slim::Utils::Cache (needed by TokenManager, Client, and Plugin)
+write_stub($stub_dir, 'Slim::Utils::Cache', <<'END');
+package Slim::Utils::Cache;
+my %_store;
+sub new    { bless {}, shift }
+sub get    { $_store{$_[1]} }
+sub set    { $_store{$_[1]} = $_[2]; 1 }
+sub remove { delete $_store{$_[1]} }
+1;
+END
+
+# Stub: Slim::Utils::Unicode (needed by TokenManager)
+write_stub($stub_dir, 'Slim::Utils::Unicode', <<'END');
+package Slim::Utils::Unicode;
+sub utf8toLatin1Transliterate { $_[1] }
+1;
+END
+
+# Stub: Slim::Networking::SimpleAsyncHTTP (needed by Client)
+write_stub($stub_dir, 'Slim::Networking::SimpleAsyncHTTP', <<'END');
+package Slim::Networking::SimpleAsyncHTTP;
+sub new  { bless { _success => $_[1], _error => $_[2] }, shift }
+sub get  { }
+sub post { }
+sub AUTOLOAD { }
+sub can { 1 }
 1;
 END
 
