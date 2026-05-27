@@ -128,12 +128,12 @@ Herger nannte den personalisierten Bereich "Start" — ein Sammelbecken aus Feat
 
 | ID | Requirement | Priorität | Herkunft |
 |---|---|---|---|
-| AUT-01 | **OAuth2 PKCE Flow** als Primary Auth: Browser-basierte Autorisierung mit code_verifier | MUST | Bewährter Ansatz |
+| AUT-01 | **OAuth 2.0 Authorization Code + PKCE** als einziger Auth-Mechanismus: Browser-basierte Autorisierung mit code_verifier/code_challenge, jeder User registriert eigene Spotify Developer App (D-04) | MUST | Phase 02.1 |
 | AUT-02 | **Token Caching + Auto-Refresh**: Access Token cachen, bei Ablauf automatisch refreshen, kein User-Eingriff bei normalem Betrieb | MUST | Token.pm |
 | AUT-03 | **Multi-Account-Support**: Mehrere Spotify-Accounts pro LMS-Instanz | SHOULD | Herger's AccountHelper |
-| AUT-04 | **Keymaster/login5 Token Fallback**: Wenn PKCE-Token abläuft und Refresh fehlschlägt, Binary kann über `--keymaster-token` eigenes Token generieren | SHOULD | Spotty-NG Keymaster-Integration |
+| AUT-04 | **ENTFAELLT** — login5 ist von Spotify deaktiviert (verifiziert Mai 2026). Kein Fallback-Mechanismus. Siehe Phase 02.1 D-01/D-02. | REMOVED | Phase 02.1 D-01/D-02 |
 | AUT-05 | **Scope-Management**: Alle benötigten Scopes (`user-library-read`, `user-read-playback-state`, `streaming`, etc.) bei Erstanmeldung anfordern | MUST | Token.pm `SPOTIFY_SCOPE` |
-| AUT-06 | **Client-ID-Strategie**: Klare Entscheidung ob eigene Developer App ID, ob bundled, oder ob konfigurierbar. Spotty-NG brauchte Dual-Flavor wegen Scope-Einschränkungen. | MUST | Spotty-NG Phase 2 Kernerkenntnis |
+| AUT-06 | **Client-ID-Strategie**: Jeder User registriert eigene Spotify Developer App. Keine bundled Client-ID, keine zentrale Plugin-ID. Client-ID wird in LMS-Settings eingegeben (D-04). | MUST | Phase 02.1 D-04 |
 
 ### 3.5 LMS Integration
 

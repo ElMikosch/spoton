@@ -6,7 +6,6 @@ use File::Basename qw(dirname);
 use File::Temp qw(tempdir);
 use File::Path qw(make_path);
 use Cwd qw(abs_path);
-use Digest::MD5 qw(md5_hex);
 
 # Resolve project root: t/ is directly under the project root
 my $test_dir    = dirname(abs_path($0));
@@ -84,13 +83,12 @@ sub can { 1 }
 END
 
 # Stub: Slim::Utils::Prefs
-# Supports preferences('server')->get('cachedir') returning the test cache dir
-# preferences() is exported as a function when modules do 'use Slim::Utils::Prefs'
+# Supports preferences('server')->get('httpport') returning 9000 for _buildRedirectUri
 my $prefs_cache_dir = $cache_dir;
 write_stub($stub_dir, 'Slim::Utils::Prefs', <<"END");
 package Slim::Utils::Prefs;
 my %_store;
-my %_ns_store = ( server => { cachedir => '$prefs_cache_dir' } );
+my %_ns_store = ( server => { cachedir => '$prefs_cache_dir', httpport => 9000 } );
 
 sub import {
     my \$class = shift;
@@ -169,13 +167,6 @@ sub cstring { join(' ', grep { defined } @_[1..$#_]) }
 1;
 END
 
-# Stub: Slim::Utils::Unicode
-write_stub($stub_dir, 'Slim::Utils::Unicode', <<'END');
-package Slim::Utils::Unicode;
-sub utf8toLatin1Transliterate { $_[1] }
-1;
-END
-
 # Stub: JSON::XS::VersionOneAndTwo (delegates to JSON::PP)
 write_stub($stub_dir, 'JSON::XS::VersionOneAndTwo', <<'END');
 package JSON::XS::VersionOneAndTwo;
@@ -195,10 +186,6 @@ sub time  { POSIX::floor(CORE::time()) + 0 }
 sub sleep { CORE::sleep($_[1]) }
 1;
 END
-
-# No stub needed for File::Spec::Functions — it's a real system module available in Perl core.
-# TokenManager.pm uses 'use File::Spec::Functions qw(catdir catfile)' which works with the
-# real module. The stub_dir is for LMS-specific modules only.
 
 # Stub: Slim::Plugin::OPMLBased (empty base class)
 write_stub($stub_dir, 'Slim::Plugin::OPMLBased', <<'END');
@@ -247,6 +234,90 @@ sub can      { 1 }
 END
 
 # ============================================================
+# New stubs for PKCE TokenManager
+# ============================================================
+
+# Stub: Slim::Networking::SimpleAsyncHTTP
+# Captures callbacks and request data for test inspection.
+# simulate_success() and simulate_error() trigger the callbacks.
+# MockHTTP is defined inline (not as a separate file) because it has no pkg path.
+write_stub($stub_dir, 'Slim::Networking::SimpleAsyncHTTP', <<'END');
+package Slim::Networking::SimpleAsyncHTTP;
+our ($last_success_cb, $last_error_cb, $last_url, $last_body);
+sub new {
+    my ($class, $success, $error, $opts) = @_;
+    $last_success_cb = $success;
+    $last_error_cb   = $error;
+    return bless {}, $class;
+}
+sub post {
+    my ($self, $url, @rest) = @_;
+    $last_url = $url;
+    # body is the last arg when the count of remaining args is odd
+    # (Content-Type => 'value' is 2 args, body is 1 arg at end)
+    $last_body = $rest[-1] if @rest % 2 != 0;
+    return $self;
+}
+sub get {
+    my ($self, $url, @rest) = @_;
+    $last_url = $url;
+    return $self;
+}
+# Helper: simulate a successful HTTP response
+sub simulate_success {
+    my ($class, $json_str) = @_;
+    # MockHTTP defined in this same file so content() method is always available
+    my $mock_http = bless { _content => $json_str }, 'Slim::Networking::MockHTTP';
+    $last_success_cb->($mock_http) if $last_success_cb;
+}
+# Helper: simulate an HTTP error
+sub simulate_error {
+    my ($class, $error_str) = @_;
+    $last_error_cb->(undef, $error_str) if $last_error_cb;
+}
+
+package Slim::Networking::MockHTTP;
+sub content { $_[0]->{_content} }
+1;
+END
+
+# Stub: Crypt::OpenSSL::Random — deterministic for testing
+# Note: function (not method) — Crypt::OpenSSL::Random::random_bytes($n)
+write_stub($stub_dir, 'Crypt::OpenSSL::Random', <<'END');
+package Crypt::OpenSSL::Random;
+sub random_bytes { 'x' x $_[1] }   # deterministic: $_[1] is $n (first arg is n, not class)
+1;
+END
+
+# Stub: URI — simple mock for URL construction
+write_stub($stub_dir, 'URI', <<'END');
+package URI;
+sub new        { bless { _base => $_[1] }, $_[0] }
+sub query_form { my $self = shift; $self->{_qf} = [@_] }
+sub as_string  { 'https://accounts.spotify.com/authorize?mocked=1' }
+sub query      { 'grant_type=authorization_code&code=testcode&redirect_uri=http%3A%2F%2F127.0.0.1%3A9000%2Fplugins%2FSpotOn%2Fsettings%2Fcallback' }
+1;
+END
+
+# Stub: Digest::SHA — deterministic for testing
+write_stub($stub_dir, 'Digest::SHA', <<'END');
+package Digest::SHA;
+use parent 'Exporter';
+our @EXPORT_OK = qw(sha256);
+sub sha256 { 'fakehash_' . $_[0] }
+1;
+END
+
+# Stub: MIME::Base64 — deterministic for testing
+write_stub($stub_dir, 'MIME::Base64', <<'END');
+package MIME::Base64;
+use parent 'Exporter';
+our @EXPORT_OK = qw(encode_base64url);
+sub encode_base64url { 'b64url_' . unpack('H*', $_[0]) }
+1;
+END
+
+# ============================================================
 # main:: constants (TRANSCODING, WEBUI, SCANNER, INFOLOG, etc.)
 # ============================================================
 BEGIN {
@@ -261,70 +332,18 @@ BEGIN {
 }
 
 # ============================================================
-# Mock binary: handles --get-token, --authenticate, --check
-# ============================================================
-my $mock_bin = "$stub_dir/spoton";
-{
-    open(my $fh, '>', $mock_bin) or die "Cannot create mock binary: $!";
-    print $fh <<'SHELL';
-#!/bin/sh
-# Mock spoton binary for TokenManager tests
-MODE=""
-CACHE_DIR=""
-i=0
-for arg in "$@"; do
-    case "$arg" in
-        --get-token)    MODE="get-token" ;;
-        --authenticate) MODE="authenticate" ;;
-        --check)        MODE="check" ;;
-        --cache)        NEXT_IS_CACHE=1 ;;
-        *)
-            if [ "$NEXT_IS_CACHE" = "1" ]; then
-                CACHE_DIR="$arg"
-                NEXT_IS_CACHE=0
-            fi
-            ;;
-    esac
-done
-
-if [ "$MODE" = "get-token" ]; then
-    echo '{"accessToken":"mock_token_abc123","expiresIn":3600}'
-    exit 0
-fi
-
-if [ "$MODE" = "authenticate" ]; then
-    if [ -n "$CACHE_DIR" ]; then
-        mkdir -p "$CACHE_DIR"
-        echo '{"username":"testuser"}' > "$CACHE_DIR/credentials.json"
-    fi
-    echo "authorized"
-    exit 0
-fi
-
-if [ "$MODE" = "check" ]; then
-    echo "ok spoton v0.8.0-mock"
-    echo '{"version":"0.8.0-mock","lms-auth":false,"ogg-direct":false,"passthrough":true}'
-    exit 0
-fi
-
-exit 1
-SHELL
-    close($fh);
-}
-chmod 0755, $mock_bin;
-
-# Stub: Plugins::SpotOn::Helper (returns mock binary path from get())
-write_stub($stub_dir, 'Plugins::SpotOn::Helper', <<"END");
-package Plugins::SpotOn::Helper;
-sub get  { '$mock_bin' }
-sub init { }
-1;
-END
-
-# ============================================================
 # Add stub_dir and project_dir to @INC
 # ============================================================
 unshift @INC, $stub_dir, $project_dir;
+
+# Load stub modules so their import() methods run and install functions
+# into main:: namespace (e.g., preferences(), logger()).
+# Must use require + explicit import() call (not 'use') because @INC
+# was modified at runtime — compile-time 'use' would find the system module.
+require Slim::Utils::Prefs;
+Slim::Utils::Prefs->import();
+require Slim::Utils::Log;
+Slim::Utils::Log->import();
 
 # ============================================================
 # Tests: TokenManager.pm (skip if not yet created)
@@ -333,138 +352,192 @@ unshift @INC, $stub_dir, $project_dir;
 my $tm_module = "$project_dir/Plugins/SpotOn/API/TokenManager.pm";
 
 SKIP: {
-    skip "TokenManager.pm not yet created (Plans 02-02 will create it)", 12
+    skip "TokenManager.pm not yet created", 22
         unless -f $tm_module;
 
     require_ok('Plugins::SpotOn::API::TokenManager')
         or BAIL_OUT("Failed to load TokenManager.pm");
 
-    # AUTH-01: refreshToken with mock binary produces a token
+    # Helper: reset prefs and cache state between tests
+    sub reset_state {
+        Slim::Utils::Cache->new()->clear();
+    }
+
+    # --------------------------------------------------------
+    # AUTH-01: PKCE generation
+    # --------------------------------------------------------
+
+    # AUTH-01: _generatePkce returns defined verifier and challenge
     {
+        my ($verifier, $challenge) =
+            Plugins::SpotOn::API::TokenManager->_generatePkce();
+        ok(defined $verifier,  'AUTH-01: _generatePkce returns defined code_verifier');
+        ok(length($verifier) > 0, 'AUTH-01: code_verifier is non-empty');
+        ok(defined $challenge, 'AUTH-01: _generatePkce returns defined code_challenge');
+        ok(length($challenge) > 0, 'AUTH-01: code_challenge is non-empty');
+        isnt($verifier, $challenge, 'AUTH-01: code_verifier and code_challenge differ');
+    }
+
+    # AUTH-01: _generateState returns a defined, non-empty string
+    {
+        my $state = Plugins::SpotOn::API::TokenManager->_generateState();
+        ok(defined $state,     'AUTH-01: _generateState returns defined state');
+        ok(length($state) > 0, 'AUTH-01: state is non-empty');
+    }
+
+    # AUTH-01: startOAuthFlow returns auth URL and state, caches PKCE data
+    {
+        reset_state();
+        # Seed clientId in prefs
+        preferences('plugin.spoton')->set('clientId', 'testclientid123');
+
+        my ($authUrl, $state) = Plugins::SpotOn::API::TokenManager->startOAuthFlow('testclientid123');
+        ok(defined $authUrl, 'AUTH-01: startOAuthFlow returns defined auth URL');
+        ok(defined $state,   'AUTH-01: startOAuthFlow returns defined state');
+        ok(length($authUrl) > 0, 'AUTH-01: auth URL is non-empty');
+        ok(length($state) > 0,   'AUTH-01: state is non-empty');
+
+        # Verify PKCE data was cached under spoton_pkce_$state
+        my $pkce_data = Slim::Utils::Cache->new()->get("spoton_pkce_$state");
+        ok(defined $pkce_data, 'AUTH-01: PKCE data cached under spoton_pkce_<state>');
+        if (defined $pkce_data) {
+            ok(defined $pkce_data->{code_verifier}, 'AUTH-01: cached PKCE has code_verifier');
+            ok(defined $pkce_data->{client_id},     'AUTH-01: cached PKCE has client_id');
+            ok(defined $pkce_data->{redirect_uri},  'AUTH-01: cached PKCE has redirect_uri');
+        } else {
+            skip "PKCE data not cached — cannot inspect fields", 3;
+        }
+    }
+
+    # --------------------------------------------------------
+    # AUTH-02: Token caching
+    # --------------------------------------------------------
+
+    # AUTH-02: _cacheToken stores access token with correct key and TTL
+    {
+        reset_state();
+        Plugins::SpotOn::API::TokenManager->_cacheToken('testacct', 'tok123', 3600);
+        my $cache = Slim::Utils::Cache->new();
+        is($cache->get('spoton_token_testacct'), 'tok123',
+            'AUTH-02: _cacheToken stores token under spoton_token_<accountId>');
+        is($cache->ttl('spoton_token_testacct'), 3300,
+            'AUTH-02: _cacheToken TTL is expires_in(3600) - 300 = 3300');
+    }
+
+    # AUTH-02: _cacheToken with expiresIn between 60 and 300 uses expiresIn directly
+    {
+        reset_state();
+        Plugins::SpotOn::API::TokenManager->_cacheToken('shortacct', 'tok456', 200);
+        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_token_shortacct');
+        is($ttl, 200, 'AUTH-02: _cacheToken uses expiresIn(200) as TTL when expiresIn < TOKEN_EXPIRY_BUFFER');
+    }
+
+    # AUTH-02: refreshToken async flow — success path
+    {
+        reset_state();
+        # Seed account with refresh token in prefs
+        preferences('plugin.spoton')->set('accounts', {
+            'testacct99' => { refreshToken => 'refresh_tok_xyz', displayName => 'Test User' }
+        });
+        preferences('plugin.spoton')->set('clientId', 'myclientid');
+
         my $got_token;
-        Plugins::SpotOn::API::TokenManager->refreshToken('testacct', sub {
+        Plugins::SpotOn::API::TokenManager->refreshToken('testacct99', sub {
             $got_token = shift;
         });
-        ok(defined $got_token, 'AUTH-01: refreshToken returns a token');
-        is($got_token, 'mock_token_abc123', 'AUTH-01: token value matches mock binary output');
+
+        # Simulate Spotify returning a new access token
+        Slim::Networking::SimpleAsyncHTTP->simulate_success(
+            '{"access_token":"newtoken_abc","expires_in":3600}'
+        );
+
+        is($got_token, 'newtoken_abc',
+            'AUTH-02: refreshToken callback receives new access_token');
+        is(Slim::Utils::Cache->new()->get('spoton_token_testacct99'), 'newtoken_abc',
+            'AUTH-02: refreshToken caches new access_token');
     }
 
-    # AUTH-01: getToken calls refreshToken on cache miss
+    # AUTH-02: refreshToken updates refresh_token if Spotify returns a new one (Pitfall 7)
     {
-        # Clear any cached token first
-        my $cache = Slim::Utils::Cache->new();
-        $cache->remove('spoton_token_gettoken_miss');
-
-        my $got_token;
-        Plugins::SpotOn::API::TokenManager->getToken('gettoken_miss', sub {
-            $got_token = shift;
+        reset_state();
+        preferences('plugin.spoton')->set('accounts', {
+            'rotateacct' => { refreshToken => 'old_refresh_tok', displayName => 'Rotate User' }
         });
-        ok(defined $got_token, 'AUTH-01: getToken invokes refreshToken on cache miss and returns token');
+        preferences('plugin.spoton')->set('clientId', 'myclientid');
+
+        Plugins::SpotOn::API::TokenManager->refreshToken('rotateacct', sub { });
+
+        # Simulate Spotify returning both new access and refresh tokens
+        Slim::Networking::SimpleAsyncHTTP->simulate_success(
+            '{"access_token":"tok_new","refresh_token":"new_refresh_tok","expires_in":3600}'
+        );
+
+        my $accts = preferences('plugin.spoton')->get('accounts') || {};
+        is($accts->{rotateacct}{refreshToken}, 'new_refresh_tok',
+            'AUTH-02: refreshToken stores rotated refresh_token in Prefs');
     }
 
-    # AUTH-02: Token cached with key "spoton_token_<accountId>"
-    {
-        my $cache = Slim::Utils::Cache->new();
-        $cache->remove('spoton_token_cachetest');
-
-        Plugins::SpotOn::API::TokenManager->refreshToken('cachetest', sub { });
-
-        my $cached = $cache->get('spoton_token_cachetest');
-        ok(defined $cached, 'AUTH-02: Token stored in cache under spoton_token_<accountId>');
-        is($cached, 'mock_token_abc123', 'AUTH-02: Cached token value is correct');
-    }
-
-    # AUTH-02: Token TTL is expiresIn - 300 (mock returns expiresIn=3600, so TTL should be 3300)
-    {
-        my $cache = Slim::Utils::Cache->new();
-        $cache->remove('spoton_token_ttltest');
-
-        Plugins::SpotOn::API::TokenManager->refreshToken('ttltest', sub { });
-
-        my $ttl = $cache->ttl('spoton_token_ttltest');
-        is($ttl, 3300, 'AUTH-02: Token TTL is expiresIn(3600) - 300 = 3300');
-    }
-
-    # AUTH-03: refreshAllTokens re-arms timer (check Timers stub)
+    # --------------------------------------------------------
+    # AUTH-03: refreshAllTokens re-arms timer
+    # --------------------------------------------------------
     {
         Slim::Utils::Timers::reset_calls();
-
         Plugins::SpotOn::API::TokenManager->refreshAllTokens();
-
         my @sets = @Slim::Utils::Timers::set_calls;
-        ok(scalar(@sets) > 0, 'AUTH-03: refreshAllTokens arms a timer via Slim::Utils::Timers::setTimer');
+        ok(scalar(@sets) >= 1, 'AUTH-03: refreshAllTokens re-arms timer via setTimer');
     }
 
-    # AUTH-04: addAccount sets chmod 0700 on dir, 0600 on credentials.json
+    # --------------------------------------------------------
+    # AUTH-05: Account management
+    # --------------------------------------------------------
+
+    # AUTH-05: getAccountIds returns all account IDs
     {
-        my $acct_dir = tempdir(CLEANUP => 1);
-
-        # Temporarily override Helper to point to mock binary
-        Plugins::SpotOn::API::TokenManager->addAccount('testuser', 'testpass', sub {
-            my ($accountId, $err) = @_;
-            ok(!$err, 'AUTH-04: addAccount completes without error');
-
-            if (!$err && $accountId) {
-                my $dir  = Plugins::SpotOn::API::TokenManager->_cacheDir($accountId);
-                my $cred = "$dir/credentials.json";
-
-                if (-d $dir) {
-                    my @stat_dir = stat($dir);
-                    is($stat_dir[2] & 07777, 0700,
-                        'AUTH-04: Account cache directory has mode 0700');
-                }
-                if (-f $cred) {
-                    my @stat_cred = stat($cred);
-                    is($stat_cred[2] & 07777, 0600,
-                        'AUTH-04: credentials.json has mode 0600');
-                }
-            }
+        preferences('plugin.spoton')->set('accounts', {
+            'acct_aaa' => { displayName => 'Alice', refreshToken => 'tok_a' },
+            'acct_bbb' => { displayName => 'Bob',   refreshToken => 'tok_b' },
         });
-    }
-
-    # AUTH-05: Two addAccount calls create separate subdirectories
-    {
-        Plugins::SpotOn::API::TokenManager->addAccount('user_alpha', 'pass1', sub { });
-        Plugins::SpotOn::API::TokenManager->addAccount('user_beta',  'pass2', sub { });
-
         my @ids = Plugins::SpotOn::API::TokenManager->getAccountIds();
-        ok(scalar(@ids) >= 2, 'AUTH-05: getAccountIds returns at least two account IDs after two addAccount calls');
-
-        # Verify they are separate subdirs
-        my %dirs_seen;
-        for my $id (@ids) {
-            my $dir = Plugins::SpotOn::API::TokenManager->_cacheDir($id);
-            $dirs_seen{$dir}++;
-        }
-        my $unique_dirs = grep { $dirs_seen{$_} == 1 } keys %dirs_seen;
-        ok($unique_dirs >= 2, 'AUTH-05: Each account has a separate cache subdirectory');
+        is(scalar(@ids), 2, 'AUTH-05: getAccountIds returns 2 IDs for 2 seeded accounts');
     }
 
     # AUTH-05: removeAccount removes from prefs and cache
     {
-        # Add an account to remove
-        my $remove_id;
-        Plugins::SpotOn::API::TokenManager->addAccount('user_remove', 'pass3', sub {
-            ($remove_id) = @_;
+        reset_state();
+        preferences('plugin.spoton')->set('accounts', {
+            'remove_me' => { displayName => 'Remove', refreshToken => 'tok_r' },
+        });
+        Slim::Utils::Cache->new()->set('spoton_token_remove_me', 'cached_tok', 3600);
+
+        Plugins::SpotOn::API::TokenManager->removeAccount('remove_me');
+
+        my %accts = map { $_ => 1 } Plugins::SpotOn::API::TokenManager->getAccountIds();
+        ok(!exists $accts{remove_me},
+            'AUTH-05: removeAccount removes account from prefs');
+        ok(!defined Slim::Utils::Cache->new()->get('spoton_token_remove_me'),
+            'AUTH-05: removeAccount clears cached access token');
+    }
+
+    # --------------------------------------------------------
+    # D-12: getToken cache-first (no async call if cached)
+    # --------------------------------------------------------
+    {
+        reset_state();
+        # Seed cache with a token
+        Slim::Utils::Cache->new()->set('spoton_token_cached_acct', 'existing_tok', 3300);
+
+        # Reset SimpleAsyncHTTP state to detect if a request was made
+        $Slim::Networking::SimpleAsyncHTTP::last_url = undef;
+
+        my $got_token;
+        Plugins::SpotOn::API::TokenManager->getToken('cached_acct', sub {
+            $got_token = shift;
         });
 
-        if ($remove_id) {
-            # Seed the token cache
-            my $cache = Slim::Utils::Cache->new();
-            $cache->set("spoton_token_$remove_id", 'sometoken', 3600);
-
-            Plugins::SpotOn::API::TokenManager->removeAccount($remove_id);
-
-            my @ids_after = Plugins::SpotOn::API::TokenManager->getAccountIds();
-            ok(!grep { $_ eq $remove_id } @ids_after,
-                'AUTH-05: removeAccount removes account ID from prefs');
-
-            my $cached_after = $cache->get("spoton_token_$remove_id");
-            ok(!defined $cached_after,
-                'AUTH-05: removeAccount clears cached token from cache');
-        } else {
-            skip "addAccount did not return an ID — removeAccount tests skipped", 2;
-        }
+        is($got_token, 'existing_tok',
+            'D-12: getToken returns cached token without making HTTP request');
+        ok(!defined $Slim::Networking::SimpleAsyncHTTP::last_url,
+            'D-12: getToken does not trigger SimpleAsyncHTTP when token is cached');
     }
 }
 
