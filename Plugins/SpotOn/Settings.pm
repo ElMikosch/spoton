@@ -68,27 +68,34 @@ sub handler {
             }
         }
 
-        # Account remove (CR-03).
-        # Determine the new activeAccount BEFORE calling removeAccount, because
-        # removeAccount clears activeAccount to '' before returning — checking
-        # it afterwards would always yield '' and never auto-select a replacement.
+        # Account remove (CR-03, WR-03).
+        # WR-03: validate that removeId is an 8-char hex string that actually
+        # exists in the accounts pref before acting on it.  This prevents a
+        # crafted POST with e.g. removeAccount=../../etc from reaching _cacheDir
+        # and potentially deleting directories outside the SpotOn data dir.
+        # CR-03: determine the new activeAccount BEFORE calling removeAccount,
+        # because removeAccount clears activeAccount to '' before returning —
+        # checking it afterwards would always yield '' and never auto-select a
+        # replacement.
         if (my $removeId = $paramRef->{removeAccount}) {
-            my $newActive;
-            if (($prefs->get('activeAccount') || '') eq $removeId) {
-                # Removed account was active — pick a replacement from the
-                # remaining accounts (sorted for determinism).
-                my $accounts  = $prefs->get('accounts') || {};
-                my @remaining = sort grep { $_ ne $removeId } keys %{$accounts};
-                $newActive = @remaining ? $remaining[0] : '';
-            }
+            my $accounts = $prefs->get('accounts') || {};
+            if (exists $accounts->{$removeId} && $removeId =~ /\A[0-9a-f]{8}\z/) {
+                my $newActive;
+                if (($prefs->get('activeAccount') || '') eq $removeId) {
+                    # Removed account was active — pick a replacement from the
+                    # remaining accounts (sorted for determinism).
+                    my @remaining = sort grep { $_ ne $removeId } keys %{$accounts};
+                    $newActive = @remaining ? $remaining[0] : '';
+                }
 
-            Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
+                Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
 
-            # Apply the pre-computed replacement if one was needed.
-            # (removeAccount already set activeAccount to '' if it was active;
-            # we overwrite that '' with the proper replacement here.)
-            if (defined $newActive) {
-                $prefs->set('activeAccount', $newActive);
+                # Apply the pre-computed replacement if one was needed.
+                # (removeAccount already set activeAccount to '' if it was active;
+                # we overwrite that '' with the proper replacement here.)
+                if (defined $newActive) {
+                    $prefs->set('activeAccount', $newActive);
+                }
             }
         }
 
