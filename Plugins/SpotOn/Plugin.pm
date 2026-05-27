@@ -35,7 +35,8 @@ sub initPlugin {
     $prefs->init({
         bitrate       => 320,
         binary        => '',    # custom binary override (LMS-10, Phase 6)
-        accounts      => {},    # hash: accountId => { username => ..., displayName => ... }
+        clientId      => '',    # user's Spotify Developer App Client ID (D-04)
+        accounts      => {},    # hash: accountId => { displayName => ..., refreshToken => ... }
         activeAccount => '',    # default active account ID (global fallback)
     });
 
@@ -68,6 +69,10 @@ sub initPlugin {
     if (main::WEBUI) {
         require Plugins::SpotOn::Settings;
         Plugins::SpotOn::Settings->new();
+
+        # Register OAuth callback route (D-08)
+        require Plugins::SpotOn::Settings::Callback;
+        Plugins::SpotOn::Settings::Callback->init();
     }
 
     $class->SUPER::initPlugin(
@@ -139,7 +144,7 @@ sub _accountSwitcherFeed {
 
     my @items;
     for my $id (sort keys %{$accounts}) {
-        my $name    = $accounts->{$id}{displayName} || $accounts->{$id}{username} || $id;
+        my $name    = $accounts->{$id}{displayName} || $id;
         my $isActive = ($id eq $activeId);
         push @items, {
             name        => $name . ($isActive ? ' *' : ''),

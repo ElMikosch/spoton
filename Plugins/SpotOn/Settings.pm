@@ -26,7 +26,7 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary');
+    return ($prefs, 'bitrate', 'binary', 'clientId');
 }
 
 sub handler {
@@ -47,27 +47,25 @@ sub handler {
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
-        # Account add (D-07).
-        # addAccount uses a blocking backtick spawn and invokes $cb synchronously.
-        # $accountId and $err are captured from the callback before the if-blocks below.
-        # IMPORTANT: if addAccount is ever made truly async, the code below must move
-        # into the callback body.
-        if ($paramRef->{addAccount}) {
-            my $username = $paramRef->{username} // '';
-            my $password = $paramRef->{password} // '';
-            $username =~ s/^\s+|\s+$//g;
-            $password =~ s/^\s+|\s+$//g;
-
-            if ($username && $password) {
-                my ($accountId, $err);
-                Plugins::SpotOn::API::TokenManager->addAccount($username, $password, sub {
-                    ($accountId, $err) = @_;
-                });
-                if ($err) {
-                    $paramRef->{authError} = $err;
-                } elsif ($accountId) {
-                    $prefs->set('activeAccount', $accountId)
-                        unless $prefs->get('activeAccount');
+        # OAuth PKCE flow initiation (D-07, IC-02).
+        # startOAuth triggers an HTTP 302 redirect to Spotify's authorization endpoint.
+        # Per IC-02: server-side redirect, not JS window.location.
+        # startOAuth is also submitted via "Add Another Account" button (same action name).
+        if ($paramRef->{startOAuth}) {
+            my $clientId = $prefs->get('clientId') // '';
+            $clientId =~ s/^\s+|\s+$//g;
+            if (!$clientId) {
+                $paramRef->{oauthError} = string('PLUGIN_SPOTON_CLIENT_ID_REQUIRED');
+            } else {
+                my ($authUrl, $state) = Plugins::SpotOn::API::TokenManager->startOAuthFlow($clientId);
+                if ($authUrl) {
+                    $response->code(302);
+                    $response->header('Location' => $authUrl);
+                    my $html = '<html><body><p>Redirecting to Spotify...</p></body></html>';
+                    $callback->($client, $paramRef, \$html, $httpClient, $response);
+                    return;
+                } else {
+                    $paramRef->{oauthError} = string('PLUGIN_SPOTON_AUTH_ERROR');
                 }
             }
         }
@@ -116,9 +114,11 @@ sub handler {
         }
     }
 
-    # Pass account data to template for all requests
+    # Pass account and OAuth data to template for all requests
     $paramRef->{accounts}      = $prefs->get('accounts') || {};
     $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
+    $paramRef->{clientId}      = $prefs->get('clientId') || '';
+    $paramRef->{redirectUri}   = Plugins::SpotOn::API::TokenManager->_buildRedirectUri();
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
