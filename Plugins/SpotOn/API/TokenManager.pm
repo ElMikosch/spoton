@@ -68,15 +68,17 @@ sub refreshToken {
         $safeBin, $safeCache, $safeScope
     );
 
-    # T-02-06: alarm(10) to prevent LMS freeze on network outage
+    # T-02-06: alarm(10) to prevent LMS freeze on network outage.
+    # WR-02: capture and restore the parent alarm so we don't cancel it.
     my $output;
     local $SIG{ALRM} = sub { die "timeout\n" };
+    my $parentAlarm;
     eval {
-        alarm(10);
+        $parentAlarm = alarm(10);   # returns remaining time of any prior alarm
         $output = `$cmd`;
-        alarm(0);
+        alarm($parentAlarm || 0);   # restore parent alarm (0 = cancel if none)
     };
-    alarm(0);
+    alarm($parentAlarm || 0);       # also restore on exception path
 
     if ($@) {
         $log->error("TokenManager: --get-token timed out for account $accountId");
@@ -166,15 +168,17 @@ sub addAccount {
         $safeBin, $safeUser, $safePass, $safeCache
     );
 
-    # T-02-06: alarm(15) — auth takes longer than token fetch
+    # T-02-06: alarm(15) — auth takes longer than token fetch.
+    # WR-02: capture and restore the parent alarm so we don't cancel it.
     my $output;
     local $SIG{ALRM} = sub { die "timeout\n" };
+    my $parentAlarm;
     eval {
-        alarm(15);
+        $parentAlarm = alarm(15);   # returns remaining time of any prior alarm
         $output = `$cmd`;
-        alarm(0);
+        alarm($parentAlarm || 0);   # restore parent alarm (0 = cancel if none)
     };
-    alarm(0);
+    alarm($parentAlarm || 0);       # also restore on exception path
 
     if ($@) {
         eval { rmtree($tempDir) };
