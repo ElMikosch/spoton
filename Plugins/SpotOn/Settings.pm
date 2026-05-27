@@ -26,8 +26,7 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary', 'activeAccount');
-    # Note: 'accounts' hash is managed manually in handler, not via auto-pref saving
+    return ($prefs, 'bitrate', 'binary');
 }
 
 sub handler {

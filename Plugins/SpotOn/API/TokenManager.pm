@@ -64,7 +64,7 @@ sub refreshToken {
     (my $safeScope = REQUIRED_SCOPES) =~ s/'/'\\''/g;
 
     my $cmd = sprintf(
-        "'%s' -n 'SpotOn' --cache '%s' --get-token --scope '%s' 2>/dev/null",
+        "'%s' -n 'SpotOn' --cache '%s' --get-token --scope '%s' 2>&1",
         $safeBin, $safeCache, $safeScope
     );
 
@@ -162,7 +162,7 @@ sub addAccount {
     (my $safeCache = $tempDir)  =~ s/'/'\\''/g;
 
     my $cmd = sprintf(
-        "'%s' -n 'SpotOn' --username '%s' --password '%s' --authenticate --cache '%s' 2>/dev/null",
+        "'%s' -n 'SpotOn' --username '%s' --password '%s' --authenticate --cache '%s' 2>&1",
         $safeBin, $safeUser, $safePass, $safeCache
     );
 
@@ -184,8 +184,8 @@ sub addAccount {
 
     unless ($output && $output =~ /^authorized/i) {
         eval { rmtree($tempDir) };
-        my $error = $output ? "Authentication failed: $output" : "Authentication failed";
-        $log->error("TokenManager: addAccount failed for '$username'");
+        my $error = $output ? "Authentication failed: $output" : "Authentication failed (no output from binary)";
+        $log->error("TokenManager: addAccount failed for '$username': $error");
         $cb->(undef, $error);
         return;
     }
