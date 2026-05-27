@@ -3,27 +3,27 @@ package Plugins::SpotOn::API::TokenManager;
 use strict;
 use warnings;
 
-use File::Copy qw(move);
-use File::Path qw(mkpath rmtree);
-use File::Spec::Functions qw(catdir catfile);
 use Digest::MD5 qw(md5_hex);
+use Digest::SHA qw(sha256);
+use MIME::Base64 qw(encode_base64url);
+use Crypt::OpenSSL::Random;
+use URI;
 use JSON::XS::VersionOneAndTwo;
 
+use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
-use Slim::Utils::Unicode;
 use Time::HiRes;
 
-# Helper is loaded by Plugin.pm at startup; require here for standalone use in tests
-require Plugins::SpotOn::Helper;
-
 # Constants
-use constant TOKEN_EXPIRY_BUFFER    => 300;       # Refresh 5 min before expiry
-use constant TOKEN_REFRESH_TIMER    => 45 * 60;   # 45 minute proactive refresh cycle
-use constant CLIENT_ID              => '65b708073fc0480ea92a077233ca87bd';
-use constant REQUIRED_SCOPES        => join(' ', qw(
+use constant TOKEN_EXPIRY_BUFFER => 300;       # Refresh 5 min before expiry
+use constant TOKEN_REFRESH_TIMER => 45 * 60;   # 45 minute proactive refresh cycle
+use constant SPOTIFY_AUTH_URL    => 'https://accounts.spotify.com/authorize';
+use constant SPOTIFY_TOKEN_URL   => 'https://accounts.spotify.com/api/token';
+use constant SPOTIFY_ME_URL      => 'https://api.spotify.com/v1/me';
+use constant REQUIRED_SCOPES     => join(' ', qw(
     user-read-playback-state
     user-modify-playback-state
     user-read-currently-playing
@@ -43,78 +43,9 @@ my $cache = Slim::Utils::Cache->new();
 # Public class methods
 # ============================================================
 
-# refreshToken($class, $accountId, $cb)
-# Spawns binary with --get-token, parses JSON from stdout,
-# caches token, invokes $cb->($token) on success, $cb->(undef) on failure.
-sub refreshToken {
-    my ($class, $accountId, $cb) = @_;
-
-    my $binary = Plugins::SpotOn::Helper->get();
-    unless ($binary) {
-        $log->error("TokenManager: no binary found, cannot refresh token");
-        $cb->(undef);
-        return;
-    }
-
-    my $cacheDir = $class->_cacheDir($accountId);
-
-    # Shell-safe quoting — T-02-04 protection
-    (my $safeBin   = $binary)   =~ s/'/'\\''/g;
-    (my $safeCache = $cacheDir) =~ s/'/'\\''/g;
-    (my $safeScope = REQUIRED_SCOPES) =~ s/'/'\\''/g;
-
-    my $cmd = sprintf(
-        "'%s' -n 'SpotOn' --cache '%s' --get-token --scope '%s' 2>&1",
-        $safeBin, $safeCache, $safeScope
-    );
-
-    # T-02-06: alarm(10) to prevent LMS freeze on network outage.
-    # WR-02: capture and restore the parent alarm so we don't cancel it.
-    my $output;
-    local $SIG{ALRM} = sub { die "timeout\n" };
-    my $parentAlarm;
-    eval {
-        $parentAlarm = alarm(10);   # returns remaining time of any prior alarm
-        $output = `$cmd`;
-        alarm($parentAlarm || 0);   # restore parent alarm (0 = cancel if none)
-    };
-    alarm($parentAlarm || 0);       # also restore on exception path
-
-    if ($@) {
-        $log->error("TokenManager: --get-token timed out for account $accountId");
-        $cb->(undef);
-        return;
-    }
-
-    unless ($output && $output =~ /^\{/) {
-        $log->error("TokenManager: --get-token returned no JSON for account $accountId");
-        $cb->(undef);
-        return;
-    }
-
-    my $tokenData = eval { from_json($output) };
-    if ($@ || !$tokenData) {
-        $log->error("TokenManager: JSON parse error from --get-token for account $accountId: $@");
-        $cb->(undef);
-        return;
-    }
-
-    # Handle both camelCase and snake_case key names
-    my $token     = $tokenData->{accessToken}  || $tokenData->{access_token};
-    my $expiresIn = $tokenData->{expiresIn}    || $tokenData->{expires_in} || 3600;
-
-    unless ($token) {
-        $log->error("TokenManager: no accessToken in binary response for account $accountId");
-        $cb->(undef);
-        return;
-    }
-
-    $class->_cacheToken($accountId, { accessToken => $token, expiresIn => $expiresIn });
-    $cb->($token);
-}
-
 # getToken($class, $accountId, $cb)
 # Checks cache first; falls back to refreshToken on miss.
+# Interface preserved for Client.pm compatibility.
 sub getToken {
     my ($class, $accountId, $cb) = @_;
 
@@ -128,101 +59,172 @@ sub getToken {
     $class->refreshToken($accountId, $cb);
 }
 
-# addAccount($class, $username, $password, $cb)
-# Authenticates via binary --authenticate, stores account in prefs.
-sub addAccount {
-    my ($class, $username, $password, $cb) = @_;
+# refreshToken($class, $accountId, $cb)
+# Async PKCE refresh using stored refresh_token.
+# On success: $cb->($accessToken). On failure: $cb->(undef).
+sub refreshToken {
+    my ($class, $accountId, $cb) = @_;
 
-    unless ($username && $password) {
-        $cb->(undef, "Username and password are required");
+    my $accounts     = $prefs->get('accounts') || {};
+    my $account      = $accounts->{$accountId} || {};
+    my $refreshToken = $account->{refreshToken};
+    my $clientId     = $prefs->get('clientId');
+
+    unless ($refreshToken && $clientId) {
+        $log->error("TokenManager: no refreshToken or clientId for account $accountId");
+        $cb->(undef);
         return;
     }
 
-    my $binary = Plugins::SpotOn::Helper->get();
-    unless ($binary) {
-        $cb->(undef, "SpotOn binary not found");
-        return;
-    }
+    my $body_uri = URI->new('', 'https');
+    $body_uri->query_form(
+        grant_type    => 'refresh_token',
+        refresh_token => $refreshToken,
+        client_id     => $clientId,
+    );
+    my $body = $body_uri->query();
 
-    # Compute account ID: MD5 of transliterated username, first 8 hex chars
-    my $normalized = Slim::Utils::Unicode::utf8toLatin1Transliterate($username) || $username;
-    my $accountId  = substr(md5_hex($normalized), 0, 8);
+    # T-02.1-03: never log token values
+    main::INFOLOG && $log->info("TokenManager: refreshing token for account $accountId");
 
-    my $tempDir = $class->_newAccountCacheDir();
+    Slim::Networking::SimpleAsyncHTTP->new(
+        sub {
+            my $http   = shift;
+            my $result = eval { from_json($http->content) };
+            if ($@ || !$result) {
+                $log->error("TokenManager: JSON parse error on refresh for $accountId: $@");
+                $cb->(undef);
+                return;
+            }
+            unless ($result->{access_token}) {
+                $log->error("TokenManager: no access_token in refresh response for $accountId");
+                $cb->(undef);
+                return;
+            }
 
-    # Create temp dir
-    eval { mkpath($tempDir) };
-    if ($@) {
-        $cb->(undef, "Cannot create temp directory: $@");
-        return;
-    }
+            # Update refresh_token if Spotify returns a new one (Pitfall 7)
+            if ($result->{refresh_token}) {
+                my $accts = $prefs->get('accounts') || {};
+                $accts->{$accountId}{refreshToken} = $result->{refresh_token};
+                $prefs->set('accounts', $accts);
+                main::INFOLOG && $log->info("TokenManager: refresh token rotated for $accountId");
+            }
 
-    # Shell-safe quoting — T-02-04: all user-supplied values
-    (my $safeBin   = $binary)   =~ s/'/'\\''/g;
-    (my $safeUser  = $username) =~ s/'/'\\''/g;
-    (my $safePass  = $password) =~ s/'/'\\''/g;
-    (my $safeCache = $tempDir)  =~ s/'/'\\''/g;
+            $class->_cacheToken($accountId, $result->{access_token}, $result->{expires_in});
+            $cb->($result->{access_token});
+        },
+        sub {
+            my ($http, $error) = @_;
+            $log->error("TokenManager: refresh HTTP error for $accountId: $error");
+            $cb->(undef);
+        },
+        { timeout => 30 }
+    )->post(
+        SPOTIFY_TOKEN_URL,
+        'Content-Type' => 'application/x-www-form-urlencoded',
+        $body,
+    );
+}
 
-    my $cmd = sprintf(
-        "'%s' -n 'SpotOn' --username '%s' --password '%s' --authenticate --cache '%s' 2>&1",
-        $safeBin, $safeUser, $safePass, $safeCache
+# startOAuthFlow($class, $clientId)
+# Generates PKCE pair + state, caches PKCE data, builds Spotify auth URL.
+# Returns ($authUrl, $state).
+sub startOAuthFlow {
+    my ($class, $clientId) = @_;
+
+    my ($codeVerifier, $codeChallenge) = $class->_generatePkce();
+    my $state       = $class->_generateState();
+    my $redirectUri = $class->_buildRedirectUri();
+
+    # T-02.1-06: cache verifier with TTL=600s; consume-on-use in callback
+    $cache->set("spoton_pkce_$state", {
+        code_verifier => $codeVerifier,
+        client_id     => $clientId,
+        redirect_uri  => $redirectUri,
+    }, 600);
+
+    my $uri = URI->new(SPOTIFY_AUTH_URL);
+    $uri->query_form(
+        response_type         => 'code',
+        client_id             => $clientId,
+        redirect_uri          => $redirectUri,
+        code_challenge_method => 'S256',
+        code_challenge        => $codeChallenge,
+        scope                 => REQUIRED_SCOPES,
+        state                 => $state,
     );
 
-    # T-02-06: alarm(15) — auth takes longer than token fetch.
-    # WR-02: capture and restore the parent alarm so we don't cancel it.
-    my $output;
-    local $SIG{ALRM} = sub { die "timeout\n" };
-    my $parentAlarm;
-    eval {
-        $parentAlarm = alarm(15);   # returns remaining time of any prior alarm
-        $output = `$cmd`;
-        alarm($parentAlarm || 0);   # restore parent alarm (0 = cancel if none)
-    };
-    alarm($parentAlarm || 0);       # also restore on exception path
+    return ($uri->as_string(), $state);
+}
 
-    if ($@) {
-        eval { rmtree($tempDir) };
-        $cb->(undef, "Authentication timed out");
-        return;
-    }
+# exchangeCode($class, $code, $verifier, $clientId, $redirectUri, $cb)
+# POSTs to SPOTIFY_TOKEN_URL to exchange authorization code for tokens.
+# On success: $cb->($accountId, undef). On error: $cb->(undef, $error).
+sub exchangeCode {
+    my ($class, $code, $verifier, $clientId, $redirectUri, $cb) = @_;
 
-    unless ($output && $output =~ /^authorized/i) {
-        eval { rmtree($tempDir) };
-        my $error = $output ? "Authentication failed: $output" : "Authentication failed (no output from binary)";
-        $log->error("TokenManager: addAccount failed for '$username': $error");
-        $cb->(undef, $error);
-        return;
-    }
+    my $body_uri = URI->new('', 'https');
+    $body_uri->query_form(
+        grant_type    => 'authorization_code',
+        code          => $code,
+        redirect_uri  => $redirectUri,
+        client_id     => $clientId,
+        code_verifier => $verifier,
+    );
+    my $body = $body_uri->query();
 
-    # Finalize: move temp dir to permanent location keyed by accountId
-    my $finalDir = $class->_cacheDir($accountId);
+    main::INFOLOG && $log->info("TokenManager: exchanging authorization code");
 
-    # Remove existing dir if present (re-auth of same account)
-    eval { rmtree($finalDir) } if -d $finalDir;
+    Slim::Networking::SimpleAsyncHTTP->new(
+        sub {
+            my $http   = shift;
+            my $result = eval { from_json($http->content) };
+            if ($@ || !$result) {
+                $log->error("TokenManager: JSON parse error on code exchange: $@");
+                $cb->(undef, "JSON parse error: $@");
+                return;
+            }
+            # T-02.1-05: validate response contains access_token
+            unless ($result->{access_token}) {
+                my $err = $result->{error} || 'no access_token in response';
+                $log->error("TokenManager: code exchange failed: $err");
+                $cb->(undef, $err);
+                return;
+            }
 
-    unless (rename($tempDir, $finalDir) || move($tempDir, $finalDir)) {
-        eval { rmtree($tempDir) };
-        $cb->(undef, "Cannot finalize account directory");
-        return;
-    }
+            # Fetch user profile to generate stable accountId (D-12)
+            $class->_fetchUserProfile($result->{access_token}, sub {
+                my $profile = shift;
+                unless ($profile && $profile->{id}) {
+                    $log->error("TokenManager: could not fetch user profile after code exchange");
+                    $cb->(undef, "Failed to fetch user profile");
+                    return;
+                }
 
-    # Set secure permissions — T-02-05
-    $class->_setPermissions($accountId);
-
-    # Store in prefs
-    my $accounts = $prefs->get('accounts') || {};
-    $accounts->{$accountId} = {
-        username    => $username,
-        displayName => $username,    # Phase 3 will update via getMe
-    };
-    $prefs->set('accounts', $accounts);
-
-    main::INFOLOG && $log->info("TokenManager: account $accountId added for '$username'");
-    $cb->($accountId, undef);
+                $class->_storeTokens(
+                    $result->{access_token},
+                    $result->{refresh_token},
+                    $result->{expires_in},
+                    $profile,
+                    $cb
+                );
+            });
+        },
+        sub {
+            my ($http, $error) = @_;
+            $log->error("TokenManager: code exchange HTTP error: $error");
+            $cb->(undef, $error);
+        },
+        { timeout => 30 }
+    )->post(
+        SPOTIFY_TOKEN_URL,
+        'Content-Type' => 'application/x-www-form-urlencoded',
+        $body,
+    );
 }
 
 # removeAccount($class, $accountId)
-# Removes account from prefs, cache, and filesystem.
+# Removes account from prefs and cache. No filesystem cleanup.
 sub removeAccount {
     my ($class, $accountId) = @_;
 
@@ -233,10 +235,6 @@ sub removeAccount {
 
     # Clear cached token
     $cache->remove("spoton_token_$accountId");
-
-    # Remove credential directory
-    my $dir = $class->_cacheDir($accountId);
-    eval { rmtree($dir) } if -d $dir;
 
     # Clear active account if it was this one
     my $active = $prefs->get('activeAccount') || '';
@@ -301,55 +299,118 @@ sub refreshAllTokens {
 # Private methods
 # ============================================================
 
-# _cacheDir($class, $accountId)
-# Returns path to the credential/cache directory for this account.
-sub _cacheDir {
-    my ($class, $accountId) = @_;
-    return catdir(preferences('server')->get('cachedir'), 'spoton', $accountId);
-}
-
-# _newAccountCacheDir()
-# Returns path to a temporary directory used during authentication.
-sub _newAccountCacheDir {
+# _generatePkce()
+# Returns ($code_verifier, $code_challenge).
+# T-02.1-01: uses Crypt::OpenSSL::Random for cryptographic randomness
+sub _generatePkce {
     my ($class) = @_;
-    return catdir(preferences('server')->get('cachedir'), 'spoton', '__AUTHENTICATE__');
+
+    my $random_bytes  = Crypt::OpenSSL::Random::random_bytes(32);
+    my $code_verifier = encode_base64url($random_bytes);
+    $code_verifier    =~ s/=+$//;  # strip base64 padding per PKCE spec
+
+    # SHA-256 of verifier, URL-safe base64 encoded
+    my $code_challenge = encode_base64url(sha256($code_verifier));
+    $code_challenge    =~ s/=+$//;
+
+    return ($code_verifier, $code_challenge);
 }
 
-# _cacheToken($class, $accountId, $tokenData)
-# Caches the access token with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
-# T-02-07: Never logs the token value itself.
-sub _cacheToken {
-    my ($class, $accountId, $tokenData) = @_;
+# _generateState()
+# Returns random state string for OAuth CSRF protection.
+# T-02.1-02: 16 random bytes -> URL-safe base64
+sub _generateState {
+    my ($class) = @_;
 
-    my $expiresIn = $tokenData->{expiresIn} || 3600;
+    my $raw   = Crypt::OpenSSL::Random::random_bytes(16);
+    my $state = encode_base64url($raw);
+    $state    =~ s/=+$//;
+    return $state;
+}
+
+# _buildRedirectUri()
+# Returns "http://127.0.0.1:{httpPort}/plugins/SpotOn/settings/callback".
+# NEVER use serverURL() per RESEARCH.md Pitfall 5.
+sub _buildRedirectUri {
+    my ($class) = @_;
+    my $httpPort = preferences('server')->get('httpport') || 9000;
+    return "http://127.0.0.1:${httpPort}/plugins/SpotOn/settings/callback";
+}
+
+# _fetchUserProfile($class, $accessToken, $cb)
+# GETs /me to retrieve {id, display_name}. Used to generate stable accountId.
+# T-02.1-03: never logs the accessToken value
+sub _fetchUserProfile {
+    my ($class, $accessToken, $cb) = @_;
+
+    Slim::Networking::SimpleAsyncHTTP->new(
+        sub {
+            my $http    = shift;
+            my $profile = eval { from_json($http->content) };
+            if ($@ || !$profile) {
+                $log->error("TokenManager: JSON parse error fetching user profile: $@");
+                $cb->(undef);
+                return;
+            }
+            $cb->($profile);
+        },
+        sub {
+            my ($http, $error) = @_;
+            $log->error("TokenManager: HTTP error fetching user profile: $error");
+            $cb->(undef);
+        },
+        { timeout => 30 }
+    )->get(
+        SPOTIFY_ME_URL,
+        'Authorization' => "Bearer $accessToken",
+        'Accept'        => 'application/json',
+    );
+}
+
+# _storeTokens($class, $accessToken, $refreshToken, $expiresIn, $userProfile, $cb)
+# Generates accountId from MD5 of Spotify user ID, stores tokens, calls $cb->($accountId).
+# T-02.1-04: refresh_token in Prefs (not Cache) for persistence across restarts
+sub _storeTokens {
+    my ($class, $accessToken, $refreshToken, $expiresIn, $userProfile, $cb) = @_;
+
+    # D-12: accountId from MD5 of spotify user_id (stable across username changes)
+    my $spotifyUserId = $userProfile->{id} || '';
+    my $accountId     = substr(md5_hex($spotifyUserId), 0, 8);
+    my $displayName   = $userProfile->{display_name} || $spotifyUserId || 'Unknown';
+
+    # Cache access token (short-lived)
+    $class->_cacheToken($accountId, $accessToken, $expiresIn);
+
+    # T-02.1-04: store refresh_token in Prefs (not Cache) for persistence
+    my $accounts = $prefs->get('accounts') || {};
+    $accounts->{$accountId} = {
+        displayName  => $displayName,
+        refreshToken => $refreshToken,
+    };
+    $prefs->set('accounts', $accounts);
+
+    # Set as active account if none currently set
+    unless ($prefs->get('activeAccount')) {
+        $prefs->set('activeAccount', $accountId);
+    }
+
+    main::INFOLOG && $log->info("TokenManager: stored tokens for account $accountId ($displayName)");
+    $cb->($accountId);
+}
+
+# _cacheToken($class, $accountId, $accessToken, $expiresIn)
+# Caches the access token with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
+# T-02.1-03: Never logs the token value itself.
+sub _cacheToken {
+    my ($class, $accountId, $accessToken, $expiresIn) = @_;
+
+    $expiresIn //= 3600;
     my $ttl = $expiresIn > TOKEN_EXPIRY_BUFFER
         ? $expiresIn - TOKEN_EXPIRY_BUFFER
         : ($expiresIn > 60 ? $expiresIn : 60);
 
-    $cache->set("spoton_token_$accountId", $tokenData->{accessToken}, $ttl);
+    $cache->set("spoton_token_$accountId", $accessToken, $ttl);
     main::INFOLOG && $log->info("TokenManager: token cached for account $accountId, TTL ${ttl}s");
-}
-
-# _setPermissions($class, $accountId)
-# Sets chmod 0700 on credential directory, 0600 on credentials.json.
-# T-02-05 mitigation: prevent world-readable credential files.
-sub _setPermissions {
-    my ($class, $accountId) = @_;
-
-    my $dir  = $class->_cacheDir($accountId);
-    my $cred = catfile($dir, 'credentials.json');
-
-    chmod 0700, $dir  if -d $dir;
-    chmod 0600, $cred if -f $cred;
-}
-
-# _finalizeAccountDir($class, $tempDir, $accountId)
-# Moves temp authentication directory to the permanent per-account location.
-sub _finalizeAccountDir {
-    my ($class, $tempDir, $accountId) = @_;
-
-    my $finalDir = $class->_cacheDir($accountId);
-    return rename($tempDir, $finalDir) || move($tempDir, $finalDir);
 }
 
 1;
