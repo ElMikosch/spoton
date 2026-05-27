@@ -47,27 +47,24 @@ sub handler {
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
-        # Account add (D-07)
+        # Account add (D-07) — addAccount is synchronous (backtick), no callback needed
         if ($paramRef->{addAccount}) {
             my $username = $paramRef->{username} // '';
             my $password = $paramRef->{password} // '';
-            $username =~ s/^\s+|\s+$//g;  # trim whitespace
-            $password =~ s/^\s+|\s+$//g;  # trim whitespace
+            $username =~ s/^\s+|\s+$//g;
+            $password =~ s/^\s+|\s+$//g;
 
             if ($username && $password) {
+                my ($accountId, $err);
                 Plugins::SpotOn::API::TokenManager->addAccount($username, $password, sub {
-                    my ($accountId, $err) = @_;
-                    if ($err) {
-                        $paramRef->{authError} = $err;
-                    } else {
-                        $prefs->set('activeAccount', $accountId)
-                            unless $prefs->get('activeAccount');
-                    }
-                    $paramRef->{accounts}      = $prefs->get('accounts') || {};
-                    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
-                    return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+                    ($accountId, $err) = @_;
                 });
-                return;  # async — callback will complete the response
+                if ($err) {
+                    $paramRef->{authError} = $err;
+                } elsif ($accountId) {
+                    $prefs->set('activeAccount', $accountId)
+                        unless $prefs->get('activeAccount');
+                }
             }
         }
 
