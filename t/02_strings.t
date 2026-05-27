@@ -31,14 +31,35 @@ SKIP: {
         PLUGIN_SPOTON_ACTIVE_ACCOUNT
         PLUGIN_SPOTON_RATE_LIMIT_HINT
         PLUGIN_SPOTON_ACCOUNT_NONE
-        PLUGIN_SPOTON_ACCOUNT_ADD
-        PLUGIN_SPOTON_ACCOUNT_ADD_BTN
         PLUGIN_SPOTON_ACCOUNT_ACTIVE
         PLUGIN_SPOTON_ACCOUNT_SWITCH
         PLUGIN_SPOTON_ACCOUNT_REMOVE
+        PLUGIN_SPOTON_AUTH_ERROR
+        PLUGIN_SPOTON_SETUP_WIZARD
+        PLUGIN_SPOTON_STEP1_BODY
+        PLUGIN_SPOTON_DASHBOARD_LINK
+        PLUGIN_SPOTON_CLIENT_ID_LABEL
+        PLUGIN_SPOTON_CLIENT_ID_HINT
+        PLUGIN_SPOTON_CONNECT_BTN
+        PLUGIN_SPOTON_ADD_ANOTHER
+        PLUGIN_SPOTON_CONNECTED_AS
+        PLUGIN_SPOTON_SETUP_HINT
+        PLUGIN_SPOTON_AUTH_STATE_ERROR
+        PLUGIN_SPOTON_AUTH_DENIED
+        PLUGIN_SPOTON_AUTH_SUCCESS
+        PLUGIN_SPOTON_AUTH_REDIRECT
+        PLUGIN_SPOTON_AUTH_FAILED
+        PLUGIN_SPOTON_BACK_TO_SETTINGS
+        PLUGIN_SPOTON_CLIENT_ID_REQUIRED
+        PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
+    );
+
+    # Obsolete keys that must NOT be present (removed in Phase 02.1)
+    my @removed_keys = qw(
         PLUGIN_SPOTON_ACCOUNT_USERNAME
         PLUGIN_SPOTON_ACCOUNT_PASSWORD
-        PLUGIN_SPOTON_AUTH_ERROR
+        PLUGIN_SPOTON_ACCOUNT_ADD
+        PLUGIN_SPOTON_ACCOUNT_ADD_BTN
     );
 
     # Keys that only require EN (format identifiers etc.)
@@ -73,6 +94,11 @@ SKIP: {
     # Verify EN-only keys
     for my $key (@en_only_keys) {
         ok($has_en{$key}, "$key has EN translation");
+    }
+
+    # Verify obsolete keys are removed (Phase 02.1 cleanup)
+    for my $key (@removed_keys) {
+        ok(!$has_en{$key} && !$has_de{$key}, "$key is removed (obsolete in Phase 02.1)");
     }
 
     # Verify correct indentation: lines must use Tab, not spaces
