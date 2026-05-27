@@ -68,14 +68,26 @@ sub handler {
             }
         }
 
-        # Account remove
+        # Account remove (CR-03).
+        # Determine the new activeAccount BEFORE calling removeAccount, because
+        # removeAccount clears activeAccount to '' before returning — checking
+        # it afterwards would always yield '' and never auto-select a replacement.
         if (my $removeId = $paramRef->{removeAccount}) {
-            Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
-            # If removed account was active, switch to first remaining account
+            my $newActive;
             if (($prefs->get('activeAccount') || '') eq $removeId) {
-                my $accounts   = $prefs->get('accounts') || {};
-                my @remaining  = grep { $_ ne $removeId } keys %{$accounts};
-                my $newActive  = @remaining ? $remaining[0] : '';
+                # Removed account was active — pick a replacement from the
+                # remaining accounts (sorted for determinism).
+                my $accounts  = $prefs->get('accounts') || {};
+                my @remaining = sort grep { $_ ne $removeId } keys %{$accounts};
+                $newActive = @remaining ? $remaining[0] : '';
+            }
+
+            Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
+
+            # Apply the pre-computed replacement if one was needed.
+            # (removeAccount already set activeAccount to '' if it was active;
+            # we overwrite that '' with the proper replacement here.)
+            if (defined $newActive) {
                 $prefs->set('activeAccount', $newActive);
             }
         }
