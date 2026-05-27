@@ -1,0 +1,5 @@
+# Rust build artifacts
+librespot-spoton/target/
+
+# Perl test artifacts
+*.bak
