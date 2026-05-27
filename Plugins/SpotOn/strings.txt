@@ -18,10 +18,6 @@ PLUGIN_SPOTON_ACCOUNT_SETTINGS
 	DE	Konto-Einstellungen
 	EN	Account Settings
 
-PLUGIN_SPOTON_ACCOUNT_PLACEHOLDER
-	DE	Konto-Einstellungen werden in einer späteren Phase konfigurierbar sein.
-	EN	Account settings will be configurable in a later phase.
-
 PLUGIN_SPOTON_BITRATE
 	DE	Bitrate
 	EN	Bitrate
@@ -29,6 +25,50 @@ PLUGIN_SPOTON_BITRATE
 PLUGIN_SPOTON_NO_BINARY
 	DE	Kein SpotOn-Binary gefunden. Streaming ist nicht möglich.
 	EN	No SpotOn binary found. Streaming is not possible.
+
+PLUGIN_SPOTON_ACTIVE_ACCOUNT
+	DE	Aktiv: %s [wechseln]
+	EN	Active: %s [switch]
+
+PLUGIN_SPOTON_RATE_LIMIT_HINT
+	DE	Spotify-Anfragen gedrosselt -- bitte warten
+	EN	Spotify requests throttled -- please wait
+
+PLUGIN_SPOTON_ACCOUNT_NONE
+	DE	Kein Konto konfiguriert
+	EN	No account configured
+
+PLUGIN_SPOTON_ACCOUNT_ADD
+	DE	Konto hinzufuegen
+	EN	Add Account
+
+PLUGIN_SPOTON_ACCOUNT_ADD_BTN
+	DE	Hinzufuegen
+	EN	Add
+
+PLUGIN_SPOTON_ACCOUNT_ACTIVE
+	DE	Aktiv
+	EN	Active
+
+PLUGIN_SPOTON_ACCOUNT_SWITCH
+	DE	Wechseln
+	EN	Switch
+
+PLUGIN_SPOTON_ACCOUNT_REMOVE
+	DE	Entfernen
+	EN	Remove
+
+PLUGIN_SPOTON_ACCOUNT_USERNAME
+	DE	Benutzername (Spotify)
+	EN	Username (Spotify)
+
+PLUGIN_SPOTON_ACCOUNT_PASSWORD
+	DE	Passwort
+	EN	Password
+
+PLUGIN_SPOTON_AUTH_ERROR
+	DE	Anmeldung fehlgeschlagen
+	EN	Authentication failed
 
 SON
 	EN	SpotOn

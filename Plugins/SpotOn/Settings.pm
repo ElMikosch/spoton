@@ -26,11 +26,14 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary');
+    return ($prefs, 'bitrate', 'binary', 'activeAccount');
+    # Note: 'accounts' hash is managed manually in handler, not via auto-pref saving
 }
 
 sub handler {
     my ($class, $client, $paramRef, $callback, $httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::TokenManager;
 
     my ($helperPath, $helperVersion) = Plugins::SpotOn::Helper->get();
 
@@ -44,7 +47,52 @@ sub handler {
         my $bitrate = $paramRef->{'pref_bitrate'};
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
+
+        # Account add (D-07)
+        if ($paramRef->{addAccount}) {
+            my $username = $paramRef->{username} // '';
+            my $password = $paramRef->{password} // '';
+            $username =~ s/^\s+|\s+$//g;  # trim whitespace
+            $password =~ s/^\s+|\s+$//g;  # trim whitespace
+
+            if ($username && $password) {
+                Plugins::SpotOn::API::TokenManager->addAccount($username, $password, sub {
+                    my ($accountId, $err) = @_;
+                    if ($err) {
+                        $paramRef->{authError} = $err;
+                    } else {
+                        $prefs->set('activeAccount', $accountId)
+                            unless $prefs->get('activeAccount');
+                    }
+                    $paramRef->{accounts}      = $prefs->get('accounts') || {};
+                    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
+                    return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+                });
+                return;  # async — callback will complete the response
+            }
+        }
+
+        # Account remove
+        if (my $removeId = $paramRef->{removeAccount}) {
+            Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
+            # If removed account was active, switch to first remaining account
+            if (($prefs->get('activeAccount') || '') eq $removeId) {
+                my $accounts   = $prefs->get('accounts') || {};
+                my @remaining  = grep { $_ ne $removeId } keys %{$accounts};
+                my $newActive  = @remaining ? $remaining[0] : '';
+                $prefs->set('activeAccount', $newActive);
+            }
+        }
+
+        # Account switch
+        if (my $switchId = $paramRef->{switchAccount}) {
+            $prefs->set('activeAccount', $switchId);
+        }
     }
+
+    # Pass account data to template for all requests
+    $paramRef->{accounts}      = $prefs->get('accounts') || {};
+    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
