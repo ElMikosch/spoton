@@ -1,0 +1,27 @@
+[% PROCESS settings/header.html %]
+	[% title = "PLUGIN_SPOTON" %]
+	[% IF helperMissing; WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
+		<div style="color: red">[% helperMissing %]</div>
+	[% END; END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
+		[% IF binaryPath %]
+			<p>[% binaryPath %] (v[% binaryVersion %])</p>
+		[% ELSE %]
+			<div style="color: red">[% 'PLUGIN_SPOTON_BINARY_MISSING' | string %]</div>
+		[% END %]
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BITRATE" desc="" %]
+		<select class="stdedit" name="pref_bitrate" id="pref_bitrate">
+			<option value="320" [% IF prefs.pref_bitrate == 320 %]selected[% END %]>320 kbps</option>
+			<option value="160" [% IF prefs.pref_bitrate == 160 %]selected[% END %]>160 kbps</option>
+			<option value="96"  [% IF prefs.pref_bitrate == 96  %]selected[% END %]>96 kbps</option>
+		</select>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
+		<p style="color: grey">[% 'PLUGIN_SPOTON_ACCOUNT_PLACEHOLDER' | string %]</p>
+	[% END %]
+
+[% PROCESS settings/footer.html %]
