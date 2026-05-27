@@ -1,0 +1,7 @@
+# Cargo configuration for librespot-spoton
+# Produces static-pie linked binaries when musl-tools is not available.
+# With musl-tools installed: use --target x86_64-unknown-linux-musl (preferred for LMS deployment)
+# Without musl-tools: use --target x86_64-unknown-linux-gnu with +crt-static (static-pie linked)
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-feature=+crt-static"]
