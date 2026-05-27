@@ -18,6 +18,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Settings.pm",
     "$project_dir/Plugins/SpotOn/API/TokenManager.pm",
     "$project_dir/Plugins/SpotOn/API/Client.pm",
+    "$project_dir/Plugins/SpotOn/Settings/Callback.pm",
 );
 
 # Check which files actually exist
@@ -252,6 +253,13 @@ write_stub($stub_dir, 'Slim::Web::HTTP::CSRF', <<'END');
 package Slim::Web::HTTP::CSRF;
 sub protectName { $_[1] }
 sub protectURI  { $_[1] }
+1;
+END
+
+# Stub: Slim::Web::Pages (needed by Settings/Callback.pm)
+write_stub($stub_dir, 'Slim::Web::Pages', <<'END');
+package Slim::Web::Pages;
+sub addPageFunction { }
 1;
 END
 
