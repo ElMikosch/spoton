@@ -1,0 +1,20 @@
+<?xml version='1.0' standalone='yes'?>
+<extension>
+	<name>PLUGIN_SPOTON_NAME</name>
+	<creator>Marek Stiefenhofer</creator>
+	<defaultState>enabled</defaultState>
+	<description>PLUGIN_SPOTON</description>
+	<email>sti@posteo.de</email>
+	<category>musicservices</category>
+	<id>7fdb8daa-2ff3-4725-8464-753478541deb</id>
+	<module>Plugins::SpotOn::Plugin</module>
+	<optionsURL>plugins/SpotOn/settings/basic.html</optionsURL>
+	<icon>plugins/SpotOn/html/images/icon.png</icon>
+	<targetApplication>
+		<id>SqueezeCenter</id>
+		<maxVersion>*</maxVersion>
+		<minVersion>8.0</minVersion>
+	</targetApplication>
+	<type>2</type>
+	<version>0.1.0</version>
+</extension>
