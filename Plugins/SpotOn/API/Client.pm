@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use JSON::XS::VersionOneAndTwo;
+use URI::Escape qw(uri_escape);
 
 use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Cache;
@@ -72,13 +73,17 @@ sub _request {
         return;
     }
 
-    # Step 2: Response cache check (API-03) — skip for _noCache paths
+    # Step 2: Response cache check (API-03) — skip for _noCache paths.
+    # Cache key is built here only if it was pre-computed on a prior pass
+    # (i.e. after query params are known). On first entry _cacheKey is undef
+    # so we skip the check; on retry from the timer the key is already set.
     unless ($params->{_noCache}) {
-        my $cacheKey = "spoton_resp_$path";
-        if (my $cached = $cache->get($cacheKey)) {
-            main::INFOLOG && $log->info("Client: cache hit for $path");
-            $cb->($cached);
-            return;
+        if (my $cacheKey = $params->{_cacheKey}) {
+            if (my $cached = $cache->get($cacheKey)) {
+                main::INFOLOG && $log->info("Client: cache hit for $path");
+                $cb->($cached);
+                return;
+            }
         }
     }
 
@@ -107,16 +112,34 @@ sub _request {
             return;
         }
 
-        # Step 6: Build URL and fire async HTTP request
-        # Append query params (excluding keys prefixed with _)
+        # Step 6: Build URL and fire async HTTP request.
+        # Append query params (excluding keys prefixed with _).
+        # Build the cache key from path + sorted query string so that two
+        # calls differing only in query params never share a cache entry (CR-02).
         my $url = API_BASE . "/$path";
         my @queryParts;
         for my $key (sort keys %{$params}) {
             next if $key =~ /^_/;
-            push @queryParts, "$key=" . URI::Escape::uri_escape($params->{$key});
+            push @queryParts, "$key=" . uri_escape($params->{$key});
         }
-        if (@queryParts) {
-            $url .= '?' . join('&', @queryParts);
+        my $queryStr = join('&', @queryParts);
+        if ($queryStr) {
+            $url .= '?' . $queryStr;
+        }
+
+        # Compute and cache the key so _onSuccess can use the same key.
+        # Also perform the cache lookup now that we know the full key.
+        unless ($params->{_noCache}) {
+            my $cacheKey = $queryStr
+                ? "spoton_resp_${path}?${queryStr}"
+                : "spoton_resp_${path}";
+            $params->{_cacheKey} = $cacheKey;
+            if (my $cached = $cache->get($cacheKey)) {
+                $inflightCount--;
+                main::INFOLOG && $log->info("Client: cache hit for $path");
+                $cb->($cached);
+                return;
+            }
         }
 
         # T-02-10: Never log Authorization header value — only URL path and status
@@ -148,11 +171,12 @@ sub _onSuccess {
         return;
     }
 
-    # Cache response with domain-specific TTL (API-03) unless _noCache or TTL=0
+    # Cache response with domain-specific TTL (API-03) unless _noCache or TTL=0.
+    # Use the pre-computed _cacheKey that includes query params (CR-02).
     unless ($params->{_noCache}) {
         my $ttl = $class->_cacheTTL($path);
         if ($ttl > 0) {
-            my $cacheKey = "spoton_resp_$path";
+            my $cacheKey = $params->{_cacheKey} || "spoton_resp_$path";
             $cache->set($cacheKey, $result, $ttl);
             main::INFOLOG && $log->info("Client: cached $path for ${ttl}s");
         }
