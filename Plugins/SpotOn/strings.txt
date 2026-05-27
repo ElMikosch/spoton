@@ -38,14 +38,6 @@ PLUGIN_SPOTON_ACCOUNT_NONE
 	DE	Kein Konto konfiguriert
 	EN	No account configured
 
-PLUGIN_SPOTON_ACCOUNT_ADD
-	DE	Konto hinzufuegen
-	EN	Add Account
-
-PLUGIN_SPOTON_ACCOUNT_ADD_BTN
-	DE	Hinzufuegen
-	EN	Add
-
 PLUGIN_SPOTON_ACCOUNT_ACTIVE
 	DE	Aktiv
 	EN	Active
@@ -58,17 +50,77 @@ PLUGIN_SPOTON_ACCOUNT_REMOVE
 	DE	Entfernen
 	EN	Remove
 
-PLUGIN_SPOTON_ACCOUNT_USERNAME
-	DE	Benutzername (Spotify)
-	EN	Username (Spotify)
-
-PLUGIN_SPOTON_ACCOUNT_PASSWORD
-	DE	Passwort
-	EN	Password
-
 PLUGIN_SPOTON_AUTH_ERROR
 	DE	Anmeldung fehlgeschlagen
 	EN	Authentication failed
+
+PLUGIN_SPOTON_SETUP_WIZARD
+	DE	Einrichtungs-Assistent
+	EN	Setup Wizard
+
+PLUGIN_SPOTON_STEP1_BODY
+	DE	Erstelle eine App im Spotify Developer Dashboard und trage folgende Redirect-URI ein:
+	EN	Create an app in the Spotify Developer Dashboard and register this Redirect URI exactly:
+
+PLUGIN_SPOTON_DASHBOARD_LINK
+	DE	Spotify Developer Dashboard öffnen
+	EN	Open Spotify Developer Dashboard
+
+PLUGIN_SPOTON_CLIENT_ID_LABEL
+	DE	Client-ID deiner Spotify-App:
+	EN	Client ID of your Spotify app:
+
+PLUGIN_SPOTON_CLIENT_ID_HINT
+	DE	Die Client-ID findest du in den App-Einstellungen unter "Client ID".
+	EN	Find the Client ID in your app settings under "Client ID".
+
+PLUGIN_SPOTON_CONNECT_BTN
+	DE	Mit Spotify verbinden
+	EN	Connect with Spotify
+
+PLUGIN_SPOTON_ADD_ANOTHER
+	DE	Weiteres Konto hinzufügen
+	EN	Add Another Account
+
+PLUGIN_SPOTON_CONNECTED_AS
+	DE	Verbunden als: %s
+	EN	Connected as: %s
+
+PLUGIN_SPOTON_SETUP_HINT
+	DE	Folge dem Einrichtungs-Assistenten oben, um SpotOn mit Spotify zu verbinden.
+	EN	Follow the Setup Wizard above to connect SpotOn with Spotify.
+
+PLUGIN_SPOTON_AUTH_STATE_ERROR
+	DE	Sicherheitsüberprüfung fehlgeschlagen. Bitte versuche die Anmeldung erneut.
+	EN	Security check failed. Please try authenticating again.
+
+PLUGIN_SPOTON_AUTH_DENIED
+	DE	Zugriff verweigert. Bitte erlaube SpotOn den Zugriff auf dein Spotify-Konto.
+	EN	Access denied. Please allow SpotOn to access your Spotify account.
+
+PLUGIN_SPOTON_AUTH_SUCCESS
+	DE	Erfolgreich verbunden!
+	EN	Successfully connected!
+
+PLUGIN_SPOTON_AUTH_REDIRECT
+	DE	Du wirst gleich zu den Einstellungen weitergeleitet...
+	EN	Redirecting to settings...
+
+PLUGIN_SPOTON_AUTH_FAILED
+	DE	Verbindung fehlgeschlagen
+	EN	Connection failed
+
+PLUGIN_SPOTON_BACK_TO_SETTINGS
+	DE	Zurück zu den Einstellungen
+	EN	Back to Settings
+
+PLUGIN_SPOTON_CLIENT_ID_REQUIRED
+	DE	Bitte trage zuerst eine Client-ID ein.
+	EN	Please enter a Client ID first.
+
+PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
+	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.
+	EN	Remove this account? This cannot be undone.
 
 SON
 	EN	SpotOn

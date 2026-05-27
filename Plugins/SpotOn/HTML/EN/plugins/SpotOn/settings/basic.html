@@ -20,13 +20,49 @@
 		</select>
 	[% END %]
 
+	[% IF NOT accounts.keys.size %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_SETUP_WIZARD" desc="" %]
+		<p><strong>Schritt 1: Spotify-App registrieren</strong></p>
+		<p>[% 'PLUGIN_SPOTON_STEP1_BODY' | string %]</p>
+		<p><code>[% redirectUri | html %]</code></p>
+		<p><a href="https://developer.spotify.com/dashboard" target="_blank">[% 'PLUGIN_SPOTON_DASHBOARD_LINK' | string %]</a></p>
+
+		<p><label for="pref_clientId">[% 'PLUGIN_SPOTON_CLIENT_ID_LABEL' | string %]</label><br/>
+		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
+			value="[% prefs.pref_clientId | html %]"/></p>
+		<p class="hint">[% 'PLUGIN_SPOTON_CLIENT_ID_HINT' | string %]</p>
+
+		<p><strong>Schritt 2: Mit Spotify verbinden</strong></p>
+
+		[% IF oauthError %]
+		<div style="color:red">[% oauthError | html %]</div>
+		[% END %]
+
+		<input type="submit" name="startOAuth"
+			value="[% 'PLUGIN_SPOTON_CONNECT_BTN' | string %]"
+			class="submit" id="startOAuthBtn"[% IF NOT clientId %] disabled[% END %]/>
+
+		<script type="text/javascript">
+		// Prototype.js is available in LMS WebUI context
+		document.observe("dom:loaded", function() {
+			var clientIdField = $('pref_clientId');
+			var connectBtn    = $('startOAuthBtn');
+			if (clientIdField && connectBtn) {
+				clientIdField.observe('input', function() {
+					connectBtn.disabled = (clientIdField.value.trim() == '');
+				});
+			}
+		});
+		</script>
+	[% END %]
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
 			<table style="width:100%">
 			[% FOREACH id IN accounts.keys %]
 				<tr>
 					<td>[% accounts.$id.displayName | html %]</td>
-					<td>[% accounts.$id.username | html %]</td>
 					<td>
 						[% IF id == activeAccount %]
 							<strong>[% 'PLUGIN_SPOTON_ACCOUNT_ACTIVE' | string %]</strong>
@@ -39,28 +75,20 @@
 					<td>
 						<input type="hidden" name="removeAccount" value="[% id | html %]" disabled/>
 						<input type="submit" value="[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE' | string %]"
-							onclick="this.previousElementSibling.disabled=false"/>
+							onclick="return confirm('[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM' | string %]') && (this.previousElementSibling.disabled=false,true)"/>
 					</td>
 				</tr>
 			[% END %]
 			</table>
+
+			<p>
+				<input type="submit" name="startOAuth"
+					value="[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]"
+					class="submit"/>
+			</p>
 		[% ELSE %]
 			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
 		[% END %]
-
-		<hr/>
-		<p><strong>[% 'PLUGIN_SPOTON_ACCOUNT_ADD' | string %]</strong></p>
-		[% IF authError %]
-			<div style="color:red">[% authError | html %]</div>
-		[% END %]
-		<label>[% 'PLUGIN_SPOTON_ACCOUNT_USERNAME' | string %]<br/>
-			<input type="text" name="username" value="" autocomplete="username"/>
-		</label><br/>
-		<label>[% 'PLUGIN_SPOTON_ACCOUNT_PASSWORD' | string %]<br/>
-			<input type="password" name="password" value="" autocomplete="current-password"/>
-		</label><br/>
-		<input type="submit" name="addAccount" value="[% 'PLUGIN_SPOTON_ACCOUNT_ADD_BTN' | string %]"
-			class="submit" id="addAccountBtn"/>
 	[% END %]
 
 [% PROCESS settings/footer.html %]

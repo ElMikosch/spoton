@@ -256,9 +256,11 @@ END
 # Stub: Plugins::SpotOn::API::TokenManager (needed by Settings.pm)
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-sub addAccount    { my ($class, $u, $p, $cb) = @_; $cb->('stub1234', undef) }
-sub removeAccount { }
-sub getAccountIds { return () }
+sub addAccount        { my ($class, $u, $p, $cb) = @_; $cb->('stub1234', undef) }
+sub removeAccount     { }
+sub getAccountIds     { return () }
+sub _buildRedirectUri { return 'http://127.0.0.1:9000/plugins/SpotOn/settings/callback' }
+sub startOAuthFlow    { return ('https://accounts.spotify.com/authorize?mocked=1', 'teststate') }
 1;
 END
 
@@ -386,13 +388,11 @@ SKIP: {
             PLUGIN_SPOTON_ACTIVE_ACCOUNT
             PLUGIN_SPOTON_RATE_LIMIT_HINT
             PLUGIN_SPOTON_ACCOUNT_NONE
-            PLUGIN_SPOTON_ACCOUNT_ADD
-            PLUGIN_SPOTON_ACCOUNT_ADD_BTN
             PLUGIN_SPOTON_ACCOUNT_ACTIVE
             PLUGIN_SPOTON_ACCOUNT_SWITCH
             PLUGIN_SPOTON_ACCOUNT_REMOVE
-            PLUGIN_SPOTON_ACCOUNT_USERNAME
-            PLUGIN_SPOTON_ACCOUNT_PASSWORD
+            PLUGIN_SPOTON_SETUP_WIZARD
+            PLUGIN_SPOTON_CONNECT_BTN
         );
 
         for my $key (@required_keys) {
