@@ -1,0 +1,100 @@
+package Plugins::SpotOn::Settings;
+
+use strict;
+use warnings;
+use base qw(Slim::Web::Settings);
+
+use Slim::Utils::Prefs;
+use Slim::Utils::Strings qw(string);
+use Plugins::SpotOn::Helper;
+
+use constant SETTINGS_URL => 'plugins/SpotOn/settings/basic.html';
+
+my $prefs = preferences('plugin.spoton');
+
+sub new {
+    my $class = shift;
+    return $class->SUPER::new(@_);
+}
+
+sub name {
+    return Slim::Web::HTTP::CSRF->protectName('PLUGIN_SPOTON_NAME');
+}
+
+sub page {
+    return Slim::Web::HTTP::CSRF->protectURI(SETTINGS_URL);
+}
+
+sub prefs {
+    return ($prefs, 'bitrate', 'binary', 'activeAccount');
+    # Note: 'accounts' hash is managed manually in handler, not via auto-pref saving
+}
+
+sub handler {
+    my ($class, $client, $paramRef, $callback, $httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::TokenManager;
+
+    my ($helperPath, $helperVersion) = Plugins::SpotOn::Helper->get();
+
+    # Binary-Status an Template uebergeben
+    $paramRef->{helperMissing} = string('PLUGIN_SPOTON_BINARY_MISSING') unless $helperPath;
+    $paramRef->{binaryVersion} = $helperVersion || '';
+    $paramRef->{binaryPath}    = $helperPath    || '';
+
+    if ($paramRef->{saveSettings}) {
+        my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
+        my $bitrate = $paramRef->{'pref_bitrate'};
+        $bitrate = 320 unless $valid_bitrates{$bitrate};
+        $prefs->set('bitrate', $bitrate);
+
+        # Account add (D-07)
+        if ($paramRef->{addAccount}) {
+            my $username = $paramRef->{username} // '';
+            my $password = $paramRef->{password} // '';
+            $username =~ s/^\s+|\s+$//g;  # trim whitespace
+            $password =~ s/^\s+|\s+$//g;  # trim whitespace
+
+            if ($username && $password) {
+                Plugins::SpotOn::API::TokenManager->addAccount($username, $password, sub {
+                    my ($accountId, $err) = @_;
+                    if ($err) {
+                        $paramRef->{authError} = $err;
+                    } else {
+                        $prefs->set('activeAccount', $accountId)
+                            unless $prefs->get('activeAccount');
+                    }
+                    $paramRef->{accounts}      = $prefs->get('accounts') || {};
+                    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
+                    return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+                });
+                return;  # async — callback will complete the response
+            }
+        }
+
+        # Account remove
+        if (my $removeId = $paramRef->{removeAccount}) {
+            Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
+            # If removed account was active, switch to first remaining account
+            if (($prefs->get('activeAccount') || '') eq $removeId) {
+                my $accounts   = $prefs->get('accounts') || {};
+                my @remaining  = grep { $_ ne $removeId } keys %{$accounts};
+                my $newActive  = @remaining ? $remaining[0] : '';
+                $prefs->set('activeAccount', $newActive);
+            }
+        }
+
+        # Account switch
+        if (my $switchId = $paramRef->{switchAccount}) {
+            $prefs->set('activeAccount', $switchId);
+        }
+    }
+
+    # Pass account data to template for all requests
+    $paramRef->{accounts}      = $prefs->get('accounts') || {};
+    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
+
+    return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+}
+
+1;

@@ -1,0 +1,64 @@
+[% PROCESS settings/header.html %]
+	[% title = "PLUGIN_SPOTON" %]
+	[% IF helperMissing; WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
+		<div style="color: red">[% helperMissing %]</div>
+	[% END; END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
+		[% IF binaryPath %]
+			<p>[% binaryPath | html %] (v[% binaryVersion | html %])</p>
+		[% ELSE %]
+			<div style="color: red">[% 'PLUGIN_SPOTON_BINARY_MISSING' | string %]</div>
+		[% END %]
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BITRATE" desc="" %]
+		<select class="stdedit" name="pref_bitrate" id="pref_bitrate">
+			<option value="320" [% IF prefs.pref_bitrate == 320 %]selected[% END %]>320 kbps</option>
+			<option value="160" [% IF prefs.pref_bitrate == 160 %]selected[% END %]>160 kbps</option>
+			<option value="96"  [% IF prefs.pref_bitrate == 96  %]selected[% END %]>96 kbps</option>
+		</select>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
+		[% IF accounts.keys.size > 0 %]
+			<table style="width:100%">
+			[% FOREACH id IN accounts.keys %]
+				<tr>
+					<td>[% accounts.$id.displayName | html %]</td>
+					<td>[% accounts.$id.username | html %]</td>
+					<td>
+						[% IF id == activeAccount %]
+							<strong>[% 'PLUGIN_SPOTON_ACCOUNT_ACTIVE' | string %]</strong>
+						[% ELSE %]
+							<input type="submit" name="switchAccount" value="[% id | html %]"
+								onclick="[% 'PLUGIN_SPOTON_ACCOUNT_SWITCH' | string %]"/>
+						[% END %]
+					</td>
+					<td>
+						<input type="submit" name="removeAccount" value="[% id | html %]"
+							onclick="[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE' | string %]"/>
+					</td>
+				</tr>
+			[% END %]
+			</table>
+		[% ELSE %]
+			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
+		[% END %]
+
+		<hr/>
+		<p><strong>[% 'PLUGIN_SPOTON_ACCOUNT_ADD' | string %]</strong></p>
+		[% IF authError %]
+			<div style="color:red">[% authError | html %]</div>
+		[% END %]
+		<label>[% 'PLUGIN_SPOTON_ACCOUNT_USERNAME' | string %]<br/>
+			<input type="text" name="username" value="" autocomplete="username"/>
+		</label><br/>
+		<label>[% 'PLUGIN_SPOTON_ACCOUNT_PASSWORD' | string %]<br/>
+			<input type="password" name="password" value="" autocomplete="current-password"/>
+		</label><br/>
+		<input type="submit" name="addAccount" value="1"
+			class="submit" id="addAccountBtn"/>
+	[% END %]
+
+[% PROCESS settings/footer.html %]
