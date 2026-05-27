@@ -51,27 +51,47 @@ sub init { }
 END
 
 # Stub: Slim::Utils::Log
+# logger() is exported as a function when modules do 'use Slim::Utils::Log'
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
+use parent 'Exporter';
+our @EXPORT_OK = qw(logger);
+# Install logger() into caller namespace so bare 'logger(...)' works
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::logger"} = \&logger;
+}
 sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
 sub logger {
     return bless { _calls => [] }, 'Slim::Utils::Log';
 }
-sub info  { push @{$_[0]->{_calls}}, ['info',  $_[1]] }
-sub warn  { push @{$_[0]->{_calls}}, ['warn',  $_[1]] }
-sub error { push @{$_[0]->{_calls}}, ['error', $_[1]] }
-sub debug { push @{$_[0]->{_calls}}, ['debug', $_[1]] }
+sub info     { push @{$_[0]->{_calls}}, ['info',  $_[1]] }
+sub warn     { push @{$_[0]->{_calls}}, ['warn',  $_[1]] }
+sub error    { push @{$_[0]->{_calls}}, ['error', $_[1]] }
+sub debug    { push @{$_[0]->{_calls}}, ['debug', $_[1]] }
+sub is_info  { 0 }
+sub is_debug { 0 }
 sub AUTOLOAD { }
 sub can { 1 }
 1;
 END
 
 # Stub: Slim::Utils::Prefs
+# preferences() is exported as a function when modules do 'use Slim::Utils::Prefs'
 my $prefs_cache_dir = $cache_dir;
 write_stub($stub_dir, 'Slim::Utils::Prefs', <<"END");
 package Slim::Utils::Prefs;
 my %_store;
 my %_ns_store = ( server => { cachedir => '$prefs_cache_dir' } );
+
+sub import {
+    my \$class = shift;
+    my \$caller = caller;
+    no strict 'refs';
+    *{"\${caller}::preferences"} = \\\&preferences;
+}
 
 sub preferences {
     my \$ns = \$_[0] eq 'Slim::Utils::Prefs' ? \$_[1] : \$_[0];
