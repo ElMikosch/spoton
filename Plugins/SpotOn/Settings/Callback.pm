@@ -15,12 +15,14 @@ use warnings;
 
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
+use Slim::Utils::Prefs;
 use Slim::Web::Pages;
 
 use constant CALLBACK_PATH => 'plugins/SpotOn/settings/callback';
 
 my $log   = logger('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
+my $prefs = preferences('plugin.spoton');
 
 # ============================================================
 # Public class methods
@@ -50,7 +52,7 @@ sub handler {
     # Error path: user denied or Spotify returned an error
     if ($error) {
         main::INFOLOG && $log->info("Callback: Spotify returned error: $error");
-        _renderResult($client, $paramRef, $callback, $httpClient, $response, 0, $error);
+        _renderResult($client, $paramRef, $callback, $httpClient, $response, undef, 0, $error);
         return;
     }
 
@@ -61,7 +63,7 @@ sub handler {
         # State not found: expired (>600s), already consumed, or forged
         main::INFOLOG && $log->info("Callback: state validation failed (state prefix: "
             . substr($state, 0, 8) . "...)");
-        _renderResult($client, $paramRef, $callback, $httpClient, $response, 0, 'invalid_state');
+        _renderResult($client, $paramRef, $callback, $httpClient, $response, undef, 0, 'invalid_state');
         return;
     }
 
@@ -85,10 +87,12 @@ sub handler {
             if (defined $accountId) {
                 main::INFOLOG && $log->info(
                     "Callback: token exchange succeeded for account $accountId");
-                _renderResult($client, $paramRef, $callback, $httpClient, $response, 1, undef);
+                my $accounts    = $prefs->get('accounts') || {};
+                my $displayName = $accounts->{$accountId}{displayName};
+                _renderResult($client, $paramRef, $callback, $httpClient, $response, $displayName, 1, undef);
             } else {
                 $log->error("Callback: token exchange failed: " . ($err // 'unknown error'));
-                _renderResult($client, $paramRef, $callback, $httpClient, $response, 0, $err);
+                _renderResult($client, $paramRef, $callback, $httpClient, $response, undef, 0, $err);
             }
         }
     );
@@ -101,13 +105,14 @@ sub handler {
 # Private helpers
 # ============================================================
 
-# _renderResult($client, $paramRef, $callback, $httpClient, $response, $success, $errorMsg)
+# _renderResult($client, $paramRef, $callback, $httpClient, $response, $displayName, $success, $errorMsg)
 # Builds and delivers an HTML response inline.
-# Success path: "Erfolgreich verbunden!" with auto-redirect to settings after 2s.
+# Success path: "Erfolgreich verbunden!" with display name and auto-redirect to settings after 2s.
 # Error path: "Verbindung fehlgeschlagen" with error message and back link.
 # Per UI-SPEC.md Screen 3.
+# T-02.1-GC-01: displayName is passed through _html_escape() before embedding in HTML (XSS prevention).
 sub _renderResult {
-    my ($client, $paramRef, $callback, $httpClient, $response, $success, $errorMsg) = @_;
+    my ($client, $paramRef, $callback, $httpClient, $response, $displayName, $success, $errorMsg) = @_;
 
     $response->content_type('text/html');
 
@@ -118,6 +123,9 @@ sub _renderResult {
 
     my $html;
     if ($success) {
+        my $displayNameHtml = (defined $displayName && $displayName ne '')
+            ? '<p>Verbunden als: <strong>' . _html_escape($displayName) . '</strong></p>'
+            : '';
         $html = <<"HTML";
 <!DOCTYPE html>
 <html>
@@ -127,7 +135,7 @@ sub _renderResult {
 </head>
 <body style="font-family:sans-serif;padding:24px">
 <h2 style="color:green">Erfolgreich verbunden!</h2>
-<p>Du wirst gleich zu den Einstellungen weitergeleitet...</p>
+$displayNameHtml<p>Du wirst gleich zu den Einstellungen weitergeleitet...</p>
 <script>
 setTimeout(function() {
     window.location = "$settingsUrl";

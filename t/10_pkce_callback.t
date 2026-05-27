@@ -292,12 +292,18 @@ END
 # Toggle $Plugins::SpotOn::API::TokenManager::_force_error to '...' for error mode
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-our $_force_error = undef;  # set to error string to simulate failure
+our $_force_error  = undef;   # set to error string to simulate failure
+our $_display_name = 'Test User';  # display name seeded into accounts pref on success
 sub exchangeCode {
     my ($class, $code, $verifier, $clientId, $redirectUri, $cb) = @_;
     if ($_force_error) {
         $cb->(undef, $_force_error);
     } else {
+        # Seed accounts hash with displayName BEFORE calling $cb so Callback.pm
+        # can read it from prefs immediately in the success branch.
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('accounts', {
+            testacct => { displayName => $_display_name },
+        });
         $cb->('testacct', undef);
     }
 }
@@ -354,7 +360,7 @@ Slim::Utils::Log->import();
 my $callback_module = "$project_dir/Plugins/SpotOn/Settings/Callback.pm";
 
 SKIP: {
-    skip "Settings/Callback.pm not yet created", 12
+    skip "Settings/Callback.pm not yet created", 15
         unless -f $callback_module;
 
     require_ok('Plugins::SpotOn::Settings::Callback')
@@ -468,8 +474,11 @@ SKIP: {
         if (defined $html_ref && ref($html_ref) eq 'SCALAR') {
             like($$html_ref, qr/Erfolgreich|verbunden/i,
                 'D-08: HTML body contains success message after valid code exchange');
+            like($$html_ref, qr/Verbunden als:.*Test User/s,
+                'SC-2: success page shows display name');
         } else {
             fail('D-08: HTML reference not available for success test');
+            fail('SC-2: HTML reference not available for display name test');
         }
     }
 
@@ -522,6 +531,54 @@ SKIP: {
 
         # Reset for subsequent tests
         $Plugins::SpotOn::API::TokenManager::_force_error = undef;
+    }
+
+    # --------------------------------------------------------
+    # Test 7: Success page omits "Verbunden als" when displayName is empty
+    # --------------------------------------------------------
+    {
+        my $cache = Slim::Utils::Cache->new();
+        $cache->clear();
+
+        # Seed PKCE data
+        $cache->set('spoton_pkce_emptyname', {
+            code_verifier => 'empty_verifier',
+            client_id     => 'empty_client',
+            redirect_uri  => 'http://127.0.0.1:9000/plugins/SpotOn/settings/callback',
+        }, 600);
+
+        # Seed accounts with empty displayName
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('accounts', {
+            testacct => { displayName => '' },
+        });
+
+        # Override TokenManager to NOT re-seed accounts (use the empty name above)
+        $Plugins::SpotOn::API::TokenManager::_display_name = '';
+
+        my @result_args;
+        my $mock_response = bless {}, 'MockResponse';
+
+        Plugins::SpotOn::Settings::Callback::handler(
+            undef,
+            { code => 'empty_name_code', state => 'emptyname' },
+            sub { @result_args = @_ },
+            undef,
+            $mock_response
+        );
+
+        my $html_ref = $result_args[2];
+        if (defined $html_ref && ref($html_ref) eq 'SCALAR') {
+            like($$html_ref, qr/Erfolgreich/i,
+                'SC-2: success page renders even when displayName is empty');
+            unlike($$html_ref, qr/Verbunden als:/,
+                'SC-2: success page omits "Verbunden als:" when displayName is empty');
+        } else {
+            fail('SC-2: HTML reference not available for empty displayName test');
+            fail('SC-2: HTML reference not available for empty displayName omission test');
+        }
+
+        # Restore default display name
+        $Plugins::SpotOn::API::TokenManager::_display_name = 'Test User';
     }
 }
 
