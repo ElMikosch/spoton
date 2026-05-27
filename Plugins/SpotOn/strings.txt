@@ -1,0 +1,74 @@
+PLUGIN_SPOTON
+	DE	SpotOn Spotify für Squeezebox
+	EN	SpotOn Spotify for Squeezebox
+
+PLUGIN_SPOTON_NAME
+	DE	SpotOn
+	EN	SpotOn
+
+PLUGIN_SPOTON_BINARY_MISSING
+	DE	Das SpotOn-Binary fehlt. Bitte das Plugin neu installieren oder den Pfad in den Einstellungen angeben.
+	EN	The SpotOn binary is missing. Please reinstall the plugin or specify the path in settings.
+
+PLUGIN_SPOTON_BINARY_STATUS
+	DE	Binary-Status
+	EN	Binary Status
+
+PLUGIN_SPOTON_ACCOUNT_SETTINGS
+	DE	Konto-Einstellungen
+	EN	Account Settings
+
+PLUGIN_SPOTON_BITRATE
+	DE	Bitrate
+	EN	Bitrate
+
+PLUGIN_SPOTON_NO_BINARY
+	DE	Kein SpotOn-Binary gefunden. Streaming ist nicht möglich.
+	EN	No SpotOn binary found. Streaming is not possible.
+
+PLUGIN_SPOTON_ACTIVE_ACCOUNT
+	DE	Aktiv: %s [wechseln]
+	EN	Active: %s [switch]
+
+PLUGIN_SPOTON_RATE_LIMIT_HINT
+	DE	Spotify-Anfragen gedrosselt -- bitte warten
+	EN	Spotify requests throttled -- please wait
+
+PLUGIN_SPOTON_ACCOUNT_NONE
+	DE	Kein Konto konfiguriert
+	EN	No account configured
+
+PLUGIN_SPOTON_ACCOUNT_ADD
+	DE	Konto hinzufuegen
+	EN	Add Account
+
+PLUGIN_SPOTON_ACCOUNT_ADD_BTN
+	DE	Hinzufuegen
+	EN	Add
+
+PLUGIN_SPOTON_ACCOUNT_ACTIVE
+	DE	Aktiv
+	EN	Active
+
+PLUGIN_SPOTON_ACCOUNT_SWITCH
+	DE	Wechseln
+	EN	Switch
+
+PLUGIN_SPOTON_ACCOUNT_REMOVE
+	DE	Entfernen
+	EN	Remove
+
+PLUGIN_SPOTON_ACCOUNT_USERNAME
+	DE	Benutzername (Spotify)
+	EN	Username (Spotify)
+
+PLUGIN_SPOTON_ACCOUNT_PASSWORD
+	DE	Passwort
+	EN	Password
+
+PLUGIN_SPOTON_AUTH_ERROR
+	DE	Anmeldung fehlgeschlagen
+	EN	Authentication failed
+
+SON
+	EN	SpotOn
