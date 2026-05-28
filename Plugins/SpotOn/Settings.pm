@@ -26,7 +26,7 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary', 'clientId');
+    return ($prefs, 'bitrate', 'binary', 'clientId', 'normalization');
 }
 
 sub handler {
@@ -46,6 +46,11 @@ sub handler {
         my $bitrate = $paramRef->{'pref_bitrate'};
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
+
+        # Normalization pref speichern (STR-08, T-04-05)
+        # Checkbox: wenn nicht angehakt, sendet Browser keinen Wert — undef/leer wird zu 0
+        my $norm = $paramRef->{'pref_normalization'} ? 1 : 0;
+        $prefs->set('normalization', $norm);
 
         # OAuth PKCE flow initiation (D-07).
         # LMS loads settings pages inside an iframe, so a 302 redirect would
