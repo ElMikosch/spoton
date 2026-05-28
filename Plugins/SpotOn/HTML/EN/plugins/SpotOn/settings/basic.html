@@ -51,7 +51,7 @@
 		[% ELSE %]
 		<input type="submit" name="startOAuth"
 			value="[% 'PLUGIN_SPOTON_CONNECT_BTN' | string %]"
-			class="submit" id="startOAuthBtn"[% IF NOT clientId %] disabled[% END %]/>
+			class="submit" id="startOAuthBtn"[% IF NOT prefs.pref_clientId %] disabled[% END %]/>
 		[% END %]
 		<script type="text/javascript">
 		(function() {

@@ -223,8 +223,8 @@ PLUGIN_SPOTON_NORMALIZATION
 	EN	Volume Normalization
 
 PLUGIN_SPOTON_NORMALIZATION_DESC
-	DE
-	EN
+	DE	Aktiviert Lautstärkenormalisierung (ReplayGain) für gleichmäßige Lautstärke
+	EN	Enables volume normalization (ReplayGain) for consistent playback volume
 
 PLUGIN_SPOTON_NORMALIZATION_LABEL
 	DE	Lautstärke normalisieren (ReplayGain)
