@@ -12,6 +12,7 @@ use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Timers;
 use Slim::Utils::Cache;
+use Digest::MD5 qw(md5_hex);
 use Time::HiRes;
 use File::Basename;
 use File::Spec::Functions qw(catdir);
@@ -319,12 +320,30 @@ sub _trackItem {
         };
     }
 
+    # T-04.1-01: Extract path from Spotify URI to prevent double-prefix.
+    # spotify:track:ID -> track:ID; fallback preserves original URI if no match.
+    my ($track_path) = ($track->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
+    $track_path //= ($track->{uri} // '');
+    my $spotify_url = 'spotify://' . $track_path;
+
+    # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
+    $cache->set('spoton_meta_' . md5_hex($spotify_url), {
+        title    => $title,
+        artist   => $artist,
+        album    => $album,
+        duration => $duration,
+        cover    => $image,
+        icon     => $image,
+        bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+        type     => 'Spotify',
+    }, 3600);
+
     my %item = (
         name      => "$title \x{2014} $artist",    # em-dash fallback for older clients
         line1     => $title,
         line2     => $artist . ($album ? " \x{2022} $album" : ''),
-        url       => 'spotify://' . ($track->{uri} // ''),
-        play      => 'spotify://' . ($track->{uri} // ''),
+        url       => $spotify_url,
+        play      => $spotify_url,
         on_select => 'play',
         playall   => 1,    # Kontext-Queueing (D-09/D-10) — XMLBrowser reiht alle Items des Feeds ein
         image     => $image,
@@ -967,12 +986,32 @@ sub _albumTrackItem {
         };
     }
 
+    # T-04.1-01: Extract path from Spotify URI to prevent double-prefix.
+    # spotify:track:ID -> track:ID; fallback preserves original URI if no match.
+    my ($track_path) = ($track->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
+    $track_path //= ($track->{uri} // '');
+    my $spotify_url = 'spotify://' . $track_path;
+
+    # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display.
+    # Album name not available in simplified track objects from album context.
+    my $albumName = '';
+    $cache->set('spoton_meta_' . md5_hex($spotify_url), {
+        title    => $title,
+        artist   => $artists,
+        album    => $albumName,
+        duration => $duration,
+        cover    => $image,
+        icon     => $image,
+        bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+        type     => 'Spotify',
+    }, 3600);
+
     my %item = (
         name      => ($trackNum ? "$trackNum. " : '') . $title,
         line1     => ($trackNum ? "$trackNum. " : '') . $title,
         line2     => $line2,
-        url       => 'spotify://' . ($track->{uri} // ''),
-        play      => 'spotify://' . ($track->{uri} // ''),
+        url       => $spotify_url,
+        play      => $spotify_url,
         on_select => 'play',
         playall   => 1,    # Kontext-Queueing fuer Album-Track-Tap (D-09)
         image     => $image,
@@ -1088,6 +1127,14 @@ sub updateTranscodingTable {
         # It is hardcoded in custom-convert.conf and the regex patterns above do not match it
 
         main::INFOLOG && $log->is_info && $log->info("updateTranscodingTable: $key => $commandTable->{$key}");
+    }
+
+    # OGG-Passthrough Guard: remove son-ogg entry when binary lacks passthrough (STR-05)
+    # Prevents LMS from selecting the son-ogg-*-* profile on players that support OGG
+    # natively but where librespot was not built with the passthrough-decoder feature.
+    require Plugins::SpotOn::Helper;
+    unless (Plugins::SpotOn::Helper->getCapability('passthrough')) {
+        delete $commandTable->{'son-ogg-*-*'};
     }
 }
 
