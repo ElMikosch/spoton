@@ -115,13 +115,24 @@ sub _killOrphanedProcesses {
 
     Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
 
+    # CR-01/WR-04: Only check Spotify-playing clients (not all protocols).
+    # This prevents false positives (non-Spotify playback blocking cleanup)
+    # and reduces the race window during Spotify track transitions.
     my $isBusy = 0;
+    my %activePids;
     for my $client (Slim::Player::Client::clients()) {
+        my $song = $client->playingSong() || next;
+        my $url  = $song->currentTrack() ? $song->currentTrack()->url : '';
+        next unless $url =~ m{^spotify://};
+
         if ($client->isPlaying()) {
-            main::DEBUGLOG && $log->is_debug && $log->debug("Player " . $client->name() . " is busy, skipping orphan cleanup");
+            main::DEBUGLOG && $log->is_debug && $log->debug("Spotify player " . $client->name() . " is busy, skipping orphan cleanup");
             $isBusy = 1;
-            last;
         }
+
+        # Track PIDs of active transcoding processes to protect them from kill
+        my $pid = $song->transcodeProcess() if $song->can('transcodeProcess');
+        $activePids{$pid} = 1 if $pid;
     }
 
     unless ($isBusy) {
@@ -134,8 +145,15 @@ sub _killOrphanedProcesses {
                     system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
                 } else {
                     # PHASE-5-NOTE: Phase 5 must exclude Connect daemon PIDs here (Pitfall 6, CON-09)
+                    # CR-01: Use PID-based kill to avoid killing active transcoding processes.
+                    # Find all matching PIDs, exclude active ones, kill only orphans.
                     (my $safeHelper = $helper) =~ s/'/'\\''/g;
-                    `pkill -f '$safeHelper'`;
+                    my @pids = map { /^\s*(\d+)/ ? $1 : () } `pgrep -f '$safeHelper'`;
+                    for my $pid (@pids) {
+                        next if $activePids{$pid};
+                        kill 'TERM', $pid;
+                        main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
+                    }
                 }
             };
             $@ && $log->warn("Could not kill orphaned spoton processes: $@");
