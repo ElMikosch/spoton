@@ -12,5 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
+librespot-playback = { version = "0.8", default-features = false, features = ["passthrough-decoder", "rustls-tls-native-roots"] }
 serde_json     = "1"
 tokio          = { version = "1", features = ["rt-multi-thread", "macros"] }
