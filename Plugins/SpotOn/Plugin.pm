@@ -291,7 +291,7 @@ sub _albumItem {
     return {
         name        => $album->{name} // '',
         url         => \&_albumFeed,
-        passthrough => [{ albumId => $album->{id} }],
+        passthrough => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist }],
         image       => _largestImage($album->{images}),
         line2       => $line2,
         type        => 'link',
