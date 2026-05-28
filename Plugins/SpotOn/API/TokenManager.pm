@@ -297,6 +297,13 @@ sub refreshAllTokens {
     );
 }
 
+# buildRedirectUri($class)
+# Public wrapper — exposes redirect URI construction for callers outside this class.
+sub buildRedirectUri {
+    my ($class) = @_;
+    return $class->_buildRedirectUri();
+}
+
 # ============================================================
 # Private methods
 # ============================================================

@@ -121,7 +121,7 @@ sub handler {
     $paramRef->{accounts}      = $prefs->get('accounts') || {};
     $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
     $paramRef->{clientId}      = $prefs->get('clientId') || '';
-    $paramRef->{redirectUri}   = Plugins::SpotOn::API::TokenManager->_buildRedirectUri();
+    $paramRef->{redirectUri}   = Plugins::SpotOn::API::TokenManager->buildRedirectUri();
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
