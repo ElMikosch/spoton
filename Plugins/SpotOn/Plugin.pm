@@ -387,7 +387,7 @@ sub _albumItem {
     return {
         name        => $album->{name} // '',
         url         => \&_albumFeed,
-        passthrough => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist }],
+        passthrough => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name} }],
         image       => _largestImage($album->{images}),
         line2       => $line2,
         type        => 'link',
@@ -924,6 +924,7 @@ sub _albumFeed {
     my $albumId      = $passthrough->{albumId}      // '';
     my $albumImages  = $passthrough->{albumImages};    # undef on first load
     my $albumArtist  = $passthrough->{albumArtist}  // '';
+    my $albumName    = $passthrough->{albumName}    // '';    # WR-01: carried for metadata cache
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
@@ -945,7 +946,7 @@ sub _albumFeed {
             my $total    = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
             my $tracks   = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
 
-            my @items = map { _albumTrackItem($client, $_, $images, $artist0) } @{$tracks};
+            my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}) } @{$tracks};
 
             if (!@items) {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -965,7 +966,7 @@ sub _albumFeed {
                 return;
             }
 
-            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist) } @{ $data->{items} || [] };
+            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist, $albumName) } @{ $data->{items} || [] };
 
             if (!@items) {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -976,13 +977,14 @@ sub _albumFeed {
     }
 }
 
-# _albumTrackItem($client, $track, $albumImages, $albumArtist)
+# _albumTrackItem($client, $track, $albumImages, $albumArtist, $albumName)
 # Builds a track item in album context.
 # line1: "$track_number. $title" per NAV-06.
 # line2: featuring artists — shown only if they differ from the album's primary artist.
 # Album images passed from the getAlbum call since simplified track objects lack images.
+# WR-01: $albumName passed from caller for metadata cache (simplified track objects lack album name).
 sub _albumTrackItem {
-    my ($client, $track, $albumImages, $albumArtist) = @_;
+    my ($client, $track, $albumImages, $albumArtist, $albumName) = @_;
 
     my $trackNum  = $track->{track_number} // '';
     my $title     = $track->{name}         // '';
@@ -1011,8 +1013,8 @@ sub _albumTrackItem {
     my $spotify_url = 'spotify://' . $track_path;
 
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display.
-    # Album name not available in simplified track objects from album context.
-    my $albumName = '';
+    # WR-01: Album name passed from caller; fallback to empty if undef (e.g., future callers).
+    $albumName //= '';
     $cache->set('spoton_meta_' . md5_hex($spotify_url), {
         title    => $title,
         artist   => $artists,
