@@ -180,7 +180,7 @@ sub _accountSwitcherFeed {
 sub _switchAccount {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $accountId = $passthrough && $passthrough->[0] ? $passthrough->[0]{accountId} : undef;
+    my $accountId = $passthrough ? $passthrough->{accountId} : undef;
 
     if ($accountId && $client) {
         $prefs->client($client)->set('activeAccount', $accountId);
@@ -661,8 +661,8 @@ sub _searchFeed {
 sub _searchTypeFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $query  = $passthrough->[0]{query} // '';
-    my $type   = $passthrough->[0]{type}  // 'track';
+    my $query  = $passthrough->{query} // '';
+    my $type   = $passthrough->{type}  // 'track';
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 10;
@@ -724,7 +724,7 @@ sub _searchTypeFeed {
 sub _artistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $artistId = $passthrough->[0]{artistId} // '';
+    my $artistId = $passthrough->{artistId} // '';
 
     my @items = (
         {
@@ -762,8 +762,8 @@ sub _artistFeed {
 sub _artistAlbumsFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $artistId      = $passthrough->[0]{artistId}      // '';
-    my $includeGroups = $passthrough->[0]{includeGroups} // 'album';
+    my $artistId      = $passthrough->{artistId}      // '';
+    my $includeGroups = $passthrough->{includeGroups} // 'album';
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
@@ -802,9 +802,9 @@ sub _artistAlbumsFeed {
 sub _albumFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $albumId      = $passthrough->[0]{albumId}      // '';
-    my $albumImages  = $passthrough->[0]{albumImages};    # undef on first load
-    my $albumArtist  = $passthrough->[0]{albumArtist}  // '';
+    my $albumId      = $passthrough->{albumId}      // '';
+    my $albumImages  = $passthrough->{albumImages};    # undef on first load
+    my $albumArtist  = $passthrough->{albumArtist}  // '';
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
@@ -913,7 +913,7 @@ sub _albumTrackItem {
 sub _playlistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $playlistId = $passthrough->[0]{playlistId} // '';
+    my $playlistId = $passthrough->{playlistId} // '';
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
