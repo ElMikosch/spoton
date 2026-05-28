@@ -17,6 +17,8 @@ use File::Basename;
 use File::Spec::Functions qw(catdir);
 use Slim::Player::TranscodingHelper;
 
+use constant KILL_PROCESS_INTERVAL => 3600;    # Stundlicher Orphaned-Process-Cleanup (STR-10)
+
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
 
@@ -61,6 +63,14 @@ sub initPlugin {
             Time::HiRes::time() + 10,
             \&_refreshAllTokens
         );
+
+        # Orphaned-Process-Cleanup-Timer starten (STR-10)
+        Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
+        Slim::Utils::Timers::setTimer(
+            $class,
+            Time::HiRes::time() + KILL_PROCESS_INTERVAL,
+            \&_killOrphanedProcesses
+        );
     }
 
     $VERSION = $class->_pluginDataFor('version');
@@ -93,6 +103,48 @@ sub initPlugin {
 # Thin timer callback wrapper — Slim::Utils::Timers passes $class as first arg.
 sub _refreshAllTokens {
     Plugins::SpotOn::API::TokenManager->refreshAllTokens();
+}
+
+# _killOrphanedProcesses($class)
+# Cleans up orphaned librespot processes when no player is actively playing.
+# Runs every KILL_PROCESS_INTERVAL seconds (STR-10).
+# IMPORTANT: Slim::Player::Client is NOT explicitly imported — LMS autoloads it.
+sub _killOrphanedProcesses {
+    my ($class) = @_;
+
+    Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
+
+    my $isBusy = 0;
+    for my $client (Slim::Player::Client::clients()) {
+        if ($client->isPlaying()) {
+            main::DEBUGLOG && $log->is_debug && $log->debug("Player " . $client->name() . " is busy, skipping orphan cleanup");
+            $isBusy = 1;
+            last;
+        }
+    }
+
+    unless ($isBusy) {
+        my ($helper) = Plugins::SpotOn::Helper->get();
+        if ($helper) {
+            eval {
+                if (main::ISWINDOWS) {
+                    my $name = basename($helper);
+                    system("taskkill /IM $name /F 1>nul 2>&1");
+                } else {
+                    # PHASE-5-NOTE: Phase 5 must exclude Connect daemon PIDs here (Pitfall 6, CON-09)
+                    `pkill -f "$helper"`;
+                }
+            };
+            $@ && $log->warn("Could not kill orphaned spoton processes: $@");
+        }
+    }
+
+    # Always reschedule (even when $isBusy) to maintain hourly cleanup cycle
+    Slim::Utils::Timers::setTimer(
+        $class,
+        Time::HiRes::time() + KILL_PROCESS_INTERVAL,
+        \&_killOrphanedProcesses
+    );
 }
 
 sub handleFeed {
@@ -272,6 +324,7 @@ sub _trackItem {
         url       => 'spotify://' . ($track->{uri} // ''),
         play      => 'spotify://' . ($track->{uri} // ''),
         on_select => 'play',
+        playall   => 1,    # Kontext-Queueing (D-09/D-10) — XMLBrowser reiht alle Items des Feeds ein
         image     => $image,
         duration  => $duration,
         type      => 'audio',
@@ -919,6 +972,7 @@ sub _albumTrackItem {
         url       => 'spotify://' . ($track->{uri} // ''),
         play      => 'spotify://' . ($track->{uri} // ''),
         on_select => 'play',
+        playall   => 1,    # Kontext-Queueing fuer Album-Track-Tap (D-09)
         image     => $image,
         duration  => $duration,
         type      => 'audio',
