@@ -511,22 +511,45 @@ sub _savedAlbumsFeed {
 }
 
 # _followedArtistsFeed($client, $callback, $args)
-# Fetches followed artists via cursor-based API (no offset — Pitfall 4/7).
-# Single-page response with limit=50; no total field.
+# Fetches ALL followed artists by chaining cursor-based API calls.
+# Spotify's /me/following uses cursor pagination (no offset — Pitfall 4/7).
+# We fetch 50 at a time until no more cursors remain, then return all at once.
 sub _followedArtistsFeed {
     my ($client, $callback, $args) = @_;
 
     my $accountId = _getAccountId($client);
 
-    # Cursor-based API: no offset parameter (Pitfall 4)
-    Plugins::SpotOn::API::Client->getFollowedArtists($accountId, { limit => 50 }, sub {
+    _fetchAllFollowedArtists($client, $accountId, undef, [], sub {
+        my ($allArtists) = @_;
+        my @items = map { _artistItem($client, $_) } @{$allArtists};
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+        $callback->({ items => \@items });
+    });
+}
+
+sub _fetchAllFollowedArtists {
+    my ($client, $accountId, $after, $accumulated, $done) = @_;
+
+    my %params = (limit => 50);
+    $params{after} = $after if defined $after;
+
+    Plugins::SpotOn::API::Client->getFollowedArtists($accountId, \%params, sub {
         my $data = shift;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $done->($accumulated);
             return;
         }
-        my @items = map { _artistItem($client, $_) } @{ $data->{artists}{items} || [] };
-        $callback->({ items => \@items });
+        my $artists = $data->{artists}{items} || [];
+        push @{$accumulated}, @{$artists};
+
+        my $nextCursor = $data->{artists}{cursors}{after} // '';
+        if ($nextCursor ne '' && @{$artists} > 0) {
+            _fetchAllFollowedArtists($client, $accountId, $nextCursor, $accumulated, $done);
+        } else {
+            $done->($accumulated);
+        }
     });
 }
 
