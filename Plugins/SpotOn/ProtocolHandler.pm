@@ -7,6 +7,7 @@ use base qw(Slim::Formats::RemoteStream);
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Player::CapabilitiesHelper;
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -23,7 +24,26 @@ sub getFormatForURL { 'flc' }
 
 sub formatOverride {
     my ($class, $song) = @_;
-    # Phase 4: updateTranscodingTable will dynamically select ogg/mp3/pcm per player
+
+    my $client = $song->master;
+
+    # Inject runtime parameters (bitrate, cache dir, helper name, normalization) into
+    # commandTable before format selection (D-01, Pattern 1). Must happen first.
+    require Plugins::SpotOn::Plugin;
+    Plugins::SpotOn::Plugin->updateTranscodingTable($client);
+
+    # Query player format capabilities
+    my @formats = Slim::Player::CapabilitiesHelper::supportedFormats($client);
+
+    # OGG-Direct: only when player supports OGG natively AND binary has passthrough
+    # capability (STR-05, A2-Mitigation guard per RESEARCH.md Open Question 1 resolution)
+    if (grep { $_ eq 'ogg' } @formats) {
+        if (Plugins::SpotOn::Helper->getCapability('passthrough')) {
+            return 'ogg';
+        }
+    }
+
+    # FLAC: default fallback for all modern players (D-04, STR-02)
     return 'flc';
 }
 
