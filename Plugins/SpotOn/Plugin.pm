@@ -1076,7 +1076,13 @@ sub updateTranscodingTable {
         # Volume normalisation: always remove first, then conditionally add (STR-08)
         # Removal of flag ensures idempotent behavior across repeated calls
         $commandTable->{$key} =~ s/ --enable-volume-normalisation//g;
-        $commandTable->{$key} =~ s/( -n )/ --enable-volume-normalisation $1/ if $normalize;
+        if ($normalize) {
+            my $before = $commandTable->{$key};
+            $commandTable->{$key} =~ s/( -n )/ --enable-volume-normalisation $1/;
+            if ($commandTable->{$key} eq $before) {
+                $log->warn("updateTranscodingTable: could not inject --enable-volume-normalisation for $key");
+            }
+        }
 
         # NOTE: --disable-audio-cache is NOT touched here (STR-11, D-07)
         # It is hardcoded in custom-convert.conf and the regex patterns above do not match it
