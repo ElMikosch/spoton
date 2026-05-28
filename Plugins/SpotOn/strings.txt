@@ -206,5 +206,13 @@ PLUGIN_SPOTON_NO_RESULTS
 	DE	Keine Ergebnisse
 	EN	No results
 
+PLUGIN_SPOTON_ARTIST_VIEW
+	DE	Künstler anzeigen
+	EN	View Artist
+
+PLUGIN_SPOTON_ALBUM_VIEW
+	DE	Album anzeigen
+	EN	View Album
+
 SON
 	EN	SpotOn
