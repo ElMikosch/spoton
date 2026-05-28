@@ -1127,7 +1127,7 @@ sub updateTranscodingTable {
         $commandTable->{$key} =~ s/-c "[^"]*"/-c "$cacheDir"/g;
 
         # Bitrate injection
-        $commandTable->{$key} =~ s/--bitrate \d{2,3}/--bitrate $bitrate/;
+        $commandTable->{$key} =~ s/--bitrate \d+/--bitrate $bitrate/;
 
         # Helper binary name injection (LMS-10 preparation for custom binary support)
         $commandTable->{$key} =~ s/\[spoton[^\]]*\]/[$helperName]/g;
