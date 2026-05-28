@@ -214,5 +214,21 @@ PLUGIN_SPOTON_ALBUM_VIEW
 	DE	Album anzeigen
 	EN	View Album
 
+PLUGIN_SPOTON_STREAMING_SETTINGS
+	DE	Streaming-Einstellungen
+	EN	Streaming Settings
+
+PLUGIN_SPOTON_NORMALIZATION
+	DE	Lautstärkenormalisierung
+	EN	Volume Normalization
+
+PLUGIN_SPOTON_NORMALIZATION_DESC
+	DE
+	EN
+
+PLUGIN_SPOTON_NORMALIZATION_LABEL
+	DE	Lautstärke normalisieren (ReplayGain)
+	EN	Normalize volume (ReplayGain)
+
 SON
 	EN	SpotOn
