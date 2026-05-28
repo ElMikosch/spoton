@@ -13,6 +13,9 @@ use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Timers;
 use Slim::Utils::Cache;
 use Time::HiRes;
+use File::Basename;
+use File::Spec::Functions qw(catdir);
+use Slim::Player::TranscodingHelper;
 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
@@ -34,6 +37,7 @@ sub initPlugin {
 
     $prefs->init({
         bitrate       => 320,
+        normalization => 0,     # STR-08: volume normalisation toggle, default off (D-06)
         binary        => '',    # custom binary override (LMS-10, Phase 6)
         clientId      => '',    # user's Spotify Developer App Client ID (D-04)
         accounts      => {},    # hash: accountId => { displayName => ..., refreshToken => ... }
@@ -966,6 +970,63 @@ sub _playlistFeed {
 
         $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
     });
+}
+
+
+# ============================================================
+# Transcoding Engine (STR-01 through STR-08, LMS-11)
+# ============================================================
+
+# updateTranscodingTable($client)
+# Injects runtime parameters (bitrate, cache dir, helper name, volume normalization)
+# into LMS commandTable for all son-* single-track pipeline entries.
+# Called from ProtocolHandler::formatOverride before each track start (D-01, Pattern 1).
+# This approach avoids pref-file caching in TranscodingHelper (RESEARCH.md Anti-Pattern 1).
+# LMS single-threaded event loop guarantees no race condition (LMS-11).
+sub updateTranscodingTable {
+    my ($class, $client) = @_;
+
+    my $bitrate   = $prefs->get('bitrate')      || 320;
+    my $normalize = $prefs->get('normalization') || 0;    # Phase 4: global toggle (D-06)
+
+    # Compute librespot credentials/session cache dir (Pattern 4)
+    my $serverPrefs = preferences('server');
+    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    # Create cache dir if it does not exist
+    unless (-d $cacheDir) {
+        require File::Path;
+        File::Path::make_path($cacheDir);
+    }
+
+    # Get helper binary name — used to update [spoton] placeholder in commandTable
+    my ($helper) = Plugins::SpotOn::Helper->get();
+    my $helperName = $helper ? basename($helper) : 'spoton';
+
+    my $commandTable = Slim::Player::TranscodingHelper::Conversions();
+    foreach my $key (keys %{$commandTable}) {
+        # Only modify son-* entries that use --single-track (skip Connect/other pipelines)
+        next unless $key =~ /^son-/ && $commandTable->{$key} =~ /single-track/;
+
+        # Cache dir injection (Pitfall 4: regex matches any content between quotes)
+        $commandTable->{$key} =~ s/-c "[^"]*"/-c "$cacheDir"/g;
+
+        # Bitrate injection
+        $commandTable->{$key} =~ s/--bitrate \d{2,3}/--bitrate $bitrate/;
+
+        # Helper binary name injection (LMS-10 preparation for custom binary support)
+        $commandTable->{$key} =~ s/\[spoton[^\]]*\]/[$helperName]/g;
+
+        # Volume normalisation: always remove first, then conditionally add (STR-08)
+        # Removal of flag ensures idempotent behavior across repeated calls
+        $commandTable->{$key} =~ s/ --enable-volume-normalisation//g;
+        $commandTable->{$key} =~ s/( -n )/ --enable-volume-normalisation $1/ if $normalize;
+
+        # NOTE: --disable-audio-cache is NOT touched here (STR-11, D-07)
+        # It is hardcoded in custom-convert.conf and the regex patterns above do not match it
+
+        main::INFOLOG && $log->is_info && $log->info("updateTranscodingTable: $key => $commandTable->{$key}");
+    }
 }
 
 1;
