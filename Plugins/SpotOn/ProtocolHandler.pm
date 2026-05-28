@@ -38,6 +38,7 @@ sub formatOverride {
     # OGG-Direct: only when player supports OGG natively AND binary has passthrough
     # capability (STR-05, A2-Mitigation guard per RESEARCH.md Open Question 1 resolution)
     if (grep { $_ eq 'ogg' } @formats) {
+        require Plugins::SpotOn::Helper;
         if (Plugins::SpotOn::Helper->getCapability('passthrough')) {
             return 'ogg';
         }
