@@ -142,5 +142,69 @@ PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
 	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.
 	EN	Remove this account? This cannot be undone.
 
+PLUGIN_SPOTON_HOME
+	DE	Home
+	EN	Home
+
+PLUGIN_SPOTON_SEARCH
+	DE	Suche
+	EN	Search
+
+PLUGIN_SPOTON_LIBRARY
+	DE	Bibliothek
+	EN	Library
+
+PLUGIN_SPOTON_RECENTLY_PLAYED
+	DE	Kürzlich gehört
+	EN	Recently Played
+
+PLUGIN_SPOTON_MADE_FOR_YOU
+	DE	Für dich gemacht
+	EN	Made For You
+
+PLUGIN_SPOTON_TOP_TRACKS
+	DE	Top Tracks
+	EN	Top Tracks
+
+PLUGIN_SPOTON_LIKED_SONGS
+	DE	Gefällt mir
+	EN	Liked Songs
+
+PLUGIN_SPOTON_ALBUMS
+	DE	Alben
+	EN	Albums
+
+PLUGIN_SPOTON_ARTISTS
+	DE	Künstler
+	EN	Artists
+
+PLUGIN_SPOTON_PLAYLISTS
+	DE	Playlists
+	EN	Playlists
+
+PLUGIN_SPOTON_SINGLES
+	DE	Singles
+	EN	Singles
+
+PLUGIN_SPOTON_COMPILATIONS
+	DE	Compilations
+	EN	Compilations
+
+PLUGIN_SPOTON_APPEARS_ON
+	DE	Erscheint auf
+	EN	Appears On
+
+PLUGIN_SPOTON_TOP_RESULT
+	DE	Bestes Ergebnis
+	EN	Top Result
+
+PLUGIN_SPOTON_TRACKS
+	DE	Tracks
+	EN	Tracks
+
+PLUGIN_SPOTON_NO_RESULTS
+	DE	Keine Ergebnisse
+	EN	No results
+
 SON
 	EN	SpotOn

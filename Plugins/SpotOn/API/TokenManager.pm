@@ -29,7 +29,9 @@ use constant REQUIRED_SCOPES     => join(' ', qw(
     user-read-currently-playing
     user-read-recently-played
     user-read-private
+    playlist-read-collaborative
     playlist-read-private
+    user-follow-read
     user-library-read
     user-top-read
     streaming

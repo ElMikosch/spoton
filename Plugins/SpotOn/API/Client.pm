@@ -51,6 +51,153 @@ sub getMe {
 }
 
 # ============================================================
+# Browse / Search / Library API methods (Phase 3)
+# ============================================================
+
+# search($class, $accountId, $params, $cb)
+# Searches Spotify. q is the search query; type defaults to "track,album,artist,playlist";
+# limit defaults to 10 (Dev Mode max per NAV-11); offset is optional for pagination.
+sub search {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'search', {
+        _accountId => $accountId,
+        q          => $params->{q} // '',
+        type       => $params->{type}   // 'track,album,artist,playlist',
+        limit      => $params->{limit}  // 10,
+        offset     => $params->{offset} // 0,
+    }, $cb);
+}
+
+# getRecentlyPlayed($class, $accountId, $params, $cb)
+# Fetches recently played tracks (/me/player/recently-played).
+# Cursor-based — no offset parameter (Pitfall 4).
+sub getRecentlyPlayed {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/player/recently-played', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        limit      => $params->{limit} // 50,
+    }, $cb);
+}
+
+# getTopTracks($class, $accountId, $params, $cb)
+# Fetches user's top tracks (/me/top/tracks).
+# time_range defaults to "medium_term" (D-05).
+sub getTopTracks {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/top/tracks', {
+        _accountId => $accountId,
+        time_range => $params->{time_range} // 'medium_term',
+        limit      => $params->{limit}      // 50,
+    }, $cb);
+}
+
+# getSavedTracks($class, $accountId, $params, $cb)
+# Fetches user's saved (liked) tracks (/me/tracks).
+# Offset-paginated; max limit 50.
+sub getSavedTracks {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/tracks', {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
+# getSavedAlbums($class, $accountId, $params, $cb)
+# Fetches user's saved albums (/me/albums).
+# Offset-paginated; max limit 50.
+sub getSavedAlbums {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/albums', {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
+# getFollowedArtists($class, $accountId, $params, $cb)
+# Fetches followed artists (/me/following?type=artist).
+# Cursor-based (no offset); type=artist is hardcoded (Pitfall 2 — requires user-follow-read scope).
+sub getFollowedArtists {
+    my ($class, $accountId, $params, $cb) = @_;
+    my %reqParams = (
+        _accountId => $accountId,
+        type       => 'artist',
+        limit      => $params->{limit} // 50,
+    );
+    $reqParams{after} = $params->{after} if defined $params->{after};
+    $class->_request('get', 'me/following', \%reqParams, $cb);
+}
+
+# getUserPlaylists($class, $accountId, $params, $cb)
+# Fetches user's playlists (/me/playlists).
+# Offset-paginated; max limit 50.
+sub getUserPlaylists {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/playlists', {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
+# getArtist($class, $accountId, $artistId, $cb)
+# Fetches a single artist by ID (/artists/{artistId}).
+sub getArtist {
+    my ($class, $accountId, $artistId, $cb) = @_;
+    $class->_request('get', "artists/$artistId", { _accountId => $accountId }, $cb);
+}
+
+# getArtistAlbums($class, $accountId, $artistId, $params, $cb)
+# Fetches albums for an artist (/artists/{artistId}/albums).
+# Per D-09: include_groups takes a SINGLE value per call (album|single|compilation|appears_on).
+# Combined values break pagination — callers issue separate requests per type.
+sub getArtistAlbums {
+    my ($class, $accountId, $artistId, $params, $cb) = @_;
+    my %reqParams = (
+        _accountId     => $accountId,
+        offset         => $params->{offset} // 0,
+        limit          => $params->{limit}  // 50,
+    );
+    $reqParams{include_groups} = $params->{include_groups}
+        if defined $params->{include_groups};
+    $class->_request('get', "artists/$artistId/albums", \%reqParams, $cb);
+}
+
+# getAlbum($class, $accountId, $albumId, $cb)
+# Fetches album metadata including first page of tracks (/albums/{albumId}).
+sub getAlbum {
+    my ($class, $accountId, $albumId, $cb) = @_;
+    $class->_request('get', "albums/$albumId", { _accountId => $accountId }, $cb);
+}
+
+# getAlbumTracks($class, $accountId, $albumId, $params, $cb)
+# Fetches paginated track list for an album (/albums/{albumId}/tracks).
+# Offset-paginated; max limit 50.
+sub getAlbumTracks {
+    my ($class, $accountId, $albumId, $params, $cb) = @_;
+    $class->_request('get', "albums/$albumId/tracks", {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
+# getPlaylistItems($class, $accountId, $playlistId, $params, $cb)
+# Fetches paginated items for a playlist (/playlists/{playlistId}/items).
+# Uses /items path — NOT /tracks (Pitfall 3: Feb 2026 rename).
+# Offset-paginated; max limit 100.
+sub getPlaylistItems {
+    my ($class, $accountId, $playlistId, $params, $cb) = @_;
+    $class->_request('get', "playlists/$playlistId/items", {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 100,
+    }, $cb);
+}
+
+# ============================================================
 # Core request pipeline
 # ============================================================
 
@@ -230,17 +377,20 @@ sub _onError {
 sub _cacheTTL {
     my ($class, $path) = @_;
 
-    # Playback state: never cache (always live)
+    # Playback state: never cache (always live) — also covers me/player/recently-played
     return 0 if $path =~ /^me\/player/;
 
     # User profile: always fresh
     return 0 if $path eq 'me';
 
-    # Library items: 60 seconds
-    return 60 if $path =~ /^me\/(?:tracks|albums)/;
+    # Library items: 60 seconds (tracks, albums, top, following, playlists)
+    return 60 if $path =~ /^me\/(?:tracks|albums|top|following|playlists)/;
 
     # Track/album/artist metadata: 3600 seconds (1 hour)
     return 3600 if $path =~ /^(?:tracks|albums|artists)\//;
+
+    # Search results: 300 seconds (5 minutes, same as browse tier)
+    return 300 if $path =~ /^search/;
 
     # Playlists and browse data: 300 seconds (5 minutes)
     return 300 if $path =~ /^(?:playlists|browse)\//;
