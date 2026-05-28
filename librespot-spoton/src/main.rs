@@ -59,7 +59,7 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut mode = Mode::Check;
-    let mut name_provided = false;
+    let mut _name_provided = false;
     let mut username = String::new();
     let mut password = String::new();
     let mut cache_dir = String::new();
@@ -123,7 +123,7 @@ async fn main() {
             }
             "-n" | "--name" => {
                 if i + 1 < args.len() {
-                    name_provided = true;
+                    _name_provided = true;
                     i += 1;
                 }
             }
@@ -177,6 +177,7 @@ async fn main() {
                 "passthrough": has_passthrough,
             });
             println!("{}", json);
+            process::exit(0);
         }
 
         Mode::Authenticate => {
@@ -266,9 +267,6 @@ async fn main() {
             }
         }
     }
-
-    // Suppress unused variable warning for name_provided in non-check modes
-    let _ = name_provided;
 }
 
 /// Authenticate with Spotify via login5 username/password.
