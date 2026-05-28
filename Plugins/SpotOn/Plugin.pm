@@ -129,10 +129,12 @@ sub _killOrphanedProcesses {
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
-                    system("taskkill /IM $name /F 1>nul 2>&1");
+                    $name =~ s/"//g;    # remove any double-quotes from binary name
+                    system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
                 } else {
                     # PHASE-5-NOTE: Phase 5 must exclude Connect daemon PIDs here (Pitfall 6, CON-09)
-                    `pkill -f "$helper"`;
+                    (my $safeHelper = $helper) =~ s/'/'\\''/g;
+                    `pkill -f '$safeHelper'`;
                 }
             };
             $@ && $log->warn("Could not kill orphaned spoton processes: $@");
