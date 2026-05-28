@@ -160,8 +160,8 @@ write_stub($stub_dir, 'Slim::Utils::Strings', <<'END');
 package Slim::Utils::Strings;
 use parent 'Exporter';
 our @EXPORT_OK = qw(string cstring);
-sub string  { join(' ', grep { defined } @_[1..$#_]) }
-sub cstring { join(' ', grep { defined } @_[1..$#_]) }
+sub string  { $_[0] }
+sub cstring { $_[0] }
 1;
 END
 
@@ -472,9 +472,9 @@ SKIP: {
             'D-08: handler calls $callback when state and code are valid');
         my $html_ref = $result_args[2];
         if (defined $html_ref && ref($html_ref) eq 'SCALAR') {
-            like($$html_ref, qr/Erfolgreich|verbunden/i,
+            like($$html_ref, qr/PLUGIN_SPOTON_AUTH_SUCCESS/,
                 'D-08: HTML body contains success message after valid code exchange');
-            like($$html_ref, qr/Verbunden als:.*Test User/s,
+            like($$html_ref, qr/PLUGIN_SPOTON_CONNECTED_AS.*Test User/s,
                 'SC-2: success page shows display name');
         } else {
             fail('D-08: HTML reference not available for success test');
@@ -568,10 +568,10 @@ SKIP: {
 
         my $html_ref = $result_args[2];
         if (defined $html_ref && ref($html_ref) eq 'SCALAR') {
-            like($$html_ref, qr/Erfolgreich/i,
+            like($$html_ref, qr/PLUGIN_SPOTON_AUTH_SUCCESS/,
                 'SC-2: success page renders even when displayName is empty');
-            unlike($$html_ref, qr/Verbunden als:/,
-                'SC-2: success page omits "Verbunden als:" when displayName is empty');
+            unlike($$html_ref, qr/PLUGIN_SPOTON_CONNECTED_AS/,
+                'SC-2: success page omits connected-as line when displayName is empty');
         } else {
             fail('SC-2: HTML reference not available for empty displayName test');
             fail('SC-2: HTML reference not available for empty displayName omission test');

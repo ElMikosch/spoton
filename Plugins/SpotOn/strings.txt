@@ -58,6 +58,14 @@ PLUGIN_SPOTON_SETUP_WIZARD
 	DE	Einrichtungs-Assistent
 	EN	Setup Wizard
 
+PLUGIN_SPOTON_STEP1_TITLE
+	DE	Schritt 1: Spotify-App registrieren
+	EN	Step 1: Register Spotify App
+
+PLUGIN_SPOTON_STEP2_TITLE
+	DE	Schritt 2: Mit Spotify verbinden
+	EN	Step 2: Connect with Spotify
+
 PLUGIN_SPOTON_STEP1_BODY
 	DE	Erstelle eine App im Spotify Developer Dashboard und trage folgende Redirect-URI ein:
 	EN	Create an app in the Spotify Developer Dashboard and register this Redirect URI exactly:
@@ -83,8 +91,12 @@ PLUGIN_SPOTON_ADD_ANOTHER
 	EN	Add Another Account
 
 PLUGIN_SPOTON_CONNECTED_AS
-	DE	Verbunden als: %s
-	EN	Connected as: %s
+	DE	Verbunden als:
+	EN	Connected as:
+
+PLUGIN_SPOTON_CLOSE_TAB
+	DE	Du kannst diesen Tab jetzt schließen und zur LMS-Einstellungsseite zurückkehren.
+	EN	You can close this tab now and return to the LMS settings page.
 
 PLUGIN_SPOTON_SETUP_HINT
 	DE	Folge dem Einrichtungs-Assistenten oben, um SpotOn mit Spotify zu verbinden.
@@ -117,6 +129,14 @@ PLUGIN_SPOTON_BACK_TO_SETTINGS
 PLUGIN_SPOTON_CLIENT_ID_REQUIRED
 	DE	Bitte trage zuerst eine Client-ID ein.
 	EN	Please enter a Client ID first.
+
+PLUGIN_SPOTON_OPEN_SPOTIFY
+	DE	Bei Spotify anmelden (neuer Tab)
+	EN	Sign in with Spotify (new tab)
+
+PLUGIN_SPOTON_OPEN_SPOTIFY_HINT
+	DE	Ein neuer Tab wird geöffnet. Nach der Anmeldung kehre hierher zurück und lade die Seite neu.
+	EN	A new tab will open. After signing in, return here and reload the page.
 
 PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
 	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.

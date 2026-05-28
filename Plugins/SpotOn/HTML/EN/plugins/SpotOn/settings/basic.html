@@ -22,43 +22,48 @@
 
 	[% IF NOT accounts.keys.size %]
 	[% WRAPPER setting title="PLUGIN_SPOTON_SETUP_WIZARD" desc="" %]
-		<p><strong>Schritt 1: Spotify-App registrieren</strong></p>
+		<p><strong>[% 'PLUGIN_SPOTON_STEP1_TITLE' | string %]</strong></p>
 		<p>[% 'PLUGIN_SPOTON_STEP1_BODY' | string %]</p>
 		<p><code>[% redirectUri | html %]</code></p>
 		<p><a href="https://developer.spotify.com/dashboard" target="_blank">[% 'PLUGIN_SPOTON_DASHBOARD_LINK' | string %]</a></p>
 
 		<p><label for="pref_clientId">[% 'PLUGIN_SPOTON_CLIENT_ID_LABEL' | string %]</label><br/>
 		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
-			value="[% prefs.pref_clientId | html %]"/></p>
+			value="[% prefs.pref_clientId | html %]"
+			oninput="document.getElementById('startOAuthBtn').disabled = (this.value.trim() === '')"/></p>
 		<p class="hint">[% 'PLUGIN_SPOTON_CLIENT_ID_HINT' | string %]</p>
 
-		<p><strong>Schritt 2: Mit Spotify verbinden</strong></p>
+		<p><strong>[% 'PLUGIN_SPOTON_STEP2_TITLE' | string %]</strong></p>
 
 		[% IF oauthError %]
 		<div style="color:red">[% oauthError | html %]</div>
 		[% END %]
 
+		[% IF authUrl %]
+		<p><a href="[% authUrl | html %]" target="_blank"
+			style="color:#1db954; font-weight:bold; text-decoration:underline"
+			onclick="sessionStorage.setItem('spoton_auth_pending', Date.now()); setTimeout(function(){location.reload()}, 5000)"
+			>[% 'PLUGIN_SPOTON_OPEN_SPOTIFY' | string %]</a></p>
+		<p class="hint">[% 'PLUGIN_SPOTON_OPEN_SPOTIFY_HINT' | string %]</p>
+		[% ELSE %]
 		<input type="submit" name="startOAuth"
 			value="[% 'PLUGIN_SPOTON_CONNECT_BTN' | string %]"
 			class="submit" id="startOAuthBtn"[% IF NOT clientId %] disabled[% END %]/>
-
+		[% END %]
 		<script type="text/javascript">
-		// Prototype.js is available in LMS WebUI context
-		document.observe("dom:loaded", function() {
-			var clientIdField = $('pref_clientId');
-			var connectBtn    = $('startOAuthBtn');
-			if (clientIdField && connectBtn) {
-				clientIdField.observe('input', function() {
-					connectBtn.disabled = (clientIdField.value.trim() == '');
-				});
+		(function() {
+			var pending = sessionStorage.getItem('spoton_auth_pending');
+			if (pending && (Date.now() - parseInt(pending)) < 120000) {
+				setTimeout(function() { location.reload(); }, 5000);
 			}
-		});
+		})();
 		</script>
 	[% END %]
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
+		<script type="text/javascript">sessionStorage.removeItem('spoton_auth_pending');</script>
 			<table style="width:100%">
 			[% FOREACH id IN accounts.keys %]
 				<tr>

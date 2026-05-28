@@ -47,23 +47,21 @@ sub handler {
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
-        # OAuth PKCE flow initiation (D-07, IC-02).
-        # startOAuth triggers an HTTP 302 redirect to Spotify's authorization endpoint.
-        # Per IC-02: server-side redirect, not JS window.location.
-        # startOAuth is also submitted via "Add Another Account" button (same action name).
+        # OAuth PKCE flow initiation (D-07).
+        # LMS loads settings pages inside an iframe, so a 302 redirect would
+        # try to load accounts.spotify.com inside the frame — blocked by
+        # Spotify's X-Frame-Options. Instead, generate the auth URL and pass
+        # it to the template, which opens it in a new tab via target="_blank".
         if ($paramRef->{startOAuth}) {
-            my $clientId = $prefs->get('clientId') // '';
+            my $clientId = $paramRef->{'pref_clientId'} // '';
             $clientId =~ s/^\s+|\s+$//g;
+            $prefs->set('clientId', $clientId) if $clientId;
             if (!$clientId) {
                 $paramRef->{oauthError} = string('PLUGIN_SPOTON_CLIENT_ID_REQUIRED');
             } else {
                 my ($authUrl, $state) = Plugins::SpotOn::API::TokenManager->startOAuthFlow($clientId);
                 if ($authUrl) {
-                    $response->code(302);
-                    $response->header('Location' => $authUrl);
-                    my $html = '<html><body><p>Redirecting to Spotify...</p></body></html>';
-                    $callback->($client, $paramRef, \$html, $httpClient, $response);
-                    return;
+                    $paramRef->{authUrl} = $authUrl;
                 } else {
                     $paramRef->{oauthError} = string('PLUGIN_SPOTON_AUTH_ERROR');
                 }

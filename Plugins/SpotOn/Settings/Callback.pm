@@ -16,6 +16,7 @@ use warnings;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Strings qw(string);
 use Slim::Web::Pages;
 
 use constant CALLBACK_PATH => 'plugins/SpotOn/settings/callback';
@@ -121,42 +122,43 @@ sub _renderResult {
     my $webroot      = $paramRef->{webroot} // '/';
     my $settingsUrl  = $webroot . 'settings/plugin/spoton.html';
 
+    my $successTitle = string('PLUGIN_SPOTON_AUTH_SUCCESS');
+    my $connectedAs  = string('PLUGIN_SPOTON_CONNECTED_AS');
+    my $closeTab     = string('PLUGIN_SPOTON_CLOSE_TAB');
+    my $failedTitle  = string('PLUGIN_SPOTON_AUTH_FAILED');
+    my $backLink     = string('PLUGIN_SPOTON_BACK_TO_SETTINGS');
+
     my $html;
     if ($success) {
         my $displayNameHtml = (defined $displayName && $displayName ne '')
-            ? '<p>Verbunden als: <strong>' . _html_escape($displayName) . '</strong></p>'
+            ? '<p>' . _html_escape($connectedAs) . ' <strong>' . _html_escape($displayName) . '</strong></p>'
             : '';
         $html = <<"HTML";
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>SpotOn - Verbunden</title>
+<title>SpotOn</title>
 </head>
 <body style="font-family:sans-serif;padding:24px">
-<h2 style="color:green">Erfolgreich verbunden!</h2>
-$displayNameHtml<p>Du wirst gleich zu den Einstellungen weitergeleitet...</p>
-<script>
-setTimeout(function() {
-    window.location = "$settingsUrl";
-}, 2000);
-</script>
+<h2 style="color:green">$successTitle</h2>
+$displayNameHtml<p>$closeTab</p>
 </body>
 </html>
 HTML
     } else {
-        my $safeError = _html_escape($errorMsg // 'Unbekannter Fehler');
+        my $safeError = _html_escape($errorMsg // 'unknown error');
         $html = <<"HTML";
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>SpotOn - Verbindungsfehler</title>
+<title>SpotOn</title>
 </head>
 <body style="font-family:sans-serif;padding:24px">
-<h2 style="color:red">Verbindung fehlgeschlagen</h2>
+<h2 style="color:red">$failedTitle</h2>
 <p style="color:red">$safeError</p>
-<p><a href="$settingsUrl">Zurueck zu den Einstellungen</a></p>
+<p><a href="$settingsUrl">$backLink</a></p>
 </body>
 </html>
 HTML
