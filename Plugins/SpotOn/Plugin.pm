@@ -481,7 +481,7 @@ sub _savedTracksFeed {
             return;
         }
         my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
-        $callback->({ items => \@items, total => $data->{total} });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
 }
 
@@ -490,11 +490,15 @@ sub _savedTracksFeed {
 sub _savedAlbumsFeed {
     my ($client, $callback, $args) = @_;
 
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getSavedAlbums($accountId, {
-        offset => 0,
-        limit  => 50,
+        offset => $offset,
+        limit  => $limit,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -502,7 +506,7 @@ sub _savedAlbumsFeed {
             return;
         }
         my @items = map { _albumItem($client, $_->{album}) } @{ $data->{items} || [] };
-        $callback->({ items => \@items });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
 }
 
@@ -533,11 +537,15 @@ sub _followedArtistsFeed {
 sub _userPlaylistsFeed {
     my ($client, $callback, $args) = @_;
 
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
-        offset => 0,
-        limit  => 50,
+        offset => $offset,
+        limit  => $limit,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -547,7 +555,7 @@ sub _userPlaylistsFeed {
         # D-03: Exclude Made-For-You playlists from Library Playlists
         my @user  = grep { !_isMadeForYou($_) } @{ $data->{items} || [] };
         my @items = map  { _playlistItem($client, $_) } @user;
-        $callback->({ items => \@items });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
 }
 
@@ -656,13 +664,17 @@ sub _searchTypeFeed {
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'track';
 
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 10;
+    my $limit  = $qty > 10 ? 10 : $qty;
+
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 10,
-        offset => 0,
+        limit  => $limit,
+        offset => $offset,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -697,7 +709,7 @@ sub _searchTypeFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items });
+        $callback->({ items => \@items, offset => $offset, total => $total });
     });
 }
 
@@ -753,12 +765,16 @@ sub _artistAlbumsFeed {
     my $artistId      = $passthrough->{artistId}      // '';
     my $includeGroups = $passthrough->{includeGroups} // 'album';
 
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getArtistAlbums($accountId, $artistId, {
         include_groups => $includeGroups,
-        offset         => 0,
-        limit          => 50,
+        offset         => $offset,
+        limit          => $limit,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -769,7 +785,7 @@ sub _artistAlbumsFeed {
         if (!@items) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
-        $callback->({ items => \@items });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
     });
 }
 
@@ -816,7 +832,7 @@ sub _albumFeed {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
             }
 
-            $callback->({ items => \@items, total => $total });
+            $callback->({ items => \@items, offset => 0, total => $total });
         });
     } else {
         # Subsequent pages: use getAlbumTracks with correct offset.
@@ -836,7 +852,7 @@ sub _albumFeed {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
             }
 
-            $callback->({ items => \@items, total => $data->{total} // 0 });
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
         });
     }
 }
@@ -925,7 +941,7 @@ sub _playlistFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items, total => $data->{total} // 0 });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
     });
 }
 
