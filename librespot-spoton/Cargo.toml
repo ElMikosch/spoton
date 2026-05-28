@@ -6,6 +6,12 @@ authors = ["SpotOn Contributors"]
 description = "SpotOn librespot integration binary for LMS"
 license = "MIT"
 
+[features]
+# Mirror the librespot-playback passthrough-decoder feature for --check capability reporting.
+# When building without passthrough, omit this feature to make --check report false.
+passthrough-decoder = []
+default = ["passthrough-decoder"]
+
 [[bin]]
 name = "spoton"
 path = "src/main.rs"
