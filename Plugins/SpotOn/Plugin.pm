@@ -232,6 +232,7 @@ sub _isMadeForYou {
 # Builds an OPML audio item hashref for a Spotify track.
 # Per RESEARCH.md Pattern 3 and PATTERNS.md Track-Item pattern.
 # D-06: url and play set to spotify:// URI for Play-Intent.
+# D-07: items array carries context navigation (Artist view, Album view).
 sub _trackItem {
     my ($client, $track) = @_;
     my $title    = $track->{name} // '';
@@ -240,7 +241,27 @@ sub _trackItem {
     my $image    = _largestImage($track->{album}{images});
     my $duration = ($track->{duration_ms} || 0) / 1000;
 
-    return {
+    # D-07: Build context navigation items for artist and album drill-down.
+    # Only add links when IDs are available (simplified track objects may lack album).
+    my @contextItems;
+    if ($track->{artists} && @{ $track->{artists} } && $track->{artists}[0]{id}) {
+        push @contextItems, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
+            url         => \&_artistFeed,
+            passthrough => [{ artistId => $track->{artists}[0]{id} }],
+            type        => 'link',
+        };
+    }
+    if ($track->{album} && $track->{album}{id}) {
+        push @contextItems, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ALBUM_VIEW'),
+            url         => \&_albumFeed,
+            passthrough => [{ albumId => $track->{album}{id} }],
+            type        => 'link',
+        };
+    }
+
+    my %item = (
         name      => "$title \x{2014} $artist",    # em-dash fallback for older clients
         line1     => $title,
         line2     => $artist . ($album ? " \x{2022} $album" : ''),
@@ -250,7 +271,10 @@ sub _trackItem {
         image     => $image,
         duration  => $duration,
         type      => 'audio',
-    };
+    );
+    $item{items} = \@contextItems if @contextItems;
+
+    return \%item;
 }
 
 # _albumItem($client, $album)
@@ -536,11 +560,389 @@ sub _userPlaylistsFeed {
 }
 
 # ============================================================
-# Forward declarations: sub-feeds defined in Plan 03-03
+# Search Feeds (NAV-04, NAV-11, D-10)
 # ============================================================
-# These sub references are resolved at runtime by Perl.
-# The subs _searchFeed, _artistFeed, _albumFeed, _playlistFeed
-# are defined in Plan 03-03 (Plugins/SpotOn/Plugin.pm extension).
-# No forward declaration needed in Perl — \&sub resolves at call time.
+
+# _searchFeed($client, $callback, $args)
+# Entry point for the Search type item. LMS passes the search query in $args->{search}.
+# Per D-10: Top Result shown prominently above category sections.
+# Categories with 0 results are hidden entirely (D-10).
+# Per NAV-11: limit=10 per type (Dev Mode maximum).
+sub _searchFeed {
+    my ($client, $callback, $args) = @_;
+
+    my $query = $args->{search} // '';
+    if ($query eq '') {
+        $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+        return;
+    }
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->search($accountId, {
+        q      => $query,
+        type   => 'track,album,artist,playlist',
+        limit  => 10,
+        offset => 0,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        my @items;
+
+        # D-10: Top Result — first track from search results, shown inline (not as sub-menu).
+        my $trackItems = $data->{tracks}{items} || [];
+        if (@{$trackItems}) {
+            my $topTrack = $trackItems->[0];
+            push @items, {
+                name  => cstring($client, 'PLUGIN_SPOTON_TOP_RESULT'),
+                items => [ _trackItem($client, $topTrack) ],
+                type  => 'outline',
+            };
+        }
+
+        # Category sections — skip those with 0 results (D-10).
+        my $tracksTotal    = $data->{tracks}{total}    // 0;
+        my $albumsTotal    = $data->{albums}{total}    // 0;
+        my $artistsTotal   = $data->{artists}{total}   // 0;
+        my $playlistsTotal = $data->{playlists}{total} // 0;
+
+        if ($tracksTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_TRACKS'),
+                url         => \&_searchTypeFeed,
+                passthrough => [{ query => $query, type => 'track' }],
+                type        => 'link',
+                line2       => "$tracksTotal results",
+            };
+        }
+        if ($albumsTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ALBUMS'),
+                url         => \&_searchTypeFeed,
+                passthrough => [{ query => $query, type => 'album' }],
+                type        => 'link',
+                line2       => "$albumsTotal results",
+            };
+        }
+        if ($artistsTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ARTISTS'),
+                url         => \&_searchTypeFeed,
+                passthrough => [{ query => $query, type => 'artist' }],
+                type        => 'link',
+                line2       => "$artistsTotal results",
+            };
+        }
+        if ($playlistsTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_PLAYLISTS'),
+                url         => \&_searchTypeFeed,
+                passthrough => [{ query => $query, type => 'playlist' }],
+                type        => 'link',
+                line2       => "$playlistsTotal results",
+            };
+        }
+
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+
+        $callback->({ items => \@items });
+    });
+}
+
+# _searchTypeFeed($client, $callback, $args, $passthrough)
+# Paginated drill-down into a single search type (track, album, artist, or playlist).
+# Per NAV-11: limit capped at 10 (Dev Mode). Maps LMS index/quantity to offset/limit.
+sub _searchTypeFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $query  = $passthrough->[0]{query} // '';
+    my $type   = $passthrough->[0]{type}  // 'track';
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 10;
+    my $limit  = $qty > 10 ? 10 : $qty;    # Dev Mode cap: max 10 per type
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->search($accountId, {
+        q      => $query,
+        type   => $type,
+        limit  => $limit,
+        offset => $offset,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        # Map singular type name to plural response key (Spotify API convention).
+        my %typeToKey = (
+            track    => 'tracks',
+            album    => 'albums',
+            artist   => 'artists',
+            playlist => 'playlists',
+        );
+        my $key       = $typeToKey{$type} // "${type}s";
+        my $typeData  = $data->{$key} || {};
+        my $resultItems = $typeData->{items} || [];
+        my $total     = $typeData->{total}   // 0;
+
+        my @items;
+        if ($type eq 'track') {
+            @items = map { _trackItem($client, $_) } @{$resultItems};
+        } elsif ($type eq 'album') {
+            @items = map { _albumItem($client, $_) } @{$resultItems};
+        } elsif ($type eq 'artist') {
+            @items = map { _artistItem($client, $_) } @{$resultItems};
+        } elsif ($type eq 'playlist') {
+            @items = map { _playlistItem($client, $_) } @{$resultItems};
+        }
+
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+
+        $callback->({ items => \@items, total => $total });
+    });
+}
+
+# ============================================================
+# Artist Detail Feeds (NAV-05, D-09)
+# ============================================================
+
+# _artistFeed($client, $callback, $args, $passthrough)
+# Returns four navigation sections for an artist's discography.
+# Per D-09: Albums, Singles, Compilations, Appears On — NO Top Tracks, NO Related Artists
+# (both removed in Dev Mode as of Feb 2026 / Nov 2024).
+sub _artistFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $artistId = $passthrough->[0]{artistId} // '';
+
+    my @items = (
+        {
+            name        => cstring($client, 'PLUGIN_SPOTON_ALBUMS'),
+            url         => \&_artistAlbumsFeed,
+            passthrough => [{ artistId => $artistId, includeGroups => 'album' }],
+            type        => 'link',
+        },
+        {
+            name        => cstring($client, 'PLUGIN_SPOTON_SINGLES'),
+            url         => \&_artistAlbumsFeed,
+            passthrough => [{ artistId => $artistId, includeGroups => 'single' }],
+            type        => 'link',
+        },
+        {
+            name        => cstring($client, 'PLUGIN_SPOTON_COMPILATIONS'),
+            url         => \&_artistAlbumsFeed,
+            passthrough => [{ artistId => $artistId, includeGroups => 'compilation' }],
+            type        => 'link',
+        },
+        {
+            name        => cstring($client, 'PLUGIN_SPOTON_APPEARS_ON'),
+            url         => \&_artistAlbumsFeed,
+            passthrough => [{ artistId => $artistId, includeGroups => 'appears_on' }],
+            type        => 'link',
+        },
+    );
+
+    $callback->({ items => \@items });
+}
+
+# _artistAlbumsFeed($client, $callback, $args, $passthrough)
+# Fetches paginated albums for an artist filtered by a SINGLE include_groups value.
+# Per D-09/Pitfall 1: never combine include_groups values — issues separate request per type.
+sub _artistAlbumsFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $artistId      = $passthrough->[0]{artistId}      // '';
+    my $includeGroups = $passthrough->[0]{includeGroups} // 'album';
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->getArtistAlbums($accountId, $artistId, {
+        include_groups => $includeGroups,
+        offset         => $offset,
+        limit          => $limit,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+        my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+        $callback->({ items => \@items, total => $data->{total} // 0 });
+    });
+}
+
+# ============================================================
+# Album Detail Feed (NAV-06)
+# ============================================================
+
+# _albumFeed($client, $callback, $args, $passthrough)
+# Shows numbered tracklist for an album.
+# Per NAV-06: line1 = "$track_number. $title", line2 = featuring artists (if differ from album artist).
+# For index=0: uses tracks embedded in getAlbum response.
+# For index>0: fetches separate getAlbumTracks page.
+# Album artwork and artist are passed via passthrough for subsequent pages.
+sub _albumFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $albumId      = $passthrough->[0]{albumId}      // '';
+    my $albumImages  = $passthrough->[0]{albumImages};    # undef on first load
+    my $albumArtist  = $passthrough->[0]{albumArtist}  // '';
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
+    my $accountId = _getAccountId($client);
+
+    if ($offset == 0) {
+        # Initial load: fetch full album (includes first page of tracks in tracks.items).
+        Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
+            my $album = shift;
+            unless ($album) {
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
+
+            my $images   = $album->{images}           || [];
+            my $artist0  = ($album->{artists} && @{$album->{artists}}) ? $album->{artists}[0]{name} : '';
+            my $total    = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
+            my $tracks   = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
+
+            my @items = map { _albumTrackItem($client, $_, $images, $artist0) } @{$tracks};
+
+            if (!@items) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
+
+            $callback->({ items => \@items, total => $total });
+        });
+    } else {
+        # Subsequent pages: use getAlbumTracks with correct offset.
+        Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
+            offset => $offset,
+            limit  => $limit,
+        }, sub {
+            my $data = shift;
+            unless ($data) {
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
+
+            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist) } @{ $data->{items} || [] };
+
+            if (!@items) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
+
+            $callback->({ items => \@items, total => $data->{total} // 0 });
+        });
+    }
+}
+
+# _albumTrackItem($client, $track, $albumImages, $albumArtist)
+# Builds a track item in album context.
+# line1: "$track_number. $title" per NAV-06.
+# line2: featuring artists — shown only if they differ from the album's primary artist.
+# Album images passed from the getAlbum call since simplified track objects lack images.
+sub _albumTrackItem {
+    my ($client, $track, $albumImages, $albumArtist) = @_;
+
+    my $trackNum  = $track->{track_number} // '';
+    my $title     = $track->{name}         // '';
+    my $artists   = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
+    my $image     = _largestImage($albumImages);
+    my $duration  = ($track->{duration_ms} || 0) / 1000;
+
+    # Show featuring artists in line2 only when they differ from album's primary artist.
+    my $line2 = ($artists && $artists ne ($albumArtist // '')) ? $artists : '';
+
+    # Context navigation: artist view (no album view — already in album context).
+    my @contextItems;
+    if ($track->{artists} && @{ $track->{artists} } && $track->{artists}[0]{id}) {
+        push @contextItems, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
+            url         => \&_artistFeed,
+            passthrough => [{ artistId => $track->{artists}[0]{id} }],
+            type        => 'link',
+        };
+    }
+
+    my %item = (
+        name      => ($trackNum ? "$trackNum. " : '') . $title,
+        line1     => ($trackNum ? "$trackNum. " : '') . $title,
+        line2     => $line2,
+        url       => 'spotify://' . ($track->{uri} // ''),
+        play      => 'spotify://' . ($track->{uri} // ''),
+        on_select => 'play',
+        image     => $image,
+        duration  => $duration,
+        type      => 'audio',
+    );
+    $item{items} = \@contextItems if @contextItems;
+
+    return \%item;
+}
+
+# ============================================================
+# Playlist Detail Feed (NAV-07)
+# ============================================================
+
+# _playlistFeed($client, $callback, $args, $passthrough)
+# Shows paginated track list for a playlist.
+# Per NAV-07: maps LMS index/quantity to Spotify offset/limit (cap 100).
+# Null track entries (local files) are skipped per T-03-10.
+# Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
+sub _playlistFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $playlistId = $passthrough->[0]{playlistId} // '';
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
+        offset => $offset,
+        limit  => $limit,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            # Made-For-You 403 or other error — graceful fallback per RESEARCH Open Question 2.
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        # T-03-10: Skip null track entries (local files in playlists return null track objects).
+        my @items = map  { _trackItem($client, $_->{track}) }
+                    grep { defined $_->{track} }
+                    @{ $data->{items} || [] };
+
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+
+        $callback->({ items => \@items, total => $data->{total} // 0 });
+    });
+}
 
 1;
