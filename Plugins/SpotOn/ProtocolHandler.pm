@@ -7,6 +7,7 @@ use base qw(Slim::Formats::RemoteStream);
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Versions;
 use Slim::Player::CapabilitiesHelper;
 
 my $log   = logger('plugin.spoton');
