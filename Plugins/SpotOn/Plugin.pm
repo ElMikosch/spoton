@@ -489,26 +489,23 @@ sub _recentlyPlayedFeed {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# Fetches user playlists and filters for Spotify-generated personal mixes
-# (Daily Mix, Discover Weekly, etc.) via _isMadeForYou name-matching.
-# browse/categories endpoint was removed by Spotify Feb 2026.
+# Fetches curated personal mixes (Daily Mix, Discover Weekly, etc.) via
+# browse/categories/0JQ5DAt0tbjZptfcdMSKl3/playlists (Spotty-NG pattern).
+# Routes through bundled-token via @KNOWN_DEPRECATED_FAMILIES in Client.pm.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getUserPlaylists($accountId,
-        { offset => 0, limit => 50 }, sub {
+    Plugins::SpotOn::API::Client->getPersonalMixes($accountId,
+        { limit => 50 }, sub {
         my $data = shift;
-        unless ($data) {
+        my $playlists = $data && $data->{playlists} ? $data->{playlists}{items} : undef;
+        unless ($playlists && @$playlists) {
             $callback->({ items => [{ name => cstring($client,
                 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
-        my @mfy   = grep { _isMadeForYou($_) } @{ $data->{items} || [] };
-        my @items = map  { _playlistItem($client, $_) } @mfy;
-        if (!@items) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
+        my @items = map { _playlistItem($client, $_) } @$playlists;
         $callback->({ items => \@items });
     });
 }
