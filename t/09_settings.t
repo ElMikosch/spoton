@@ -179,16 +179,8 @@ sub sleep { CORE::sleep($_[1]) }
 1;
 END
 
-# Stub: File::Spec::Functions
-write_stub($stub_dir, 'File::Spec::Functions', <<'END');
-package File::Spec::Functions;
-use parent 'Exporter';
-use File::Spec ();
-our @EXPORT_OK = qw(catdir catfile);
-*catdir  = \&File::Spec::catdir;
-*catfile = \&File::Spec::catfile;
-1;
-END
+# Note: File::Spec::Functions is a core module — no stub needed.
+# The real File::Spec::Functions provides catdir/catfile as exported functions.
 
 # Stub: Slim::Plugin::OPMLBased
 write_stub($stub_dir, 'Slim::Plugin::OPMLBased', <<'END');
@@ -227,6 +219,24 @@ sub protectURI     { $_[1] }
 1;
 END
 
+# Stub: Slim::Web::Pages (for addRawFunction)
+write_stub($stub_dir, 'Slim::Web::Pages', <<'END');
+package Slim::Web::Pages;
+our @registered_raw = ();
+sub addRawFunction { push @registered_raw, [$_[1], $_[2]] }
+sub reset_calls    { @registered_raw = () }
+1;
+END
+
+# Stub: Slim::Web::HTTP (for addHTTPResponse in _discoveryStatusHandler)
+write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
+package Slim::Web::HTTP;
+our @http_responses = ();
+sub addHTTPResponse { push @http_responses, [@_] }
+sub reset_calls     { @http_responses = () }
+1;
+END
+
 # Stub: Slim::Formats::RemoteStream
 write_stub($stub_dir, 'Slim::Formats::RemoteStream', <<'END');
 package Slim::Formats::RemoteStream;
@@ -253,14 +263,21 @@ sub init { }
 1;
 END
 
-# Stub: Plugins::SpotOn::API::TokenManager (needed by Settings.pm)
+# Stub: Plugins::SpotOn::API::TokenManager (ZeroConf methods — no OAuth)
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-sub addAccount        { my ($class, $u, $p, $cb) = @_; $cb->('stub1234', undef) }
+our $discovery_running = 0;
+our @start_calls = ();
+our @stop_calls  = ();
+sub startDiscovery    { push @start_calls, 1; $discovery_running = 1 }
+sub stopDiscovery     { push @stop_calls,  1; $discovery_running = 0 }
+sub isDiscoveryRunning { return $discovery_running }
 sub removeAccount     { }
 sub getAccountIds     { return () }
-sub _buildRedirectUri { return 'http://127.0.0.1:9000/plugins/SpotOn/settings/callback' }
-sub startOAuthFlow    { return ('https://accounts.spotify.com/authorize?mocked=1', 'teststate') }
+sub reset_calls {
+    @start_calls = (); @stop_calls = ();
+    $discovery_running = 0;
+}
 1;
 END
 
@@ -325,13 +342,45 @@ unshift @INC, $stub_dir, $project_dir;
 }
 
 # ============================================================
-# AUTH-06: Account switch updates preference
-# (SKIP-guarded until Settings.pm is updated in Plan 02-04)
+# Settings.pm structure tests
 # ============================================================
 my $settings_module = "$project_dir/Plugins/SpotOn/Settings.pm";
 
 SKIP: {
-    skip "Settings.pm not yet updated with switchAccount handler (Plan 02-04)", 2
+    skip "Settings.pm not found", 1 unless -f $settings_module;
+
+    open(my $fh, '<', $settings_module) or die $!;
+    my $src = do { local $/; <$fh> };
+    close($fh);
+
+    # PLAN 03 acceptance criteria: no OAuth artifacts
+    ok($src !~ /startOAuth/,         'Settings.pm: no startOAuth reference');
+    ok($src !~ /clientId/,           'Settings.pm: no clientId reference');
+    ok($src !~ /redirectUri/,        'Settings.pm: no redirectUri reference');
+    ok($src !~ /buildRedirectUri/,   'Settings.pm: no buildRedirectUri reference');
+
+    # PLAN 03 acceptance criteria: ZeroConf discovery present
+    ok($src =~ /addRawFunction/,                              'Settings.pm: addRawFunction registered');
+    ok($src =~ /discoveryStatus/,                             'Settings.pm: discoveryStatus endpoint registered');
+    ok($src =~ /sub _discoveryStatusHandler/,                 'Settings.pm: _discoveryStatusHandler defined');
+    ok($src =~ /startDiscovery/,                              'Settings.pm: startDiscovery action present');
+    ok($src =~ /stopDiscovery/,                               'Settings.pm: stopDiscovery action present');
+    ok($src =~ /discoveryRunning/,                            'Settings.pm: discoveryRunning template param set');
+    ok($src =~ /to_json/,                                     'Settings.pm: to_json used in AJAX handler');
+    ok($src =~ /addHTTPResponse/,                             'Settings.pm: addHTTPResponse used in AJAX handler');
+
+    # prefs() should NOT include clientId
+    ok($src =~ /sub prefs[^}]+return[^}]+(?!clientId)[^}]+}/s,
+        'Settings.pm: prefs() method exists');
+    ok($src !~ /return \(\$prefs.*clientId/,
+        'Settings.pm: prefs() does not return clientId');
+}
+
+# ============================================================
+# AUTH-06: Account switch updates preference
+# ============================================================
+SKIP: {
+    skip "Settings.pm not yet updated with switchAccount handler", 2
         unless -f $settings_module && do {
             open(my $fh, '<', $settings_module) or die $!;
             my $src = do { local $/; <$fh> };
@@ -363,10 +412,90 @@ SKIP: {
 }
 
 # ============================================================
+# discoveryRunning template param test
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for discoveryRunning test", 2
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    {
+        # Force TokenManager not loaded so _isDiscoveryRunning returns 0 quickly
+        # by temporarily removing it from %INC
+        my $saved = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
+
+        my $param_ref = {};
+        Plugins::SpotOn::Settings->handler(
+            undef, $param_ref,
+            sub { },
+            undef, undef
+        );
+
+        # Restore %INC
+        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved if defined $saved;
+
+        is($param_ref->{discoveryRunning}, 0,
+            'discoveryRunning: returns 0 when TokenManager not loaded');
+    }
+
+    {
+        # Ensure TokenManager is loaded (stub or real) and discoveryRunning is 0
+        require Plugins::SpotOn::API::TokenManager;
+
+        my $param_ref = {};
+        Plugins::SpotOn::Settings->handler(
+            undef, $param_ref,
+            sub { },
+            undef, undef
+        );
+
+        # The stub returns 0 by default; real module also has isDiscoveryRunning returning false
+        is($param_ref->{discoveryRunning}, 0,
+            'discoveryRunning: returns 0 when isDiscoveryRunning is false');
+    }
+}
+
+# ============================================================
+# _discoveryStatusHandler JSON response test
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for _discoveryStatusHandler test", 3
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    # Override addHTTPResponse to capture the JSON content
+    my $captured_content;
+    {
+        no warnings 'redefine', 'once';
+        local *Slim::Web::HTTP::addHTTPResponse = sub {
+            my ($client, $resp, $content_ref) = @_;
+            $captured_content = $$content_ref;
+        };
+
+        # Mock HTTP response object
+        my $response_obj = bless {}, 'MockHTTPResponse2';
+        no warnings 'once';
+        local *MockHTTPResponse2::header       = sub { };
+        local *MockHTTPResponse2::code         = sub { };
+        local *MockHTTPResponse2::content_type = sub { };
+
+        # Status: idle (TokenManager not running, no credentials file)
+        my $saved_tm = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
+        $captured_content = undef;
+        Plugins::SpotOn::Settings::_discoveryStatusHandler(undef, $response_obj);
+        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved_tm if defined $saved_tm;
+
+        ok(defined $captured_content, '_discoveryStatusHandler: addHTTPResponse was called');
+
+        my $decoded = eval { require JSON::PP; JSON::PP::decode_json($captured_content) };
+        ok(!$@ && defined $decoded->{status},
+            '_discoveryStatusHandler: response is valid JSON with status key');
+
+        is($decoded->{status}, 'idle',
+            '_discoveryStatusHandler: returns idle when discovery not running and no credentials');
+    }
+}
+
+# ============================================================
 # i18n: All PLUGIN_SPOTON_ACCOUNT_* string keys exist in strings.txt
-# These strings are added in Plan 02-03 (strings.txt update).
-# Skip-guarded until PLUGIN_SPOTON_ACTIVE_ACCOUNT is present
-# (that key is the first Phase 2 addition; its presence signals the update landed).
 # ============================================================
 {
     my $strings_file = "$project_dir/Plugins/SpotOn/strings.txt";
@@ -383,6 +512,9 @@ SKIP: {
         skip "Phase 2 strings not yet added to strings.txt (Plan 02-03 will add them)", 11
             unless $content =~ /^PLUGIN_SPOTON_ACTIVE_ACCOUNT\s*$/m;
 
+        # These are Phase 2 strings (Plans 02-03 era): guaranteed present once
+        # PLUGIN_SPOTON_ACTIVE_ACCOUNT sentinel passes.
+        # Plan 03 ZeroConf-specific strings are tested in the separate block below.
         my @required_keys = qw(
             PLUGIN_SPOTON_ACCOUNT_SETTINGS
             PLUGIN_SPOTON_ACTIVE_ACCOUNT
@@ -391,8 +523,8 @@ SKIP: {
             PLUGIN_SPOTON_ACCOUNT_ACTIVE
             PLUGIN_SPOTON_ACCOUNT_SWITCH
             PLUGIN_SPOTON_ACCOUNT_REMOVE
-            PLUGIN_SPOTON_SETUP_WIZARD
-            PLUGIN_SPOTON_CONNECT_BTN
+            PLUGIN_SPOTON_ADD_ANOTHER
+            PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
         );
 
         for my $key (@required_keys) {
@@ -404,7 +536,6 @@ SKIP: {
 
 # ============================================================
 # i18n: PLUGIN_SPOTON_ACTIVE_ACCOUNT contains %s in both DE and EN
-# Skip-guarded until the Phase 2 strings are added to strings.txt (Plan 02-03).
 # ============================================================
 {
     my $strings_file = "$project_dir/Plugins/SpotOn/strings.txt";
@@ -437,6 +568,45 @@ SKIP: {
             'i18n: PLUGIN_SPOTON_ACTIVE_ACCOUNT DE translation contains %s placeholder');
         like($translations{EN} // '', qr/%s/,
             'i18n: PLUGIN_SPOTON_ACTIVE_ACCOUNT EN translation contains %s placeholder');
+    }
+}
+
+# ============================================================
+# PLAN 03 strings.txt: ZeroConf strings present (no PKCE strings)
+# ============================================================
+{
+    my $strings_file = "$project_dir/Plugins/SpotOn/strings.txt";
+
+    SKIP: {
+        skip "strings.txt not found", 8 unless -f $strings_file;
+
+        open(my $fh, '<', $strings_file) or die "Cannot open strings.txt: $!";
+        my $content = do { local $/; <$fh> };
+        close($fh);
+
+        # Sentinel: if PLUGIN_SPOTON_ZEROCONF_SETUP is not present, Plan 03
+        # strings have not been added yet.
+        skip "Plan 03 ZeroConf strings not yet added to strings.txt", 8
+            unless $content =~ /^PLUGIN_SPOTON_ZEROCONF_SETUP\s*$/m;
+
+        # ZeroConf strings must exist
+        for my $key (qw(
+            PLUGIN_SPOTON_ZEROCONF_SETUP
+            PLUGIN_SPOTON_ZEROCONF_STEP1
+            PLUGIN_SPOTON_WAITING_FOR_CONNECTION
+            PLUGIN_SPOTON_START_DISCOVERY
+            PLUGIN_SPOTON_STOP_DISCOVERY
+        )) {
+            ok($content =~ /^\Q$key\E\s*$/m, "Plan03 i18n: $key in strings.txt");
+        }
+
+        # PKCE strings must NOT exist
+        ok($content !~ /^PLUGIN_SPOTON_CLIENT_ID_LABEL\s*$/m,
+            'Plan03 i18n: PLUGIN_SPOTON_CLIENT_ID_LABEL removed from strings.txt');
+        ok($content !~ /^PLUGIN_SPOTON_CLIENT_ID_HINT\s*$/m,
+            'Plan03 i18n: PLUGIN_SPOTON_CLIENT_ID_HINT removed from strings.txt');
+        ok($content !~ /^PLUGIN_SPOTON_SETUP_WIZARD\s*$/m,
+            'Plan03 i18n: PLUGIN_SPOTON_SETUP_WIZARD removed from strings.txt');
     }
 }
 

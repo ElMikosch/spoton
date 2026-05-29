@@ -4,17 +4,31 @@ use strict;
 use warnings;
 use base qw(Slim::Web::Settings);
 
+use File::Spec::Functions qw(catdir catfile);
+use JSON::XS::VersionOneAndTwo;
+
+use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(string);
 use Plugins::SpotOn::Helper;
 
 use constant SETTINGS_URL => 'plugins/SpotOn/settings/basic.html';
 
+my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
 
 sub new {
     my $class = shift;
-    return $class->SUPER::new(@_);
+    my $self  = $class->SUPER::new(@_);
+
+    # Register AJAX discoveryStatus endpoint (addRawFunction pattern from Spotty/Settings/Auth.pm)
+    require Slim::Web::Pages;
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/discoveryStatus',
+        \&_discoveryStatusHandler
+    );
+
+    return $self;
 }
 
 sub name {
@@ -26,13 +40,11 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary', 'clientId', 'normalization');
+    return ($prefs, 'bitrate', 'binary', 'normalization');
 }
 
 sub handler {
     my ($class, $client, $paramRef, $callback, $httpClient, $response) = @_;
-
-    require Plugins::SpotOn::API::TokenManager;
 
     my ($helperPath, $helperVersion) = Plugins::SpotOn::Helper->get();
 
@@ -43,7 +55,7 @@ sub handler {
 
     if ($paramRef->{saveSettings}) {
         my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
-        my $bitrate = $paramRef->{'pref_bitrate'};
+        my $bitrate = $paramRef->{'pref_bitrate'} // 320;
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
@@ -52,25 +64,16 @@ sub handler {
         my $norm = $paramRef->{'pref_normalization'} ? 1 : 0;
         $prefs->set('normalization', $norm);
 
-        # OAuth PKCE flow initiation (D-07).
-        # LMS loads settings pages inside an iframe, so a 302 redirect would
-        # try to load accounts.spotify.com inside the frame — blocked by
-        # Spotify's X-Frame-Options. Instead, generate the auth URL and pass
-        # it to the template, which opens it in a new tab via target="_blank".
-        if ($paramRef->{startOAuth}) {
-            my $clientId = $paramRef->{'pref_clientId'} // '';
-            $clientId =~ s/^\s+|\s+$//g;
-            $prefs->set('clientId', $clientId) if $clientId;
-            if (!$clientId) {
-                $paramRef->{oauthError} = string('PLUGIN_SPOTON_CLIENT_ID_REQUIRED');
-            } else {
-                my ($authUrl, $state) = Plugins::SpotOn::API::TokenManager->startOAuthFlow($clientId);
-                if ($authUrl) {
-                    $paramRef->{authUrl} = $authUrl;
-                } else {
-                    $paramRef->{oauthError} = string('PLUGIN_SPOTON_AUTH_ERROR');
-                }
-            }
+        # ZeroConf Discovery starten (D-01)
+        if ($paramRef->{startDiscovery}) {
+            require Plugins::SpotOn::API::TokenManager;
+            Plugins::SpotOn::API::TokenManager->startDiscovery();
+        }
+
+        # ZeroConf Discovery stoppen
+        if ($paramRef->{stopDiscovery}) {
+            require Plugins::SpotOn::API::TokenManager;
+            Plugins::SpotOn::API::TokenManager->stopDiscovery();
         }
 
         # Account remove (CR-03, WR-03).
@@ -93,6 +96,7 @@ sub handler {
                     $newActive = @remaining ? $remaining[0] : '';
                 }
 
+                require Plugins::SpotOn::API::TokenManager;
                 Plugins::SpotOn::API::TokenManager->removeAccount($removeId);
 
                 # Apply the pre-computed replacement if one was needed.
@@ -117,13 +121,53 @@ sub handler {
         }
     }
 
-    # Pass account and OAuth data to template for all requests
-    $paramRef->{accounts}      = $prefs->get('accounts') || {};
-    $paramRef->{activeAccount} = $prefs->get('activeAccount') || '';
-    $paramRef->{clientId}      = $prefs->get('clientId') || '';
-    $paramRef->{redirectUri}   = Plugins::SpotOn::API::TokenManager->buildRedirectUri();
+    # Pass account and discovery data to template for all requests
+    $paramRef->{accounts}         = $prefs->get('accounts') || {};
+    $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
+    $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+}
+
+# ============================================================
+# AJAX endpoint: /plugins/SpotOn/settings/discoveryStatus
+# Returns JSON with status: 'connected' | 'waiting' | 'idle'
+# Source pattern: Spotty/Settings/Auth.pm::checkCredentials (addRawFunction pattern)
+# ============================================================
+sub _discoveryStatusHandler {
+    my ($httpClient, $response) = @_;
+
+    my $serverPrefs = preferences('server');
+    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__');
+    my $credsFile   = catfile($discoverDir, 'credentials.json');
+
+    my $result;
+    if (-f $credsFile) {
+        $result = { status => 'connected' };
+    } elsif (_isDiscoveryRunning()) {
+        $result = { status => 'waiting' };
+    } else {
+        $result = { status => 'idle' };
+    }
+
+    my $content = to_json($result);
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('application/json');
+    # Source: Spotty/Settings/Auth.pm line 88
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# Helper: check if ZeroConf discovery process is alive
+# Delegates to TokenManager which owns the $discoveryProc package var
+# ============================================================
+sub _isDiscoveryRunning {
+    # Lazy-load TokenManager to avoid circular dependency issues at startup
+    # If TokenManager is not loaded yet, discovery is not running
+    return 0 unless $INC{'Plugins/SpotOn/API/TokenManager.pm'};
+    return Plugins::SpotOn::API::TokenManager->isDiscoveryRunning();
 }
 
 1;
