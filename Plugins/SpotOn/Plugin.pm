@@ -493,8 +493,10 @@ sub _madeForYouFeed {
     Plugins::SpotOn::API::Client->getPersonalMixes($accountId, {}, sub {
         my ($data, $err) = @_;
 
-        # Fallback bei 404/403 (Dev Mode: Browse Categories seit Feb 2026 entfernt)
-        if (!$data || ($err && ($err->{code} == 404 || $err->{code} == 403))) {
+        # WR-02: Fallback bei JEDEM Fehler wenn $data fehlt — nicht nur 404/403.
+        # Bei Netzwerkfehler liefert _onError code=>0; die alte Bedingung löste
+        # keinen Fallback aus und ließ den Browser in einem hängenden Spinner stecken.
+        if (!$data) {
             main::INFOLOG && $log->info(
                 "_madeForYouFeed: category endpoint unavailable (code " .
                 ($err ? $err->{code} : 'no data') . "), falling back to me/playlists");
