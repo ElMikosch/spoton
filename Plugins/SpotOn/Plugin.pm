@@ -42,8 +42,7 @@ sub initPlugin {
         bitrate       => 320,
         normalization => 0,     # STR-08: volume normalisation toggle, default off (D-06)
         binary        => '',    # custom binary override (LMS-10, Phase 6)
-        clientId      => '',    # user's Spotify Developer App Client ID (D-04)
-        accounts      => {},    # hash: accountId => { displayName => ..., refreshToken => ... }
+        accounts      => {},    # hash: accountId => { displayName => '...', spotifyUserId => '...' }
         activeAccount => '',    # default active account ID (global fallback)
     });
 
@@ -85,9 +84,10 @@ sub initPlugin {
         require Plugins::SpotOn::Settings;
         Plugins::SpotOn::Settings->new();
 
-        # Register OAuth callback route (D-08)
-        require Plugins::SpotOn::Settings::Callback;
-        Plugins::SpotOn::Settings::Callback->init();
+        # D-01: Auto-start ZeroConf Discovery if no credentials exist.
+        # Deferred via timer to not block initPlugin.
+        Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);
+        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 2, \&_autoStartDiscovery);
     }
 
     $class->SUPER::initPlugin(
@@ -104,6 +104,13 @@ sub initPlugin {
 # Thin timer callback wrapper — Slim::Utils::Timers passes $class as first arg.
 sub _refreshAllTokens {
     Plugins::SpotOn::API::TokenManager->refreshAllTokens();
+}
+
+# _autoStartDiscovery()
+# D-01: Timer callback — auto-starts ZeroConf discovery if no credentials exist.
+sub _autoStartDiscovery {
+    require Plugins::SpotOn::API::TokenManager;
+    Plugins::SpotOn::API::TokenManager->autoStartDiscoveryIfNeeded();
 }
 
 # _killOrphanedProcesses($class)
@@ -1132,8 +1139,13 @@ sub updateTranscodingTable {
     my $normalize = $prefs->get('normalization') || 0;    # Phase 4: global toggle (D-06)
 
     # Compute librespot credentials/session cache dir (Pattern 4)
-    my $serverPrefs = preferences('server');
-    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton');
+    # Multi-account: inject active accountId into cache path (RESEARCH Pitfall 6)
+    # This ensures --single-track finds the correct credentials.json for the active account.
+    my $serverPrefs     = preferences('server');
+    my $activeAccountId = $prefs->get('activeAccount') || '';
+    my $cacheDir = $activeAccountId
+        ? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
+        : catdir($serverPrefs->get('cachedir'), 'spoton');
 
     # Create cache dir if it does not exist
     unless (-d $cacheDir) {
