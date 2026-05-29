@@ -3,6 +3,7 @@ package Plugins::SpotOn::API::Client;
 use strict;
 use warnings;
 
+use Digest::MD5 qw(md5_hex);
 use JSON::XS::VersionOneAndTwo;
 use URI::Escape qw(uri_escape);
 
@@ -22,6 +23,14 @@ use constant REQUEST_TIMEOUT            => 30;
 use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
 # Source: Spotty API.pm:18 (verifiziert: michaelherger/Spotty-Plugin/API.pm)
 
+# Dual-token routing constants (D-01 through D-06)
+# Source: Spotty-NG API.pm:93-98 adapted for SpotOn
+use constant BUNDLED_HINT_TTL        => 86400;             # 24h hint persistence
+use constant BUNDLED_HINT_KEY_PREFIX => 'spoton_bundled_hint_';
+# Placeholder — SpotOn default Client-ID to be filled before release.
+# For development: use own Spotify Developer App ID via Settings -> clientId pref.
+use constant SPOTON_DEFAULT_CLIENT_ID => '';
+
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
@@ -30,6 +39,25 @@ my $cache = Slim::Utils::Cache->new();
 # Must be reset to 0 in Plugin.pm::initPlugin via Client->reset()
 # to prevent stale counter after plugin reload (Pitfall 2 from RESEARCH.md).
 my $inflightCount = 0;
+
+# me/* family guard — ALWAYS checked first (D-05)
+# Source: Spotty-NG API.pm:112
+my $_meFamilyRegex = qr{^me(?:$|/|\?)};
+
+# Deprecated-endpoint families for bundled-token fallback (D-04)
+# Source: Spotty-NG API.pm:66-91 adapted
+# These endpoints are removed/rate-limited under own Client-ID (dev mode restrictions).
+my @KNOWN_DEPRECATED_FAMILIES = (
+    qr{^browse/featured-playlists\b},
+    qr{^browse/categories/[^/?]+/playlists\b},
+    qr{^browse/categories\b},
+    qr{^browse/new-releases\b},
+    qr{^recommendations\b},
+    qr{^users/[^/?]+/playlists\b},
+    qr{^artists/[^/?]+/top-tracks\b},
+    qr{^artists/[^/?]+/related-artists\b},
+    qr{^playlists/37i9[A-Za-z0-9]+\b},  # Curated Spotify playlists (spoton_rate_limit_own / spoton_rate_limit_bundled)
+);
 
 # ============================================================
 # Public class methods
@@ -223,37 +251,54 @@ sub getPlaylistItems {
 # _request($class, $method, $path, $params, $cb)
 # Central HTTP egress point. All Spotify API calls go through here (API-01).
 #
-# Pipeline:
-#   1. Rate limit flag check (cache key set on 429)
-#   2. Response cache check (unless _noCache)
-#   3. Concurrency cap — defer via timer if >= MAX_CONCURRENT_REQUESTS
-#   4. Increment inflight counter
-#   5. Token injection via TokenManager->getToken
-#   6. Async HTTP call via SimpleAsyncHTTP
+# Dual-Token Pipeline (Phase 04.4):
+#   0. Strip leading slash from path; compute $isMeFamily (D-05 me/* guard)
+#   1. Per-flavor rate-limit check (D-01): own for me/*, bundled for others
+#   2. Response cache check (unless _noCache) — cache key excludes flavor (API-03)
+#   3. Concurrency cap (API-02) — defer via timer; cap is SHARED across both flavors
+#   4. Increment inflight counter; wrap $cb in double-callback guard
+#   5. Resolve start flavor via _resolveStartFlavor (D-04, D-05, D-06)
+#   6. Dispatch to _doFlavouredRequest (may do bundled fallback on 403/410)
 sub _request {
     my ($class, $method, $path, $params, $cb) = @_;
 
-    # Step 1: Rate limit flag check (API-04)
-    if ($cache->get(RATE_LIMIT_CACHE_KEY)) {
-        $cb->(undef, { error => 'rate_limited', code => 429 });
-        return;
+    # Step 0: Strip leading slash; compute me/* family membership (D-05)
+    my $cleanPath = $path;
+    $cleanPath =~ s{^/}{};
+    my $isMeFamily = ($cleanPath =~ $_meFamilyRegex) ? 1 : 0;
+
+    # Step 1: Per-flavor rate-limit check (D-01)
+    # me/* always uses own-token — only check own rate-limit key
+    # non-me/* may use bundled-token — check bundled rate-limit key
+    # Legacy global key checked as fallback for both paths
+    if ($isMeFamily) {
+        if ($cache->get('spoton_rate_limit_own') || $cache->get(RATE_LIMIT_CACHE_KEY)) {
+            $cb->(undef, { error => 'rate_limited', code => 429 });
+            return;
+        }
+    } else {
+        if ($cache->get('spoton_rate_limit_bundled') || $cache->get(RATE_LIMIT_CACHE_KEY)) {
+            $cb->(undef, { error => 'rate_limited', code => 429 });
+            return;
+        }
     }
 
     # Step 2: Response cache check (API-03) — skip for _noCache paths.
-    # Cache key is built here only if it was pre-computed on a prior pass
-    # (i.e. after query params are known). On first entry _cacheKey is undef
-    # so we skip the check; on retry from the timer the key is already set.
+    # Cache key excludes flavor — browse/categories response is the same
+    # regardless of which token fetched it (API-03, RESEARCH).
+    # Cache key is pre-computed only after query params are known (on first entry it's undef).
     unless ($params->{_noCache}) {
         if (my $cacheKey = $params->{_cacheKey}) {
             if (my $cached = $cache->get($cacheKey)) {
-                main::INFOLOG && $log->info("Client: cache hit for $path");
+                main::INFOLOG && $log->info("Client: cache hit for $cleanPath");
                 $cb->($cached);
                 return;
             }
         }
     }
 
-    # Step 3: Concurrency cap (API-02) — FIFO defer via timer
+    # Step 3: Concurrency cap (API-02, Pitfall 6) — SHARED across both flavors.
+    # One Spotify account = one cap, regardless of token flavor.
     if ($inflightCount >= MAX_CONCURRENT_REQUESTS) {
         Slim::Utils::Timers::setTimer(
             undef,
@@ -263,26 +308,73 @@ sub _request {
         return;
     }
 
-    # Step 4: Increment inflight counter
+    # Step 4: Increment inflight counter and wrap $cb in double-callback guard.
+    # $inflightCount is decremented exactly once per request by $userCb.
+    # _onSuccess and _onError do NOT decrement $inflightCount (prevents double-decrement
+    # during the 403/410 bundled-fallback retry path).
+    # Source: Spotty-NG API.pm:1588-1593
     $inflightCount++;
+    my $userCbCalled = 0;
+    my $userCb = sub {
+        return if $userCbCalled++;
+        $inflightCount--;
+        $cb->(@_);
+    };
 
-    # Step 5: Token injection via TokenManager
+    # Step 5: Resolve start flavor (D-04, D-05, D-06)
+    my $startFlavor = $class->_resolveStartFlavor($cleanPath, $isMeFamily);
+
+    # Step 6: Dispatch to flavor-aware request with optional bundled fallback
+    $class->_doFlavouredRequest($method, $cleanPath, $params, $userCb, $startFlavor, 0, $isMeFamily);
+}
+
+# _resolveStartFlavor($class, $cleanPath, $isMeFamily)
+# Determines the starting token flavor for a request.
+# Priority: D-05 me/* guard > D-06 hint cache > D-03 degraded mode > D-04 own-first
+# Source: Spotty-NG API.pm:1557-1590
+sub _resolveStartFlavor {
+    my ($class, $cleanPath, $isMeFamily) = @_;
+
+    # D-05: me/* ALWAYS uses own-token — no fallback ever (hard guard)
+    return 'own' if $isMeFamily;
+
+    # D-06: Hint cache hit → skip own-token trial, go directly to bundled
+    my $hintFlavor = $class->_lookupBundledHint($cleanPath);
+    return 'bundled' if $hintFlavor;
+
+    # D-03: Degraded mode — no own Client-ID configured → fall back to bundled
+    my $hasOwnId = ($prefs->get('clientId') || SPOTON_DEFAULT_CLIENT_ID) ? 1 : 0;
+    return $hasOwnId ? 'own' : 'bundled';
+}
+
+# _doFlavouredRequest($class, $method, $cleanPath, $params, $userCb, $flavor, $isRetry, $isMeFamily)
+# Executes a single-flavor HTTP request with optional bundled fallback on 403/410/deprecated-404.
+# Called from _request(); also called recursively for the bundled retry (isRetry=1).
+# Source: Spotty-NG API.pm:1595-1703 adapted
+sub _doFlavouredRequest {
+    my ($class, $method, $cleanPath, $params, $userCb, $flavor, $isRetry, $isMeFamily) = @_;
+
     my $accountId = $params->{_accountId};
+
     require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->getToken($accountId, sub {
+    Plugins::SpotOn::API::TokenManager->getToken($accountId, $flavor, sub {
         my $token = shift;
 
         unless ($token) {
-            $inflightCount--;
-            $cb->(undef, { error => 'no_token' });
+            # T-04.4-01: log only flavor, not token value
+            main::INFOLOG && $log->info("Client: no token available [flavor=$flavor] for account $accountId");
+            $userCb->(undef, { error => 'no_token', flavor => $flavor });
             return;
         }
 
-        # Step 6: Build URL and fire async HTTP request.
-        # Append query params (excluding keys prefixed with _).
-        # Build the cache key from path + sorted query string so that two
-        # calls differing only in query params never share a cache entry (CR-02).
-        my $url = API_BASE . "/$path";
+        # Pass flavor in params so _onError can use the correct rate-limit key (D-01)
+        $params->{_flavor} = $flavor;
+
+        # Build URL and compute cache key with query params.
+        # Cache key is built from path + sorted query string (CR-02).
+        # CR-01: Include accountId to prevent multi-account cache contamination.
+        # Note: cache key does NOT include flavor — response data is flavor-agnostic (API-03).
+        my $url = API_BASE . "/$cleanPath";
         my @queryParts;
         for my $key (sort keys %{$params}) {
             next if $key =~ /^_/;
@@ -293,29 +385,109 @@ sub _request {
             $url .= '?' . $queryStr;
         }
 
-        # Compute and cache the key so _onSuccess can use the same key.
-        # Also perform the cache lookup now that we know the full key.
-        # CR-01: Include accountId in cache key to prevent multi-account cache contamination.
-        # _accountId is filtered from queryStr (^_ prefix), so it must be injected separately.
         unless ($params->{_noCache}) {
             my $cacheKey = $queryStr
-                ? "spoton_resp_${accountId}_${path}?${queryStr}"
-                : "spoton_resp_${accountId}_${path}";
+                ? "spoton_resp_${accountId}_${cleanPath}?${queryStr}"
+                : "spoton_resp_${accountId}_${cleanPath}";
             $params->{_cacheKey} = $cacheKey;
             if (my $cached = $cache->get($cacheKey)) {
-                $inflightCount--;
-                main::INFOLOG && $log->info("Client: cache hit for $path");
-                $cb->($cached);
+                # Cache hit — $userCb decrements $inflightCount
+                main::INFOLOG && $log->info("Client: cache hit for $cleanPath [flavor=$flavor]");
+                $userCb->($cached);
                 return;
             }
         }
 
-        # T-02-10: Never log Authorization header value — only URL path and status
-        main::INFOLOG && $log->info("Client: $method $path");
+        # T-02-10: Never log Authorization header value — only URL path, flavor, and method
+        main::INFOLOG && $log->info("Client: $method $cleanPath [flavor=$flavor]");
 
         Slim::Networking::SimpleAsyncHTTP->new(
-            sub { $class->_onSuccess(shift, $path, $params, $cb) },
-            sub { $class->_onError(shift, $_[0], $_[1], $path, $params, $cb) },
+            sub {
+                # Success callback — parse JSON, cache, then check for bundled hint write
+                my $http = shift;
+                my $result = eval { from_json($http->content) };
+                if ($@) {
+                    $log->error("Client: JSON parse error for $cleanPath [flavor=$flavor]: $@");
+                    $userCb->(undef, { error => 'parse_error' });
+                    return;
+                }
+
+                # Cache response with domain-specific TTL (API-03).
+                # Cache key excludes flavor — same data regardless of which token fetched it.
+                unless ($params->{_noCache}) {
+                    my $ttl = $class->_cacheTTL($cleanPath);
+                    if ($ttl > 0) {
+                        my $cacheKey = $params->{_cacheKey} || "spoton_resp_$cleanPath";
+                        $cache->set($cacheKey, $result, $ttl);
+                        main::INFOLOG && $log->info("Client: cached $cleanPath for ${ttl}s [flavor=$flavor]");
+                    }
+                }
+
+                # D-06: If this was a successful bundled retry, persist hint for 24h
+                # Anti-pattern prevention: only write hint on confirmed 2xx success
+                if ($isRetry && $flavor eq 'bundled') {
+                    $class->_rememberBundledHint($cleanPath);
+                }
+
+                $userCb->($result);
+            },
+            sub {
+                # Error callback — handle 429, 401, 403/410 bundled fallback
+                my ($http, $error, $response) = @_;
+
+                my $code = ($response && ref $response && $response->can('code'))
+                    ? ($response->code || 0) : 0;
+                if (!$code && $error && $error =~ /^(\d{3})\b/) {
+                    $code = $1;
+                }
+
+                # D-01: Per-flavor rate-limit keys (spoton_rate_limit_own / spoton_rate_limit_bundled)
+                if ($code == 429) {
+                    my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
+                    if ($response && ref $response && $response->can('header')) {
+                        my $headerVal = $response->header('Retry-After');
+                        # T-02-08: Cap Retry-After at 300s to prevent self-DoS
+                        $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
+                    }
+                    $retryAfter = 300 if $retryAfter > 300;
+
+                    # Per-flavor rate-limit key (D-01) + legacy global key (backward-compat)
+                    my $rlKey = ($flavor eq 'bundled')
+                        ? 'spoton_rate_limit_bundled'
+                        : 'spoton_rate_limit_own';
+                    $cache->set($rlKey, 1, $retryAfter);
+                    $cache->set(RATE_LIMIT_CACHE_KEY, 1, $retryAfter);
+                    $log->warn("Client: 429 rate limited [flavor=$flavor] for ${retryAfter}s on $cleanPath");
+                    $userCb->(undef, { error => 'rate_limited', code => 429 });
+                    return;
+                }
+
+                # 401: Invalidate flavor-specific token cache
+                if ($code == 401) {
+                    $cache->remove("spoton_token_${accountId}_${flavor}") if $accountId;
+                    $log->warn("Client: 401 unauthorized [flavor=$flavor] for $cleanPath (token invalidated)");
+                    $userCb->(undef, { error => 'unauthorized', code => 401 });
+                    return;
+                }
+
+                # D-06 bundled fallback: 403/410 on own-token for non-me/* paths
+                # Also triggers on 404 if path is a known deprecated endpoint (Pitfall 4)
+                # D-05: me/* NEVER falls back to bundled — hard guard
+                # Anti-pattern: no re-entry into _request() (would re-run routing logic)
+                if (!$isRetry && $flavor eq 'own' && !$isMeFamily
+                        && ($code == 403 || $code == 410
+                            || ($code == 404 && $class->_is404Deprecated($cleanPath)))) {
+                    main::INFOLOG && $log->info(
+                        "Client: $code on own-token for $cleanPath — retrying with bundled token");
+                    $class->_doFlavouredRequest(
+                        $method, $cleanPath, $params, $userCb, 'bundled', 1, $isMeFamily);
+                    return;
+                }
+
+                # T-02-10: Log only status code and path, never token value
+                $log->error("Client: HTTP $code error [flavor=$flavor] for $cleanPath: $error");
+                $userCb->(undef, { error => $error, code => $code });
+            },
             { timeout => REQUEST_TIMEOUT, cache => 0 }
         )->$method(
             $url,
@@ -325,12 +497,64 @@ sub _request {
     });
 }
 
+# ============================================================
+# Hint cache helpers (D-06)
+# Source: Spotty-NG API.pm:93-98 adapted
+# ============================================================
+
+# _lookupBundledHint($class, $cleanPath)
+# Returns 'bundled' if a cached hint exists for the path pattern, undef otherwise.
+# Hint key: BUNDLED_HINT_KEY_PREFIX + md5_hex("$regex") — stable per family (Pitfall 5).
+sub _lookupBundledHint {
+    my ($class, $cleanPath) = @_;
+    for my $rx (@KNOWN_DEPRECATED_FAMILIES) {
+        if ($cleanPath =~ $rx) {
+            return 'bundled' if $cache->get(BUNDLED_HINT_KEY_PREFIX . md5_hex("$rx"));
+        }
+    }
+    return undef;
+}
+
+# _rememberBundledHint($class, $cleanPath)
+# Persists a 24h hint for the matched family pattern.
+# Only written on confirmed 2xx bundled-retry success (never speculatively).
+sub _rememberBundledHint {
+    my ($class, $cleanPath) = @_;
+    for my $rx (@KNOWN_DEPRECATED_FAMILIES) {
+        if ($cleanPath =~ $rx) {
+            my $key = BUNDLED_HINT_KEY_PREFIX . md5_hex("$rx");
+            $cache->set($key, 1, BUNDLED_HINT_TTL);
+            main::INFOLOG && $log->info("Client: bundled hint cached for $cleanPath");
+            return;
+        }
+    }
+}
+
+# _is404Deprecated($class, $cleanPath)
+# Returns 1 if path matches a known deprecated-endpoint family (Pitfall 4).
+# A real "not found" 404 should NOT trigger bundled fallback — only deprecated paths should.
+sub _is404Deprecated {
+    my ($class, $cleanPath) = @_;
+    for my $rx (@KNOWN_DEPRECATED_FAMILIES) {
+        return 1 if $cleanPath =~ $rx;
+    }
+    return 0;
+}
+
+# ============================================================
+# Legacy callbacks (called from _doFlavouredRequest's inner closures above)
+# _onSuccess and _onError are retained as named subs for testability,
+# but the main _doFlavouredRequest uses inline closures for flavor context.
+# NOTE: $inflightCount is NOT decremented here — it is managed exclusively
+# by the $userCb double-callback guard in _request(). This prevents
+# double-decrement during the 403/410 bundled-fallback retry path.
+# ============================================================
+
 # _onSuccess($class, $http, $path, $params, $cb)
 # Handles successful HTTP response: parse JSON, cache, invoke callback.
+# IMPORTANT: Does NOT decrement $inflightCount — managed by $userCb guard in _request().
 sub _onSuccess {
     my ($class, $http, $path, $params, $cb) = @_;
-
-    $inflightCount--;
 
     my $result = eval { from_json($http->content) };
     if ($@) {
@@ -356,17 +580,18 @@ sub _onSuccess {
 # _onError($class, $http, $error, $response, $path, $params, $cb)
 # Handles HTTP error: handles 429 rate limiting, 401 token invalidation, other errors.
 # $response is the HTTP::Response object passed by SimpleAsyncHTTP's error callback.
-# CRITICAL: Both _onSuccess and _onError MUST decrement $inflightCount (Pitfall 2).
+# IMPORTANT: Does NOT decrement $inflightCount — managed by $userCb guard in _request().
+# Per-flavor rate-limit keys used; flavor read from $params->{_flavor}.
 sub _onError {
     my ($class, $http, $error, $response, $path, $params, $cb) = @_;
-
-    $inflightCount--;
 
     my $code = ($response && ref $response && $response->can('code'))
         ? ($response->code || 0) : 0;
     if (!$code && $error && $error =~ /^(\d{3})\b/) {
         $code = $1;
     }
+
+    my $flavor = $params->{_flavor} // 'own';
 
     if ($code == 429) {
         # T-02-08: Cap Retry-After at 300 seconds to prevent self-DoS from malicious header
@@ -377,23 +602,28 @@ sub _onError {
         }
         $retryAfter = 300 if $retryAfter > 300;
 
-        $cache->set(RATE_LIMIT_CACHE_KEY, 1, $retryAfter);
-        $log->warn("Client: 429 rate limited for $retryAfter seconds");
+        # D-01: Per-flavor rate-limit keys (spoton_rate_limit_own / spoton_rate_limit_bundled)
+        my $rlKey = ($flavor eq 'bundled')
+            ? 'spoton_rate_limit_bundled'
+            : 'spoton_rate_limit_own';
+        $cache->set($rlKey, 1, $retryAfter);
+        $cache->set(RATE_LIMIT_CACHE_KEY, 1, $retryAfter);  # backward-compat
+        $log->warn("Client: 429 rate limited [flavor=$flavor] for $retryAfter seconds on $path");
         $cb->(undef, { error => 'rate_limited', code => 429 });
         return;
     }
 
     if ($code == 401) {
-        # Invalidate cached token for this account on 401 (token expired/revoked)
+        # Invalidate cached token for this account and flavor on 401
         my $accountId = $params->{_accountId} // '';
-        $cache->remove("spoton_token_$accountId") if $accountId;
-        $log->warn("Client: 401 unauthorized for $path (token invalidated for $accountId)");
+        $cache->remove("spoton_token_${accountId}_${flavor}") if $accountId;
+        $log->warn("Client: 401 unauthorized [flavor=$flavor] for $path (token invalidated for $accountId)");
         $cb->(undef, { error => 'unauthorized', code => 401 });
         return;
     }
 
-    # T-02-10: Log only status code and path, never token value
-    $log->error("Client: HTTP $code error for $path: $error");
+    # T-02-10: Log only status code, flavor, and path — never token value
+    $log->error("Client: HTTP $code error [flavor=$flavor] for $path: $error");
     $cb->(undef, { error => $error, code => $code });
 }
 

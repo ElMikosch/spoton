@@ -15,11 +15,14 @@ use Slim::Utils::Timers;
 use Time::HiRes;
 
 # Constants
-use constant TOKEN_EXPIRY_BUFFER => 300;       # Refresh 5 min before expiry
-use constant TOKEN_REFRESH_TIMER => 45 * 60;   # 45 minute proactive refresh cycle
-use constant DISCOVERY_TIMEOUT   => 60 * 15;   # 15 min Proc::Background watchdog
-use constant DISCOVER_DIR        => '__DISCOVER__'; # temp dir during ZeroConf
-use constant SPOTIFY_ME_URL      => 'https://api.spotify.com/v1/me';
+use constant TOKEN_EXPIRY_BUFFER   => 300;       # Refresh 5 min before expiry
+use constant TOKEN_REFRESH_TIMER   => 45 * 60;   # 45 minute proactive refresh cycle
+use constant DISCOVERY_TIMEOUT     => 60 * 15;   # 15 min Proc::Background watchdog
+use constant DISCOVER_DIR          => '__DISCOVER__'; # temp dir during ZeroConf
+use constant SPOTIFY_ME_URL        => 'https://api.spotify.com/v1/me';
+# Placeholder — SpotOn default Client-ID to be filled before release.
+# For development: use own Spotify Developer App ID via Settings -> clientId pref.
+use constant SPOTON_DEFAULT_CLIENT_ID => '';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -32,24 +35,34 @@ my $discoveryProc;
 # Public class methods
 # ============================================================
 
-# getToken($class, $accountId, $cb)
+# getToken($class, $accountId, $flavorOrCb, [$cb])
 # Checks cache first; falls back to _fetchKeymasterToken on miss.
-# Interface preserved for Client.pm compatibility.
+# Flavor: 'own' (eigene Client-ID) | 'bundled' (librespot-Default-ID).
+# Backward-compatible: getToken($id, $cb) maps to flavor='own'.
 sub getToken {
-    my ($class, $accountId, $cb) = @_;
+    my ($class, $accountId, $flavorOrCb, $cb) = @_;
 
-    my $cached = $cache->get("spoton_token_$accountId");
-    if (defined $cached) {
-        main::INFOLOG && $log->info("TokenManager: cache hit for account $accountId");
+    my $flavor;
+    if (ref $flavorOrCb eq 'CODE') {
+        # Backward-compat: old callers without flavor parameter
+        $cb     = $flavorOrCb;
+        $flavor = 'own';
+    } else {
+        $flavor = $flavorOrCb // 'own';
+    }
+
+    my $cacheKey = "spoton_token_${accountId}_${flavor}";
+    if (my $cached = $cache->get($cacheKey)) {
+        main::INFOLOG && $log->info("TokenManager: cache hit for account $accountId ($flavor)");
         $cb->($cached);
         return;
     }
 
-    $class->_fetchKeymasterToken($accountId, $cb);
+    $class->_fetchKeymasterToken($accountId, $flavor, $cb);
 }
 
 # removeAccount($class, $accountId)
-# Removes account from prefs and cache. No filesystem cleanup.
+# Removes account from prefs and cache. Deletes both flavor keys and legacy key.
 sub removeAccount {
     my ($class, $accountId) = @_;
 
@@ -58,8 +71,12 @@ sub removeAccount {
     delete $accounts->{$accountId};
     $prefs->set('accounts', $accounts);
 
-    # Clear cached token
-    $cache->remove("spoton_token_$accountId");
+    # Clear flavor token cache keys (both new keys + legacy migration key):
+    #   spoton_token_${accountId}_own     — own Client-ID flavor
+    #   spoton_token_${accountId}_bundled — bundled librespot-Default-ID flavor
+    $cache->remove("spoton_token_${accountId}_own");
+    $cache->remove("spoton_token_${accountId}_bundled");
+    $cache->remove("spoton_token_$accountId");  # legacy key — safe migration net
 
     # Clear active account if it was this one
     my $active = $prefs->get('activeAccount') || '';
@@ -96,17 +113,18 @@ sub getActiveAccountName {
 }
 
 # refreshAllTokens($class)
-# Refreshes tokens for all accounts and re-arms the 45-minute timer.
+# Refreshes own-flavor tokens for all accounts and re-arms the 45-minute timer.
+# Bundled tokens are lazy-only (on-demand) — no proactive refresh (D-Discretion).
 sub refreshAllTokens {
     my ($class) = @_;
 
     my @ids = $class->getAccountIds();
     for my $id (@ids) {
-        $class->_fetchKeymasterToken($id, sub {
+        $class->_fetchKeymasterToken($id, 'own', sub {
             my $token = shift;
-            main::INFOLOG && $log->info("TokenManager: refreshed token for account $id")
+            main::INFOLOG && $log->info("TokenManager: refreshed token for account $id (own)")
                 if $token;
-            $log->error("TokenManager: failed to refresh token for account $id")
+            $log->error("TokenManager: failed to refresh token for account $id (own)")
                 unless $token;
         });
     }
@@ -299,18 +317,29 @@ sub _setupAccountFromCredentials {
 # Private methods
 # ============================================================
 
-# _fetchKeymasterToken($class, $accountId, $cb)
-# Spawns "spoton --get-token --cache {cachedir}/spoton/{accountId}" via Helper->get().
+# _fetchKeymasterToken($class, $accountId, $flavorOrCb, [$cb])
+# Spawns "spoton --get-token [--client-id X] --cache {cachedir}/spoton/{accountId}".
+# Flavor dispatch: 'bundled' = no --client-id; 'own' = own Client-ID from prefs/constant.
+# Backward-compatible: _fetchKeymasterToken($id, $cb) maps to flavor='own'.
 # WR-01: Deferred via Timer to avoid blocking event loop.
 # T-04.3-05: Single-quote escaping on $helper and $cacheDir (shell injection prevention).
-# T-04.3-06: Never logs $result->{accessToken} — logs only accountId and TTL.
+# T-04.3-06: Never logs $result->{accessToken} — logs only accountId, flavor, and TTL.
 sub _fetchKeymasterToken {
-    my ($class, $accountId, $cb) = @_;
+    my ($class, $accountId, $flavorOrCb, $cb) = @_;
+
+    my $flavor;
+    if (ref $flavorOrCb eq 'CODE') {
+        # Backward-compat: internal callers without flavor parameter
+        $cb     = $flavorOrCb;
+        $flavor = 'own';
+    } else {
+        $flavor = $flavorOrCb // 'own';
+    }
 
     require Plugins::SpotOn::Helper;
     my ($helper) = Plugins::SpotOn::Helper->get();
     unless ($helper) {
-        $log->error("TokenManager: binary not found for account $accountId");
+        $log->error("TokenManager: binary not found for account $accountId ($flavor)");
         $cb->(undef);
         return;
     }
@@ -318,17 +347,27 @@ sub _fetchKeymasterToken {
     my $serverPrefs = preferences('server');
     my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
 
-    my $clientId = $prefs->get('clientId') || '';
-
     # T-04.3-05: Single-quote escaping to prevent shell injection
-    (my $safeHelper   = $helper)   =~ s/'/'\\''/g;
-    (my $safeDir      = $cacheDir) =~ s/'/'\\''/g;
-    (my $safeClientId = $clientId) =~ s/'/'\\''/g;
+    (my $safeHelper = $helper)   =~ s/'/'\\''/g;
+    (my $safeDir    = $cacheDir) =~ s/'/'\\''/g;
 
-    my $cmd = $safeClientId
-        ? sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1", $safeHelper, $safeDir, $safeClientId)
-        : sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
-    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId");
+    my $cmd;
+    if ($flavor eq 'bundled') {
+        # bundled = no --client-id → uses librespot-Default-ID
+        $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
+    } else {
+        # own = own Client-ID (from prefs or SPOTON_DEFAULT_CLIENT_ID constant)
+        my $ownClientId = $prefs->get('clientId') || SPOTON_DEFAULT_CLIENT_ID;
+        if ($ownClientId) {
+            (my $safeClientId = $ownClientId) =~ s/'/'\\''/g;
+            $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+                $safeHelper, $safeDir, $safeClientId);
+        } else {
+            # No own Client-ID configured — fall back to bundled-like behavior
+            $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
+        }
+    }
+    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor)");
 
     # WR-01: Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
     Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.1, sub {
@@ -336,31 +375,31 @@ sub _fetchKeymasterToken {
         my $exit   = $? >> 8;
 
         if ($exit != 0 || !$output) {
-            $log->error("TokenManager: --get-token failed for $accountId (exit $exit): $output");
+            $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
             $cb->(undef);
             return;
         }
 
         my $result = eval { from_json($output) };
         if ($@ || !$result->{accessToken}) {
-            $log->error("TokenManager: JSON parse error on --get-token for $accountId: $@");
+            $log->error("TokenManager: JSON parse error on --get-token for $accountId ($flavor): $@");
             $cb->(undef);
             return;
         }
 
-        # T-04.3-06: Log only accountId and TTL — never the token value
-        $class->_cacheToken($accountId, $result->{accessToken}, $result->{expiresIn});
+        # T-04.3-06: Log only accountId, flavor, and TTL — never the token value
+        $class->_cacheToken($accountId, $flavor, $result->{accessToken}, $result->{expiresIn});
         $cb->($result->{accessToken});
     });
 }
 
 # _fetchDisplayName($class, $accountId, $spotifyUserId, $cb)
-# Gets token via _fetchKeymasterToken, then GET /me for display_name.
+# Gets token via _fetchKeymasterToken (own flavor), then GET /me for display_name.
 # Fallback: uses spotifyUserId directly if /me fails.
 sub _fetchDisplayName {
     my ($class, $accountId, $spotifyUserId, $cb) = @_;
 
-    $class->_fetchKeymasterToken($accountId, sub {
+    $class->_fetchKeymasterToken($accountId, 'own', sub {
         my $accessToken = shift;
 
         unless ($accessToken) {
@@ -421,19 +460,20 @@ sub _storeAccountPrefs {
     $cb->($accountId);
 }
 
-# _cacheToken($class, $accountId, $accessToken, $expiresIn)
-# Caches the access token with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
-# T-04.3-06: Never logs the token value itself.
+# _cacheToken($class, $accountId, $flavor, $accessToken, $expiresIn)
+# Caches the access token under flavor-specific key with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
+# T-04.3-06: Never logs the token value itself — only accountId, flavor, and TTL.
 sub _cacheToken {
-    my ($class, $accountId, $accessToken, $expiresIn) = @_;
+    my ($class, $accountId, $flavor, $accessToken, $expiresIn) = @_;
 
     $expiresIn //= 3600;
     my $ttl = $expiresIn > TOKEN_EXPIRY_BUFFER
         ? $expiresIn - TOKEN_EXPIRY_BUFFER
         : ($expiresIn > 60 ? $expiresIn : 60);
 
-    $cache->set("spoton_token_$accountId", $accessToken, $ttl);
-    main::INFOLOG && $log->info("TokenManager: token cached for account $accountId, TTL ${ttl}s");
+    $cache->set("spoton_token_${accountId}_${flavor}", $accessToken, $ttl);
+    main::INFOLOG && $log->info(
+        "TokenManager: token cached for account $accountId ($flavor), TTL ${ttl}s");
 }
 
 # _getLmsServerName()
