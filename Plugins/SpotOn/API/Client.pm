@@ -27,9 +27,7 @@ use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
 # Source: Spotty-NG API.pm:93-98 adapted for SpotOn
 use constant BUNDLED_HINT_TTL        => 86400;             # 24h hint persistence
 use constant BUNDLED_HINT_KEY_PREFIX => 'spoton_bundled_hint_';
-# Placeholder — SpotOn default Client-ID to be filled before release.
-# For development: use own Spotify Developer App ID via Settings -> clientId pref.
-use constant SPOTON_DEFAULT_CLIENT_ID => '';
+use constant SPOTON_DEFAULT_CLIENT_ID => '93aac68fb06348598c1e67734dfaceee';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');

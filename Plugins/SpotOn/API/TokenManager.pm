@@ -20,9 +20,7 @@ use constant TOKEN_REFRESH_TIMER   => 45 * 60;   # 45 minute proactive refresh c
 use constant DISCOVERY_TIMEOUT     => 60 * 15;   # 15 min Proc::Background watchdog
 use constant DISCOVER_DIR          => '__DISCOVER__'; # temp dir during ZeroConf
 use constant SPOTIFY_ME_URL        => 'https://api.spotify.com/v1/me';
-# Placeholder — SpotOn default Client-ID to be filled before release.
-# For development: use own Spotify Developer App ID via Settings -> clientId pref.
-use constant SPOTON_DEFAULT_CLIENT_ID => '';
+use constant SPOTON_DEFAULT_CLIENT_ID => '93aac68fb06348598c1e67734dfaceee';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -353,18 +351,22 @@ sub _fetchKeymasterToken {
 
     my $cmd;
     if ($flavor eq 'bundled') {
-        # bundled = no --client-id → uses librespot-Default-ID
-        $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
+        # bundled = SPOTON_DEFAULT_CLIENT_ID (shared app, access to browse/categories)
+        (my $safeBundledId = SPOTON_DEFAULT_CLIENT_ID) =~ s/'/'\\''/g;
+        $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+            $safeHelper, $safeDir, $safeBundledId);
     } else {
-        # own = own Client-ID (from prefs or SPOTON_DEFAULT_CLIENT_ID constant)
-        my $ownClientId = $prefs->get('clientId') || SPOTON_DEFAULT_CLIENT_ID;
+        # own = user's custom Client-ID (Dev Mode app, access to me/*, search)
+        my $ownClientId = $prefs->get('clientId');
         if ($ownClientId) {
             (my $safeClientId = $ownClientId) =~ s/'/'\\''/g;
             $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
                 $safeHelper, $safeDir, $safeClientId);
         } else {
-            # No own Client-ID configured — fall back to bundled-like behavior
-            $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
+            # No own Client-ID — use SPOTON_DEFAULT_CLIENT_ID as fallback
+            (my $safeFallbackId = SPOTON_DEFAULT_CLIENT_ID) =~ s/'/'\\''/g;
+            $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+                $safeHelper, $safeDir, $safeFallbackId);
         }
     }
     main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor)");
