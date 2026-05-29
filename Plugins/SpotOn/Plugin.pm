@@ -505,7 +505,7 @@ sub _madeForYouFeed {
                 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
-        my @items = map { _playlistItem($client, $_) } @$playlists;
+        my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
         $callback->({ items => \@items });
     });
 }
