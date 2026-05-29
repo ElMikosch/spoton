@@ -1,7 +1,13 @@
 # Cargo configuration for librespot-spoton
-# Produces static-pie linked binaries when musl-tools is not available.
-# With musl-tools installed: use --target x86_64-unknown-linux-musl (preferred for LMS deployment)
-# Without musl-tools: use --target x86_64-unknown-linux-gnu with +crt-static (static-pie linked)
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "target-feature=+crt-static"]
+#
+# LMS deployment binaries: use cross-rs with musl target for fully static binaries:
+#   cross build --release --target x86_64-unknown-linux-musl
+#
+# Local development builds: plain `cargo build --release` (dynamically linked, dev only)
+#
+# NOTE: The previous +crt-static flag on x86_64-unknown-linux-gnu was removed.
+# It causes proc-macro compilation to fail on Rust >= 1.87 with the error:
+#   "cannot produce proc-macro for async-trait as target does not support these crate types"
+# This is a known limitation: proc-macros must be compiled as dynamic libraries for the
+# build host, but +crt-static prevents that on x86_64-unknown-linux-gnu.
+# Use x86_64-unknown-linux-musl (with musl-tools or cross-rs) for static LMS deployment.

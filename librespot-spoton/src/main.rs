@@ -1,12 +1,14 @@
 // SpotOn librespot integration binary for Lyrion Music Server
 //
 // Phase 4.1 implementation: --single-track subcommand for LMS transcoding pipeline
+// Phase 04.2 implementation: --token-login subcommand for credential provisioning
 //
 // Modes:
 //   --check          : Print capability manifest (Phase 1 contract, unchanged)
 //   --authenticate   : Acquire credentials via username/password, write credentials.json
 //   --get-token      : Read cached credentials, return Web API token JSON to stdout
 //   --single-track   : Decode one Spotify track to stdout (pipe backend) and exit
+//   --token-login    : Acquire reusable credentials from OAuth access token, write credentials.json
 //   --connect        : Not yet implemented (Phase 5)
 //
 // --check output format:
@@ -21,6 +23,11 @@
 // --get-token contract (for TokenManager.pm):
 //   Command: spoton -n 'SpotOn' --cache <dir> --get-token [--scope <scopes>]
 //   stdout: {"accessToken":"<token>","expiresIn":<seconds>}
+//   exit 0 on success, non-zero on failure
+//
+// --token-login contract (for TokenManager.pm):
+//   Command: spoton -n 'SpotOn' --token-login --token <access_token> --cache <dir>
+//   stdout: "credentials_saved" on success
 //   exit 0 on success, non-zero on failure
 //
 // --single-track contract (for custom-convert.conf):
@@ -52,6 +59,7 @@ enum Mode {
     GetToken,
     Connect,
     SingleTrack,
+    TokenLogin,    // Phase 04.2: credential provisioning from OAuth access token
 }
 
 #[tokio::main]
@@ -62,6 +70,7 @@ async fn main() {
     let mut _name_provided = false;
     let mut username = String::new();
     let mut password = String::new();
+    let mut token_str = String::new();
     let mut cache_dir = String::new();
     let mut scope = String::new();
     // --client-id accepted for forward compatibility but not used in librespot-core flow
@@ -94,6 +103,15 @@ async fn main() {
                 mode = Mode::SingleTrack;
                 if i + 1 < args.len() && !args[i + 1].starts_with("--") {
                     track_uri = args[i + 1].clone();
+                    i += 1;
+                }
+            }
+            "--token-login" => {
+                mode = Mode::TokenLogin;
+            }
+            "--token" => {
+                if i + 1 < args.len() {
+                    token_str = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -175,6 +193,7 @@ async fn main() {
                 "lms-auth": false,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
+                "token-login": true,
             });
             println!("{}", json);
             process::exit(0);
@@ -233,6 +252,30 @@ async fn main() {
             process::exit(1);
         }
 
+        Mode::TokenLogin => {
+            if token_str.is_empty() {
+                eprintln!("Error: --token is required for --token-login");
+                eprintln!("Usage: spoton -n 'SpotOn' --token-login --token <access_token> --cache <dir>");
+                process::exit(1);
+            }
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --token-login");
+                eprintln!("Usage: spoton -n 'SpotOn' --token-login --token <access_token> --cache <dir>");
+                process::exit(1);
+            }
+
+            match run_token_login(&token_str, &cache_dir).await {
+                Ok(_) => {
+                    println!("credentials_saved");
+                    process::exit(0);
+                }
+                Err(e) => {
+                    eprintln!("Token login failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
         Mode::SingleTrack => {
             if track_uri.is_empty() {
                 eprintln!("Error: track URI is required for --single-track");
@@ -285,6 +328,36 @@ async fn run_authenticate(
     let session = Session::new(session_config, Some(cache));
 
     // connect() with store_credentials=true saves credentials.json to cache_dir
+    session.connect(credentials, true).await?;
+
+    Ok(())
+}
+
+/// Acquire reusable credentials from a Spotify OAuth access token.
+///
+/// Calls Credentials::with_access_token() (auth_type = AUTHENTICATION_SPOTIFY_TOKEN,
+/// verified in librespot-core-0.8.0/src/authentication.rs:61-67), then connects with
+/// store_credentials=true. librespot-core performs the token->reusable_credentials
+/// exchange internally (session.rs:184-201, session.rs:249-258) and writes
+/// credentials.json to cache_dir.
+///
+/// No manual reconnect needed — librespot handles the double-connect internally
+/// (RESEARCH.md Pitfall 1).
+async fn run_token_login(
+    access_token: &str,
+    cache_dir: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Credentials::with_access_token() sets auth_type = AUTHENTICATION_SPOTIFY_TOKEN
+    let credentials = Credentials::with_access_token(access_token);
+
+    // Cache object: credentials_path = cache_dir, no volume/audio paths
+    let cache = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None)?;
+
+    let session_config = SessionConfig::default();
+    let session = Session::new(session_config, Some(cache));
+
+    // store_credentials=true: librespot-core connects, receives reusable_auth_credentials
+    // from Spotify AP, and writes credentials.json to cache_dir automatically
     session.connect(credentials, true).await?;
 
     Ok(())
