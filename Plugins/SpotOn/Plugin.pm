@@ -489,43 +489,26 @@ sub _recentlyPlayedFeed {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# Primary: Category endpoint (D-05) — GET browse/categories/{id}/playlists
-# Fallback: me/playlists + _isMadeForYou name-matching (D-06) when 404/403 (Dev Mode)
-# Response structure: $data->{playlists}{items} — NOT $data->{items} (Pitfall 2).
-# Spotify's response ordering preserved — no custom sorting applied (D-07).
+# Fetches user playlists and filters for Spotify-generated personal mixes
+# (Daily Mix, Discover Weekly, etc.) via _isMadeForYou name-matching.
+# browse/categories endpoint was removed by Spotify Feb 2026.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getPersonalMixes($accountId, {}, sub {
-        my ($data, $err) = @_;
-
-        # WR-02: Fallback bei JEDEM Fehler wenn $data fehlt — nicht nur 404/403.
-        # Bei Netzwerkfehler liefert _onError code=>0; die alte Bedingung löste
-        # keinen Fallback aus und ließ den Browser in einem hängenden Spinner stecken.
-        if (!$data) {
-            main::INFOLOG && $log->info(
-                "_madeForYouFeed: category endpoint unavailable (code " .
-                ($err ? $err->{code} : 'no data') . "), falling back to me/playlists");
-
-            Plugins::SpotOn::API::Client->getUserPlaylists($accountId,
-                { offset => 0, limit => 50 }, sub {
-                my $fallback = shift;
-                unless ($fallback) {
-                    $callback->({ items => [{ name => cstring($client,
-                        'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
-                    return;
-                }
-                my @mfy   = grep { _isMadeForYou($_) } @{ $fallback->{items} || [] };
-                my @items = map  { _playlistItem($client, $_) } @mfy;
-                $callback->({ items => \@items });
-            });
+    Plugins::SpotOn::API::Client->getUserPlaylists($accountId,
+        { offset => 0, limit => 50 }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client,
+                'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
-
-        # Kategorie-Antwort: {playlists: {items: [...]}} (Pitfall 2 beachten)
-        my @items = map { _playlistItem($client, $_) }
-                    @{ $data->{playlists}{items} || [] };
+        my @mfy   = grep { _isMadeForYou($_) } @{ $data->{items} || [] };
+        my @items = map  { _playlistItem($client, $_) } @mfy;
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
         $callback->({ items => \@items });
     });
 }
