@@ -84,7 +84,7 @@ SKIP: {
     );
 
     # Keys that only require EN (format identifiers etc.)
-    my @en_only_keys = qw(SON);
+    my @en_only_keys = ();
 
     # Build lookup of what exists
     # strings.txt format: KEY\n\tEN\tvalue\n\tDE\tvalue\n

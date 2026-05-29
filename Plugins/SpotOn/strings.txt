@@ -60,7 +60,7 @@ PLUGIN_SPOTON_STEP1_TITLE
 
 PLUGIN_SPOTON_STEP2_TITLE
 	DE	Schritt 2: Gerät auswählen
-	EN	Step 2: Select Device
+	EN	Step 2: Select device
 
 PLUGIN_SPOTON_ADD_ANOTHER
 	DE	Weiteres Konto hinzufügen
@@ -171,11 +171,11 @@ PLUGIN_SPOTON_ZEROCONF_STEP1
 	EN	Connect with the Spotify App
 
 PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS
-	DE	Oeffne die Spotify App auf deinem Handy. Tippe auf das Geraete-Symbol (unten rechts) und waehle deinen LMS-Server aus der Geraetliste.
+	DE	Öffne die Spotify App auf deinem Handy. Tippe auf das Geräte-Symbol (unten rechts) und wähle deinen LMS-Server aus der Geräteliste.
 	EN	Open the Spotify app on your phone. Tap the device icon (bottom right) and select your LMS server from the device list.
 
 PLUGIN_SPOTON_WAITING_FOR_CONNECTION
-	DE	Warte auf Verbindung ueber Spotify App...
+	DE	Warte auf Verbindung über Spotify App...
 	EN	Waiting for connection via Spotify app...
 
 PLUGIN_SPOTON_START_DISCOVERY
@@ -187,8 +187,5 @@ PLUGIN_SPOTON_STOP_DISCOVERY
 	EN	Stop Discovery
 
 PLUGIN_SPOTON_CONNECT_HINT_ALT
-	DE	Spotify App Geraeteauswahl
+	DE	Spotify App Geräteauswahl
 	EN	Spotify app device picker
-
-SON
-	EN	SpotOn

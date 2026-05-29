@@ -65,13 +65,14 @@ sub handler {
         $prefs->set('normalization', $norm);
 
         # ZeroConf Discovery starten (D-01)
-        if ($paramRef->{startDiscovery}) {
+        # Use 'defined' — submit button value may be empty string when strings aren't loaded
+        if (defined $paramRef->{startDiscovery}) {
             require Plugins::SpotOn::API::TokenManager;
             Plugins::SpotOn::API::TokenManager->startDiscovery();
         }
 
         # ZeroConf Discovery stoppen
-        if ($paramRef->{stopDiscovery}) {
+        if (defined $paramRef->{stopDiscovery}) {
             require Plugins::SpotOn::API::TokenManager;
             Plugins::SpotOn::API::TokenManager->stopDiscovery();
         }
