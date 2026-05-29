@@ -362,6 +362,9 @@ sub _onError {
     $inflightCount--;
 
     my $code = ($http && $http->can('code')) ? ($http->code || 0) : 0;
+    if (!$code && $error && $error =~ /^(\d{3})\b/) {
+        $code = $1;
+    }
 
     if ($code == 429) {
         # T-02-08: Cap Retry-After at 300 seconds to prevent self-DoS from malicious header
