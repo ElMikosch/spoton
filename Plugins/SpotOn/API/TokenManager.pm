@@ -385,9 +385,16 @@ sub _storeTokens {
     my ($class, $accessToken, $refreshToken, $expiresIn, $userProfile, $cb) = @_;
 
     # D-12: accountId from MD5 of spotify user_id (stable across username changes)
-    my $spotifyUserId = $userProfile->{id} || '';
-    my $accountId     = substr(md5_hex($spotifyUserId), 0, 8);
-    my $displayName   = $userProfile->{display_name} || $spotifyUserId || 'Unknown';
+    # WR-03: Guard gegen leere userId — md5_hex("") = d41d8cd9 würde alle Konten
+    # auf dieselbe accountId abbilden und das zweite Konto das erste überschreiben.
+    my $spotifyUserId = $userProfile->{id} // '';
+    unless ($spotifyUserId) {
+        $log->error("TokenManager: Spotify user ID missing in /me response — cannot generate accountId");
+        $cb->(undef, "Missing Spotify user ID");
+        return;
+    }
+    my $accountId   = substr(md5_hex($spotifyUserId), 0, 8);
+    my $displayName = $userProfile->{display_name} || $spotifyUserId || 'Unknown';
 
     # Cache access token (short-lived)
     $class->_cacheToken($accountId, $accessToken, $expiresIn);
