@@ -189,3 +189,23 @@ PLUGIN_SPOTON_STOP_DISCOVERY
 PLUGIN_SPOTON_CONNECT_HINT_ALT
 	DE	Spotify App Geräteauswahl
 	EN	Spotify app device picker
+
+PLUGIN_SPOTON_CLIENT_ID_SETTINGS
+	DE	Eigene Spotify App
+	EN	Custom Spotify App
+
+PLUGIN_SPOTON_CLIENT_ID_DESC
+	DE	Optionale eigene Spotify Developer App-ID für höhere Rate-Limits
+	EN	Optional custom Spotify Developer App ID for higher rate limits
+
+PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
+	DE	Spotify Client-ID (32 Zeichen, alphanumerisch)
+	EN	Spotify Client ID (32 characters, alphanumeric)
+
+PLUGIN_SPOTON_DEGRADED_MODE_WARNING
+	DE	Keine eigene Spotify App-ID konfiguriert. Für volle Funktionalität bitte eigene App registrieren:
+	EN	No custom Spotify App ID configured. For full functionality, please register your own app:
+
+PLUGIN_SPOTON_REGISTER_APP_LINK
+	DE	Eigene App registrieren
+	EN	Register your own app

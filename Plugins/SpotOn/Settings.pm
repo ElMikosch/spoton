@@ -41,7 +41,7 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary', 'normalization');
+    return ($prefs, 'bitrate', 'binary', 'normalization', 'clientId');
 }
 
 sub handler {
@@ -64,6 +64,17 @@ sub handler {
         # Checkbox: wenn nicht angehakt, sendet Browser keinen Wert — undef/leer wird zu 0
         my $norm = $paramRef->{'pref_normalization'} ? 1 : 0;
         $prefs->set('normalization', $norm);
+
+        # Client-ID pref speichern (D-02, T-04.4-01)
+        # T-04.4-01: Input-Validierung — nur alphanumerische Zeichen, max 32 Zeichen.
+        # Spotify Client-IDs sind genau 32 hex-Zeichen — regex + Laengencheck
+        # eliminiert Shell-Metacharacter-Injection-Vektoren fuer --client-id Flag.
+        if (defined $paramRef->{pref_clientId}) {
+            my $id = $paramRef->{pref_clientId} // '';
+            $id =~ s/[^a-zA-Z0-9]//g;  # T-04.4-01: nur alphanumerisch (Injection-Schutz)
+            $id = substr($id, 0, 32);   # T-04.4-01: max 32 Zeichen (Spotify Client-ID-Format)
+            $prefs->set('clientId', $id);
+        }
 
         # ZeroConf Discovery starten (D-01)
         # Use 'defined' — submit button value may be empty string when strings aren't loaded
@@ -139,6 +150,10 @@ sub handler {
     $paramRef->{accounts}         = $prefs->get('accounts') || {};
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
     $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
+
+    # Client-ID und Degraded-Mode-Status fuer Template (D-02, D-03)
+    $paramRef->{customClientId} = $prefs->get('clientId') || '';
+    $paramRef->{degradedMode}   = _isDegradedMode();
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
@@ -228,6 +243,17 @@ sub _discoveryStatusHandler {
     $response->content_type('application/json');
     # Source: Spotty/Settings/Auth.pm line 88
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# Helper: Degraded Mode pruefen (D-03)
+# Degraded = kein Custom-Client-ID konfiguriert.
+# Zeigt Hinweis in Settings damit User eigene Spotify Developer App eintragen kann.
+# Analog zu _isDiscoveryRunning unten.
+# ============================================================
+sub _isDegradedMode {
+    my $customId = $prefs->get('clientId') || '';
+    return $customId ? 0 : 1;
 }
 
 # ============================================================

@@ -23,6 +23,20 @@
 		<label for="pref_normalization">[% 'PLUGIN_SPOTON_NORMALIZATION_LABEL' | string %]</label>
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_SPOTON_CLIENT_ID_SETTINGS" desc="PLUGIN_SPOTON_CLIENT_ID_DESC" %]
+		[% IF degradedMode %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_DEGRADED_MODE_WARNING' | string %]
+			<a href="https://developer.spotify.com/dashboard" target="_blank">
+				[% 'PLUGIN_SPOTON_REGISTER_APP_LINK' | string %]
+			</a>
+		</div>
+		[% END %]
+		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
+		       value="[% customClientId | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
+	[% END %]
+
 	[% IF NOT accounts.keys.size %]
 	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
 		<!-- D-02: visual instruction with Spotify App device picker hint image -->
