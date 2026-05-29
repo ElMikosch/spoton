@@ -31,12 +31,16 @@ use constant REQUIRED_SCOPES     => join(' ', qw(
     user-read-currently-playing
     user-read-recently-played
     user-read-private
+    user-read-email
     playlist-read-collaborative
     playlist-read-private
+    playlist-modify-public
+    playlist-modify-private
     user-follow-read
+    user-follow-modify
     user-library-read
+    user-library-modify
     user-top-read
-    streaming
 ));
 
 my $log   = logger('plugin.spoton');
