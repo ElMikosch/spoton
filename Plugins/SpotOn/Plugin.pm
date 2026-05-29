@@ -141,8 +141,10 @@ sub _killOrphanedProcesses {
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
-                    $name =~ s/"//g;    # remove any double-quotes from binary name
-                    system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
+                    $name =~ s/[^A-Za-z0-9._-]//g;    # CR-02: Whitelist statt Blacklist — verhindert Shell-Injection via &, |, ;
+                    if ($name) {
+                        system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
+                    }
                 } else {
                     # PHASE-5-NOTE: Phase 5 must exclude Connect daemon PIDs here (Pitfall 6, CON-09)
                     # CR-01: Use PID-based kill to avoid killing active transcoding processes.
