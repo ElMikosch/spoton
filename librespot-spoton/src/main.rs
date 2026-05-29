@@ -88,8 +88,7 @@ async fn main() {
     let mut token_str = String::new();
     let mut cache_dir = String::new();
     let mut scope = String::new();
-    // --client-id accepted for forward compatibility but not used in librespot-core flow
-    let mut _client_id = String::new();
+    let mut client_id = String::new();
 
     // Single-track mode variables
     let mut track_uri = String::new();
@@ -190,7 +189,7 @@ async fn main() {
             }
             "--client-id" => {
                 if i + 1 < args.len() {
-                    _client_id = args[i + 1].clone();
+                    client_id = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -255,7 +254,7 @@ async fn main() {
                 process::exit(1);
             }
 
-            match run_get_token(&cache_dir, &scope).await {
+            match run_get_token(&cache_dir, &scope, &client_id).await {
                 Ok(_) => {
                     process::exit(0);
                 }
@@ -409,6 +408,7 @@ async fn run_token_login(
 async fn run_get_token(
     cache_dir: &str,
     scope: &str,
+    client_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load cached credentials from credentials.json in cache_dir
     let cache = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None)?;
@@ -445,10 +445,12 @@ async fn run_get_token(
     };
 
     // Get token via Keymaster/Mercury protocol
-    let token = session
-        .token_provider()
-        .get_token(&scopes_str)
-        .await?;
+    let token = if client_id.is_empty() {
+        session.token_provider().get_token(&scopes_str).await?
+    } else {
+        eprintln!("Using custom client_id: {}", client_id);
+        session.token_provider().get_token_with_client_id(&scopes_str, client_id).await?
+    };
 
     // expires_in is a Duration — convert to whole seconds for the JSON contract
     let expires_in_secs = token.expires_in.as_secs();

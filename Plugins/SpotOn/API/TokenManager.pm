@@ -318,11 +318,16 @@ sub _fetchKeymasterToken {
     my $serverPrefs = preferences('server');
     my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
 
-    # T-04.3-05: Single-quote escaping to prevent shell injection
-    (my $safeHelper = $helper)   =~ s/'/'\\''/g;
-    (my $safeDir    = $cacheDir) =~ s/'/'\\''/g;
+    my $clientId = $prefs->get('clientId') || '';
 
-    my $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
+    # T-04.3-05: Single-quote escaping to prevent shell injection
+    (my $safeHelper   = $helper)   =~ s/'/'\\''/g;
+    (my $safeDir      = $cacheDir) =~ s/'/'\\''/g;
+    (my $safeClientId = $clientId) =~ s/'/'\\''/g;
+
+    my $cmd = $safeClientId
+        ? sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1", $safeHelper, $safeDir, $safeClientId)
+        : sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
     main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId");
 
     # WR-01: Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
