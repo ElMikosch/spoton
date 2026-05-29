@@ -267,43 +267,24 @@ sub _request {
     $cleanPath =~ s{^/}{};
     my $isMeFamily = ($cleanPath =~ $_meFamilyRegex) ? 1 : 0;
 
-    # Step 1: Per-flavor rate-limit check (D-01)
-    # me/* always uses own-token — only check own rate-limit key
-    # non-me/* may use bundled-token — check bundled rate-limit key
-    # Legacy global key checked as fallback for both paths
-    if ($isMeFamily) {
-        if ($cache->get('spoton_rate_limit_own') || $cache->get(RATE_LIMIT_CACHE_KEY)) {
-            $cb->(undef, { error => 'rate_limited', code => 429 });
-            return;
-        }
-    } else {
-        if ($cache->get('spoton_rate_limit_bundled') || $cache->get(RATE_LIMIT_CACHE_KEY)) {
-            $cb->(undef, { error => 'rate_limited', code => 429 });
-            return;
-        }
-    }
+    # Step 1: Resolve start flavor FIRST (D-04, D-05, D-06)
+    # Flavor must be known before rate-limit check so we test the correct key (CR-03).
+    my $startFlavor = $class->_resolveStartFlavor($cleanPath, $isMeFamily);
 
-    # Step 2: Response cache check (API-03) — skip for _noCache paths.
-    # Cache key excludes flavor — browse/categories response is the same
-    # regardless of which token fetched it (API-03, RESEARCH).
-    # Cache key is pre-computed only after query params are known (on first entry it's undef).
-    unless ($params->{_noCache}) {
-        if (my $cacheKey = $params->{_cacheKey}) {
-            if (my $cached = $cache->get($cacheKey)) {
-                main::INFOLOG && $log->info("Client: cache hit for $cleanPath");
-                $cb->($cached);
-                return;
-            }
-        }
+    # Step 2: Per-flavor rate-limit check (D-01, CR-02, CR-03)
+    # Only check the per-flavor key for the resolved flavor — no global key (D-01).
+    my $rlKey = ($startFlavor eq 'bundled') ? 'spoton_rate_limit_bundled' : 'spoton_rate_limit_own';
+    if ($cache->get($rlKey)) {
+        $cb->(undef, { error => 'rate_limited', code => 429 });
+        return;
     }
 
     # Step 3: Concurrency cap (API-02, Pitfall 6) — SHARED across both flavors.
-    # One Spotify account = one cap, regardless of token flavor.
     if ($inflightCount >= MAX_CONCURRENT_REQUESTS) {
         Slim::Utils::Timers::setTimer(
             undef,
             Time::HiRes::time() + 0.1,
-            sub { $class->_request($method, $path, $params, $cb) }
+            sub { $class->_request($method, $cleanPath, $params, $cb) }
         );
         return;
     }
@@ -312,7 +293,6 @@ sub _request {
     # $inflightCount is decremented exactly once per request by $userCb.
     # _onSuccess and _onError do NOT decrement $inflightCount (prevents double-decrement
     # during the 403/410 bundled-fallback retry path).
-    # Source: Spotty-NG API.pm:1588-1593
     $inflightCount++;
     my $userCbCalled = 0;
     my $userCb = sub {
@@ -320,9 +300,6 @@ sub _request {
         $inflightCount--;
         $cb->(@_);
     };
-
-    # Step 5: Resolve start flavor (D-04, D-05, D-06)
-    my $startFlavor = $class->_resolveStartFlavor($cleanPath, $isMeFamily);
 
     # Step 6: Dispatch to flavor-aware request with optional bundled fallback
     $class->_doFlavouredRequest($method, $cleanPath, $params, $userCb, $startFlavor, 0, $isMeFamily);
@@ -451,12 +428,11 @@ sub _doFlavouredRequest {
                     }
                     $retryAfter = 300 if $retryAfter > 300;
 
-                    # Per-flavor rate-limit key (D-01) + legacy global key (backward-compat)
+                    # Per-flavor rate-limit key only (D-01) — no global key (CR-02)
                     my $rlKey = ($flavor eq 'bundled')
                         ? 'spoton_rate_limit_bundled'
                         : 'spoton_rate_limit_own';
                     $cache->set($rlKey, 1, $retryAfter);
-                    $cache->set(RATE_LIMIT_CACHE_KEY, 1, $retryAfter);
                     $log->warn("Client: 429 rate limited [flavor=$flavor] for ${retryAfter}s on $cleanPath");
                     $userCb->(undef, { error => 'rate_limited', code => 429 });
                     return;
@@ -607,7 +583,6 @@ sub _onError {
             ? 'spoton_rate_limit_bundled'
             : 'spoton_rate_limit_own';
         $cache->set($rlKey, 1, $retryAfter);
-        $cache->set(RATE_LIMIT_CACHE_KEY, 1, $retryAfter);  # backward-compat
         $log->warn("Client: 429 rate limited [flavor=$flavor] for $retryAfter seconds on $path");
         $cb->(undef, { error => 'rate_limited', code => 429 });
         return;

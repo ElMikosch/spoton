@@ -41,7 +41,9 @@ sub page {
 }
 
 sub prefs {
-    return ($prefs, 'bitrate', 'binary', 'normalization', 'clientId');
+    # clientId is saved manually with sanitization in handler() — not listed here
+    # to prevent Slim::Web::Settings::handler from overwriting with raw form input.
+    return ($prefs, 'bitrate', 'binary', 'normalization');
 }
 
 sub handler {
