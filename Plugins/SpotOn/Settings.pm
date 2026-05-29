@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use base qw(Slim::Web::Settings);
 
+use Digest::MD5 qw(md5_hex);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
 
@@ -122,12 +123,81 @@ sub handler {
         }
     }
 
+    # Auto-setup: if __DISCOVER__/credentials.json exists, create account now.
+    # This bridges discovery completion → account creation. The AJAX poll reloads
+    # the page when credentials arrive, and this block picks them up.
+    my $serverPrefs = preferences('server');
+    my $discoverCredsFile = catfile(
+        $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
+
+    if (-f $discoverCredsFile) {
+        require Plugins::SpotOn::API::TokenManager;
+        _autoSetupAccount($discoverCredsFile, $serverPrefs);
+    }
+
     # Pass account and discovery data to template for all requests
     $paramRef->{accounts}         = $prefs->get('accounts') || {};
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
     $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
+}
+
+# ============================================================
+# Auto-setup: synchronous account creation from __DISCOVER__/credentials.json.
+# Reads credentials, derives accountId, renames dir, stores prefs immediately.
+# Display name is fetched asynchronously afterwards (may update on next page load).
+# ============================================================
+sub _autoSetupAccount {
+    my ($credsFile, $serverPrefs) = @_;
+
+    open(my $fh, '<', $credsFile) or do {
+        $log->error("Settings: cannot read $credsFile: $!");
+        return;
+    };
+    local $/;
+    my $json = <$fh>;
+    close $fh;
+
+    my $creds = eval { from_json($json) };
+    if ($@ || !$creds->{username}) {
+        $log->error("Settings: credentials.json parse failed: $@");
+        return;
+    }
+
+    my $username  = $creds->{username};
+    my $accountId = substr(md5_hex($username), 0, 8);
+    my $baseDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
+    my $discoverDir = catdir($baseDir, '__DISCOVER__');
+    my $finalDir    = catdir($baseDir, $accountId);
+
+    if (-d $finalDir) {
+        require File::Path;
+        File::Path::remove_tree($finalDir);
+    }
+    require File::Copy;
+    File::Copy::move($discoverDir, $finalDir) or do {
+        $log->error("Settings: dir rename __DISCOVER__ -> $accountId failed: $!");
+        return;
+    };
+    chmod(0700, $finalDir);
+
+    my $accounts = $prefs->get('accounts') || {};
+    $accounts->{$accountId} = {
+        displayName   => $username,
+        spotifyUserId => $username,
+    };
+    $prefs->set('accounts', $accounts);
+
+    unless ($prefs->get('activeAccount')) {
+        $prefs->set('activeAccount', $accountId);
+    }
+
+    $log->info("Settings: account $accountId created from ZeroConf discovery (user=$username)");
+
+    # Fire async /me fetch to get the real display name
+    Plugins::SpotOn::API::TokenManager->_fetchDisplayName(
+        $accountId, $username, sub { });
 }
 
 # ============================================================
