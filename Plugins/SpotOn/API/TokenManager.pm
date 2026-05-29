@@ -4,15 +4,10 @@ use strict;
 use warnings;
 
 use Digest::MD5 qw(md5_hex);
-use Digest::SHA qw(sha256);
-use MIME::Base64 qw(encode_base64url);
-use Crypt::OpenSSL::Random;
-use URI;
 use JSON::XS::VersionOneAndTwo;
 
-use File::Spec::Functions qw(catdir);
+use File::Spec::Functions qw(catdir catfile);
 
-use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -22,37 +17,23 @@ use Time::HiRes;
 # Constants
 use constant TOKEN_EXPIRY_BUFFER => 300;       # Refresh 5 min before expiry
 use constant TOKEN_REFRESH_TIMER => 45 * 60;   # 45 minute proactive refresh cycle
-use constant SPOTIFY_AUTH_URL    => 'https://accounts.spotify.com/authorize';
-use constant SPOTIFY_TOKEN_URL   => 'https://accounts.spotify.com/api/token';
+use constant DISCOVERY_TIMEOUT   => 60 * 15;   # 15 min Proc::Background watchdog
+use constant DISCOVER_DIR        => '__DISCOVER__'; # temp dir during ZeroConf
 use constant SPOTIFY_ME_URL      => 'https://api.spotify.com/v1/me';
-use constant REQUIRED_SCOPES     => join(' ', qw(
-    user-read-playback-state
-    user-modify-playback-state
-    user-read-currently-playing
-    user-read-recently-played
-    user-read-private
-    user-read-email
-    playlist-read-collaborative
-    playlist-read-private
-    playlist-modify-public
-    playlist-modify-private
-    user-follow-read
-    user-follow-modify
-    user-library-read
-    user-library-modify
-    user-top-read
-));
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
+
+# Package-level discovery process reference
+my $discoveryProc;
 
 # ============================================================
 # Public class methods
 # ============================================================
 
 # getToken($class, $accountId, $cb)
-# Checks cache first; falls back to refreshToken on miss.
+# Checks cache first; falls back to _fetchKeymasterToken on miss.
 # Interface preserved for Client.pm compatibility.
 sub getToken {
     my ($class, $accountId, $cb) = @_;
@@ -64,171 +45,7 @@ sub getToken {
         return;
     }
 
-    $class->refreshToken($accountId, $cb);
-}
-
-# refreshToken($class, $accountId, $cb)
-# Async PKCE refresh using stored refresh_token.
-# On success: $cb->($accessToken). On failure: $cb->(undef).
-sub refreshToken {
-    my ($class, $accountId, $cb) = @_;
-
-    my $accounts     = $prefs->get('accounts') || {};
-    my $account      = $accounts->{$accountId} || {};
-    my $refreshToken = $account->{refreshToken};
-    my $clientId     = $prefs->get('clientId');
-
-    unless ($refreshToken && $clientId) {
-        $log->error("TokenManager: no refreshToken or clientId for account $accountId");
-        $cb->(undef);
-        return;
-    }
-
-    my $body_uri = URI->new('', 'https');
-    $body_uri->query_form(
-        grant_type    => 'refresh_token',
-        refresh_token => $refreshToken,
-        client_id     => $clientId,
-    );
-    my $body = $body_uri->query();
-
-    # T-02.1-03: never log token values
-    main::INFOLOG && $log->info("TokenManager: refreshing token for account $accountId");
-
-    Slim::Networking::SimpleAsyncHTTP->new(
-        sub {
-            my $http   = shift;
-            my $result = eval { from_json($http->content) };
-            if ($@ || !$result) {
-                $log->error("TokenManager: JSON parse error on refresh for $accountId: $@");
-                $cb->(undef);
-                return;
-            }
-            unless ($result->{access_token}) {
-                $log->error("TokenManager: no access_token in refresh response for $accountId");
-                $cb->(undef);
-                return;
-            }
-
-            # Update refresh_token if Spotify returns a new one (Pitfall 7)
-            if ($result->{refresh_token}) {
-                my $accts = $prefs->get('accounts') || {};
-                $accts->{$accountId}{refreshToken} = $result->{refresh_token};
-                $prefs->set('accounts', $accts);
-                main::INFOLOG && $log->info("TokenManager: refresh token rotated for $accountId");
-            }
-
-            $class->_cacheToken($accountId, $result->{access_token}, $result->{expires_in});
-            $cb->($result->{access_token});
-        },
-        sub {
-            my ($http, $error) = @_;
-            $log->error("TokenManager: refresh HTTP error for $accountId: $error");
-            $cb->(undef);
-        },
-        { timeout => 30 }
-    )->post(
-        SPOTIFY_TOKEN_URL,
-        'Content-Type' => 'application/x-www-form-urlencoded',
-        $body,
-    );
-}
-
-# startOAuthFlow($class, $clientId)
-# Generates PKCE pair + state, caches PKCE data, builds Spotify auth URL.
-# Returns ($authUrl, $state).
-sub startOAuthFlow {
-    my ($class, $clientId) = @_;
-
-    my ($codeVerifier, $codeChallenge) = $class->_generatePkce();
-    my $state       = $class->_generateState();
-    my $redirectUri = $class->_buildRedirectUri();
-
-    # T-02.1-06: cache verifier with TTL=600s; consume-on-use in callback
-    $cache->set("spoton_pkce_$state", {
-        code_verifier => $codeVerifier,
-        client_id     => $clientId,
-        redirect_uri  => $redirectUri,
-    }, 600);
-
-    my $uri = URI->new(SPOTIFY_AUTH_URL);
-    $uri->query_form(
-        response_type         => 'code',
-        client_id             => $clientId,
-        redirect_uri          => $redirectUri,
-        code_challenge_method => 'S256',
-        code_challenge        => $codeChallenge,
-        scope                 => REQUIRED_SCOPES,
-        state                 => $state,
-    );
-
-    return ($uri->as_string(), $state);
-}
-
-# exchangeCode($class, $code, $verifier, $clientId, $redirectUri, $cb)
-# POSTs to SPOTIFY_TOKEN_URL to exchange authorization code for tokens.
-# On success: $cb->($accountId, undef). On error: $cb->(undef, $error).
-sub exchangeCode {
-    my ($class, $code, $verifier, $clientId, $redirectUri, $cb) = @_;
-
-    my $body_uri = URI->new('', 'https');
-    $body_uri->query_form(
-        grant_type    => 'authorization_code',
-        code          => $code,
-        redirect_uri  => $redirectUri,
-        client_id     => $clientId,
-        code_verifier => $verifier,
-    );
-    my $body = $body_uri->query();
-
-    main::INFOLOG && $log->info("TokenManager: exchanging authorization code");
-
-    Slim::Networking::SimpleAsyncHTTP->new(
-        sub {
-            my $http   = shift;
-            my $result = eval { from_json($http->content) };
-            if ($@ || !$result) {
-                $log->error("TokenManager: JSON parse error on code exchange: $@");
-                $cb->(undef, "JSON parse error: $@");
-                return;
-            }
-            # T-02.1-05: validate response contains access_token
-            unless ($result->{access_token}) {
-                my $err = $result->{error} || 'no access_token in response';
-                $log->error("TokenManager: code exchange failed: $err");
-                $cb->(undef, $err);
-                return;
-            }
-
-            # Fetch user profile to generate stable accountId (D-12)
-            $class->_fetchUserProfile($result->{access_token}, sub {
-                my $profile = shift;
-                unless ($profile && $profile->{id}) {
-                    $log->error("TokenManager: could not fetch user profile after code exchange");
-                    $cb->(undef, "Failed to fetch user profile");
-                    return;
-                }
-
-                $class->_storeTokens(
-                    $result->{access_token},
-                    $result->{refresh_token},
-                    $result->{expires_in},
-                    $profile,
-                    $cb
-                );
-            });
-        },
-        sub {
-            my ($http, $error) = @_;
-            $log->error("TokenManager: code exchange HTTP error: $error");
-            $cb->(undef, $error);
-        },
-        { timeout => 30 }
-    )->post(
-        SPOTIFY_TOKEN_URL,
-        'Content-Type' => 'application/x-www-form-urlencoded',
-        $body,
-    );
+    $class->_fetchKeymasterToken($accountId, $cb);
 }
 
 # removeAccount($class, $accountId)
@@ -285,7 +102,7 @@ sub refreshAllTokens {
 
     my @ids = $class->getAccountIds();
     for my $id (@ids) {
-        $class->refreshToken($id, sub {
+        $class->_fetchKeymasterToken($id, sub {
             my $token = shift;
             main::INFOLOG && $log->info("TokenManager: refreshed token for account $id")
                 if $token;
@@ -294,7 +111,7 @@ sub refreshAllTokens {
         });
     }
 
-    # Re-arm timer
+    # Re-arm timer (AUTH-03 timer continuity)
     Slim::Utils::Timers::killTimers($class, \&refreshAllTokens);
     Slim::Utils::Timers::setTimer(
         $class,
@@ -303,111 +120,289 @@ sub refreshAllTokens {
     );
 }
 
-# buildRedirectUri($class)
-# Public wrapper — exposes redirect URI construction for callers outside this class.
-sub buildRedirectUri {
+# startDiscovery($class)
+# Manages ZeroConf discovery process via librespot --discover-once.
+# T-04.3-08: Always cleans __DISCOVER__ dir before starting (stale credential prevention).
+# T-04.3-09: DISCOVERY_TIMEOUT watchdog timer kills process after 15 min.
+sub startDiscovery {
     my ($class) = @_;
-    return $class->_buildRedirectUri();
+
+    # Stop existing discovery if running
+    if ($discoveryProc && $discoveryProc->alive()) {
+        $discoveryProc->die();
+        $discoveryProc = undef;
+    }
+
+    require Plugins::SpotOn::Helper;
+    my ($helperPath) = Plugins::SpotOn::Helper->get();
+    unless ($helperPath) {
+        $log->error("TokenManager: cannot start discovery — binary not found");
+        return;
+    }
+
+    my $serverPrefs = preferences('server');
+    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
+
+    # T-04.3-08: Clean up stale __DISCOVER__ dir (RESEARCH Pitfall 2)
+    if (-d $discoverDir) {
+        require File::Path;
+        File::Path::remove_tree($discoverDir);
+    }
+    require File::Path;
+    File::Path::make_path($discoverDir);
+
+    my $deviceName = _getLmsServerName();
+
+    main::INFOLOG && $log->info(
+        "TokenManager: starting ZeroConf discovery as '$deviceName', cache=$discoverDir");
+
+    require Proc::Background;
+    $discoveryProc = Proc::Background->new(
+        { 'die_upon_destroy' => 0 },
+        $helperPath,
+        '-n', $deviceName,
+        '--cache', $discoverDir,
+        '--discover-once',
+    );
+
+    unless ($discoveryProc && $discoveryProc->alive()) {
+        $log->error("TokenManager: discovery process failed to start");
+        $discoveryProc = undef;
+        return;
+    }
+
+    main::INFOLOG && $log->info(
+        "TokenManager: discovery process started (PID " . $discoveryProc->pid() . ")");
+
+    # T-04.3-09: Watchdog timer — kill discovery after DISCOVERY_TIMEOUT
+    Slim::Utils::Timers::killTimers($class, \&stopDiscovery);
+    Slim::Utils::Timers::setTimer(
+        $class,
+        Time::HiRes::time() + DISCOVERY_TIMEOUT,
+        \&stopDiscovery
+    );
+}
+
+# stopDiscovery($class)
+# Kills discovery process if alive and cleans up watchdog timer.
+# T-04.3-08: Cleans __DISCOVER__ if no credentials.json inside.
+sub stopDiscovery {
+    my ($class) = @_;
+
+    Slim::Utils::Timers::killTimers($class, \&stopDiscovery);
+
+    if ($discoveryProc && $discoveryProc->alive()) {
+        main::INFOLOG && $log->info("TokenManager: stopping discovery process");
+        $discoveryProc->die();
+    }
+    $discoveryProc = undef;
+
+    # T-04.3-08: Clean __DISCOVER__ dir if no credentials.json was written
+    my $serverPrefs = preferences('server');
+    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
+    my $credsFile   = catfile($discoverDir, 'credentials.json');
+
+    if (-d $discoverDir && !-f $credsFile) {
+        require File::Path;
+        File::Path::remove_tree($discoverDir);
+        main::INFOLOG && $log->info("TokenManager: cleaned up empty __DISCOVER__ dir");
+    }
+}
+
+# isDiscoveryRunning($class)
+# Returns boolean: true if discovery process is running.
+# Consumed by Settings.pm _isDiscoveryRunning() (Plan 03).
+sub isDiscoveryRunning {
+    my ($class) = @_;
+    return $discoveryProc && $discoveryProc->alive() ? 1 : 0;
+}
+
+# autoStartDiscoveryIfNeeded($class)
+# D-01: Checks if any account has credentials.json in its cache subdir.
+# If no accounts have credentials, calls startDiscovery.
+sub autoStartDiscoveryIfNeeded {
+    my ($class) = @_;
+
+    my $serverPrefs = preferences('server');
+    my $baseDir     = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    my @accountIds = $class->getAccountIds();
+
+    for my $id (@accountIds) {
+        my $credsFile = catfile($baseDir, $id, 'credentials.json');
+        if (-f $credsFile) {
+            main::INFOLOG && $log->info(
+                "TokenManager: credentials found for account $id — skipping auto-discovery");
+            return;
+        }
+    }
+
+    main::INFOLOG && $log->info(
+        "TokenManager: no credentials found — auto-starting ZeroConf discovery");
+    $class->startDiscovery();
+}
+
+# _setupAccountFromCredentials($class, $cb)
+# Called after discovery completes (from Settings AJAX flow).
+# Reads credentials.json, derives accountId, renames __DISCOVER__ dir,
+# sets chmod 0700, fetches display_name, stores in prefs.
+# T-04.3-07: chmod 0700 on account dir (credential storage security).
+sub _setupAccountFromCredentials {
+    my ($class, $cb) = @_;
+
+    my $serverPrefs = preferences('server');
+    my $baseDir     = catdir($serverPrefs->get('cachedir'), 'spoton');
+    my $discoverDir = catdir($baseDir, DISCOVER_DIR);
+    my $credsFile   = catfile($discoverDir, 'credentials.json');
+
+    open(my $fh, '<', $credsFile) or do {
+        $log->error("TokenManager: credentials.json not readable: $!");
+        $cb->(undef);
+        return;
+    };
+    local $/;
+    my $json = <$fh>;
+    close $fh;
+
+    my $creds = eval { from_json($json) };
+    if ($@ || !$creds->{username}) {
+        $log->error("TokenManager: credentials.json parse failed: $@");
+        $cb->(undef);
+        return;
+    }
+
+    my $spotifyUserId = $creds->{username};
+    # accountId pattern: MD5 of spotify user_id (stable across username changes)
+    my $accountId = substr(md5_hex($spotifyUserId), 0, 8);
+
+    # Dir-rename: __DISCOVER__ -> {accountId}
+    my $finalDir = catdir($baseDir, $accountId);
+    if (-d $finalDir) {
+        require File::Path;
+        File::Path::remove_tree($finalDir);
+    }
+    require File::Copy;
+    File::Copy::move($discoverDir, $finalDir) or do {
+        $log->error("TokenManager: dir rename failed: $!");
+        $cb->(undef);
+        return;
+    };
+
+    # T-04.3-07: Secure credential dir permissions
+    chmod(0700, $finalDir);
+
+    # Fetch display_name via --get-token + /me
+    $class->_fetchDisplayName($accountId, $spotifyUserId, $cb);
 }
 
 # ============================================================
 # Private methods
 # ============================================================
 
-# _generatePkce()
-# Returns ($code_verifier, $code_challenge).
-# T-02.1-01: uses Crypt::OpenSSL::Random for cryptographic randomness
-sub _generatePkce {
-    my ($class) = @_;
+# _fetchKeymasterToken($class, $accountId, $cb)
+# Spawns "spoton --get-token --cache {cachedir}/spoton/{accountId}" via Helper->get().
+# WR-01: Deferred via Timer to avoid blocking event loop.
+# T-04.3-05: Single-quote escaping on $helper and $cacheDir (shell injection prevention).
+# T-04.3-06: Never logs $result->{accessToken} — logs only accountId and TTL.
+sub _fetchKeymasterToken {
+    my ($class, $accountId, $cb) = @_;
 
-    my $random_bytes  = Crypt::OpenSSL::Random::random_bytes(32);
-    my $code_verifier = encode_base64url($random_bytes);
-    $code_verifier    =~ s/=+$//;  # strip base64 padding per PKCE spec
-
-    # SHA-256 of verifier, URL-safe base64 encoded
-    my $code_challenge = encode_base64url(sha256($code_verifier));
-    $code_challenge    =~ s/=+$//;
-
-    return ($code_verifier, $code_challenge);
-}
-
-# _generateState()
-# Returns random state string for OAuth CSRF protection.
-# T-02.1-02: 16 random bytes -> URL-safe base64
-sub _generateState {
-    my ($class) = @_;
-
-    my $raw   = Crypt::OpenSSL::Random::random_bytes(16);
-    my $state = encode_base64url($raw);
-    $state    =~ s/=+$//;
-    return $state;
-}
-
-# _buildRedirectUri()
-# Returns "http://127.0.0.1:{httpPort}/plugins/SpotOn/settings/callback".
-# NEVER use serverURL() per RESEARCH.md Pitfall 5.
-sub _buildRedirectUri {
-    my ($class) = @_;
-    my $httpPort = preferences('server')->get('httpport') || 9000;
-    return "http://127.0.0.1:${httpPort}/plugins/SpotOn/settings/callback";
-}
-
-# _fetchUserProfile($class, $accessToken, $cb)
-# GETs /me to retrieve {id, display_name}. Used to generate stable accountId.
-# T-02.1-03: never logs the accessToken value
-sub _fetchUserProfile {
-    my ($class, $accessToken, $cb) = @_;
-
-    Slim::Networking::SimpleAsyncHTTP->new(
-        sub {
-            my $http    = shift;
-            my $profile = eval { from_json($http->content) };
-            if ($@ || !$profile) {
-                $log->error("TokenManager: JSON parse error fetching user profile: $@");
-                $cb->(undef);
-                return;
-            }
-            $cb->($profile);
-        },
-        sub {
-            my ($http, $error) = @_;
-            $log->error("TokenManager: HTTP error fetching user profile: $error");
-            $cb->(undef);
-        },
-        { timeout => 30 }
-    )->get(
-        SPOTIFY_ME_URL,
-        'Authorization' => "Bearer $accessToken",
-        'Accept'        => 'application/json',
-    );
-}
-
-# _storeTokens($class, $accessToken, $refreshToken, $expiresIn, $userProfile, $cb)
-# Generates accountId from MD5 of Spotify user ID, stores tokens, calls $cb->($accountId).
-# T-02.1-04: refresh_token in Prefs (not Cache) for persistence across restarts
-sub _storeTokens {
-    my ($class, $accessToken, $refreshToken, $expiresIn, $userProfile, $cb) = @_;
-
-    # D-12: accountId from MD5 of spotify user_id (stable across username changes)
-    # WR-03: Guard gegen leere userId — md5_hex("") = d41d8cd9 würde alle Konten
-    # auf dieselbe accountId abbilden und das zweite Konto das erste überschreiben.
-    my $spotifyUserId = $userProfile->{id} // '';
-    unless ($spotifyUserId) {
-        $log->error("TokenManager: Spotify user ID missing in /me response — cannot generate accountId");
-        $cb->(undef, "Missing Spotify user ID");
+    require Plugins::SpotOn::Helper;
+    my ($helper) = Plugins::SpotOn::Helper->get();
+    unless ($helper) {
+        $log->error("TokenManager: binary not found for account $accountId");
+        $cb->(undef);
         return;
     }
-    my $accountId   = substr(md5_hex($spotifyUserId), 0, 8);
-    my $displayName = $userProfile->{display_name} || $spotifyUserId || 'Unknown';
 
-    # Cache access token (short-lived)
-    $class->_cacheToken($accountId, $accessToken, $expiresIn);
+    my $serverPrefs = preferences('server');
+    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
 
-    # T-02.1-04: store refresh_token in Prefs (not Cache) for persistence
+    # T-04.3-05: Single-quote escaping to prevent shell injection
+    (my $safeHelper = $helper)   =~ s/'/'\\''/g;
+    (my $safeDir    = $cacheDir) =~ s/'/'\\''/g;
+
+    my $cmd = sprintf("'%s' --get-token --cache '%s' 2>/dev/null", $safeHelper, $safeDir);
+    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId");
+
+    # WR-01: Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
+    Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.1, sub {
+        my $output = `$cmd`;
+        my $exit   = $? >> 8;
+
+        if ($exit != 0 || !$output) {
+            $log->error("TokenManager: --get-token failed for $accountId (exit $exit)");
+            $cb->(undef);
+            return;
+        }
+
+        my $result = eval { from_json($output) };
+        if ($@ || !$result->{accessToken}) {
+            $log->error("TokenManager: JSON parse error on --get-token for $accountId: $@");
+            $cb->(undef);
+            return;
+        }
+
+        # T-04.3-06: Log only accountId and TTL — never the token value
+        $class->_cacheToken($accountId, $result->{accessToken}, $result->{expiresIn});
+        $cb->($result->{accessToken});
+    });
+}
+
+# _fetchDisplayName($class, $accountId, $spotifyUserId, $cb)
+# Gets token via _fetchKeymasterToken, then GET /me for display_name.
+# Fallback: uses spotifyUserId directly if /me fails.
+sub _fetchDisplayName {
+    my ($class, $accountId, $spotifyUserId, $cb) = @_;
+
+    $class->_fetchKeymasterToken($accountId, sub {
+        my $accessToken = shift;
+
+        unless ($accessToken) {
+            # Fallback: use spotifyUserId as display name
+            $log->warn("TokenManager: could not get token for /me — using userId as displayName");
+            $class->_storeAccountPrefs($accountId, $spotifyUserId, $spotifyUserId, $cb);
+            return;
+        }
+
+        # Need SimpleAsyncHTTP for this single /me call
+        require Slim::Networking::SimpleAsyncHTTP;
+
+        Slim::Networking::SimpleAsyncHTTP->new(
+            sub {
+                my $http    = shift;
+                my $profile = eval { from_json($http->content) };
+                if ($@ || !$profile) {
+                    $log->warn("TokenManager: /me JSON parse failed for $accountId — using userId");
+                    $class->_storeAccountPrefs($accountId, $spotifyUserId, $spotifyUserId, $cb);
+                    return;
+                }
+                my $displayName = $profile->{display_name} || $spotifyUserId || 'Unknown';
+                $class->_storeAccountPrefs($accountId, $spotifyUserId, $displayName, $cb);
+            },
+            sub {
+                my ($http, $error) = @_;
+                $log->warn("TokenManager: /me HTTP error for $accountId: $error — using userId");
+                $class->_storeAccountPrefs($accountId, $spotifyUserId, $spotifyUserId, $cb);
+            },
+            { timeout => 30 }
+        )->get(
+            SPOTIFY_ME_URL,
+            'Authorization' => "Bearer $accessToken",
+            'Accept'        => 'application/json',
+        );
+    });
+}
+
+# _storeAccountPrefs($class, $accountId, $spotifyUserId, $displayName, $cb)
+# Stores account in prefs, sets activeAccount if none, calls $cb->($accountId).
+sub _storeAccountPrefs {
+    my ($class, $accountId, $spotifyUserId, $displayName, $cb) = @_;
+
     my $accounts = $prefs->get('accounts') || {};
     $accounts->{$accountId} = {
-        displayName  => $displayName,
-        refreshToken => $refreshToken,
+        displayName   => $displayName,
+        spotifyUserId => $spotifyUserId,
     };
     $prefs->set('accounts', $accounts);
 
@@ -416,20 +411,14 @@ sub _storeTokens {
         $prefs->set('activeAccount', $accountId);
     }
 
-    # D-01, D-03: Provision librespot credentials after OAuth callback (Phase 04.2)
-    # WR-01: Deferred via Timer statt synchronem Backtick-Call — verhindert Event-Loop-Blockade.
-    # _provisionCredentials öffnet TCP-Verbindung zu Spotify; kann bei DNS-Problemen 30+ s dauern.
-    Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.1, sub {
-        $class->_provisionCredentials($accountId, $accessToken);
-    });
-
-    main::INFOLOG && $log->info("TokenManager: stored tokens for account $accountId ($displayName)");
+    main::INFOLOG && $log->info(
+        "TokenManager: account $accountId stored (displayName=$displayName)");
     $cb->($accountId);
 }
 
 # _cacheToken($class, $accountId, $accessToken, $expiresIn)
 # Caches the access token with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
-# T-02.1-03: Never logs the token value itself.
+# T-04.3-06: Never logs the token value itself.
 sub _cacheToken {
     my ($class, $accountId, $accessToken, $expiresIn) = @_;
 
@@ -442,57 +431,18 @@ sub _cacheToken {
     main::INFOLOG && $log->info("TokenManager: token cached for account $accountId, TTL ${ttl}s");
 }
 
-# _provisionCredentials($class, $accountId, $accessToken)
-# Invokes the librespot-spoton binary in --token-login mode to write credentials.json
-# to the SpotOn cache directory. Called synchronously after OAuth callback (_storeTokens).
-# Per D-01, D-03, D-04: SpotOn provisions its own credentials, no Spotty dependency.
-#
-# SECURITY (T-04.2-01, T-04.2-04):
-#   - $accessToken is never passed to any $log-> call ([REDACTED] used instead)
-#   - All three shell arguments are single-quote escaped (s/'/'\\''/g)
-#   - cacheDir is built internally from server prefs, not user-controllable (T-04.2-03)
-#
-# No hard failure — if provisioning fails, --single-track will report "No cached credentials"
-# on the next playback attempt. Streaming continues if credentials.json already exists.
-sub _provisionCredentials {
-    my ($class, $accountId, $accessToken) = @_;
-
-    require Plugins::SpotOn::Helper;
-    my ($helper) = Plugins::SpotOn::Helper->get();
-    unless ($helper) {
-        $log->warn("TokenManager: cannot provision credentials for $accountId — binary not found");
-        return;
-    }
-
-    # Cache-Dir: analog Plugin.pm::updateTranscodingTable (catdir pattern)
+# _getLmsServerName()
+# Returns LMS server name from preferences('server')->get('libraryname'),
+# with Sys::Hostname fallback, truncated to 60 chars.
+# Per RESEARCH Pattern 5: Spotify device name limit.
+sub _getLmsServerName {
     my $serverPrefs = preferences('server');
-    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton');
-
-    # T-04.2-04: shell-escape single quotes in all interpolated values
-    (my $safeHelper = $helper)      =~ s/'/'\\''/g;
-    (my $safeToken  = $accessToken) =~ s/'/'\\''/g;
-    (my $safeDir    = $cacheDir)    =~ s/'/'\\''/g;
-
-    my $cmd = sprintf("'%s' -n 'SpotOn' --token-login --token '%s' --cache '%s' 2>&1",
-        $safeHelper, $safeToken, $safeDir);
-
-    # T-04.2-01: Log command with [REDACTED] — never the raw token value
-    main::INFOLOG && $log->info(
-        "TokenManager: provisioning credentials for account $accountId " .
-        "(cmd: '$safeHelper' -n 'SpotOn' --token-login --token [REDACTED] --cache '$safeDir')");
-
-    my $output = `$cmd`;
-    my $exit   = $? >> 8;
-
-    if ($exit == 0 && $output =~ /credentials_saved/) {
-        main::INFOLOG && $log->info(
-            "TokenManager: credentials provisioned successfully for account $accountId");
-    } else {
-        $log->error(
-            "TokenManager: credential provisioning failed for $accountId " .
-            "(exit $exit): $output");
-        # No hard failure — next --single-track invocation will report "No cached credentials"
+    my $name = $serverPrefs->get('libraryname') || '';
+    unless ($name) {
+        require Sys::Hostname;
+        $name = eval { Sys::Hostname::hostname() } || 'Lyrion Music Server';
     }
+    return substr($name, 0, 60);
 }
 
 1;
