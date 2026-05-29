@@ -315,7 +315,7 @@ sub _request {
 
         Slim::Networking::SimpleAsyncHTTP->new(
             sub { $class->_onSuccess(shift, $path, $params, $cb) },
-            sub { $class->_onError(shift, $_[0], $path, $params, $cb) },
+            sub { $class->_onError(shift, $_[0], $_[1], $path, $params, $cb) },
             { timeout => REQUEST_TIMEOUT, cache => 0 }
         )->$method(
             $url,
@@ -353,15 +353,17 @@ sub _onSuccess {
     $cb->($result);
 }
 
-# _onError($class, $http, $error, $path, $params, $cb)
+# _onError($class, $http, $error, $response, $path, $params, $cb)
 # Handles HTTP error: handles 429 rate limiting, 401 token invalidation, other errors.
+# $response is the HTTP::Response object passed by SimpleAsyncHTTP's error callback.
 # CRITICAL: Both _onSuccess and _onError MUST decrement $inflightCount (Pitfall 2).
 sub _onError {
-    my ($class, $http, $error, $path, $params, $cb) = @_;
+    my ($class, $http, $error, $response, $path, $params, $cb) = @_;
 
     $inflightCount--;
 
-    my $code = ($http && $http->can('code')) ? ($http->code || 0) : 0;
+    my $code = ($response && ref $response && $response->can('code'))
+        ? ($response->code || 0) : 0;
     if (!$code && $error && $error =~ /^(\d{3})\b/) {
         $code = $1;
     }
@@ -369,8 +371,8 @@ sub _onError {
     if ($code == 429) {
         # T-02-08: Cap Retry-After at 300 seconds to prevent self-DoS from malicious header
         my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
-        if ($http && $http->can('headers') && $http->headers) {
-            my $headerVal = $http->headers->header('Retry-After');
+        if ($response && ref $response && $response->can('header')) {
+            my $headerVal = $response->header('Retry-After');
             $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
         }
         $retryAfter = 300 if $retryAfter > 300;
