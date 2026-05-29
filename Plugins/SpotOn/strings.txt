@@ -54,89 +54,21 @@ PLUGIN_SPOTON_AUTH_ERROR
 	DE	Anmeldung fehlgeschlagen
 	EN	Authentication failed
 
-PLUGIN_SPOTON_SETUP_WIZARD
-	DE	Einrichtungs-Assistent
-	EN	Setup Wizard
-
 PLUGIN_SPOTON_STEP1_TITLE
-	DE	Schritt 1: Spotify-App registrieren
-	EN	Step 1: Register Spotify App
+	DE	Schritt 1: Spotify App öffnen
+	EN	Step 1: Open Spotify App
 
 PLUGIN_SPOTON_STEP2_TITLE
-	DE	Schritt 2: Mit Spotify verbinden
-	EN	Step 2: Connect with Spotify
-
-PLUGIN_SPOTON_STEP1_BODY
-	DE	Erstelle eine App im Spotify Developer Dashboard und trage folgende Redirect-URI ein:
-	EN	Create an app in the Spotify Developer Dashboard and register this Redirect URI exactly:
-
-PLUGIN_SPOTON_DASHBOARD_LINK
-	DE	Spotify Developer Dashboard öffnen
-	EN	Open Spotify Developer Dashboard
-
-PLUGIN_SPOTON_CLIENT_ID_LABEL
-	DE	Client-ID deiner Spotify-App:
-	EN	Client ID of your Spotify app:
-
-PLUGIN_SPOTON_CLIENT_ID_HINT
-	DE	Die Client-ID findest du in den App-Einstellungen unter "Client ID".
-	EN	Find the Client ID in your app settings under "Client ID".
-
-PLUGIN_SPOTON_CONNECT_BTN
-	DE	Mit Spotify verbinden
-	EN	Connect with Spotify
+	DE	Schritt 2: Gerät auswählen
+	EN	Step 2: Select Device
 
 PLUGIN_SPOTON_ADD_ANOTHER
 	DE	Weiteres Konto hinzufügen
 	EN	Add Another Account
 
 PLUGIN_SPOTON_CONNECTED_AS
-	DE	Verbunden als:
-	EN	Connected as:
-
-PLUGIN_SPOTON_CLOSE_TAB
-	DE	Du kannst diesen Tab jetzt schließen und zur LMS-Einstellungsseite zurückkehren.
-	EN	You can close this tab now and return to the LMS settings page.
-
-PLUGIN_SPOTON_SETUP_HINT
-	DE	Folge dem Einrichtungs-Assistenten oben, um SpotOn mit Spotify zu verbinden.
-	EN	Follow the Setup Wizard above to connect SpotOn with Spotify.
-
-PLUGIN_SPOTON_AUTH_STATE_ERROR
-	DE	Sicherheitsüberprüfung fehlgeschlagen. Bitte versuche die Anmeldung erneut.
-	EN	Security check failed. Please try authenticating again.
-
-PLUGIN_SPOTON_AUTH_DENIED
-	DE	Zugriff verweigert. Bitte erlaube SpotOn den Zugriff auf dein Spotify-Konto.
-	EN	Access denied. Please allow SpotOn to access your Spotify account.
-
-PLUGIN_SPOTON_AUTH_SUCCESS
-	DE	Erfolgreich verbunden!
-	EN	Successfully connected!
-
-PLUGIN_SPOTON_AUTH_REDIRECT
-	DE	Du wirst gleich zu den Einstellungen weitergeleitet...
-	EN	Redirecting to settings...
-
-PLUGIN_SPOTON_AUTH_FAILED
-	DE	Verbindung fehlgeschlagen
-	EN	Connection failed
-
-PLUGIN_SPOTON_BACK_TO_SETTINGS
-	DE	Zurück zu den Einstellungen
-	EN	Back to Settings
-
-PLUGIN_SPOTON_CLIENT_ID_REQUIRED
-	DE	Bitte trage zuerst eine Client-ID ein.
-	EN	Please enter a Client ID first.
-
-PLUGIN_SPOTON_OPEN_SPOTIFY
-	DE	Bei Spotify anmelden (neuer Tab)
-	EN	Sign in with Spotify (new tab)
-
-PLUGIN_SPOTON_OPEN_SPOTIFY_HINT
-	DE	Ein neuer Tab wird geöffnet. Nach der Anmeldung kehre hierher zurück und lade die Seite neu.
-	EN	A new tab will open. After signing in, return here and reload the page.
+	DE	Verbunden als
+	EN	Connected as
 
 PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
 	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.
@@ -229,6 +161,34 @@ PLUGIN_SPOTON_NORMALIZATION_DESC
 PLUGIN_SPOTON_NORMALIZATION_LABEL
 	DE	Lautstärke normalisieren (ReplayGain)
 	EN	Normalize volume (ReplayGain)
+
+PLUGIN_SPOTON_ZEROCONF_SETUP
+	DE	Spotify verbinden
+	EN	Connect Spotify
+
+PLUGIN_SPOTON_ZEROCONF_STEP1
+	DE	Mit der Spotify App verbinden
+	EN	Connect with the Spotify App
+
+PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS
+	DE	Oeffne die Spotify App auf deinem Handy. Tippe auf das Geraete-Symbol (unten rechts) und waehle deinen LMS-Server aus der Geraetliste.
+	EN	Open the Spotify app on your phone. Tap the device icon (bottom right) and select your LMS server from the device list.
+
+PLUGIN_SPOTON_WAITING_FOR_CONNECTION
+	DE	Warte auf Verbindung ueber Spotify App...
+	EN	Waiting for connection via Spotify app...
+
+PLUGIN_SPOTON_START_DISCOVERY
+	DE	Erkennung starten
+	EN	Start Discovery
+
+PLUGIN_SPOTON_STOP_DISCOVERY
+	DE	Erkennung stoppen
+	EN	Stop Discovery
+
+PLUGIN_SPOTON_CONNECT_HINT_ALT
+	DE	Spotify App Geraeteauswahl
+	EN	Spotify app device picker
 
 SON
 	EN	SpotOn

@@ -21,6 +21,7 @@ SKIP: {
     close($fh);
 
     # Required keys that must have both EN and DE
+    # Updated in Plan 04.3-03: PKCE strings removed, ZeroConf strings added
     my @bilingual_keys = qw(
         PLUGIN_SPOTON
         PLUGIN_SPOTON_NAME
@@ -35,14 +36,40 @@ SKIP: {
         PLUGIN_SPOTON_ACCOUNT_SWITCH
         PLUGIN_SPOTON_ACCOUNT_REMOVE
         PLUGIN_SPOTON_AUTH_ERROR
+        PLUGIN_SPOTON_ADD_ANOTHER
+        PLUGIN_SPOTON_CONNECTED_AS
+        PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
+        PLUGIN_SPOTON_STEP1_TITLE
+        PLUGIN_SPOTON_STEP2_TITLE
+        PLUGIN_SPOTON_ZEROCONF_SETUP
+        PLUGIN_SPOTON_ZEROCONF_STEP1
+        PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS
+        PLUGIN_SPOTON_WAITING_FOR_CONNECTION
+        PLUGIN_SPOTON_START_DISCOVERY
+        PLUGIN_SPOTON_STOP_DISCOVERY
+        PLUGIN_SPOTON_CONNECT_HINT_ALT
+        PLUGIN_SPOTON_NORMALIZATION
+        PLUGIN_SPOTON_NORMALIZATION_DESC
+        PLUGIN_SPOTON_NORMALIZATION_LABEL
+    );
+
+    # Obsolete keys that must NOT be present
+    # Phase 02.1 cleanup (username/password flow removed):
+    my @removed_keys = qw(
+        PLUGIN_SPOTON_ACCOUNT_USERNAME
+        PLUGIN_SPOTON_ACCOUNT_PASSWORD
+        PLUGIN_SPOTON_ACCOUNT_ADD
+        PLUGIN_SPOTON_ACCOUNT_ADD_BTN
+    );
+
+    # Plan 04.3-03 cleanup (PKCE/OAuth flow removed):
+    my @pkce_removed_keys = qw(
         PLUGIN_SPOTON_SETUP_WIZARD
         PLUGIN_SPOTON_STEP1_BODY
         PLUGIN_SPOTON_DASHBOARD_LINK
         PLUGIN_SPOTON_CLIENT_ID_LABEL
         PLUGIN_SPOTON_CLIENT_ID_HINT
         PLUGIN_SPOTON_CONNECT_BTN
-        PLUGIN_SPOTON_ADD_ANOTHER
-        PLUGIN_SPOTON_CONNECTED_AS
         PLUGIN_SPOTON_SETUP_HINT
         PLUGIN_SPOTON_AUTH_STATE_ERROR
         PLUGIN_SPOTON_AUTH_DENIED
@@ -51,15 +78,9 @@ SKIP: {
         PLUGIN_SPOTON_AUTH_FAILED
         PLUGIN_SPOTON_BACK_TO_SETTINGS
         PLUGIN_SPOTON_CLIENT_ID_REQUIRED
-        PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
-    );
-
-    # Obsolete keys that must NOT be present (removed in Phase 02.1)
-    my @removed_keys = qw(
-        PLUGIN_SPOTON_ACCOUNT_USERNAME
-        PLUGIN_SPOTON_ACCOUNT_PASSWORD
-        PLUGIN_SPOTON_ACCOUNT_ADD
-        PLUGIN_SPOTON_ACCOUNT_ADD_BTN
+        PLUGIN_SPOTON_OPEN_SPOTIFY
+        PLUGIN_SPOTON_OPEN_SPOTIFY_HINT
+        PLUGIN_SPOTON_CLOSE_TAB
     );
 
     # Keys that only require EN (format identifiers etc.)
@@ -96,9 +117,14 @@ SKIP: {
         ok($has_en{$key}, "$key has EN translation");
     }
 
-    # Verify obsolete keys are removed (Phase 02.1 cleanup)
+    # Verify obsolete Phase 02.1 keys are removed
     for my $key (@removed_keys) {
         ok(!$has_en{$key} && !$has_de{$key}, "$key is removed (obsolete in Phase 02.1)");
+    }
+
+    # Verify PKCE/OAuth keys removed in Plan 04.3-03
+    for my $key (@pkce_removed_keys) {
+        ok(!$has_en{$key} && !$has_de{$key}, "$key is removed (PKCE flow removed in Plan 04.3-03)");
     }
 
     # Verify correct indentation: lines must use Tab, not spaces
