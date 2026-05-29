@@ -2,6 +2,7 @@
 //
 // Phase 4.1 implementation: --single-track subcommand for LMS transcoding pipeline
 // Phase 04.2 implementation: --token-login subcommand for credential provisioning
+// Phase 04.3 implementation: --discover-once subcommand for ZeroConf credential acquisition
 //
 // Modes:
 //   --check          : Print capability manifest (Phase 1 contract, unchanged)
@@ -9,6 +10,7 @@
 //   --get-token      : Read cached credentials, return Web API token JSON to stdout
 //   --single-track   : Decode one Spotify track to stdout (pipe backend) and exit
 //   --token-login    : Acquire reusable credentials from OAuth access token, write credentials.json
+//   --discover-once  : ZeroConf mDNS announcement, wait for Spotify App connection, write credentials.json
 //   --connect        : Not yet implemented (Phase 5)
 //
 // --check output format:
@@ -30,6 +32,12 @@
 //   stdout: "credentials_saved" on success
 //   exit 0 on success, non-zero on failure
 //
+// --discover-once contract (for Settings.pm / TokenManager.pm):
+//   Command: spoton -n 'LMS-Server-Name' --cache <dir> --discover-once
+//   stdout line 1: "credentials_saved"
+//   stdout line 2: spotify_username
+//   exit 0 on success, exit 1 on failure (including 15-min timeout)
+//
 // --single-track contract (for custom-convert.conf):
 //   Command: spoton -n 'SpotOn' -c <dir> --single-track <spotify:track:ID>
 //            --bitrate 320 [--passthrough] --disable-discovery --disable-audio-cache
@@ -44,6 +52,11 @@ use librespot_core::authentication::Credentials;
 use librespot_core::cache::Cache;
 use librespot_core::config::SessionConfig;
 use librespot_core::{Session, SpotifyUri};
+
+// Phase 04.3: ZeroConf Discovery imports
+use librespot_discovery::{DeviceType, Discovery};
+use futures_util::StreamExt;
+use tokio::time::{timeout, Duration};
 
 use librespot_playback::audio_backend;
 use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig};
@@ -60,6 +73,7 @@ enum Mode {
     Connect,
     SingleTrack,
     TokenLogin,    // Phase 04.2: credential provisioning from OAuth access token
+    DiscoverOnce,  // Phase 04.3: ZeroConf mDNS credential acquisition
 }
 
 #[tokio::main]
@@ -68,6 +82,7 @@ async fn main() {
 
     let mut mode = Mode::Check;
     let mut _name_provided = false;
+    let mut device_name = String::new();
     let mut username = String::new();
     let mut password = String::new();
     let mut token_str = String::new();
@@ -109,6 +124,9 @@ async fn main() {
             "--token-login" => {
                 mode = Mode::TokenLogin;
             }
+            "--discover-once" => {
+                mode = Mode::DiscoverOnce;
+            }
             "--token" => {
                 if i + 1 < args.len() {
                     token_str = args[i + 1].clone();
@@ -142,6 +160,7 @@ async fn main() {
             "-n" | "--name" => {
                 if i + 1 < args.len() {
                     _name_provided = true;
+                    device_name = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -190,6 +209,7 @@ async fn main() {
             let has_passthrough = cfg!(feature = "passthrough-decoder");
             let json = serde_json::json!({
                 "version": VERSION,
+                "discover-once": true,
                 "lms-auth": false,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
@@ -271,6 +291,26 @@ async fn main() {
                 }
                 Err(e) => {
                     eprintln!("Token login failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        Mode::DiscoverOnce => {
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --discover-once");
+                eprintln!("Usage: spoton -n 'LMS-Server' --cache <dir> --discover-once");
+                process::exit(1);
+            }
+
+            match run_discover_once(&device_name, &cache_dir).await {
+                Ok(username) => {
+                    println!("credentials_saved");
+                    println!("{}", username);
+                    process::exit(0);
+                }
+                Err(e) => {
+                    eprintln!("Discovery failed: {}", e);
                     process::exit(1);
                 }
             }
@@ -422,6 +462,68 @@ async fn run_get_token(
     println!("{}", json);
 
     Ok(())
+}
+
+/// ZeroConf Discovery: announce via mDNS, wait for first Spotify App connection,
+/// write credentials.json, return spotify_username.
+///
+/// Contract for Perl layer (stdout):
+///   Line 1: "credentials_saved"
+///   Line 2: spotify_username
+///   exit 0 on success, exit 1 on failure (including 15-min timeout)
+///
+/// Timeout: 15 minutes (900 seconds), matching Spotty pattern.
+async fn run_discover_once(
+    device_name: &str,
+    cache_dir: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    // Derive stable device_id from cache_dir path to survive restarts.
+    // This ensures the same Spotify device appears consistent (RESEARCH Pitfall 1).
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    cache_dir.hash(&mut hasher);
+    let device_id = format!("{:016x}", hasher.finish());
+
+    // KEYMASTER_CLIENT_ID — standard librespot client ID
+    // Source: librespot-core-0.8.0/src/config.rs line 6
+    const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+
+    // Build Discovery: starts mDNS announcement and HTTP server for Spotify Connect
+    // builder() requires T: Into<String> + 'static; use owned Strings
+    let device_name_owned = device_name.to_string();
+    let mut discovery = Discovery::builder(device_id, KEYMASTER_CLIENT_ID.to_string())
+        .name(device_name_owned)
+        .device_type(DeviceType::Speaker)
+        .launch()?;
+
+    // Wait for first connection with 15-minute timeout (RESEARCH.md Pitfall 7)
+    let credentials = timeout(
+        Duration::from_secs(900),
+        discovery.next(),
+    )
+    .await
+    .map_err(|_| "Discovery timeout after 15 minutes — no Spotify App connected")?
+    .ok_or("Discovery stream ended without credentials")?;
+
+    // Write credentials.json via session.connect(creds, store_credentials=true)
+    // Source: run_authenticate() pattern
+    let cache = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None)?;
+    let session_config = SessionConfig::default();
+    let session = Session::new(session_config, Some(cache));
+    session.connect(credentials, true).await?;
+
+    // Read username from credentials.json (safer than session.username() — RESEARCH Open Q1)
+    // credentials.json format: {"username":"...","auth_type":1,"auth_data":"..."}
+    let creds_path = std::path::Path::new(cache_dir).join("credentials.json");
+    let creds_json = std::fs::read_to_string(&creds_path)?;
+    let creds_data: serde_json::Value = serde_json::from_str(&creds_json)?;
+    let username = creds_data["username"]
+        .as_str()
+        .ok_or("username field missing in credentials.json")?
+        .to_string();
+
+    Ok(username)
 }
 
 /// Decode a single Spotify track to stdout via the pipe audio backend.
