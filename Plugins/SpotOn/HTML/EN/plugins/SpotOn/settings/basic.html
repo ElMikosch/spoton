@@ -1,0 +1,123 @@
+[% PROCESS settings/header.html %]
+	[% title = "PLUGIN_SPOTON" %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
+		[% IF binaryPath %]
+			<p>[% binaryPath | html %] (v[% binaryVersion | html %])</p>
+		[% ELSE %]
+			<div style="color: red">[% 'PLUGIN_SPOTON_BINARY_MISSING' | string %]</div>
+		[% END %]
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BITRATE" desc="" %]
+		<select class="stdedit" name="pref_bitrate" id="pref_bitrate">
+			<option value="320" [% IF prefs.pref_bitrate == 320 %]selected[% END %]>320 kbps</option>
+			<option value="160" [% IF prefs.pref_bitrate == 160 %]selected[% END %]>160 kbps</option>
+			<option value="96"  [% IF prefs.pref_bitrate == 96  %]selected[% END %]>96 kbps</option>
+		</select>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_NORMALIZATION" desc="PLUGIN_SPOTON_NORMALIZATION_DESC" %]
+		<input type="checkbox" class="stdedit" name="pref_normalization" id="pref_normalization"
+			value="1" [% IF prefs.pref_normalization %]checked[% END %]/>
+		<label for="pref_normalization">[% 'PLUGIN_SPOTON_NORMALIZATION_LABEL' | string %]</label>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_CLIENT_ID_SETTINGS" desc="PLUGIN_SPOTON_CLIENT_ID_DESC" %]
+		[% IF degradedMode %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_DEGRADED_MODE_WARNING' | string %]
+			<a href="https://developer.spotify.com/dashboard" target="_blank">
+				[% 'PLUGIN_SPOTON_REGISTER_APP_LINK' | string %]
+			</a>
+		</div>
+		[% END %]
+		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
+		       value="[% customClientId | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
+	[% END %]
+
+	[% IF NOT accounts.keys.size %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
+		<!-- D-02: visual instruction with Spotify App device picker hint image -->
+		<div style="text-align:center; margin-bottom:15px">
+			<img src="/plugins/SpotOn/html/images/connect-hint.png"
+			     style="max-width:300px; border-radius:8px"
+			     alt="[% 'PLUGIN_SPOTON_CONNECT_HINT_ALT' | string %]"/>
+		</div>
+
+		<p><strong>[% 'PLUGIN_SPOTON_ZEROCONF_STEP1' | string %]</strong></p>
+		<p>[% 'PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS' | string %]</p>
+
+		[% IF discoveryRunning %]
+			<div id="discovery-status" style="color:#888">
+				[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
+			</div>
+			<script type="text/javascript">
+			(function() {
+				var timer = setInterval(function() {
+					var xhr = new XMLHttpRequest();
+					xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
+					xhr.onload = function() {
+						if (xhr.status === 200) {
+							var data = JSON.parse(xhr.responseText);
+							if (data.status === 'connected') {
+								clearInterval(timer);
+								location.reload();
+							}
+						}
+					};
+					xhr.send();
+				}, 3000);
+			})();
+			</script>
+			<p>
+				<input type="submit" name="stopDiscovery"
+				       value="[% 'PLUGIN_SPOTON_STOP_DISCOVERY' | string %]"
+				       class="submit"/>
+			</p>
+		[% ELSE %]
+			<p>
+				<input type="submit" name="startDiscovery"
+				       value="[% 'PLUGIN_SPOTON_START_DISCOVERY' | string %]"
+				       class="submit"/>
+			</p>
+		[% END %]
+	[% END %]
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
+		[% IF accounts.keys.size > 0 %]
+			<table style="width:100%">
+			[% FOREACH id IN accounts.keys %]
+				<tr>
+					<td>[% accounts.$id.displayName | html %]</td>
+					<td>
+						[% IF id == activeAccount %]
+							<strong>[% 'PLUGIN_SPOTON_ACCOUNT_ACTIVE' | string %]</strong>
+						[% ELSE %]
+							<input type="hidden" name="switchAccount" value="[% id | html %]" disabled/>
+							<input type="submit" value="[% 'PLUGIN_SPOTON_ACCOUNT_SWITCH' | string %]"
+								onclick="this.previousElementSibling.disabled=false"/>
+						[% END %]
+					</td>
+					<td>
+						<input type="hidden" name="removeAccount" value="[% id | html %]" disabled/>
+						<input type="submit" value="[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE' | string %]"
+							onclick="return confirm('[% 'PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM' | string %]') && (this.previousElementSibling.disabled=false,true)"/>
+					</td>
+				</tr>
+			[% END %]
+			</table>
+
+			<p>
+				<input type="submit" name="startDiscovery"
+				       value="[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]"
+				       class="submit"/>
+			</p>
+		[% ELSE %]
+			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
+		[% END %]
+	[% END %]
+
+[% PROCESS settings/footer.html %]

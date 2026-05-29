@@ -1,0 +1,211 @@
+PLUGIN_SPOTON
+	DE	SpotOn Spotify für Squeezebox
+	EN	SpotOn Spotify for Squeezebox
+
+PLUGIN_SPOTON_NAME
+	DE	SpotOn
+	EN	SpotOn
+
+PLUGIN_SPOTON_BINARY_MISSING
+	DE	Das SpotOn-Binary fehlt. Bitte das Plugin neu installieren oder den Pfad in den Einstellungen angeben.
+	EN	The SpotOn binary is missing. Please reinstall the plugin or specify the path in settings.
+
+PLUGIN_SPOTON_BINARY_STATUS
+	DE	Binary-Status
+	EN	Binary Status
+
+PLUGIN_SPOTON_ACCOUNT_SETTINGS
+	DE	Konto-Einstellungen
+	EN	Account Settings
+
+PLUGIN_SPOTON_BITRATE
+	DE	Bitrate
+	EN	Bitrate
+
+PLUGIN_SPOTON_NO_BINARY
+	DE	Kein SpotOn-Binary gefunden. Streaming ist nicht möglich.
+	EN	No SpotOn binary found. Streaming is not possible.
+
+PLUGIN_SPOTON_ACTIVE_ACCOUNT
+	DE	Aktiv: %s [wechseln]
+	EN	Active: %s [switch]
+
+PLUGIN_SPOTON_RATE_LIMIT_HINT
+	DE	Spotify-Anfragen gedrosselt -- bitte warten
+	EN	Spotify requests throttled -- please wait
+
+PLUGIN_SPOTON_ACCOUNT_NONE
+	DE	Kein Konto konfiguriert
+	EN	No account configured
+
+PLUGIN_SPOTON_ACCOUNT_ACTIVE
+	DE	Aktiv
+	EN	Active
+
+PLUGIN_SPOTON_ACCOUNT_SWITCH
+	DE	Wechseln
+	EN	Switch
+
+PLUGIN_SPOTON_ACCOUNT_REMOVE
+	DE	Entfernen
+	EN	Remove
+
+PLUGIN_SPOTON_AUTH_ERROR
+	DE	Anmeldung fehlgeschlagen
+	EN	Authentication failed
+
+PLUGIN_SPOTON_STEP1_TITLE
+	DE	Schritt 1: Spotify App öffnen
+	EN	Step 1: Open Spotify App
+
+PLUGIN_SPOTON_STEP2_TITLE
+	DE	Schritt 2: Gerät auswählen
+	EN	Step 2: Select device
+
+PLUGIN_SPOTON_ADD_ANOTHER
+	DE	Weiteres Konto hinzufügen
+	EN	Add Another Account
+
+PLUGIN_SPOTON_CONNECTED_AS
+	DE	Verbunden als
+	EN	Connected as
+
+PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
+	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.
+	EN	Remove this account? This cannot be undone.
+
+PLUGIN_SPOTON_HOME
+	DE	Home
+	EN	Home
+
+PLUGIN_SPOTON_SEARCH
+	DE	Suche
+	EN	Search
+
+PLUGIN_SPOTON_LIBRARY
+	DE	Bibliothek
+	EN	Library
+
+PLUGIN_SPOTON_RECENTLY_PLAYED
+	DE	Kürzlich gehört
+	EN	Recently Played
+
+PLUGIN_SPOTON_MADE_FOR_YOU
+	DE	Für dich gemacht
+	EN	Made For You
+
+PLUGIN_SPOTON_TOP_TRACKS
+	DE	Top Tracks
+	EN	Top Tracks
+
+PLUGIN_SPOTON_LIKED_SONGS
+	DE	Gefällt mir
+	EN	Liked Songs
+
+PLUGIN_SPOTON_ALBUMS
+	DE	Alben
+	EN	Albums
+
+PLUGIN_SPOTON_ARTISTS
+	DE	Künstler
+	EN	Artists
+
+PLUGIN_SPOTON_PLAYLISTS
+	DE	Playlists
+	EN	Playlists
+
+PLUGIN_SPOTON_SINGLES
+	DE	Singles
+	EN	Singles
+
+PLUGIN_SPOTON_COMPILATIONS
+	DE	Compilations
+	EN	Compilations
+
+PLUGIN_SPOTON_APPEARS_ON
+	DE	Erscheint auf
+	EN	Appears On
+
+PLUGIN_SPOTON_TOP_RESULT
+	DE	Bestes Ergebnis
+	EN	Top Result
+
+PLUGIN_SPOTON_TRACKS
+	DE	Tracks
+	EN	Tracks
+
+PLUGIN_SPOTON_NO_RESULTS
+	DE	Keine Ergebnisse
+	EN	No results
+
+PLUGIN_SPOTON_ARTIST_VIEW
+	DE	Künstler anzeigen
+	EN	View Artist
+
+PLUGIN_SPOTON_ALBUM_VIEW
+	DE	Album anzeigen
+	EN	View Album
+
+PLUGIN_SPOTON_STREAMING_SETTINGS
+	DE	Streaming-Einstellungen
+	EN	Streaming Settings
+
+PLUGIN_SPOTON_NORMALIZATION
+	DE	Lautstärkenormalisierung
+	EN	Volume Normalization
+
+PLUGIN_SPOTON_NORMALIZATION_DESC
+	DE	Aktiviert Lautstärkenormalisierung (ReplayGain) für gleichmäßige Lautstärke
+	EN	Enables volume normalization (ReplayGain) for consistent playback volume
+
+PLUGIN_SPOTON_NORMALIZATION_LABEL
+	DE	Lautstärke normalisieren (ReplayGain)
+	EN	Normalize volume (ReplayGain)
+
+PLUGIN_SPOTON_ZEROCONF_SETUP
+	DE	Spotify verbinden
+	EN	Connect Spotify
+
+PLUGIN_SPOTON_ZEROCONF_STEP1
+	DE	Mit der Spotify App verbinden
+	EN	Connect with the Spotify App
+
+PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS
+	DE	Öffne die Spotify App auf deinem Handy. Tippe auf das Geräte-Symbol (unten rechts) und wähle deinen LMS-Server aus der Geräteliste.
+	EN	Open the Spotify app on your phone. Tap the device icon (bottom right) and select your LMS server from the device list.
+
+PLUGIN_SPOTON_WAITING_FOR_CONNECTION
+	DE	Warte auf Verbindung über Spotify App...
+	EN	Waiting for connection via Spotify app...
+
+PLUGIN_SPOTON_START_DISCOVERY
+	DE	Erkennung starten
+	EN	Start Discovery
+
+PLUGIN_SPOTON_STOP_DISCOVERY
+	DE	Erkennung stoppen
+	EN	Stop Discovery
+
+PLUGIN_SPOTON_CONNECT_HINT_ALT
+	DE	Spotify App Geräteauswahl
+	EN	Spotify app device picker
+
+PLUGIN_SPOTON_CLIENT_ID_SETTINGS
+	DE	Eigene Spotify App
+	EN	Custom Spotify App
+
+PLUGIN_SPOTON_CLIENT_ID_DESC
+	DE	Optionale eigene Spotify Developer App-ID für höhere Rate-Limits
+	EN	Optional custom Spotify Developer App ID for higher rate limits
+
+PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
+	DE	Spotify Client-ID (32 Zeichen, alphanumerisch)
+	EN	Spotify Client ID (32 characters, alphanumeric)
+
+PLUGIN_SPOTON_DEGRADED_MODE_WARNING
+	DE	Keine eigene Spotify App-ID konfiguriert. Für volle Funktionalität bitte eigene App registrieren:
+	EN	No custom Spotify App ID configured. For full functionality, please register your own app:
+
+PLUGIN_SPOTON_REGISTER_APP_LINK
+	DE	Eigene App registrieren
+	EN	Register your own app
