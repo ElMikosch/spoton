@@ -322,7 +322,7 @@ sub _fetchKeymasterToken {
     (my $safeHelper = $helper)   =~ s/'/'\\''/g;
     (my $safeDir    = $cacheDir) =~ s/'/'\\''/g;
 
-    my $cmd = sprintf("'%s' --get-token --cache '%s' 2>/dev/null", $safeHelper, $safeDir);
+    my $cmd = sprintf("'%s' --get-token --cache '%s' 2>&1", $safeHelper, $safeDir);
     main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId");
 
     # WR-01: Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
@@ -331,7 +331,7 @@ sub _fetchKeymasterToken {
         my $exit   = $? >> 8;
 
         if ($exit != 0 || !$output) {
-            $log->error("TokenManager: --get-token failed for $accountId (exit $exit)");
+            $log->error("TokenManager: --get-token failed for $accountId (exit $exit): $output");
             $cb->(undef);
             return;
         }
