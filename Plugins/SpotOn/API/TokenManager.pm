@@ -10,6 +10,8 @@ use Crypt::OpenSSL::Random;
 use URI;
 use JSON::XS::VersionOneAndTwo;
 
+use File::Spec::Functions qw(catdir);
+
 use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
@@ -403,6 +405,10 @@ sub _storeTokens {
         $prefs->set('activeAccount', $accountId);
     }
 
+    # D-01, D-03: Provision librespot credentials after OAuth callback (Phase 04.2)
+    # Synchronous, < 2s — acceptable here (T-04.2-05). No hard failure.
+    $class->_provisionCredentials($accountId, $accessToken);
+
     main::INFOLOG && $log->info("TokenManager: stored tokens for account $accountId ($displayName)");
     $cb->($accountId);
 }
@@ -420,6 +426,59 @@ sub _cacheToken {
 
     $cache->set("spoton_token_$accountId", $accessToken, $ttl);
     main::INFOLOG && $log->info("TokenManager: token cached for account $accountId, TTL ${ttl}s");
+}
+
+# _provisionCredentials($class, $accountId, $accessToken)
+# Invokes the librespot-spoton binary in --token-login mode to write credentials.json
+# to the SpotOn cache directory. Called synchronously after OAuth callback (_storeTokens).
+# Per D-01, D-03, D-04: SpotOn provisions its own credentials, no Spotty dependency.
+#
+# SECURITY (T-04.2-01, T-04.2-04):
+#   - $accessToken is never passed to any $log-> call ([REDACTED] used instead)
+#   - All three shell arguments are single-quote escaped (s/'/'\\''/g)
+#   - cacheDir is built internally from server prefs, not user-controllable (T-04.2-03)
+#
+# No hard failure — if provisioning fails, --single-track will report "No cached credentials"
+# on the next playback attempt. Streaming continues if credentials.json already exists.
+sub _provisionCredentials {
+    my ($class, $accountId, $accessToken) = @_;
+
+    require Plugins::SpotOn::Helper;
+    my ($helper) = Plugins::SpotOn::Helper->get();
+    unless ($helper) {
+        $log->warn("TokenManager: cannot provision credentials for $accountId — binary not found");
+        return;
+    }
+
+    # Cache-Dir: analog Plugin.pm::updateTranscodingTable (catdir pattern)
+    my $serverPrefs = preferences('server');
+    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    # T-04.2-04: shell-escape single quotes in all interpolated values
+    (my $safeHelper = $helper)      =~ s/'/'\\''/g;
+    (my $safeToken  = $accessToken) =~ s/'/'\\''/g;
+    (my $safeDir    = $cacheDir)    =~ s/'/'\\''/g;
+
+    my $cmd = sprintf("'%s' -n 'SpotOn' --token-login --token '%s' --cache '%s' 2>&1",
+        $safeHelper, $safeToken, $safeDir);
+
+    # T-04.2-01: Log command with [REDACTED] — never the raw token value
+    main::INFOLOG && $log->info(
+        "TokenManager: provisioning credentials for account $accountId " .
+        "(cmd: '$safeHelper' -n 'SpotOn' --token-login --token [REDACTED] --cache '$safeDir')");
+
+    my $output = `$cmd`;
+    my $exit   = $? >> 8;
+
+    if ($exit == 0 && $output =~ /credentials_saved/) {
+        main::INFOLOG && $log->info(
+            "TokenManager: credentials provisioned successfully for account $accountId");
+    } else {
+        $log->error(
+            "TokenManager: credential provisioning failed for $accountId " .
+            "(exit $exit): $output");
+        # No hard failure — next --single-track invocation will report "No cached credentials"
+    }
 }
 
 1;
