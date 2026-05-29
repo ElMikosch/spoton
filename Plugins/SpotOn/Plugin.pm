@@ -492,6 +492,7 @@ sub _recentlyPlayedFeed {
 # Fetches curated personal mixes (Daily Mix, Discover Weekly, etc.) via
 # browse/categories/0JQ5DAt0tbjZptfcdMSKl3/playlists (Spotty-NG pattern).
 # Routes through bundled-token via @KNOWN_DEPRECATED_FAMILIES in Client.pm.
+# Spotify caps at 50/request; fetches second page if total > 50.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
@@ -505,8 +506,22 @@ sub _madeForYouFeed {
                 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
-        my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
-        $callback->({ items => \@items });
+
+        my $total = $data->{playlists}{total} || 0;
+        if ($total > 50) {
+            Plugins::SpotOn::API::Client->getPersonalMixes($accountId,
+                { limit => 50, offset => 50 }, sub {
+                my $page2 = shift;
+                if ($page2 && $page2->{playlists} && $page2->{playlists}{items}) {
+                    push @$playlists, @{ $page2->{playlists}{items} };
+                }
+                my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
+                $callback->({ items => \@items });
+            });
+        } else {
+            my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
+            $callback->({ items => \@items });
+        }
     });
 }
 

@@ -177,12 +177,14 @@ sub getUserPlaylists {
 # Cache TTL: 300s (browse/ path — see _cacheTTL line 396).
 sub getPersonalMixes {
     my ($class, $accountId, $params, $cb) = @_;
+    my %reqParams = (
+        _accountId => $accountId,
+        limit      => $params->{limit} // 50,
+    );
+    $reqParams{offset} = $params->{offset} if $params->{offset};
     $class->_request('get',
         'browse/categories/' . PERSONAL_MIX_CATEGORY . '/playlists',
-        {
-            _accountId => $accountId,
-            limit      => $params->{limit} // 50,
-        },
+        \%reqParams,
         $cb
     );
 }
