@@ -361,13 +361,13 @@ sub _onError {
 
     $inflightCount--;
 
-    my $code = ($http && $http->response) ? $http->response->code : 0;
+    my $code = ($http && $http->can('code')) ? ($http->code || 0) : 0;
 
     if ($code == 429) {
         # T-02-08: Cap Retry-After at 300 seconds to prevent self-DoS from malicious header
         my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
-        if ($http && $http->response) {
-            my $headerVal = $http->response->header('Retry-After');
+        if ($http && $http->can('headers') && $http->headers) {
+            my $headerVal = $http->headers->header('Retry-After');
             $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
         }
         $retryAfter = 300 if $retryAfter > 300;
