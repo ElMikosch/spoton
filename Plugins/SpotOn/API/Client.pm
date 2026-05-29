@@ -19,6 +19,8 @@ use constant RATE_LIMIT_DEFAULT_BACKOFF => 5;
 use constant MAX_CONCURRENT_REQUESTS    => 3;
 use constant API_BASE                   => 'https://api.spotify.com/v1';
 use constant REQUEST_TIMEOUT            => 30;
+use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
+# Source: Spotty API.pm:18 (verifiziert: michaelherger/Spotty-Plugin/API.pm)
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -140,6 +142,23 @@ sub getUserPlaylists {
         offset     => $params->{offset} // 0,
         limit      => $params->{limit}  // 50,
     }, $cb);
+}
+
+# getPersonalMixes($class, $accountId, $params, $cb)
+# Fetches Spotify personal mix playlists via the browse/categories endpoint (D-05).
+# Source: Spotty API.pm categoryPlaylists pattern.
+# Response structure: {playlists: {items: [...]}} — NOT {items: [...]}.
+# Cache TTL: 300s (browse/ path — see _cacheTTL line 396).
+sub getPersonalMixes {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get',
+        'browse/categories/' . PERSONAL_MIX_CATEGORY . '/playlists',
+        {
+            _accountId => $accountId,
+            limit      => $params->{limit} // 50,
+        },
+        $cb
+    );
 }
 
 # getArtist($class, $accountId, $artistId, $cb)

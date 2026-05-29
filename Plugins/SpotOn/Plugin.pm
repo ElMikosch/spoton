@@ -296,13 +296,19 @@ sub _largestImage {
     return $largest->{url} || '';
 }
 
+# Regex-Muster fuer Spotify-generierte Personal-Mix-Playlists (D-06).
+# Verwendet \s+ statt Leerzeichen fuer Whitespace-Varianten.
+# BEIDE Aufrufstellen (_madeForYouFeed und _libraryPlaylistsFeed)
+# nutzen _isMadeForYou — nur diese Funktion aendern reicht (RESEARCH.md Pitfall 4).
+my $PERSONAL_MIX_REGEX = qr/Daily\s+Mix|MixTape|Discover\s+Weekly|Mix\s+der\s+Woche|Release\s+Radar/i;
+
 # _isMadeForYou($playlist_hashref)
-# Returns true if the playlist is a Spotify-generated playlist
-# (Daily Mix, Discover Weekly, Release Radar, etc.).
-# Detection via owner.id eq 'spotify' — per D-04 and RESEARCH.md Pattern 5.
+# Returns true if the playlist is a Spotify-generated personal mix.
+# Detection via name-matching (D-06) — replaces broken owner.id eq 'spotify' filter
+# which fails in Dev Mode (Feb 2026: owner fields restricted).
 sub _isMadeForYou {
     my ($playlist) = @_;
-    return ($playlist->{owner}{id} // '') eq 'spotify';
+    return ($playlist->{name} // '') =~ $PERSONAL_MIX_REGEX;
 }
 
 # _trackItem($client, $track)
@@ -474,24 +480,41 @@ sub _recentlyPlayedFeed {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# Fetches user playlists and filters to Spotify-generated (Made For You) playlists.
-# Uses owner.id eq 'spotify' detection per D-04.
-# Note: fetches first 50 playlists — if user has >50 playlists, some Made-For-You
-# entries near the end may be missed. Acceptable for Phase 3 (Spotify typically
-# puts them near the top of the list).
+# Primary: Category endpoint (D-05) — GET browse/categories/{id}/playlists
+# Fallback: me/playlists + _isMadeForYou name-matching (D-06) when 404/403 (Dev Mode)
+# Response structure: $data->{playlists}{items} — NOT $data->{items} (Pitfall 2).
+# Spotify's response ordering preserved — no custom sorting applied (D-07).
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
-
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getUserPlaylists($accountId, { offset => 0, limit => 50 }, sub {
-        my $data = shift;
-        unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+    Plugins::SpotOn::API::Client->getPersonalMixes($accountId, {}, sub {
+        my ($data, $err) = @_;
+
+        # Fallback bei 404/403 (Dev Mode: Browse Categories seit Feb 2026 entfernt)
+        if (!$data || ($err && ($err->{code} == 404 || $err->{code} == 403))) {
+            main::INFOLOG && $log->info(
+                "_madeForYouFeed: category endpoint unavailable (code " .
+                ($err ? $err->{code} : 'no data') . "), falling back to me/playlists");
+
+            Plugins::SpotOn::API::Client->getUserPlaylists($accountId,
+                { offset => 0, limit => 50 }, sub {
+                my $fallback = shift;
+                unless ($fallback) {
+                    $callback->({ items => [{ name => cstring($client,
+                        'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                    return;
+                }
+                my @mfy   = grep { _isMadeForYou($_) } @{ $fallback->{items} || [] };
+                my @items = map  { _playlistItem($client, $_) } @mfy;
+                $callback->({ items => \@items });
+            });
             return;
         }
-        my @mfy   = grep { _isMadeForYou($_) } @{ $data->{items} || [] };
-        my @items = map  { _playlistItem($client, $_) } @mfy;
+
+        # Kategorie-Antwort: {playlists: {items: [...]}} (Pitfall 2 beachten)
+        my @items = map { _playlistItem($client, $_) }
+                    @{ $data->{playlists}{items} || [] };
         $callback->({ items => \@items });
     });
 }
