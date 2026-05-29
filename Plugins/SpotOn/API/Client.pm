@@ -295,10 +295,12 @@ sub _request {
 
         # Compute and cache the key so _onSuccess can use the same key.
         # Also perform the cache lookup now that we know the full key.
+        # CR-01: Include accountId in cache key to prevent multi-account cache contamination.
+        # _accountId is filtered from queryStr (^_ prefix), so it must be injected separately.
         unless ($params->{_noCache}) {
             my $cacheKey = $queryStr
-                ? "spoton_resp_${path}?${queryStr}"
-                : "spoton_resp_${path}";
+                ? "spoton_resp_${accountId}_${path}?${queryStr}"
+                : "spoton_resp_${accountId}_${path}";
             $params->{_cacheKey} = $cacheKey;
             if (my $cached = $cache->get($cacheKey)) {
                 $inflightCount--;
