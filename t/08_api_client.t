@@ -291,18 +291,18 @@ sub _dispatch {
         $self->{success_cb}->($mock_response);
     }
     elsif ($auto_mode eq 'error_429') {
-        my $mock_http = bless {
+        my $mock_response = bless {
             _code    => 429,
             _headers => $last_response_headers,
-        }, 'Slim::Networking::SimpleAsyncHTTP::ErrorResponse';
-        $self->{error_cb}->($mock_http, 'Rate limit exceeded');
+        }, 'Slim::Networking::SimpleAsyncHTTP::MockResponse';
+        $self->{error_cb}->($self, '429 Rate limit exceeded', $mock_response);
     }
     elsif ($auto_mode eq 'error_generic') {
-        my $mock_http = bless {
+        my $mock_response = bless {
             _code    => 500,
             _headers => {},
-        }, 'Slim::Networking::SimpleAsyncHTTP::ErrorResponse';
-        $self->{error_cb}->($mock_http, 'Internal server error');
+        }, 'Slim::Networking::SimpleAsyncHTTP::MockResponse';
+        $self->{error_cb}->($self, '500 Internal server error', $mock_response);
     }
     # 'none': no callback, simulates hanging request
 }
@@ -320,6 +320,11 @@ sub content  { '' }
 sub code     { $_[0]->{_code} }
 sub response { $_[0] }
 sub header   { $_[0]->{_headers}{$_[1]} }
+
+package Slim::Networking::SimpleAsyncHTTP::MockResponse;
+sub code     { $_[0]->{_code} }
+sub header   { $_[0]->{_headers}{$_[1]} }
+sub can      { 1 }
 1;
 END
 
