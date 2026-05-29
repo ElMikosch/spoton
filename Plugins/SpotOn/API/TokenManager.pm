@@ -406,8 +406,11 @@ sub _storeTokens {
     }
 
     # D-01, D-03: Provision librespot credentials after OAuth callback (Phase 04.2)
-    # Synchronous, < 2s — acceptable here (T-04.2-05). No hard failure.
-    $class->_provisionCredentials($accountId, $accessToken);
+    # WR-01: Deferred via Timer statt synchronem Backtick-Call — verhindert Event-Loop-Blockade.
+    # _provisionCredentials öffnet TCP-Verbindung zu Spotify; kann bei DNS-Problemen 30+ s dauern.
+    Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.1, sub {
+        $class->_provisionCredentials($accountId, $accessToken);
+    });
 
     main::INFOLOG && $log->info("TokenManager: stored tokens for account $accountId ($displayName)");
     $cb->($accountId);
