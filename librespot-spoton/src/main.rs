@@ -448,7 +448,6 @@ async fn run_get_token(
     let token = if client_id.is_empty() {
         session.token_provider().get_token(&scopes_str).await?
     } else {
-        eprintln!("Using custom client_id: {}", client_id);
         session.token_provider().get_token_with_client_id(&scopes_str, client_id).await?
     };
 
