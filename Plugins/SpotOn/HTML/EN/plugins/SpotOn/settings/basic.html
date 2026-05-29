@@ -24,49 +24,56 @@
 	[% END %]
 
 	[% IF NOT accounts.keys.size %]
-	[% WRAPPER setting title="PLUGIN_SPOTON_SETUP_WIZARD" desc="" %]
-		<p><strong>[% 'PLUGIN_SPOTON_STEP1_TITLE' | string %]</strong></p>
-		<p>[% 'PLUGIN_SPOTON_STEP1_BODY' | string %]</p>
-		<p><code>[% redirectUri | html %]</code></p>
-		<p><a href="https://developer.spotify.com/dashboard" target="_blank">[% 'PLUGIN_SPOTON_DASHBOARD_LINK' | string %]</a></p>
+	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
+		<!-- D-02: visual instruction with Spotify App device picker hint image -->
+		<div style="text-align:center; margin-bottom:15px">
+			<img src="/plugins/SpotOn/html/images/connect-hint.png"
+			     style="max-width:300px; border-radius:8px"
+			     alt="[% 'PLUGIN_SPOTON_CONNECT_HINT_ALT' | string %]"/>
+		</div>
 
-		<p><label for="pref_clientId">[% 'PLUGIN_SPOTON_CLIENT_ID_LABEL' | string %]</label><br/>
-		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
-			value="[% prefs.pref_clientId | html %]"
-			oninput="document.getElementById('startOAuthBtn').disabled = (this.value.trim() === '')"/></p>
-		<p class="hint">[% 'PLUGIN_SPOTON_CLIENT_ID_HINT' | string %]</p>
+		<p><strong>[% 'PLUGIN_SPOTON_ZEROCONF_STEP1' | string %]</strong></p>
+		<p>[% 'PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS' | string %]</p>
 
-		<p><strong>[% 'PLUGIN_SPOTON_STEP2_TITLE' | string %]</strong></p>
-
-		[% IF oauthError %]
-		<div style="color:red">[% oauthError | html %]</div>
-		[% END %]
-
-		[% IF authUrl %]
-		<p><a href="[% authUrl | html %]" target="_blank"
-			style="color:#1db954; font-weight:bold; text-decoration:underline"
-			onclick="sessionStorage.setItem('spoton_auth_pending', Date.now()); setTimeout(function(){location.reload()}, 5000)"
-			>[% 'PLUGIN_SPOTON_OPEN_SPOTIFY' | string %]</a></p>
-		<p class="hint">[% 'PLUGIN_SPOTON_OPEN_SPOTIFY_HINT' | string %]</p>
+		[% IF discoveryRunning %]
+			<div id="discovery-status" style="color:#888">
+				[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
+			</div>
+			<script type="text/javascript">
+			(function() {
+				var timer = setInterval(function() {
+					var xhr = new XMLHttpRequest();
+					xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
+					xhr.onload = function() {
+						if (xhr.status === 200) {
+							var data = JSON.parse(xhr.responseText);
+							if (data.status === 'connected') {
+								clearInterval(timer);
+								location.reload();
+							}
+						}
+					};
+					xhr.send();
+				}, 3000);
+			})();
+			</script>
+			<p>
+				<input type="submit" name="stopDiscovery"
+				       value="[% 'PLUGIN_SPOTON_STOP_DISCOVERY' | string %]"
+				       class="submit"/>
+			</p>
 		[% ELSE %]
-		<input type="submit" name="startOAuth"
-			value="[% 'PLUGIN_SPOTON_CONNECT_BTN' | string %]"
-			class="submit" id="startOAuthBtn"[% IF NOT prefs.pref_clientId %] disabled[% END %]/>
+			<p>
+				<input type="submit" name="startDiscovery"
+				       value="[% 'PLUGIN_SPOTON_START_DISCOVERY' | string %]"
+				       class="submit"/>
+			</p>
 		[% END %]
-		<script type="text/javascript">
-		(function() {
-			var pending = sessionStorage.getItem('spoton_auth_pending');
-			if (pending && (Date.now() - parseInt(pending)) < 120000) {
-				setTimeout(function() { location.reload(); }, 5000);
-			}
-		})();
-		</script>
 	[% END %]
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
-		<script type="text/javascript">sessionStorage.removeItem('spoton_auth_pending');</script>
 			<table style="width:100%">
 			[% FOREACH id IN accounts.keys %]
 				<tr>
@@ -90,9 +97,9 @@
 			</table>
 
 			<p>
-				<input type="submit" name="startOAuth"
-					value="[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]"
-					class="submit"/>
+				<input type="submit" name="startDiscovery"
+				       value="[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]"
+				       class="submit"/>
 			</p>
 		[% ELSE %]
 			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
