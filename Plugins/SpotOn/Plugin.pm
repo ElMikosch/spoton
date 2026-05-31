@@ -192,8 +192,8 @@ sub handleFeed {
 
     my @items;
 
-    # Rate-limit hint (D-12): show when Spotify API is throttled
-    if ( $cache->get(Plugins::SpotOn::API::Client->RATE_LIMIT_CACHE_KEY()) ) {
+    # Rate-limit hint (D-12): show when either token flavor is throttled
+    if ( $cache->get('spoton_rate_limit_own') || $cache->get('spoton_rate_limit_bundled') ) {
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_RATE_LIMIT_HINT'),
             type => 'textarea',

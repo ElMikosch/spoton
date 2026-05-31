@@ -15,7 +15,6 @@ use Slim::Utils::Timers;
 use Time::HiRes;
 
 # Constants
-use constant RATE_LIMIT_CACHE_KEY       => 'spoton_rate_limit_exceeded';
 use constant RATE_LIMIT_DEFAULT_BACKOFF => 5;
 use constant MAX_CONCURRENT_REQUESTS    => 3;
 use constant API_BASE                   => 'https://api.spotify.com/v1';
@@ -291,8 +290,6 @@ sub _request {
 
     # Step 4: Increment inflight counter and wrap $cb in double-callback guard.
     # $inflightCount is decremented exactly once per request by $userCb.
-    # _onSuccess and _onError do NOT decrement $inflightCount (prevents double-decrement
-    # during the 403/410 bundled-fallback retry path).
     $inflightCount++;
     my $userCbCalled = 0;
     my $userCb = sub {
@@ -344,7 +341,6 @@ sub _doFlavouredRequest {
             return;
         }
 
-        # Pass flavor in params so _onError can use the correct rate-limit key (D-01)
         $params->{_flavor} = $flavor;
 
         # Build URL and compute cache key with query params.
@@ -515,91 +511,6 @@ sub _is404Deprecated {
         return 1 if $cleanPath =~ $rx;
     }
     return 0;
-}
-
-# ============================================================
-# Legacy callbacks (called from _doFlavouredRequest's inner closures above)
-# _onSuccess and _onError are retained as named subs for testability,
-# but the main _doFlavouredRequest uses inline closures for flavor context.
-# NOTE: $inflightCount is NOT decremented here — it is managed exclusively
-# by the $userCb double-callback guard in _request(). This prevents
-# double-decrement during the 403/410 bundled-fallback retry path.
-# ============================================================
-
-# _onSuccess($class, $http, $path, $params, $cb)
-# Handles successful HTTP response: parse JSON, cache, invoke callback.
-# IMPORTANT: Does NOT decrement $inflightCount — managed by $userCb guard in _request().
-sub _onSuccess {
-    my ($class, $http, $path, $params, $cb) = @_;
-
-    my $result = eval { from_json($http->content) };
-    if ($@) {
-        $log->error("Client: JSON parse error for $path: $@");
-        $cb->(undef, { error => 'parse_error' });
-        return;
-    }
-
-    # Cache response with domain-specific TTL (API-03) unless _noCache or TTL=0.
-    # Use the pre-computed _cacheKey that includes query params (CR-02).
-    unless ($params->{_noCache}) {
-        my $ttl = $class->_cacheTTL($path);
-        if ($ttl > 0) {
-            my $cacheKey = $params->{_cacheKey} || "spoton_resp_$path";
-            $cache->set($cacheKey, $result, $ttl);
-            main::INFOLOG && $log->info("Client: cached $path for ${ttl}s");
-        }
-    }
-
-    $cb->($result);
-}
-
-# _onError($class, $http, $error, $response, $path, $params, $cb)
-# Handles HTTP error: handles 429 rate limiting, 401 token invalidation, other errors.
-# $response is the HTTP::Response object passed by SimpleAsyncHTTP's error callback.
-# IMPORTANT: Does NOT decrement $inflightCount — managed by $userCb guard in _request().
-# Per-flavor rate-limit keys used; flavor read from $params->{_flavor}.
-sub _onError {
-    my ($class, $http, $error, $response, $path, $params, $cb) = @_;
-
-    my $code = ($response && ref $response && $response->can('code'))
-        ? ($response->code || 0) : 0;
-    if (!$code && $error && $error =~ /^(\d{3})\b/) {
-        $code = $1;
-    }
-
-    my $flavor = $params->{_flavor} // 'own';
-
-    if ($code == 429) {
-        # T-02-08: Cap Retry-After at 300 seconds to prevent self-DoS from malicious header
-        my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
-        if ($response && ref $response && $response->can('header')) {
-            my $headerVal = $response->header('Retry-After');
-            $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
-        }
-        $retryAfter = 300 if $retryAfter > 300;
-
-        # D-01: Per-flavor rate-limit keys (spoton_rate_limit_own / spoton_rate_limit_bundled)
-        my $rlKey = ($flavor eq 'bundled')
-            ? 'spoton_rate_limit_bundled'
-            : 'spoton_rate_limit_own';
-        $cache->set($rlKey, 1, $retryAfter);
-        $log->warn("Client: 429 rate limited [flavor=$flavor] for $retryAfter seconds on $path");
-        $cb->(undef, { error => 'rate_limited', code => 429 });
-        return;
-    }
-
-    if ($code == 401) {
-        # Invalidate cached token for this account and flavor on 401
-        my $accountId = $params->{_accountId} // '';
-        $cache->remove("spoton_token_${accountId}_${flavor}") if $accountId;
-        $log->warn("Client: 401 unauthorized [flavor=$flavor] for $path (token invalidated for $accountId)");
-        $cb->(undef, { error => 'unauthorized', code => 401 });
-        return;
-    }
-
-    # T-02-10: Log only status code, flavor, and path — never token value
-    $log->error("Client: HTTP $code error [flavor=$flavor] for $path: $error");
-    $cb->(undef, { error => $error, code => $code });
 }
 
 # _cacheTTL($path)
