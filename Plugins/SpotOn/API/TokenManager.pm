@@ -116,15 +116,27 @@ sub getActiveAccountName {
 sub refreshAllTokens {
     my ($class) = @_;
 
+    my $accounts = $prefs->get('accounts') || {};
     my @ids = $class->getAccountIds();
     for my $id (@ids) {
-        $class->_fetchKeymasterToken($id, 'own', sub {
-            my $token = shift;
-            main::INFOLOG && $log->info("TokenManager: refreshed token for account $id (own)")
-                if $token;
-            $log->error("TokenManager: failed to refresh token for account $id (own)")
-                unless $token;
-        });
+        my $acct = $accounts->{$id} || {};
+        my $needsDisplayName = $acct->{displayName}
+            && $acct->{spotifyUserId}
+            && $acct->{displayName} eq $acct->{spotifyUserId};
+
+        if ($needsDisplayName) {
+            $class->_fetchDisplayName($id, $acct->{spotifyUserId}, sub {
+                main::INFOLOG && $log->info("TokenManager: updated displayName for $id");
+            });
+        } else {
+            $class->_fetchKeymasterToken($id, 'own', sub {
+                my $token = shift;
+                main::INFOLOG && $log->info("TokenManager: refreshed token for account $id (own)")
+                    if $token;
+                $log->error("TokenManager: failed to refresh token for account $id (own)")
+                    unless $token;
+            });
+        }
     }
 
     # Re-arm timer (AUTH-03 timer continuity)

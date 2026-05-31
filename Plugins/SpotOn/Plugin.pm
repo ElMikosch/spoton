@@ -200,16 +200,18 @@ sub handleFeed {
         };
     }
 
-    # Account switcher (D-05, AUTH-06): first real item when account is configured
+    # Account switcher: only show when multiple accounts configured
     my $activeName = Plugins::SpotOn::API::TokenManager->getActiveAccountName($client);
+    my $accountCount = scalar Plugins::SpotOn::API::TokenManager->getAccountIds();
     if ($activeName) {
-        push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_ACTIVE_ACCOUNT', $activeName),
-            url  => \&_accountSwitcherFeed,
-            type => 'link',
-        };
+        if ($accountCount > 1) {
+            push @items, {
+                name => cstring($client, 'PLUGIN_SPOTON_ACTIVE_ACCOUNT', $activeName),
+                url  => \&_accountSwitcherFeed,
+                type => 'link',
+            };
+        }
 
-        # D-01: Home, Search, Library as three top-level entries after Account Switcher
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_HOME'),
             url  => \&_homeFeed,
@@ -400,12 +402,13 @@ sub _albumItem {
     my $line2 = $firstArtist . ($releaseDate ? " ($releaseDate)" : '');
 
     return {
-        name        => $album->{name} // '',
-        url         => \&_albumFeed,
-        passthrough => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name} }],
-        image       => _largestImage($album->{images}),
-        line2       => $line2,
-        type        => 'link',
+        name          => $album->{name} // '',
+        url           => \&_albumFeed,
+        passthrough   => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name} }],
+        image         => _largestImage($album->{images}),
+        line2         => $line2,
+        favorites_url => $album->{uri},
+        type          => 'playlist',
     };
 }
 
@@ -429,12 +432,13 @@ sub _artistItem {
 sub _playlistItem {
     my ($client, $playlist) = @_;
     return {
-        name        => $playlist->{name} // '',
-        url         => \&_playlistFeed,
-        passthrough => [{ playlistId => $playlist->{id} }],
-        image       => _largestImage($playlist->{images}),
-        line2       => $playlist->{owner}{display_name} // '',
-        type        => 'link',
+        name          => $playlist->{name} // '',
+        url           => \&_playlistFeed,
+        passthrough   => [{ playlistId => $playlist->{id} }],
+        image         => _largestImage($playlist->{images}),
+        line2         => $playlist->{owner}{display_name} // '',
+        favorites_url => $playlist->{uri},
+        type          => 'playlist',
     };
 }
 
@@ -488,40 +492,92 @@ sub _recentlyPlayedFeed {
     });
 }
 
+# Priority tiers for Made For You sorting (matched against English names).
+my @MFY_PRIORITY = (
+    qr/^daylist$/i,
+    qr/^Discover Weekly$/i,
+    qr/^Release Radar$/i,
+    qr/^Daily Mix \d+$/i,
+    qr/^On Repeat$/i,
+    qr/^Repeat Rewind$/i,
+);
+
+sub _madeForYouPriority {
+    my ($name) = @_;
+    for my $i (0 .. $#MFY_PRIORITY) {
+        return $i if $name =~ $MFY_PRIORITY[$i];
+    }
+    return scalar @MFY_PRIORITY;
+}
+
+# _fetchAllPersonalMixes($accountId, $locale, $cb)
+# Fetches all pages of personal mixes. $locale is optional (undef = user default).
+# Calls $cb->(\@playlists) with valid (non-null) items from all pages.
+sub _fetchAllPersonalMixes {
+    my ($accountId, $locale, $cb) = @_;
+    my %params = (limit => 50);
+    $params{_locale} = $locale if $locale;
+
+    Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%params, sub {
+        my $data = shift;
+        my $items = $data && $data->{playlists} ? $data->{playlists}{items} : [];
+        my @valid = grep { $_ && $_->{id} } @$items;
+        my $total = $data && $data->{playlists} ? ($data->{playlists}{total} || 0) : 0;
+
+        if ($total > 50) {
+            my %p2 = (limit => 50, offset => 50);
+            $p2{_locale} = $locale if $locale;
+            Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%p2, sub {
+                my $page2 = shift;
+                if ($page2 && $page2->{playlists} && $page2->{playlists}{items}) {
+                    push @valid, grep { $_ && $_->{id} } @{ $page2->{playlists}{items} };
+                }
+                $cb->(\@valid);
+            });
+        } else {
+            $cb->(\@valid);
+        }
+    });
+}
+
 # _madeForYouFeed($client, $callback, $args)
-# Fetches curated personal mixes (Daily Mix, Discover Weekly, etc.) via
-# browse/categories/0JQ5DAt0tbjZptfcdMSKl3/playlists (Spotty-NG pattern).
-# Routes through bundled-token via @KNOWN_DEPRECATED_FAMILIES in Client.pm.
-# Spotify caps at 50/request; fetches second page if total > 50.
+# Fetches personal mixes in two parallel requests: localized (for display) and
+# English (for locale-independent sorting). Merges by playlist ID.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getPersonalMixes($accountId,
-        { limit => 50 }, sub {
-        my $data = shift;
-        my $playlists = $data && $data->{playlists} ? $data->{playlists}{items} : undef;
-        unless ($playlists && @$playlists) {
+    my ($localized, %en_names);
+    my $pending = 2;
+
+    my $merge = sub {
+        return if --$pending > 0;
+
+        unless ($localized && @$localized) {
             $callback->({ items => [{ name => cstring($client,
                 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
 
-        my $total = $data->{playlists}{total} || 0;
-        if ($total > 50) {
-            Plugins::SpotOn::API::Client->getPersonalMixes($accountId,
-                { limit => 50, offset => 50 }, sub {
-                my $page2 = shift;
-                if ($page2 && $page2->{playlists} && $page2->{playlists}{items}) {
-                    push @$playlists, @{ $page2->{playlists}{items} };
-                }
-                my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
-                $callback->({ items => \@items });
-            });
-        } else {
-            my @items = map { _playlistItem($client, $_) } grep { $_ && $_->{id} } @$playlists;
-            $callback->({ items => \@items });
-        }
+        my @sorted = sort {
+            _madeForYouPriority($en_names{$a->{id}} // $a->{name} // '')
+            <=>
+            _madeForYouPriority($en_names{$b->{id}} // $b->{name} // '')
+        } @$localized;
+
+        my @items = map { _playlistItem($client, $_) } @sorted;
+        $callback->({ items => \@items });
+    };
+
+    _fetchAllPersonalMixes($accountId, undef, sub {
+        $localized = shift;
+        $merge->();
+    });
+
+    _fetchAllPersonalMixes($accountId, 'en', sub {
+        my $en = shift || [];
+        %en_names = map { $_->{id} => $_->{name} } @$en;
+        $merge->();
     });
 }
 

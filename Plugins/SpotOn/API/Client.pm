@@ -180,7 +180,8 @@ sub getPersonalMixes {
         _accountId => $accountId,
         limit      => $params->{limit} // 50,
     );
-    $reqParams{offset} = $params->{offset} if $params->{offset};
+    $reqParams{offset}  = $params->{offset}  if $params->{offset};
+    $reqParams{_locale}  = $params->{_locale}  if $params->{_locale};
     $class->_request('get',
         'browse/categories/' . PERSONAL_MIX_CATEGORY . '/playlists',
         \%reqParams,
@@ -362,6 +363,7 @@ sub _doFlavouredRequest {
             my $cacheKey = $queryStr
                 ? "spoton_resp_${accountId}_${cleanPath}?${queryStr}"
                 : "spoton_resp_${accountId}_${cleanPath}";
+            $cacheKey .= "_locale=$params->{_locale}" if $params->{_locale};
             $params->{_cacheKey} = $cacheKey;
             if (my $cached = $cache->get($cacheKey)) {
                 # Cache hit — $userCb decrements $inflightCount
@@ -374,7 +376,7 @@ sub _doFlavouredRequest {
         # T-02-10: Never log Authorization header value — only URL path, flavor, and method
         main::INFOLOG && $log->info("Client: $method $cleanPath [flavor=$flavor]");
 
-        Slim::Networking::SimpleAsyncHTTP->new(
+        my $http = Slim::Networking::SimpleAsyncHTTP->new(
             sub {
                 # Success callback — parse JSON, cache, then check for bundled hint write
                 my $http = shift;
@@ -461,11 +463,15 @@ sub _doFlavouredRequest {
                 $userCb->(undef, { error => $error, code => $code });
             },
             { timeout => REQUEST_TIMEOUT, cache => 0 }
-        )->$method(
-            $url,
+        );
+
+        my @headers = (
             'Authorization' => "Bearer $token",
             'Accept'        => 'application/json',
         );
+        push @headers, 'Accept-Language' => $params->{_locale} if $params->{_locale};
+
+        $http->$method($url, @headers);
     });
 }
 
