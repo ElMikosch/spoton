@@ -4,7 +4,7 @@ use strict;
 
 use base qw(Slim::Utils::Accessor);
 
-use File::Spec::Functions qw(catdir);
+use File::Spec::Functions qw(catdir catfile);
 use IO::Select;
 use MIME::Base64 qw(encode_base64);
 
@@ -31,6 +31,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	_streamStartTimes
 	_streamMode
 	_streamPort
+	_stderrFh
 ) );
 
 my $prefs       = preferences('plugin.spoton');
@@ -117,15 +118,23 @@ sub start {
 	pipe(my $port_r, my $port_w)
 		or do { $log->error("pipe() failed for port capture: $!"); return; };
 
+	# D-02: Open stderr log file before spawning — binary eprintln! output captured here
+	my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
+	my $stderr_fh;
+	open($stderr_fh, '>>', $stderrFile)
+		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderrFile; undef $stderr_fh; };
+
 	eval {
 		$self->_proc( Proc::Background->new(
-			{ 'die_upon_destroy' => 1, stdout => $port_w },
+			{ 'die_upon_destroy' => 1, stdout => $port_w,
+			  ($stderr_fh ? (stderr => $stderr_fh) : ()) },
 			$helperPath,
 			@helperArgs,
 		) );
 	};
 
 	# CRITICAL: close write-end in parent BEFORE IO::Select — otherwise readline blocks forever
+	# $stderr_fh intentionally NOT closed — must remain open for lifetime of process
 	close($port_w);
 
 	if ($@ || !$self->_proc) {
@@ -134,6 +143,9 @@ sub start {
 		$self->_streamPort(undef);
 		return;
 	}
+
+	# Store stderr file handle as accessor to prevent premature GC (RESEARCH.md Pitfall 3)
+	$self->_stderrFh($stderr_fh) if $stderr_fh;
 
 	# Synchronous port read with 5s timeout (avoids SIGALRM in LMS event loop)
 	my $port_line;
@@ -155,6 +167,9 @@ sub start {
 	$self->_streamMode(1);
 	main::INFOLOG && $log->is_info && $log->info(
 		"SpotOn Connect daemon started, stream port=" . $self->_streamPort
+	);
+	main::INFOLOG && $log->is_info && $stderrFile && $log->info(
+		"SpotOn Connect daemon stderr logged to $stderrFile"
 	);
 }
 
