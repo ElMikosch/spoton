@@ -526,6 +526,13 @@ pub async fn http_stream_server(
 
                         // ---- GET /stream ----
                         if method == Method::GET && path == "/stream" {
+                            // T-05.1-06: Range-aware response — LMS HTTP.pm::requestString adds
+                            // "Range: bytes=0-" to all HTTP stream requests. RFC 2616 permits the
+                            // server to ignore Range and respond with 200 OK. However, squeezelite
+                            // may require 206 Partial Content when a Range header is present.
+                            // Check for Range header here (req is not yet consumed for /stream).
+                            let has_range = req.headers().contains_key("range");
+
                             // Pitfall 2 / T-05-06: wait up to 5s for Spirc to become active.
                             // In sync-group proxy mode, LMS connects before Spotify session
                             // is fully established.
@@ -635,11 +642,22 @@ pub async fn http_stream_server(
                             });
                             let body = BodyExt::boxed(StreamBody::new(stream));
 
-                            let resp = Response::builder()
-                                .status(StatusCode::OK)
-                                .header("Content-Type", "audio/L16;rate=44100;channels=2")
+                            // T-05.1-06: If client sent Range header, respond with 206 Partial
+                            // Content + Content-Range to satisfy squeezelite's range-request
+                            // expectations. Content-Range: bytes 0-*/* signals an open-ended
+                            // stream (no known total length). If no Range header, 200 OK.
+                            let mut builder = Response::builder()
+                                .header("Content-Type", "audio/L16;rate=44100;channels=2");
+                            builder = if has_range {
+                                builder
+                                    .status(StatusCode::PARTIAL_CONTENT)
+                                    .header("Content-Range", "bytes 0-*/*")
+                            } else {
+                                builder.status(StatusCode::OK)
+                            };
+                            let resp = builder
                                 .body(body)
-                                .expect("static 200 stream response builder");
+                                .expect("stream response builder");
                             return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
                         }
 

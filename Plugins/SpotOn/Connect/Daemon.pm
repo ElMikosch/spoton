@@ -124,6 +124,13 @@ sub start {
 	open($stderr_fh, '>>', $stderrFile)
 		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderrFile; undef $stderr_fh; };
 
+	# Temporarily untie STDERR before fork so Proc::Background can dup2 it in the child.
+	# LMS ties STDERR to Slim::Utils::Log::Trapper (no OPEN method) — the child would die on
+	# 'open STDERR, ">>&N"' dispatch if STDERR remains tied during fork.
+	# We untie here (parent only, for the fork window) and re-tie immediately after spawn.
+	my $had_stderr_tie = defined tied(*STDERR);
+	untie *STDERR if $had_stderr_tie;
+
 	eval {
 		$self->_proc( Proc::Background->new(
 			{ 'die_upon_destroy' => 1, stdout => $port_w,
@@ -132,6 +139,9 @@ sub start {
 			@helperArgs,
 		) );
 	};
+
+	# Re-tie STDERR to LMS log trapper immediately after spawn
+	tie *STDERR, 'Slim::Utils::Log::Trapper' if $had_stderr_tie;
 
 	# CRITICAL: close write-end in parent BEFORE IO::Select — otherwise readline blocks forever
 	# $stderr_fh intentionally NOT closed — must remain open for lifetime of process
