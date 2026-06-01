@@ -244,6 +244,67 @@ sub getPlaylistItems {
     }, $cb);
 }
 
+# getTrack($class, $accountId, $trackId, $cb)
+# Fetches a single track by ID (/tracks/{trackId}).
+# Used by Connect.pm for metadata fetch after start/change events (D-13).
+# Track endpoint is available in dev mode (batch GET /tracks removed, but GET /tracks/{id} works).
+sub getTrack {
+    my ($class, $accountId, $trackId, $cb) = @_;
+    $class->_request('get', "tracks/$trackId", { _accountId => $accountId }, $cb);
+}
+
+# ============================================================
+# Player Control API methods (D-15 Web API fallback for Connect)
+# ============================================================
+# These are used as fallback when binary HTTP control endpoints are unreachable.
+# Primary control path is POST /control/* on the binary (D-14).
+
+# playerPause($class, $accountId, $cb)
+# Pauses playback on the active device (PUT /me/player/pause).
+sub playerPause {
+    my ($class, $accountId, $cb) = @_;
+    $class->_request('put', 'me/player/pause', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        _method    => 'PUT',
+    }, $cb);
+}
+
+# playerPlay($class, $accountId, $cb)
+# Resumes playback on the active device (PUT /me/player/play).
+sub playerPlay {
+    my ($class, $accountId, $cb) = @_;
+    $class->_request('put', 'me/player/play', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        _method    => 'PUT',
+    }, $cb);
+}
+
+# playerVolume($class, $accountId, $volumePct, $cb)
+# Sets volume on the active device (PUT /me/player/volume?volume_percent=N).
+sub playerVolume {
+    my ($class, $accountId, $volumePct, $cb) = @_;
+    $class->_request('put', 'me/player/volume', {
+        _accountId      => $accountId,
+        _noCache        => 1,
+        _method         => 'PUT',
+        volume_percent  => int($volumePct),
+    }, $cb);
+}
+
+# playerSeek($class, $accountId, $positionMs, $cb)
+# Seeks to position in current track (PUT /me/player/seek?position_ms=N).
+sub playerSeek {
+    my ($class, $accountId, $positionMs, $cb) = @_;
+    $class->_request('put', 'me/player/seek', {
+        _accountId  => $accountId,
+        _noCache    => 1,
+        _method     => 'PUT',
+        position_ms => int($positionMs),
+    }, $cb);
+}
+
 # ============================================================
 # Core request pipeline
 # ============================================================
