@@ -417,6 +417,11 @@ sub _onPlaylistJump {
     my $index = $request->getParam('_index');
     return if !defined $index;
 
+    # Suppress _onPause echo: LMS fires internal pause/stop events during
+    # playlist jump (old track stops). Without this, _onPause forwards them
+    # as /control/pause BEFORE the skip command takes effect.
+    $client->pluginData(connectPauseTs => Time::HiRes::time());
+
     if ($index eq '+1') {
         main::INFOLOG && $log->is_info && $log->info(
             "Connect mode: forwarding skip-next to binary /control/next (D-14)"
