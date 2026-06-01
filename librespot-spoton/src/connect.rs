@@ -161,7 +161,12 @@ impl LMS {
                 log::debug!("[spoton] Playing: track_id={new_id}, position_ms={position_ms}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => {
-                        if self.needs_position_sync.load(Ordering::Acquire) {
+                        // D-01: Check was_paused first — if set, this Playing is a resume.
+                        // swap(false) clears the flag atomically to avoid double-resume.
+                        if self.was_paused.swap(false, Ordering::AcqRel) {
+                            let secs = f64::from(*position_ms) / 1000.0;
+                            self.notify("resume", &new_id, &format!("{secs:.3}")).await;
+                        } else if self.needs_position_sync.load(Ordering::Acquire) {
                             self.needs_position_sync.store(false, Ordering::Release);
                             let secs = f64::from(*position_ms) / 1000.0;
                             if secs > 1.0 {
@@ -203,7 +208,11 @@ impl LMS {
                         return;
                     }
                 }
-                if current_track.take().is_some() {
+                if current_track.is_some() {
+                    // D-01: Set was_paused BEFORE notify("stop") so the Playing handler
+                    // can detect resume-after-pause. Preserve current_track (no take())
+                    // so the track context is available for resume detection.
+                    self.was_paused.store(true, Ordering::Release);
                     self.notify("stop", "", "").await;
                 }
             }
@@ -712,9 +721,11 @@ pub async fn http_stream_server(
                             };
                             drop(spirc_guard);
 
-                            let status = if result.is_some() || cmd == "pause" || cmd == "play" || cmd == "next" || cmd == "prev" {
+                            let status = if result.is_some() || cmd == "pause" || cmd == "play" || cmd == "next" || cmd == "prev" || cmd == "volume" || cmd == "seek" {
                                 // Return 204 No Content for valid control commands
                                 // (even if Spirc returned Err — daemon not active is non-fatal)
+                                // D-03: volume and seek are known endpoints — always 204, not 404
+                                // on body parse failures (e.g. missing JSON body from Perl side).
                                 StatusCode::NO_CONTENT
                             } else {
                                 StatusCode::NOT_FOUND
