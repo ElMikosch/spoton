@@ -39,11 +39,13 @@ sub initPlugin {
     }
 
     $prefs->init({
-        bitrate       => 320,
-        normalization => 0,     # STR-08: volume normalisation toggle, default off (D-06)
-        binary        => '',    # custom binary override (LMS-10, Phase 6)
-        accounts      => {},    # hash: accountId => { displayName => '...', spotifyUserId => '...' }
-        activeAccount => '',    # default active account ID (global fallback)
+        bitrate              => 320,
+        normalization        => 0,     # STR-08: volume normalisation toggle, default off (D-06)
+        binary               => '',    # custom binary override (LMS-10, Phase 6)
+        accounts             => {},    # hash: accountId => { displayName => '...', spotifyUserId => '...' }
+        activeAccount        => '',    # default active account ID (global fallback)
+        enableSpotifyConnect => 1,     # CON-10: per-player Connect toggle, default on
+        connectOggOverride   => 'auto', # D-05: OGG passthrough override ('auto'|'ogg'|'pcm')
     });
 
     require Plugins::SpotOn::Helper;
@@ -88,6 +90,11 @@ sub initPlugin {
         # Deferred via timer to not block initPlugin.
         Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);
         Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 2, \&_autoStartDiscovery);
+
+        # D-07: Start Connect daemon manager for all players.
+        # 3s delay allows player list to populate after LMS start.
+        Slim::Utils::Timers::killTimers($class, \&_startConnectDaemons);
+        Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3, \&_startConnectDaemons);
     }
 
     $class->SUPER::initPlugin(
@@ -111,6 +118,15 @@ sub _refreshAllTokens {
 sub _autoStartDiscovery {
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->autoStartDiscoveryIfNeeded();
+}
+
+# _startConnectDaemons()
+# D-07: Timer callback — starts Connect daemon manager at LMS boot.
+# Guarded by main::WEBUI (called only from the WEBUI block in initPlugin).
+# 3s delay allows player list to populate before daemon lifecycle starts.
+sub _startConnectDaemons {
+    require Plugins::SpotOn::Connect;
+    Plugins::SpotOn::Connect->init();
 }
 
 # _killOrphanedProcesses($class)
@@ -153,13 +169,20 @@ sub _killOrphanedProcesses {
                         system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
                     }
                 } else {
-                    # PHASE-5-NOTE: Phase 5 must exclude Connect daemon PIDs here (Pitfall 6, CON-09)
                     # CR-01: Use PID-based kill to avoid killing active transcoding processes.
                     # Find all matching PIDs, exclude active ones, kill only orphans.
+                    # CON-09: Exclude Connect daemon PIDs from orphan cleanup (Pitfall 6).
+                    my %connectPids;
+                    if ($INC{'Plugins/SpotOn/Connect/DaemonManager.pm'}) {
+                        %connectPids = map { $_ => 1 }
+                            Plugins::SpotOn::Connect::DaemonManager->helperPids();
+                    }
+
                     (my $safeHelper = $helper) =~ s/'/'\\''/g;
                     my @pids = map { /^\s*(\d+)/ ? $1 : () } `pgrep -f '$safeHelper'`;
                     for my $pid (@pids) {
                         next if $activePids{$pid};
+                        next if $connectPids{$pid};    # CON-09: protect Connect daemon PIDs
                         kill 'TERM', $pid;
                         main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
                     }
@@ -1245,6 +1268,17 @@ sub updateTranscodingTable {
     require Plugins::SpotOn::Helper;
     unless (Plugins::SpotOn::Helper->getCapability('passthrough')) {
         delete $commandTable->{'son-ogg-*-*'};
+        delete $commandTable->{'soc-ogg-*-*'};    # same guard for Connect OGG passthrough
+    }
+
+    # Per-player OGG override: delete soc-ogg-*-* when player pref forces PCM mode (D-05)
+    if ($client) {
+        my $override = $prefs->client($client)->get('connectOggOverride')
+                    || $prefs->get('connectOggOverride')
+                    || 'auto';
+        if ($override eq 'pcm') {
+            delete $commandTable->{'soc-ogg-*-*'};
+        }
     }
 }
 
