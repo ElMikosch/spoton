@@ -285,8 +285,7 @@ sub _onPause {
     # Source-marking loop prevention (T-05-13): skip our own requests
     return if $request->source && $request->source eq __PACKAGE__;
 
-    # No need to forward if this is an unpause
-    return if $request->isCommand([['playlist'], ['pause']]) && !$request->getParam('_newvalue');
+    my $isUnpause = $request->isCommand([['playlist'], ['pause']]) && !$request->getParam('_newvalue');
 
     my $client = $request->client();
     return if !defined $client;
@@ -314,11 +313,17 @@ sub _onPause {
         return;
     }
 
-    main::INFOLOG && $log->is_info && $log->info(
-        "Got a pause event - forwarding to Connect binary via HTTP /control/pause (D-14)"
-    );
-
-    _sendControlCommand($client, '/control/pause', undef);
+    if ($isUnpause) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Got unpause event - forwarding to Connect binary via HTTP /control/play (D-14)"
+        );
+        _sendControlCommand($client, '/control/play', undef);
+    } else {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Got a pause event - forwarding to Connect binary via HTTP /control/pause (D-14)"
+        );
+        _sendControlCommand($client, '/control/pause', undef);
+    }
 }
 
 # _onVolume($request)
