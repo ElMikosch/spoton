@@ -27,6 +27,7 @@ sub isRemote    { 1 }
 sub getFormatForURL {
     my ($class, $url) = @_;
     return 'soc' if $url && $url =~ m{spotify://connect-};
+    return 'pcm' if $url && $url =~ m{:\d+/stream\b};
     return 'son';
 }
 
@@ -41,23 +42,19 @@ sub formatOverride {
     my ($class, $song) = @_;
 
     my $client = $song->master;
+    my $url = $song->track->url || '';
 
-    # Inject runtime parameters (bitrate, cache dir, helper name, normalization) into
-    # commandTable before format selection (D-01, Pattern 1). Must happen first.
-    # Passthrough-guard (STR-05) runs inside updateTranscodingTable.
     require Plugins::SpotOn::Plugin;
     Plugins::SpotOn::Plugin->updateTranscodingTable($client);
 
-    # Check if a streaming Connect daemon is active for this player (D-04).
-    # MUST come BEFORE existing ogg/flc logic so Connect gets priority (D-04, Plan 05-04).
-    require Plugins::SpotOn::Connect::DaemonManager;
-    my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
-    if ($helper && $helper->_streamMode) {
-        return 'soc';   # SpotOn Connect content type (D-04)
+    if ($url =~ m{spotify://connect-}) {
+        require Plugins::SpotOn::Connect::DaemonManager;
+        my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
+        if ($helper && $helper->_streamMode) {
+            return 'soc';
+        }
     }
 
-    # Return 'son' — the INPUT content type for single-track Browse mode.
-    # 'son' correctly matches son-flc-*-* and son-ogg-*-* in custom-convert.conf.
     return 'son';
 }
 
@@ -76,7 +73,6 @@ sub canDirectStream {
     my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
     return 0 unless $helper && $helper->_streamMode && $helper->_streamPort;
 
-    # D-06: sync groups must use new() proxy — individual player addresses differ
     return 0 if $client->isSynced();
 
     my $host = Slim::Utils::Network::serverAddr();

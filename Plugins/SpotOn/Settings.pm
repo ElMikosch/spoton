@@ -36,6 +36,10 @@ sub name {
     return Slim::Web::HTTP::CSRF->protectName('PLUGIN_SPOTON_NAME');
 }
 
+sub needsClient {
+    return 1;
+}
+
 sub page {
     return Slim::Web::HTTP::CSRF->protectURI(SETTINGS_URL);
 }

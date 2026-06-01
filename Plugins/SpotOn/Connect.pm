@@ -294,6 +294,17 @@ sub _onPause {
 
     return unless __PACKAGE__->isSpotifyConnect($client);
 
+    # Grace period: suppress stop/pause events within 3s of our own playlist play.
+    # When Connect issues playlist play, LMS internally stops the previous item
+    # which generates a stop event that would leak back to the binary as /control/pause.
+    my $startTime = $client->pluginData('connectStartTime') || 0;
+    if (Time::HiRes::time() - $startTime < 3) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Suppressing pause/stop during Connect start grace period"
+        );
+        return;
+    }
+
     # Player-switch guard: if another player has taken over the active Connect
     # session, suppress this player's stop event.
     if ($_activeConnectPlayer && $_activeConnectPlayer ne $client->id) {
@@ -601,9 +612,11 @@ sub _connectEvent {
     # Stop: forward pause to LMS player (source-marked to prevent echo)
     # -----------------------------------------------------------------
     if ($cmd eq 'stop') {
-        # Grace period: ignore spurious stop events during mid-playback session setup
-        if ((Time::HiRes::time() - ($client->pluginData('connectStartTime') || 0)) < CONNECT_START_GRACE
-            && !$client->isPlaying)
+        # Grace period: ignore spurious stop events during Connect session setup.
+        # The binary fires Stopped between TrackChanged and Playing — this must not
+        # pause the LMS player. Time-based check only (isPlaying is already true by
+        # the time the stop arrives because playlist play was just issued).
+        if ((Time::HiRes::time() - ($client->pluginData('connectStartTime') || 0)) < CONNECT_START_GRACE)
         {
             main::INFOLOG && $log->is_info && $log->info(
                 "Ignoring spurious stop during Connect session setup grace period"

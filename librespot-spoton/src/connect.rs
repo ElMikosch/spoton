@@ -163,8 +163,9 @@ impl LMS {
                         self.notify("change", &new_id, &prev).await;
                     }
                     None => {
+                        // TrackChanged is the authoritative "start" source.
+                        // Only set cursor here as fallback (Playing without prior TrackChanged).
                         *current_track = Some(new_id.clone());
-                        self.notify("start", &new_id, "").await;
                     }
                 }
             }
@@ -207,7 +208,8 @@ impl LMS {
                 self.suppress_next_volume.store(true, Ordering::Relaxed);
             }
 
-            // TrackChanged: update cursor and emit change/start.
+            // TrackChanged: authoritative source for "start" and "change" notifications.
+            // Playing only handles seek-sync for the same track.
             PlayerEvent::TrackChanged { audio_item } => {
                 let new_id = audio_item.track_id.to_id().unwrap_or_default();
                 match current_track.as_deref() {
@@ -281,11 +283,9 @@ impl LMS {
         match TcpStream::connect(host_port).await {
             Ok(mut stream) => {
                 if let Err(_e) = stream.write_all(request.as_bytes()).await {
-                    // Non-fatal: LMS may be temporarily unreachable
                 }
             }
             Err(_e) => {
-                // Non-fatal: connection refused during LMS restart etc.
             }
         }
     }
@@ -826,13 +826,19 @@ pub async fn run_connect(
         });
     }
 
-    // 9. Spawn spirc_active watcher — set true ONLY on SessionConnected (Pitfall 2)
+    // 9. Spawn spirc_active watcher — set true on session or playback events.
+    // SessionConnected may not fire reliably in all librespot versions;
+    // Playing/TrackChanged are definitive proof that Spirc is active.
     {
         let mut session_event_chan = player.get_player_event_channel();
         let sa = Arc::clone(&spirc_active);
         tokio::spawn(async move {
             while let Some(event) = session_event_chan.recv().await {
-                if matches!(event, PlayerEvent::SessionConnected { .. }) {
+                if matches!(event,
+                    PlayerEvent::SessionConnected { .. } |
+                    PlayerEvent::Playing { .. } |
+                    PlayerEvent::TrackChanged { .. }
+                ) {
                     sa.store(true, Ordering::SeqCst);
                 }
             }
