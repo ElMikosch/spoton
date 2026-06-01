@@ -3,6 +3,7 @@
 // Phase 4.1 implementation: --single-track subcommand for LMS transcoding pipeline
 // Phase 04.2 implementation: --token-login subcommand for credential provisioning
 // Phase 04.3 implementation: --discover-once subcommand for ZeroConf credential acquisition
+// Phase 05.1 implementation: --connect mode (Spirc + HTTP streaming + LMS event dispatch)
 //
 // Modes:
 //   --check          : Print capability manifest (Phase 1 contract, unchanged)
@@ -11,7 +12,7 @@
 //   --single-track   : Decode one Spotify track to stdout (pipe backend) and exit
 //   --token-login    : Acquire reusable credentials from OAuth access token, write credentials.json
 //   --discover-once  : ZeroConf mDNS announcement, wait for Spotify App connection, write credentials.json
-//   --connect        : Not yet implemented (Phase 5)
+//   --connect        : Spotify Connect receiver (Spirc + HTTP streaming + LMS JSON-RPC)
 //
 // --check output format:
 //   Line 1: "ok spoton v{VERSION}"
@@ -44,6 +45,8 @@
 //            [--start-position <secs>]
 //   stdout: raw PCM (S16LE) or raw OGG Vorbis (when --passthrough)
 //   exit 0 on success, non-zero on failure
+
+mod connect;
 
 use std::env;
 use std::process;
@@ -98,6 +101,13 @@ async fn main() {
     let mut disable_audio_cache = false;
     let mut normalisation = false;
 
+    // Connect mode variables
+    let mut player_mac = String::new();
+    let mut lms_host = String::new();
+    let mut lms_auth = String::new();
+    let mut disable_discovery = false;
+    let mut buffer_latency_ms: u64 = 2000;
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -148,7 +158,31 @@ async fn main() {
                 }
             }
             "--disable-discovery" => {
-                // Accepted and ignored — not relevant for single-track mode
+                disable_discovery = true;
+            }
+            "--player-mac" => {
+                if i + 1 < args.len() {
+                    player_mac = args[i + 1].clone();
+                    i += 1;
+                }
+            }
+            "--lms" => {
+                if i + 1 < args.len() {
+                    lms_host = args[i + 1].clone();
+                    i += 1;
+                }
+            }
+            "--lms-auth" => {
+                if i + 1 < args.len() {
+                    lms_auth = args[i + 1].clone();
+                    i += 1;
+                }
+            }
+            "--buffer-latency-ms" => {
+                if i + 1 < args.len() {
+                    buffer_latency_ms = args[i + 1].parse().unwrap_or(2000);
+                    i += 1;
+                }
             }
             "--disable-audio-cache" => {
                 disable_audio_cache = true;
@@ -266,9 +300,29 @@ async fn main() {
         }
 
         Mode::Connect => {
-            eprintln!("Connect mode not yet implemented (Phase 5)");
-            eprintln!("Use --check, --authenticate, --get-token, or --single-track");
-            process::exit(1);
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --connect");
+                eprintln!("Usage: spoton -n 'DeviceName' -c <dir> --connect --player-mac <mac> --lms <host:port>");
+                process::exit(1);
+            }
+
+            match connect::run_connect(
+                &cache_dir,
+                &device_name,
+                if player_mac.is_empty() { None } else { Some(&player_mac) },
+                if lms_host.is_empty() { None } else { Some(&lms_host) },
+                if lms_auth.is_empty() { None } else { Some(&lms_auth) },
+                disable_discovery,
+                buffer_latency_ms,
+            )
+            .await
+            {
+                Ok(_) => process::exit(0),
+                Err(e) => {
+                    eprintln!("Connect mode error: {}", e);
+                    process::exit(1);
+                }
+            }
         }
 
         Mode::TokenLogin => {
