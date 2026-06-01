@@ -293,6 +293,17 @@ sub _onPause {
 
     return unless __PACKAGE__->isSpotifyConnect($client);
 
+    # Echo suppression: _connectEvent's ['pause', 0/1] triggers a playlist
+    # notification without source-marking. Suppress within 1s of our last
+    # _connectEvent-initiated pause to prevent spirc.pause()/play() echo.
+    my $lastConnectPause = $client->pluginData('connectPauseTs') || 0;
+    if (Time::HiRes::time() - $lastConnectPause < 1) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Suppressing _onPause echo from _connectEvent (within 1s)"
+        );
+        return;
+    }
+
     # Grace period: suppress stop/pause events within 3s of our own playlist play.
     # When Connect issues playlist play, LMS internally stops the previous item
     # which generates a stop event that would leak back to the binary as /control/pause.
@@ -539,6 +550,7 @@ sub _connectEvent {
         # Unpause squeezelite — CRITICAL: use ['pause', 0] NOT ['play'].
         # ['play'] would open a new HTTP stream connection and break the
         # continuous PCM stream (Pitfall 1). Source-mark for T-05-13 loop prevention.
+        $client->pluginData(connectPauseTs => Time::HiRes::time());
         my $unPauseReq = Slim::Control::Request->new($client->id, ['pause', 0]);
         $unPauseReq->source(__PACKAGE__);
         $unPauseReq->execute();
@@ -673,6 +685,7 @@ sub _connectEvent {
                 "Spotify told us to pause: " . $client->id
             );
 
+            $client->pluginData(connectPauseTs => Time::HiRes::time());
             my $pauseReq = Slim::Control::Request->new($client->id, ['pause', 1]);
             $pauseReq->source(__PACKAGE__);
             $pauseReq->execute();
