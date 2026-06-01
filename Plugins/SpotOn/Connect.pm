@@ -424,6 +424,7 @@ sub _onPlaylistJump {
 #   stop   — PlayerEvent::Paused OR Stopped;    p1="", p2=""  (NOTE: no 'pause' event)
 #   volume — VolumeChanged (after suppress);    p1=volume 0-100, p2=""
 #   seek   — Seeked mid-playback;               p1=position in seconds (3 decimals), p2=""
+#   resume — Playing after Pause (same track); p1=track_id(base62), p2=position (seconds, 3 decimals)
 # ---------------------------------------------------------------------------
 sub _connectEvent {
     my $request = shift;
@@ -512,6 +513,44 @@ sub _connectEvent {
                 }
             }
         }
+        return;
+    }
+
+    # -----------------------------------------------------------------
+    # Resume handler (CON-05, D-02): binary sends resume notify after Pause->Playing
+    # transition on same track. Unpauses squeezelite via ['pause', 0] (source-marked
+    # to prevent _onPause echo, T-05-13). Adjusts startOffset per CON-13.
+    # -----------------------------------------------------------------
+    if ($cmd eq 'resume') {
+        my $trackId  = $request->getParam('_p2');
+        my $position = $request->getParam('_p3');
+
+        return unless __PACKAGE__->isSpotifyConnect($client);
+
+        main::INFOLOG && $log->is_info && $log->info(
+            "Resume event: trackId=$trackId position=$position"
+        );
+
+        # Unpause squeezelite — CRITICAL: use ['pause', 0] NOT ['play'].
+        # ['play'] would open a new HTTP stream connection and break the
+        # continuous PCM stream (Pitfall 1). Source-mark for T-05-13 loop prevention.
+        my $unPauseReq = Slim::Control::Request->new($client->id, ['pause', 0]);
+        $unPauseReq->source(__PACKAGE__);
+        $unPauseReq->execute();
+
+        # CON-13: Sync position via startOffset — NEVER use ['time', N] in stream mode.
+        # startOffset adjusts songTime without triggering _JumpToTime -> _Stop + _Stream.
+        if (defined $position && $position ne '') {
+            my $song = $client->playingSong();
+            if ($song) {
+                my $elapsed = $client->songElapsedSeconds() || 0;
+                $song->startOffset(int($position) - $elapsed);
+                main::INFOLOG && $log->is_info && $log->info(
+                    "Resume: adjusted startOffset to " . $song->startOffset()
+                );
+            }
+        }
+
         return;
     }
 

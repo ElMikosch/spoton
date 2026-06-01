@@ -532,6 +532,14 @@ sub _doFlavouredRequest {
         );
         push @headers, 'Accept-Language' => $params->{_locale} if $params->{_locale};
 
+        # D-04: PUT/POST requests require Content-Length header to avoid 411 Length Required.
+        # The Spotify Web API rejects body-less PUT/POST without an explicit Content-Length: 0.
+        # Applies to: playerPause, playerPlay, playerVolume, playerSeek Web API fallback calls.
+        # Pattern from Spotty-NG API.pm:1907-1909.
+        if (uc($method) eq 'PUT' || uc($method) eq 'POST') {
+            push @headers, 'Content-Length' => 0;
+        }
+
         $http->$method($url, @headers);
     });
 }
