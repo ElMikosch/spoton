@@ -661,6 +661,14 @@ sub _connectEvent {
             $client->pluginData(progress => 0);
         }
 
+        # Ensure player is playing — stop→change from skip leaves squeezelite paused
+        if (!$client->isPlaying && __PACKAGE__->isSpotifyConnect($client)) {
+            $client->pluginData(connectPauseTs => Time::HiRes::time());
+            my $playReq = Slim::Control::Request->new($client->id, ['pause', 0]);
+            $playReq->source(__PACKAGE__);
+            $playReq->execute();
+        }
+
         # Fetch metadata for the new track (D-13)
         if ($newTrackId) {
             $client->pluginData(eventTrackUri => "spotify:track:$newTrackId");
