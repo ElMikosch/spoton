@@ -81,6 +81,7 @@ enum Mode {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
     let args: Vec<String> = env::args().collect();
 
     let mut mode = Mode::Check;
