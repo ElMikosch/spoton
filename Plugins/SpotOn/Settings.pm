@@ -134,6 +134,22 @@ sub handler {
                 $prefs->set('activeAccount', $switchId);
             }
         }
+
+        # Per-player Connect toggle (D-10, CON-10, T-05-18)
+        # Only save per-player prefs when a player is selected ($client defined).
+        # Checkbox unchecked = absent from params = 0 (T-05-18: coerce to 0/1).
+        if ($client) {
+            my $enableConnect = $paramRef->{'pref_enableSpotifyConnect'} ? 1 : 0;
+            $prefs->client($client)->set('enableSpotifyConnect', $enableConnect);
+
+            # OGG-passthrough override (D-05, T-05-19): 'auto' | 'ogg' | 'pcm'
+            # Whitelist validation — default to 'auto' on invalid or absent input.
+            if (defined $paramRef->{'pref_connectOggOverride'}) {
+                my $override = $paramRef->{'pref_connectOggOverride'};
+                $override = 'auto' unless $override =~ /^(?:auto|ogg|pcm)$/;
+                $prefs->client($client)->set('connectOggOverride', $override);
+            }
+        }
     }
 
     # Auto-setup: if __DISCOVER__/credentials.json exists, create account now.
@@ -156,6 +172,13 @@ sub handler {
     # Client-ID und Degraded-Mode-Status fuer Template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
+
+    # Per-player Connect settings for template (D-10, D-05)
+    # Only populated when a player is selected; template guards with [% IF playerid %].
+    if ($client) {
+        $paramRef->{connectEnabled}     = $prefs->client($client)->get('enableSpotifyConnect') // 1;
+        $paramRef->{connectOggOverride} = $prefs->client($client)->get('connectOggOverride') || 'auto';
+    }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }

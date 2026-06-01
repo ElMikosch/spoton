@@ -37,6 +37,23 @@
 		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
 	[% END %]
 
+	[% IF playerid %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_ENABLED" desc="PLUGIN_SPOTON_CONNECT_ENABLED_DESC" %]
+		<input type="checkbox" class="stdedit" name="pref_enableSpotifyConnect"
+		       id="pref_enableSpotifyConnect"
+		       value="1" [% IF connectEnabled %]checked[% END %]/>
+		<label for="pref_enableSpotifyConnect">[% 'PLUGIN_SPOTON_CONNECT_ENABLED_LABEL' | string %]</label>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE" desc="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC" %]
+		<select class="stdedit" name="pref_connectOggOverride" id="pref_connectOggOverride">
+			<option value="auto" [% IF connectOggOverride == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_CONNECT_OGG_AUTO' | string %]</option>
+			<option value="ogg"  [% IF connectOggOverride == 'ogg'  %]selected[% END %]>OGG Passthrough</option>
+			<option value="pcm"  [% IF connectOggOverride == 'pcm'  %]selected[% END %]>PCM (force)</option>
+		</select>
+	[% END %]
+	[% END %]
+
 	[% IF NOT accounts.keys.size %]
 	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
 		<!-- D-02: visual instruction with Spotify App device picker hint image -->
