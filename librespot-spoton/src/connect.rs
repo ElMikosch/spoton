@@ -687,7 +687,7 @@ pub async fn http_stream_server(
                                         // T-05-02: parse volume as u32, clamp 0..=100,
                                         // convert to 0..=65535 range.
                                         if let Ok(json_val) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-                                            if let Some(vol) = json_val.get("volume").and_then(|v| v.as_u64()) {
+                                            if let Some(vol) = json_val.get("volume").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))) {
                                                 let vol_clamped = vol.min(100) as u32;
                                                 let vol_u16 = (vol_clamped * 65535 / 100) as u16;
                                                 spirc.set_volume(vol_u16).ok()
@@ -701,7 +701,7 @@ pub async fn http_stream_server(
                                     "seek" => {
                                         // T-05-03: parse position_ms as u64, reject if >u32::MAX.
                                         if let Ok(json_val) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-                                            if let Some(pos) = json_val.get("position_ms").and_then(|v| v.as_u64()) {
+                                            if let Some(pos) = json_val.get("position_ms").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))) {
                                                 if let Ok(pos_u32) = u32::try_from(pos) {
                                                     spirc.set_position_ms(pos_u32).ok()
                                                 } else {

@@ -349,7 +349,7 @@ sub _bufferedSetVolume {
         "Forwarding volume to Connect binary: $volume (D-14)"
     );
 
-    _sendControlCommand($client, '/control/volume', { volume => $volume });
+    _sendControlCommand($client, '/control/volume', { volume => int($volume) });
 }
 
 # _onSeek($request)
