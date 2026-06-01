@@ -71,12 +71,26 @@ sub canDirectStream {
 
     require Plugins::SpotOn::Connect::DaemonManager;
     my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
-    return 0 unless $helper && $helper->_streamMode && $helper->_streamPort;
+    unless ($helper && $helper->_streamMode && $helper->_streamPort) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "canDirectStream: 0 (no helper/streamMode/streamPort)"
+        );
+        return 0;
+    }
 
-    return 0 if $client->isSynced();
+    if ($client->isSynced()) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "canDirectStream: 0 (player is synced)"
+        );
+        return 0;
+    }
 
     my $host = Slim::Utils::Network::serverAddr();
-    return 'http://' . $host . ':' . $helper->_streamPort . '/stream';
+    my $ds_url = 'http://' . $host . ':' . $helper->_streamPort . '/stream';
+    main::INFOLOG && $log->is_info && $log->info(
+        "canDirectStream: $ds_url"
+    );
+    return $ds_url;
 }
 
 # new($class, $args)
@@ -132,6 +146,11 @@ sub new {
     }
 
     return Slim::Player::Protocols::HTTP->new($args);
+}
+
+sub isRepeatingStream {
+    my (undef, $song) = @_;
+    return $song && Plugins::SpotOn::Connect->isSpotifyConnect($song->master());
 }
 
 # canSeek($class, $client)

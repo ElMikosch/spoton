@@ -526,12 +526,7 @@ pub async fn http_stream_server(
 
                         // ---- GET /stream ----
                         if method == Method::GET && path == "/stream" {
-                            // T-05.1-06: Range-aware response — LMS HTTP.pm::requestString adds
-                            // "Range: bytes=0-" to all HTTP stream requests. RFC 2616 permits the
-                            // server to ignore Range and respond with 200 OK. However, squeezelite
-                            // may require 206 Partial Content when a Range header is present.
-                            // Check for Range header here (req is not yet consumed for /stream).
-                            let has_range = req.headers().contains_key("range");
+                            eprintln!("[spoton] /stream: GET request received");
 
                             // Pitfall 2 / T-05-06: wait up to 5s for Spirc to become active.
                             // In sync-group proxy mode, LMS connects before Spotify session
@@ -571,7 +566,9 @@ pub async fn http_stream_server(
                             // Drain stale pre-seek audio from the channel (D-03).
                             {
                                 let mut rx = pcm_rx.lock().unwrap();
-                                while rx.try_recv().is_ok() {}
+                                let mut drained = 0u64;
+                                while rx.try_recv().is_ok() { drained += 1; }
+                                eprintln!("[spoton] /stream: relay starting, drained {} stale chunks", drained);
                             }
 
                             // Per-connection relay channel (64 frames capacity).
@@ -623,7 +620,7 @@ pub async fn http_stream_server(
                                     match chunk {
                                         Some(bytes) => {
                                             if conn_tx.send(bytes).await.is_err() {
-                                                // Client disconnected.
+                                                eprintln!("[spoton] /stream: relay client disconnected");
                                                 break;
                                             }
                                         }
@@ -642,20 +639,11 @@ pub async fn http_stream_server(
                             });
                             let body = BodyExt::boxed(StreamBody::new(stream));
 
-                            // T-05.1-06: If client sent Range header, respond with 206 Partial
-                            // Content + Content-Range to satisfy squeezelite's range-request
-                            // expectations. Content-Range: bytes 0-*/* signals an open-ended
-                            // stream (no known total length). If no Range header, 200 OK.
-                            let mut builder = Response::builder()
-                                .header("Content-Type", "audio/L16;rate=44100;channels=2");
-                            builder = if has_range {
-                                builder
-                                    .status(StatusCode::PARTIAL_CONTENT)
-                                    .header("Content-Range", "bytes 0-*/*")
-                            } else {
-                                builder.status(StatusCode::OK)
-                            };
-                            let resp = builder
+                            // Always respond with 200 OK. HTTP/1.0 clients (LMS proxy)
+                            // do not support 206 Partial Content.
+                            let resp = Response::builder()
+                                .status(StatusCode::OK)
+                                .header("Content-Type", "audio/L16;rate=44100;channels=2")
                                 .body(body)
                                 .expect("stream response builder");
                             return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
