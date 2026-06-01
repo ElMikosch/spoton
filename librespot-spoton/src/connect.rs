@@ -73,6 +73,10 @@ pub struct LMS {
     pub flush_tx: Option<watch::Sender<u64>>,
     pub seek_gen: Arc<AtomicU64>,
     pub needs_position_sync: Arc<AtomicBool>,
+    /// Nanoseconds-since-UNIX-EPOCH timestamp of the last None->Some TrackChanged (session start).
+    /// Used by the grace-timer to suppress spurious Paused/Stopped within 2s of session start.
+    /// Per D-03: only set on None->Some, never on Some->Some (track change within active session).
+    pub last_session_start_ns: Arc<AtomicU64>,
 }
 
 impl LMS {
@@ -92,6 +96,7 @@ impl LMS {
             flush_tx,
             seek_gen: Arc::new(AtomicU64::new(0)),
             needs_position_sync: Arc::new(AtomicBool::new(false)),
+            last_session_start_ns: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -114,6 +119,7 @@ impl Clone for LMS {
             flush_tx: None,
             seek_gen: Arc::clone(&self.seek_gen),
             needs_position_sync: Arc::clone(&self.needs_position_sync),
+            last_session_start_ns: Arc::clone(&self.last_session_start_ns),
         }
     }
 }
@@ -147,6 +153,7 @@ impl LMS {
             // position_ms — send `seek` to sync LMS progress bar.
             PlayerEvent::Playing { track_id, position_ms, .. } => {
                 let new_id = track_id.to_id().unwrap_or_default();
+                eprintln!("[spoton] Playing: track_id={new_id}, position_ms={position_ms}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => {
                         if self.needs_position_sync.load(Ordering::Acquire) {
@@ -172,6 +179,25 @@ impl LMS {
 
             // Both Paused and Stopped collapse into `stop`. Only fire if we had an active track.
             PlayerEvent::Paused { .. } | PlayerEvent::Stopped { .. } => {
+                eprintln!("[spoton] Paused/Stopped (disc={:?}): current_track={:?}",
+                    std::mem::discriminant(event), current_track.as_deref());
+                // D-03: Grace-timer — suppress spurious Paused/Stopped within 2s of session start.
+                // Spirc fires Paused (disc=5) immediately after TrackChanged at session start.
+                // Without suppression, this sends a spurious "stop" to LMS, killing the session.
+                let grace_ns: u64 = 2_000_000_000; // 2 seconds
+                let last = self.last_session_start_ns.load(Ordering::Acquire);
+                if last > 0 {
+                    let now_ns = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos() as u64;
+                    let elapsed_ns = now_ns.saturating_sub(last);
+                    if elapsed_ns < grace_ns {
+                        eprintln!("[spoton] Paused/Stopped suppressed (grace timer, {}ms elapsed)",
+                            elapsed_ns / 1_000_000);
+                        return;
+                    }
+                }
                 if current_track.take().is_some() {
                     self.notify("stop", "", "").await;
                 }
@@ -181,6 +207,7 @@ impl LMS {
             // Suppress the first event after SessionConnected (CON-11): that's a
             // Spotify-cloud echo, not a user action, and would clobber LMS-side volume.
             PlayerEvent::VolumeChanged { volume } => {
+                eprintln!("[spoton] VolumeChanged: volume={volume}");
                 if self.suppress_next_volume.swap(false, Ordering::Relaxed) {
                     // Suppress initial volume echo from Spotify on connect (CON-11)
                     return;
@@ -192,6 +219,7 @@ impl LMS {
             // Seeked: report position in seconds (3 decimals).
             // Also fire the flush watch-channel so the relay drains pre-seek PCM bytes.
             PlayerEvent::Seeked { position_ms, .. } => {
+                eprintln!("[spoton] Seeked: position_ms={position_ms}");
                 if current_track.is_some() {
                     let secs = f64::from(*position_ms) / 1000.0;
                     self.notify("seek", &format!("{secs:.3}"), "").await;
@@ -205,6 +233,7 @@ impl LMS {
             // SessionConnected: arm the suppress flag (CON-11).
             // The next VolumeChanged will be the Spotify-stored volume echo — suppress it.
             PlayerEvent::SessionConnected { .. } => {
+                eprintln!("[spoton] SessionConnected");
                 self.suppress_next_volume.store(true, Ordering::Relaxed);
             }
 
@@ -212,6 +241,7 @@ impl LMS {
             // Playing only handles seek-sync for the same track.
             PlayerEvent::TrackChanged { audio_item } => {
                 let new_id = audio_item.track_id.to_id().unwrap_or_default();
+                eprintln!("[spoton] TrackChanged: track_id={new_id}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => { /* same track, no-op */ }
                     Some(_) => {
@@ -220,6 +250,15 @@ impl LMS {
                         self.notify("change", &new_id, &prev).await;
                     }
                     None => {
+                        // D-03: Session start — set grace timer to suppress spurious
+                        // Paused/Stopped that Spirc fires immediately after TrackChanged.
+                        // ONLY on None->Some (session start), never on Some->Some (track change).
+                        let now_ns = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos() as u64;
+                        self.last_session_start_ns.store(now_ns, Ordering::Release);
+                        eprintln!("[spoton] TrackChanged (session start): grace timer set");
                         self.needs_position_sync.store(true, Ordering::Release);
                         *current_track = Some(new_id.clone());
                         self.notify("start", &new_id, "").await;
@@ -383,6 +422,9 @@ impl Sink for HttpStreamSink {
         // than wall-clock, so reported position matches actual audio output position.
         let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
         self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
+        if self.frames_consumed % 1000 == 0 {
+            eprintln!("[spoton] sink write: {} frames consumed", self.frames_consumed);
+        }
         let expected_ns: u128 =
             u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
             + self.buffer_latency_ns;
