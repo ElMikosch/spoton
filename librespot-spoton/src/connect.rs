@@ -58,7 +58,7 @@ use librespot_discovery::DeviceType;
 /// LMS-side notification target.
 ///
 /// Sends JSON-RPC POST requests to LMS /jsonrpc.js when Spirc fires PlayerEvents.
-/// Supports 5 command vocabulary: start, change, stop, volume, seek.
+/// Supports 6 command vocabulary: start, change, stop, volume, seek, resume.
 ///
 /// `suppress_next_volume` is set on SessionConnected, then cleared on the first
 /// VolumeChanged event — prevents the Spotify-stored device volume from clobbering
@@ -77,6 +77,9 @@ pub struct LMS {
     /// Used by the grace-timer to suppress spurious Paused/Stopped within 2s of session start.
     /// Per D-03: only set on None->Some, never on Some->Some (track change within active session).
     pub last_session_start_ns: Arc<AtomicU64>,
+    /// Set to true when Paused/Stopped fires after grace-timer check passes (real pause/stop).
+    /// Cleared atomically by the Playing handler to detect resume-after-pause (D-01).
+    pub was_paused: Arc<AtomicBool>,
 }
 
 impl LMS {
@@ -97,6 +100,7 @@ impl LMS {
             seek_gen: Arc::new(AtomicU64::new(0)),
             needs_position_sync: Arc::new(AtomicBool::new(false)),
             last_session_start_ns: Arc::new(AtomicU64::new(0)),
+            was_paused: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -120,6 +124,7 @@ impl Clone for LMS {
             seek_gen: Arc::clone(&self.seek_gen),
             needs_position_sync: Arc::clone(&self.needs_position_sync),
             last_session_start_ns: Arc::clone(&self.last_session_start_ns),
+            was_paused: Arc::clone(&self.was_paused),
         }
     }
 }
@@ -134,7 +139,7 @@ impl LMS {
     /// `current_track` is the dispatch loop's cursor: base62 id of the last-seen
     /// Playing track. Mutated in place.
     ///
-    /// Wire vocabulary (5 commands): start, change, stop, volume, seek.
+    /// Wire vocabulary (6 commands): start, change, stop, volume, seek, resume.
     /// "pause" is intentionally not emitted — Paused and Stopped collapse to "stop".
     pub async fn handle_player_event(
         &self,
@@ -153,10 +158,15 @@ impl LMS {
             // position_ms — send `seek` to sync LMS progress bar.
             PlayerEvent::Playing { track_id, position_ms, .. } => {
                 let new_id = track_id.to_id().unwrap_or_default();
-                eprintln!("[spoton] Playing: track_id={new_id}, position_ms={position_ms}");
+                log::debug!("[spoton] Playing: track_id={new_id}, position_ms={position_ms}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => {
-                        if self.needs_position_sync.load(Ordering::Acquire) {
+                        // D-01: Check was_paused first — if set, this Playing is a resume.
+                        // swap(false) clears the flag atomically to avoid double-resume.
+                        if self.was_paused.swap(false, Ordering::AcqRel) {
+                            let secs = f64::from(*position_ms) / 1000.0;
+                            self.notify("resume", &new_id, &format!("{secs:.3}")).await;
+                        } else if self.needs_position_sync.load(Ordering::Acquire) {
                             self.needs_position_sync.store(false, Ordering::Release);
                             let secs = f64::from(*position_ms) / 1000.0;
                             if secs > 1.0 {
@@ -179,7 +189,7 @@ impl LMS {
 
             // Both Paused and Stopped collapse into `stop`. Only fire if we had an active track.
             PlayerEvent::Paused { .. } | PlayerEvent::Stopped { .. } => {
-                eprintln!("[spoton] Paused/Stopped (disc={:?}): current_track={:?}",
+                log::debug!("[spoton] Paused/Stopped (disc={:?}): current_track={:?}",
                     std::mem::discriminant(event), current_track.as_deref());
                 // D-03: Grace-timer — suppress spurious Paused/Stopped within 2s of session start.
                 // Spirc fires Paused (disc=5) immediately after TrackChanged at session start.
@@ -193,12 +203,16 @@ impl LMS {
                         .as_nanos() as u64;
                     let elapsed_ns = now_ns.saturating_sub(last);
                     if elapsed_ns < grace_ns {
-                        eprintln!("[spoton] Paused/Stopped suppressed (grace timer, {}ms elapsed)",
+                        log::debug!("[spoton] Paused/Stopped suppressed (grace timer, {}ms elapsed)",
                             elapsed_ns / 1_000_000);
                         return;
                     }
                 }
-                if current_track.take().is_some() {
+                if current_track.is_some() {
+                    // D-01: Set was_paused BEFORE notify("stop") so the Playing handler
+                    // can detect resume-after-pause. Preserve current_track (no take())
+                    // so the track context is available for resume detection.
+                    self.was_paused.store(true, Ordering::Release);
                     self.notify("stop", "", "").await;
                 }
             }
@@ -207,7 +221,7 @@ impl LMS {
             // Suppress the first event after SessionConnected (CON-11): that's a
             // Spotify-cloud echo, not a user action, and would clobber LMS-side volume.
             PlayerEvent::VolumeChanged { volume } => {
-                eprintln!("[spoton] VolumeChanged: volume={volume}");
+                log::debug!("[spoton] VolumeChanged: volume={volume}");
                 if self.suppress_next_volume.swap(false, Ordering::Relaxed) {
                     // Suppress initial volume echo from Spotify on connect (CON-11)
                     return;
@@ -219,7 +233,7 @@ impl LMS {
             // Seeked: report position in seconds (3 decimals).
             // Also fire the flush watch-channel so the relay drains pre-seek PCM bytes.
             PlayerEvent::Seeked { position_ms, .. } => {
-                eprintln!("[spoton] Seeked: position_ms={position_ms}");
+                log::debug!("[spoton] Seeked: position_ms={position_ms}");
                 if current_track.is_some() {
                     let secs = f64::from(*position_ms) / 1000.0;
                     self.notify("seek", &format!("{secs:.3}"), "").await;
@@ -233,7 +247,7 @@ impl LMS {
             // SessionConnected: arm the suppress flag (CON-11).
             // The next VolumeChanged will be the Spotify-stored volume echo — suppress it.
             PlayerEvent::SessionConnected { .. } => {
-                eprintln!("[spoton] SessionConnected");
+                log::debug!("[spoton] SessionConnected");
                 self.suppress_next_volume.store(true, Ordering::Relaxed);
             }
 
@@ -241,7 +255,7 @@ impl LMS {
             // Playing only handles seek-sync for the same track.
             PlayerEvent::TrackChanged { audio_item } => {
                 let new_id = audio_item.track_id.to_id().unwrap_or_default();
-                eprintln!("[spoton] TrackChanged: track_id={new_id}");
+                log::debug!("[spoton] TrackChanged: track_id={new_id}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => { /* same track, no-op */ }
                     Some(_) => {
@@ -258,7 +272,7 @@ impl LMS {
                             .unwrap_or_default()
                             .as_nanos() as u64;
                         self.last_session_start_ns.store(now_ns, Ordering::Release);
-                        eprintln!("[spoton] TrackChanged (session start): grace timer set");
+                        log::debug!("[spoton] TrackChanged (session start): grace timer set");
                         self.needs_position_sync.store(true, Ordering::Release);
                         *current_track = Some(new_id.clone());
                         self.notify("start", &new_id, "").await;
@@ -423,7 +437,7 @@ impl Sink for HttpStreamSink {
         let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
         self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
         if self.frames_consumed % 1000 == 0 {
-            eprintln!("[spoton] sink write: {} frames consumed", self.frames_consumed);
+            log::trace!("[spoton] sink write: {} frames consumed", self.frames_consumed);
         }
         let expected_ns: u128 =
             u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
@@ -526,7 +540,7 @@ pub async fn http_stream_server(
 
                         // ---- GET /stream ----
                         if method == Method::GET && path == "/stream" {
-                            eprintln!("[spoton] /stream: GET request received");
+                            log::debug!("[spoton] /stream: GET request received");
 
                             // Pitfall 2 / T-05-06: wait up to 5s for Spirc to become active.
                             // In sync-group proxy mode, LMS connects before Spotify session
@@ -568,7 +582,7 @@ pub async fn http_stream_server(
                                 let mut rx = pcm_rx.lock().unwrap();
                                 let mut drained = 0u64;
                                 while rx.try_recv().is_ok() { drained += 1; }
-                                eprintln!("[spoton] /stream: relay starting, drained {} stale chunks", drained);
+                                log::debug!("[spoton] /stream: relay starting, drained {} stale chunks", drained);
                             }
 
                             // Per-connection relay channel (64 frames capacity).
@@ -620,7 +634,7 @@ pub async fn http_stream_server(
                                     match chunk {
                                         Some(bytes) => {
                                             if conn_tx.send(bytes).await.is_err() {
-                                                eprintln!("[spoton] /stream: relay client disconnected");
+                                                log::debug!("[spoton] /stream: relay client disconnected");
                                                 break;
                                             }
                                         }
@@ -707,9 +721,11 @@ pub async fn http_stream_server(
                             };
                             drop(spirc_guard);
 
-                            let status = if result.is_some() || cmd == "pause" || cmd == "play" || cmd == "next" || cmd == "prev" {
+                            let status = if result.is_some() || cmd == "pause" || cmd == "play" || cmd == "next" || cmd == "prev" || cmd == "volume" || cmd == "seek" {
                                 // Return 204 No Content for valid control commands
                                 // (even if Spirc returned Err — daemon not active is non-fatal)
+                                // D-03: volume and seek are known endpoints — always 204, not 404
+                                // on body parse failures (e.g. missing JSON body from Perl side).
                                 StatusCode::NO_CONTENT
                             } else {
                                 StatusCode::NOT_FOUND
