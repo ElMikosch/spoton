@@ -209,3 +209,27 @@ PLUGIN_SPOTON_DEGRADED_MODE_WARNING
 PLUGIN_SPOTON_REGISTER_APP_LINK
 	DE	Eigene App registrieren
 	EN	Register your own app
+
+PLUGIN_SPOTON_CONNECT_ENABLED
+	DE	Spotify Connect
+	EN	Spotify Connect
+
+PLUGIN_SPOTON_CONNECT_ENABLED_DESC
+	DE	Spotify Connect fuer diesen Player aktivieren
+	EN	Enable Spotify Connect for this player
+
+PLUGIN_SPOTON_CONNECT_ENABLED_LABEL
+	DE	Spotify Connect aktivieren
+	EN	Enable Spotify Connect
+
+PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE
+	DE	Audio-Format (Connect)
+	EN	Audio Format (Connect)
+
+PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC
+	DE	Audio-Format fuer Spotify Connect Wiedergabe
+	EN	Audio format for Spotify Connect playback
+
+PLUGIN_SPOTON_CONNECT_OGG_AUTO
+	DE	Automatisch (Player-abhaengig)
+	EN	Auto (player dependent)
