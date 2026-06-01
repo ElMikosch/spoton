@@ -589,6 +589,9 @@ sub _connectEvent {
     if ($cmd eq 'start') {
         my $trackId = $request->getParam('_p2');
 
+        # Clear echo suppression — new track start is authoritative
+        $client->pluginData(connectPauseTs => 0);
+
         # D-08 mutual exclusion: stop any Browse playback on this player
         my $song = $client->playingSong();
         my $currentUrl = $song ? ($song->streamUrl || '') : '';
@@ -639,6 +642,9 @@ sub _connectEvent {
     if ($cmd eq 'change') {
         my $newTrackId  = $request->getParam('_p2');
         my $prevTrackId = $request->getParam('_p3');
+
+        # Clear echo suppression — track change is authoritative
+        $client->pluginData(connectPauseTs => 0);
 
         main::INFOLOG && $log->is_info && $log->info(
             "Track change: $prevTrackId -> $newTrackId"

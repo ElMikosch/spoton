@@ -176,10 +176,12 @@ impl LMS {
                     }
                     Some(_) => {
                         self.needs_position_sync.store(false, Ordering::Release);
+                        self.was_paused.store(false, Ordering::Release);
                         let prev = current_track.replace(new_id.clone()).unwrap_or_default();
                         self.notify("change", &new_id, &prev).await;
                     }
                     None => {
+                        self.was_paused.store(false, Ordering::Release);
                         // TrackChanged is the authoritative "start" source.
                         // Only set cursor here as fallback (Playing without prior TrackChanged).
                         *current_track = Some(new_id.clone());
