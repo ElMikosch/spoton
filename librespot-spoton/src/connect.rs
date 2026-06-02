@@ -516,6 +516,8 @@ pub async fn http_stream_server(
     let flush_rx = Arc::new(Mutex::new(flush_rx));
     // CR-01: guard against concurrent relay tasks that would split the PCM stream.
     let relay_active = Arc::new(AtomicBool::new(false));
+    // T-05.3-03: track last data delivery time for stuck-relay health-check (60s timeout).
+    let last_data_time: Arc<std::sync::Mutex<Option<Instant>>> = Arc::new(std::sync::Mutex::new(None));
 
     loop {
         tokio::select! {
@@ -529,6 +531,7 @@ pub async fn http_stream_server(
                 let pcm_rx = Arc::clone(&pcm_rx);
                 let flush_rx = Arc::clone(&flush_rx);
                 let relay_active = Arc::clone(&relay_active);
+                let last_data_time = Arc::clone(&last_data_time);
                 let spirc_handle = Arc::clone(&spirc_handle);
 
                 let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -536,6 +539,7 @@ pub async fn http_stream_server(
                     let pcm_rx = Arc::clone(&pcm_rx);
                     let flush_rx = Arc::clone(&flush_rx);
                     let relay_active = Arc::clone(&relay_active);
+                    let last_data_time = Arc::clone(&last_data_time);
                     let spirc_handle = Arc::clone(&spirc_handle);
                     async move {
                         let path = req.uri().path().to_owned();
@@ -566,6 +570,21 @@ pub async fn http_stream_server(
                                 return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
                             }
 
+                            // T-05.3-03: health-check for stuck relay_active (> 60s with no data).
+                            // Tokio task cancellation may skip RelayGuard::drop; this ensures
+                            // relay_active is eventually force-cleared so new connections are not
+                            // permanently blocked.
+                            if relay_active.load(Ordering::Acquire) {
+                                let stuck = {
+                                    let t = last_data_time.lock().unwrap();
+                                    t.map(|ts| ts.elapsed() > Duration::from_secs(60)).unwrap_or(false)
+                                };
+                                if stuck {
+                                    log::warn!("[spoton] /stream: relay_active stuck for >60s — force-clearing");
+                                    relay_active.store(false, Ordering::Release);
+                                }
+                            }
+
                             // CR-01 / T-05-04: reject concurrent relay attempts.
                             if relay_active.swap(true, Ordering::AcqRel) {
                                 let body = Full::new(Bytes::new())
@@ -594,6 +613,7 @@ pub async fn http_stream_server(
                             let pcm_rx_clone = Arc::clone(&pcm_rx);
                             let flush_rx_clone = Arc::clone(&flush_rx);
                             let relay_active_clone = Arc::clone(&relay_active);
+                            let last_data_time_clone = Arc::clone(&last_data_time);
                             tokio::spawn(async move {
                                 // Drop guard: always clear relay_active on exit (panic or normal)
                                 struct RelayGuard(Arc<AtomicBool>);
@@ -647,6 +667,9 @@ pub async fn http_stream_server(
                                                 log::debug!("[spoton] /stream: relay client disconnected");
                                                 break;
                                             }
+                                            // T-05.3-03: record last successful data delivery time
+                                            // so the health-check in the accept loop can detect stuck relay_active.
+                                            *last_data_time_clone.lock().unwrap() = Some(Instant::now());
                                         }
                                         None => {
                                             // No data available; sleep 1ms to avoid hot-loop.
@@ -891,6 +914,10 @@ pub async fn run_connect(
         lms_auth.map(String::from),
         Some(flush_tx_for_lms),
     );
+    // Clone lms for use in the Spirc reconnect branch (D-04 session handover).
+    // The original `lms` is moved into the event dispatcher spawn below.
+    // flush_tx is None on the clone (Clone impl), which is fine — notify() does not use flush_tx.
+    let lms_for_reconnect = lms.clone();
     if lms.is_configured() {
         let mut event_chan = player.get_player_event_channel();
         tokio::spawn(async move {
@@ -1037,6 +1064,10 @@ pub async fn run_connect(
                         }
                         current_spirc_task = Some(tokio::spawn(new_task));
                         connecting = false;
+                        // D-04: notify LMS that Spirc has reconnected so the Perl side can
+                        // re-issue playlist play and resume streaming without user intervention.
+                        lms_for_reconnect.notify("ready", "", "").await;
+                        log::debug!("[spoton] Spirc reconnected (new credentials) — notified LMS 'ready'");
                     }
                     Err(e) => {
                         eprintln!("Spirc reconnect failed: {e}");
