@@ -1,6 +1,44 @@
 [% PROCESS settings/header.html %]
 	[% title = "PLUGIN_SPOTON" %]
 
+	<h2>[% 'PLUGIN_SPOTON_SETTINGS_PLAYER_SECTION' | string %]</h2>
+	[% IF playerid %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_ENABLED" desc="PLUGIN_SPOTON_CONNECT_ENABLED_DESC" %]
+		<input type="checkbox" class="stdedit" name="pref_enableSpotifyConnect"
+		       id="pref_enableSpotifyConnect"
+		       value="1" [% IF connectEnabled %]checked[% END %]/>
+		<label for="pref_enableSpotifyConnect">[% 'PLUGIN_SPOTON_CONNECT_ENABLED_LABEL' | string %]</label>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_DISCOVERY_ENABLED" desc="PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC" %]
+		[% IF discoveryByCrashLoop %]
+		<div style="color: orange; margin-bottom:8px">
+			[% 'PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING' | string %]
+		</div>
+		[% END %]
+		<input type="checkbox" class="stdedit" name="pref_enableDiscovery"
+		       id="pref_enableDiscovery"
+		       value="1" [% IF discoveryEnabled %]checked[% END %]
+		       [% IF discoveryByCrashLoop %]disabled[% END %]/>
+		<label for="pref_enableDiscovery">[% 'PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL' | string %]</label>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE" desc="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC" %]
+		<select class="stdedit" name="pref_connectOggOverride" id="pref_connectOggOverride">
+			<option value="auto" [% IF connectOggOverride == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_CONNECT_OGG_AUTO' | string %]</option>
+			<option value="ogg"  [% IF connectOggOverride == 'ogg'  %]selected[% END %]>OGG Passthrough</option>
+			<option value="pcm"  [% IF connectOggOverride == 'pcm'  %]selected[% END %]>PCM (force)</option>
+		</select>
+	[% END %]
+
+	[% ELSE %]
+	<p style="color:#888; margin:8px 0 16px 10px">[% 'PLUGIN_SPOTON_SETTINGS_PLAYER_HINT' | string %]</p>
+	[% END %]
+
+	<hr style="margin:16px 0; border:0; border-top:1px solid #ccc"/>
+	<h2>[% 'PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION' | string %]</h2>
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
 		[% IF binaryPath %]
 			<p>[% binaryPath | html %] (v[% binaryVersion | html %])</p>
@@ -35,36 +73,6 @@
 		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
 		       value="[% customClientId | html %]"
 		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
-	[% END %]
-
-	[% IF playerid %]
-	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_ENABLED" desc="PLUGIN_SPOTON_CONNECT_ENABLED_DESC" %]
-		<input type="checkbox" class="stdedit" name="pref_enableSpotifyConnect"
-		       id="pref_enableSpotifyConnect"
-		       value="1" [% IF connectEnabled %]checked[% END %]/>
-		<label for="pref_enableSpotifyConnect">[% 'PLUGIN_SPOTON_CONNECT_ENABLED_LABEL' | string %]</label>
-	[% END %]
-
-	[% WRAPPER setting title="PLUGIN_SPOTON_DISCOVERY_ENABLED" desc="PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC" %]
-		[% IF discoveryByCrashLoop %]
-		<div style="color: orange; margin-bottom:8px">
-			[% 'PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING' | string %]
-		</div>
-		[% END %]
-		<input type="checkbox" class="stdedit" name="pref_enableDiscovery"
-		       id="pref_enableDiscovery"
-		       value="1" [% IF discoveryEnabled %]checked[% END %]
-		       [% IF discoveryByCrashLoop %]disabled[% END %]/>
-		<label for="pref_enableDiscovery">[% 'PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL' | string %]</label>
-	[% END %]
-
-	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE" desc="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC" %]
-		<select class="stdedit" name="pref_connectOggOverride" id="pref_connectOggOverride">
-			<option value="auto" [% IF connectOggOverride == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_CONNECT_OGG_AUTO' | string %]</option>
-			<option value="ogg"  [% IF connectOggOverride == 'ogg'  %]selected[% END %]>OGG Passthrough</option>
-			<option value="pcm"  [% IF connectOggOverride == 'pcm'  %]selected[% END %]>PCM (force)</option>
-		</select>
-	[% END %]
 	[% END %]
 
 	[% IF NOT accounts.keys.size %]

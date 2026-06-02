@@ -249,3 +249,15 @@ PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL
 PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING
 	DE	Discovery wurde nach zu vielen Abstuerzen automatisch deaktiviert. Wird nach 30 Minuten oder LMS-Neustart wiederhergestellt.
 	EN	Discovery was automatically disabled after too many crashes. Will be restored after 30 minutes or LMS restart.
+
+PLUGIN_SPOTON_SETTINGS_PLAYER_SECTION
+	DE	Player-Einstellungen
+	EN	Player Settings
+
+PLUGIN_SPOTON_SETTINGS_PLAYER_HINT
+	DE	Bitte oben einen Player auswaehlen, um seine Einstellungen zu aendern.
+	EN	Please select a player above to change its settings.
+
+PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION
+	DE	Globale Einstellungen
+	EN	Global Settings

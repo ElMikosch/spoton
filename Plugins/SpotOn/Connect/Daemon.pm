@@ -115,6 +115,7 @@ sub start {
 	    || ($client && $prefs->client($client)->get('disableDiscovery'))
 	    || $prefs->get('disableDiscovery');
 	push @helperArgs, '--disable-discovery' if $disableDiscovery;
+	push @helperArgs, '--enable-volume-normalisation' if $prefs->get('normalization');
 
 	# T-05-08: Log the command BEFORE adding --lms-auth (security: no password in logs)
 	if (main::INFOLOG && $log->is_info) {
