@@ -73,10 +73,11 @@ pub struct LMS {
     pub flush_tx: Option<watch::Sender<u64>>,
     pub seek_gen: Arc<AtomicU64>,
     pub needs_position_sync: Arc<AtomicBool>,
-    /// Nanoseconds-since-UNIX-EPOCH timestamp of the last None->Some TrackChanged (session start).
-    /// Used by the grace-timer to suppress spurious Paused/Stopped within 2s of session start.
+    /// Monotonic timestamp of the last None->Some TrackChanged (session start).
+    /// Used by the grace-timer to suppress spurious Paused within 2s of session start.
     /// Per D-03: only set on None->Some, never on Some->Some (track change within active session).
-    pub last_session_start_ns: Arc<AtomicU64>,
+    /// Uses Instant (not SystemTime) to be immune to NTP clock adjustments (WR-05).
+    pub last_session_start: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
     /// Set to true when Paused/Stopped fires after grace-timer check passes (real pause/stop).
     /// Cleared atomically by the Playing handler to detect resume-after-pause (D-01).
     pub was_paused: Arc<AtomicBool>,
@@ -99,7 +100,7 @@ impl LMS {
             flush_tx,
             seek_gen: Arc::new(AtomicU64::new(0)),
             needs_position_sync: Arc::new(AtomicBool::new(false)),
-            last_session_start_ns: Arc::new(AtomicU64::new(0)),
+            last_session_start: Arc::new(std::sync::Mutex::new(None)),
             was_paused: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -123,7 +124,7 @@ impl Clone for LMS {
             flush_tx: None,
             seek_gen: Arc::clone(&self.seek_gen),
             needs_position_sync: Arc::clone(&self.needs_position_sync),
-            last_session_start_ns: Arc::clone(&self.last_session_start_ns),
+            last_session_start: Arc::clone(&self.last_session_start),
             was_paused: Arc::clone(&self.was_paused),
         }
     }
@@ -166,8 +167,9 @@ impl LMS {
                         if self.was_paused.swap(false, Ordering::AcqRel) {
                             let secs = f64::from(*position_ms) / 1000.0;
                             self.notify("resume", &new_id, &format!("{secs:.3}")).await;
-                        } else if self.needs_position_sync.load(Ordering::Acquire) {
-                            self.needs_position_sync.store(false, Ordering::Release);
+                        }
+                        // Position sync runs independently of resume (05.2 review fix).
+                        if self.needs_position_sync.swap(false, Ordering::AcqRel) {
                             let secs = f64::from(*position_ms) / 1000.0;
                             if secs > 1.0 {
                                 self.notify("seek", &format!("{secs:.3}"), "").await;
@@ -189,31 +191,27 @@ impl LMS {
                 }
             }
 
-            // Both Paused and Stopped collapse into `stop`. Only fire if we had an active track.
-            PlayerEvent::Paused { .. } | PlayerEvent::Stopped { .. } => {
-                log::debug!("[spoton] Paused/Stopped (disc={:?}): current_track={:?}",
-                    std::mem::discriminant(event), current_track.as_deref());
-                // D-03: Grace-timer — suppress spurious Paused/Stopped within 2s of session start.
-                // Spirc fires Paused (disc=5) immediately after TrackChanged at session start.
-                // Without suppression, this sends a spurious "stop" to LMS, killing the session.
-                let grace_ns: u64 = 2_000_000_000; // 2 seconds
-                let last = self.last_session_start_ns.load(Ordering::Acquire);
-                if last > 0 {
-                    let now_ns = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos() as u64;
-                    let elapsed_ns = now_ns.saturating_sub(last);
-                    if elapsed_ns < grace_ns {
-                        log::debug!("[spoton] Paused/Stopped suppressed (grace timer, {}ms elapsed)",
-                            elapsed_ns / 1_000_000);
-                        return;
+            // Paused: D-03 grace-timer suppresses spurious Paused within 2s of session start.
+            // Stopped is NEVER suppressed — it is the authoritative end-of-track signal (CR-01 fix).
+            PlayerEvent::Paused { .. } => {
+                log::debug!("[spoton] Paused: current_track={:?}", current_track.as_deref());
+                let grace = std::time::Duration::from_secs(2);
+                if let Ok(start) = self.last_session_start.lock() {
+                    if let Some(t) = *start {
+                        if t.elapsed() < grace {
+                            log::debug!("[spoton] Paused suppressed (grace timer, {:?} elapsed)", t.elapsed());
+                            return;
+                        }
                     }
                 }
                 if current_track.is_some() {
-                    // D-01: Set was_paused BEFORE notify("stop") so the Playing handler
-                    // can detect resume-after-pause. Preserve current_track (no take())
-                    // so the track context is available for resume detection.
+                    self.was_paused.store(true, Ordering::Release);
+                    self.notify("stop", "", "").await;
+                }
+            }
+            PlayerEvent::Stopped { .. } => {
+                log::debug!("[spoton] Stopped: current_track={:?}", current_track.as_deref());
+                if current_track.is_some() {
                     self.was_paused.store(true, Ordering::Release);
                     self.notify("stop", "", "").await;
                 }
@@ -259,7 +257,9 @@ impl LMS {
                 let new_id = audio_item.track_id.to_id().unwrap_or_default();
                 log::debug!("[spoton] TrackChanged: track_id={new_id}");
                 match current_track.as_deref() {
-                    Some(prev) if prev == new_id.as_str() => { /* same track, no-op */ }
+                    Some(prev) if prev == new_id.as_str() => {
+                        self.was_paused.store(false, Ordering::Release);
+                    }
                     Some(_) => {
                         self.needs_position_sync.store(false, Ordering::Release);
                         let prev = current_track.replace(new_id.clone()).unwrap_or_default();
@@ -267,13 +267,12 @@ impl LMS {
                     }
                     None => {
                         // D-03: Session start — set grace timer to suppress spurious
-                        // Paused/Stopped that Spirc fires immediately after TrackChanged.
+                        // Paused that Spirc fires immediately after TrackChanged.
                         // ONLY on None->Some (session start), never on Some->Some (track change).
-                        let now_ns = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_nanos() as u64;
-                        self.last_session_start_ns.store(now_ns, Ordering::Release);
+                        // Uses Instant for NTP immunity (WR-05 fix).
+                        if let Ok(mut start) = self.last_session_start.lock() {
+                            *start = Some(std::time::Instant::now());
+                        }
                         log::debug!("[spoton] TrackChanged (session start): grace timer set");
                         self.needs_position_sync.store(true, Ordering::Release);
                         *current_track = Some(new_id.clone());
@@ -337,10 +336,12 @@ impl LMS {
 
         match TcpStream::connect(host_port).await {
             Ok(mut stream) => {
-                if let Err(_e) = stream.write_all(request.as_bytes()).await {
+                if let Err(e) = stream.write_all(request.as_bytes()).await {
+                    log::debug!("[spoton] notify({cmd}): write failed: {e}");
                 }
             }
-            Err(_e) => {
+            Err(e) => {
+                log::debug!("[spoton] notify({cmd}): connect failed: {e}");
             }
         }
     }
@@ -594,6 +595,13 @@ pub async fn http_stream_server(
                             let flush_rx_clone = Arc::clone(&flush_rx);
                             let relay_active_clone = Arc::clone(&relay_active);
                             tokio::spawn(async move {
+                                // Drop guard: always clear relay_active on exit (panic or normal)
+                                struct RelayGuard(Arc<AtomicBool>);
+                                impl Drop for RelayGuard {
+                                    fn drop(&mut self) { self.0.store(false, Ordering::Release); }
+                                }
+                                let _guard = RelayGuard(Arc::clone(&relay_active_clone));
+
                                 // Initialise last_seen_gen to avoid draining on first iteration.
                                 let mut last_seen_gen: u64 = {
                                     let rx = flush_rx_clone.lock().unwrap();
@@ -646,8 +654,7 @@ pub async fn http_stream_server(
                                         }
                                     }
                                 }
-                                // Clear relay-active flag so next LMS reconnect can start.
-                                relay_active_clone.store(false, Ordering::Release);
+                                // relay_active cleared by _guard Drop (WR-02 panic safety)
                             });
 
                             let stream = TokioStreamExt::map(ReceiverStream::new(conn_rx), |chunk| {
@@ -723,14 +730,16 @@ pub async fn http_stream_server(
                             };
                             drop(spirc_guard);
 
-                            let status = if result.is_some() || cmd == "pause" || cmd == "play" || cmd == "next" || cmd == "prev" || cmd == "volume" || cmd == "seek" {
-                                // Return 204 No Content for valid control commands
-                                // (even if Spirc returned Err — daemon not active is non-fatal)
-                                // D-03: volume and seek are known endpoints — always 204, not 404
-                                // on body parse failures (e.g. missing JSON body from Perl side).
-                                StatusCode::NO_CONTENT
-                            } else {
-                                StatusCode::NOT_FOUND
+                            let status = match (result.is_some(), cmd) {
+                                (true, _) => StatusCode::NO_CONTENT,
+                                (false, "pause") | (false, "play") | (false, "next") | (false, "prev") => {
+                                    StatusCode::NO_CONTENT
+                                }
+                                (false, "volume") | (false, "seek") => {
+                                    log::debug!("[spoton] /control/{cmd}: body parse failed, returning 422");
+                                    StatusCode::UNPROCESSABLE_ENTITY
+                                }
+                                _ => StatusCode::NOT_FOUND,
                             };
 
                             let body = Full::new(Bytes::new())
@@ -953,12 +962,13 @@ pub async fn run_connect(
     let mut discovery = if disable_discovery {
         None
     } else {
-        // Use cache_dir hash as stable device_id
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        cache_dir.hash(&mut hasher);
-        let device_id = format!("{:016x}", hasher.finish());
+        // Stable device_id from cache_dir via FNV-1a (not DefaultHasher which
+        // is version-specific and would cause duplicate Spotify devices on rebuild).
+        let device_id = {
+            let mut h: u64 = 14695981039346656037;
+            for b in cache_dir.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+            format!("{:016x}", h)
+        };
         const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
         match librespot_discovery::Discovery::builder(device_id, KEYMASTER_CLIENT_ID.to_string())
             .name(device_name.to_string())

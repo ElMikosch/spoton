@@ -533,13 +533,13 @@ async fn run_discover_once(
     device_name: &str,
     cache_dir: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Derive stable device_id from cache_dir path to survive restarts.
-    // This ensures the same Spotify device appears consistent (RESEARCH Pitfall 1).
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    cache_dir.hash(&mut hasher);
-    let device_id = format!("{:016x}", hasher.finish());
+    // Stable device_id from cache_dir via FNV-1a (not DefaultHasher which
+    // is version-specific and would cause duplicate Spotify devices on rebuild).
+    let device_id = {
+        let mut h: u64 = 14695981039346656037;
+        for b in cache_dir.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+        format!("{:016x}", h)
+    };
 
     // KEYMASTER_CLIENT_ID — standard librespot client ID
     // Source: librespot-core-0.8.0/src/config.rs line 6
