@@ -15,6 +15,9 @@ use Slim::Utils::Prefs;
 use constant MAX_FAILURES_BEFORE_DISABLE_DISCOVERY => 3;
 use constant MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY => 5 * 60;
 
+# Cooldown duration before re-enabling discovery after crash-loop (D-02: 30 minutes)
+use constant DISCOVERY_COOLDOWN_SECONDS => 1800;
+
 # Disable stream mode if the streaming daemon crashes too many times in a short window
 use constant MAX_STREAM_FAILURES => 5;
 use constant MAX_STREAM_INTERVAL => 2 * 60;
@@ -104,7 +107,14 @@ sub start {
 		'--connect',    # SpotOn flag (Spotty-NG used '--connect-stream')
 	);
 
-	push @helperArgs, '--disable-discovery' if $prefs->get('disableDiscovery');
+	# Per-player discovery flag evaluation (D-05: crash-loop flag overrides user checkbox):
+	# 1. discoveryDisabledByCrashLoop per-player (highest priority — crash protection)
+	# 2. disableDiscovery per-player          (user checkbox)
+	# 3. disableDiscovery global              (fallback for players without per-player pref)
+	my $disableDiscovery = ($client && $prefs->client($client)->get('discoveryDisabledByCrashLoop'))
+	    || ($client && $prefs->client($client)->get('disableDiscovery'))
+	    || $prefs->get('disableDiscovery');
+	push @helperArgs, '--disable-discovery' if $disableDiscovery;
 
 	# T-05-08: Log the command BEFORE adding --lms-auth (security: no password in logs)
 	if (main::INFOLOG && $log->is_info) {
@@ -192,25 +202,71 @@ sub _checkStartTimes {
 	my $self = shift;
 
 	# Crash-backoff: if more than MAX_FAILURES starts recorded within
-	# MAX_INTERVAL seconds, disable discovery to prevent infinite crash loops
+	# MAX_INTERVAL seconds, disable discovery to prevent infinite crash loops.
+	# Per-player scope: sets discoveryDisabledByCrashLoop on the player's prefs,
+	# NOT the global disableDiscovery flag (D-05: crash-loop separate from user checkbox).
 	if ( scalar @{$self->_startTimes} >= MAX_FAILURES_BEFORE_DISABLE_DISCOVERY ) {
 		splice @{$self->_startTimes}, 0,
 		       @{$self->_startTimes} - MAX_FAILURES_BEFORE_DISABLE_DISCOVERY;
 
-		if ( time() - $self->_startTimes->[0] < MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY
-			&& !$prefs->get('disableDiscovery')
-		) {
-			$log->warn(sprintf(
-				'SpotOn daemon crashed %s times within less than %s minutes - disabling discovery.',
-				MAX_FAILURES_BEFORE_DISABLE_DISCOVERY,
-				MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY / 60
-			));
+		if ( time() - $self->_startTimes->[0] < MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY ) {
+			my $client  = Slim::Player::Client::getClient($self->mac);
+			my $already = $client
+				? ($prefs->client($client)->get('discoveryDisabledByCrashLoop') || 0)
+				: ($prefs->get('disableDiscovery') || 0);
 
-			$prefs->set('disableDiscovery', 1);
+			unless ($already) {
+				$log->warn(sprintf(
+					'SpotOn daemon crashed %s times within less than %s minutes - disabling discovery for %s min.',
+					MAX_FAILURES_BEFORE_DISABLE_DISCOVERY,
+					MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY / 60,
+					DISCOVERY_COOLDOWN_SECONDS / 60
+				));
+
+				if ($client) {
+					# Per-player crash-loop flag (D-05: separate from user disableDiscovery checkbox)
+					$prefs->client($client)->set('discoveryDisabledByCrashLoop', 1);
+				}
+				else {
+					# Fallback: no client object — use global flag
+					$prefs->set('disableDiscovery', 1);
+				}
+
+				# D-03: Schedule cooldown timer for auto-reset after 30 minutes
+				Slim::Utils::Timers::killTimers($self->mac, \&_resetDiscoveryCooldown);
+				Slim::Utils::Timers::setTimer(
+					$self->mac,
+					Time::HiRes::time() + DISCOVERY_COOLDOWN_SECONDS,
+					\&_resetDiscoveryCooldown,
+					$self->mac
+				);
+			}
 		}
 	}
 
 	push @{$self->_startTimes}, time();
+}
+
+# D-03: Timer callback — resets crash-loop flag and restarts daemon after cooldown expires.
+# Timer fires as: _resetDiscoveryCooldown($unused_timer_arg, $mac)
+sub _resetDiscoveryCooldown {
+	my (undef, $mac) = @_;
+
+	my $client = Slim::Player::Client::getClient($mac);
+	unless ($client) {
+		$log->warn("Discovery cooldown expired for $mac but no client found - skipping reset");
+		return;
+	}
+
+	main::INFOLOG && $log->is_info && $log->info(
+		"Discovery cooldown expired for $mac -- re-enabling and restarting daemon"
+	);
+
+	$prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
+
+	require Plugins::SpotOn::Connect::DaemonManager;
+	Plugins::SpotOn::Connect::DaemonManager->stopHelper($client);
+	Plugins::SpotOn::Connect::DaemonManager->startHelper($client);
 }
 
 sub _checkStreamStartTimes {
