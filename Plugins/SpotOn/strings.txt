@@ -233,3 +233,19 @@ PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC
 PLUGIN_SPOTON_CONNECT_OGG_AUTO
 	DE	Automatisch (Player-abhaengig)
 	EN	Auto (player dependent)
+
+PLUGIN_SPOTON_DISCOVERY_ENABLED
+	DE	mDNS-Discovery
+	EN	mDNS Discovery
+
+PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC
+	DE	Geraet via mDNS im lokalen Netzwerk ankuendigen (Spotify-App findet Geraet ohne Netzwerkumweg)
+	EN	Announce device via mDNS in local network (Spotify app discovers device without network detour)
+
+PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL
+	DE	mDNS-Discovery aktiviert
+	EN	mDNS Discovery enabled
+
+PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING
+	DE	Discovery wurde nach zu vielen Abstuerzen automatisch deaktiviert. Wird nach 30 Minuten oder LMS-Neustart wiederhergestellt.
+	EN	Discovery was automatically disabled after too many crashes. Will be restored after 30 minutes or LMS restart.

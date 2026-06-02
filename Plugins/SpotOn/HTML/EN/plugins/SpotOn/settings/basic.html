@@ -45,6 +45,19 @@
 		<label for="pref_enableSpotifyConnect">[% 'PLUGIN_SPOTON_CONNECT_ENABLED_LABEL' | string %]</label>
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_SPOTON_DISCOVERY_ENABLED" desc="PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC" %]
+		[% IF discoveryByCrashLoop %]
+		<div style="color: orange; margin-bottom:8px">
+			[% 'PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING' | string %]
+		</div>
+		[% END %]
+		<input type="checkbox" class="stdedit" name="pref_enableDiscovery"
+		       id="pref_enableDiscovery"
+		       value="1" [% IF discoveryEnabled %]checked[% END %]
+		       [% IF discoveryByCrashLoop %]disabled[% END %]/>
+		<label for="pref_enableDiscovery">[% 'PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL' | string %]</label>
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE" desc="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC" %]
 		<select class="stdedit" name="pref_connectOggOverride" id="pref_connectOggOverride">
 			<option value="auto" [% IF connectOggOverride == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_CONNECT_OGG_AUTO' | string %]</option>
