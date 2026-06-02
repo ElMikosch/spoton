@@ -15,6 +15,7 @@ use Digest::MD5 qw(md5_hex);
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
+my $CRLF  = "\x0d\x0a";
 
 sub contentType { 'son' }
 
@@ -91,6 +92,56 @@ sub canDirectStream {
         "canDirectStream: $ds_url"
     );
     return $ds_url;
+}
+
+# requestString($self, $client, $url, $post, $seekdata)
+# Override to suppress Range header for Connect proxy connections.
+# The base class (HTTP.pm line 971) unconditionally adds "Range: bytes=0-".
+# Sending Range to an infinite PCM stream endpoint may cause hyper to respond with
+# 206 Partial Content, and triggers LMS's "Persistent service" reconnect path
+# (HTTP.pm line 107: !$self->contentLength with Range present). For the binary's
+# /stream endpoint, a plain GET without Range is the correct request.
+# Non-stream URLs delegate to the base class unchanged (SUPER::requestString).
+sub requestString {
+    my ($self, $client, $url, $post, $seekdata) = @_;
+
+    if ($url && $url =~ m{:\d+/stream\b}) {
+        my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
+        my $host = ($port == 80) ? $server : "$server:$port";
+        main::INFOLOG && $log->is_info && $log->info(
+            "requestString: Connect proxy — plain GET (no Range) for $url"
+        );
+        return join($CRLF,
+            "GET $path HTTP/1.0",
+            "Accept: */*",
+            "Cache-Control: no-cache",
+            "Connection: close",
+            "Host: $host",
+            "", "",
+        );
+    }
+
+    return $self->SUPER::requestString($client, $url, $post, $seekdata);
+}
+
+# canEnhanceHTTP($self, $client, $url)
+# Override to return 0 for Connect proxy stream URLs.
+# The base class returns $prefs->get('useEnhancedHTTP') which may be non-zero.
+# For infinite PCM streams the "Enhanced/Persistent" path (HTTP.pm line 107)
+# causes immediate disconnection via range-based reconnections against an
+# infinite body. Returning 0 forces LMS to use the normal non-enhanced path.
+# Non-stream URLs delegate to the base class unchanged (SUPER::canEnhanceHTTP).
+sub canEnhanceHTTP {
+    my ($self, $client, $url) = @_;
+
+    if ($url && $url =~ m{:\d+/stream\b}) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "canEnhanceHTTP: Connect proxy — returning 0 for $url"
+        );
+        return 0;
+    }
+
+    return $self->SUPER::canEnhanceHTTP($client, $url);
 }
 
 # new($class, $args)
