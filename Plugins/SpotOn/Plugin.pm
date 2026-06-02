@@ -103,7 +103,7 @@ sub initPlugin {
         menu   => 'radios',
         is_app => 1,
         weight => 100,
-        icon   => 'plugins/SpotOn/html/images/icon.png',
+        icon   => 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png',
     );
 }
 
