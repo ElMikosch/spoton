@@ -146,6 +146,9 @@ sub handler {
             my $enableConnect = $paramRef->{'pref_enableSpotifyConnect'} ? 1 : 0;
             $prefs->client($client)->set('enableSpotifyConnect', $enableConnect);
 
+            require Plugins::SpotOn::Connect::DaemonManager;
+            Plugins::SpotOn::Connect::DaemonManager->initHelpers();
+
             # OGG-passthrough override (D-05, T-05-19): 'auto' | 'ogg' | 'pcm'
             # Whitelist validation — default to 'auto' on invalid or absent input.
             if (defined $paramRef->{'pref_connectOggOverride'}) {

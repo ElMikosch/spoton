@@ -449,7 +449,9 @@ sub _onPlaylistJump {
 # ---------------------------------------------------------------------------
 sub _connectEvent {
     my $request = shift;
-    my $client  = $request->client()->master;
+    my $client  = $request->client();
+    return unless defined $client;
+    $client = $client->master;
 
     my $cmd = $request->getParam('_cmd');
 
@@ -743,7 +745,7 @@ sub _fetchTrackMetadata {
             main::INFOLOG && $log->is_info && $log->info(
                 "Stale API response: event=$eventUri, API=" . $trackInfo->{uri} . " — using event (T-05-14)"
             );
-            $trackInfo = { uri => $eventUri };
+            $client->pluginData(newTrack => 0);
             return;
         }
 

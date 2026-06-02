@@ -57,8 +57,9 @@ sub init {
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.1, \&initHelpers);
     }, [['sync']]);
 
-    # React to per-player Connect toggle (D-10, CON-10)
-    $prefs->setChange(\&initHelpers, 'enableSpotifyConnect');
+    # Per-player Connect toggle reaction is handled by Settings.pm calling
+    # initHelpers() directly after saving — setChange on global prefs namespace
+    # doesn't fire for per-player prefs (WR-01 fix).
 
     # Immediate initial check — player may already be connected before listeners registered
     Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.5, \&initHelpers);

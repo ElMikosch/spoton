@@ -88,7 +88,12 @@ sub start {
 		: catdir($serverPrefs->get('cachedir'), 'spoton');
 	$self->cache($cacheDir);
 
+	# Reset stream state before attempt (WR-04: stale _streamMode after failed restart)
+	$self->_streamMode(0);
+	$self->_streamPort(undef);
+
 	$self->_checkStartTimes();
+	$self->_checkStreamStartTimes();
 
 	my @helperArgs = (
 		'-c', $self->cache,
@@ -188,7 +193,7 @@ sub _checkStartTimes {
 
 	# Crash-backoff: if more than MAX_FAILURES starts recorded within
 	# MAX_INTERVAL seconds, disable discovery to prevent infinite crash loops
-	if ( scalar @{$self->_startTimes} > MAX_FAILURES_BEFORE_DISABLE_DISCOVERY ) {
+	if ( scalar @{$self->_startTimes} >= MAX_FAILURES_BEFORE_DISABLE_DISCOVERY ) {
 		splice @{$self->_startTimes}, 0,
 		       @{$self->_startTimes} - MAX_FAILURES_BEFORE_DISABLE_DISCOVERY;
 

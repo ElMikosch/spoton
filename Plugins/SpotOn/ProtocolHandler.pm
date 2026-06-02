@@ -150,6 +150,7 @@ sub new {
 
 sub isRepeatingStream {
     my (undef, $song) = @_;
+    require Plugins::SpotOn::Connect;
     return $song && Plugins::SpotOn::Connect->isSpotifyConnect($song->master());
 }
 

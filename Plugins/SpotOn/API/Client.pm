@@ -266,7 +266,6 @@ sub playerPause {
     $class->_request('put', 'me/player/pause', {
         _accountId => $accountId,
         _noCache   => 1,
-        _method    => 'PUT',
     }, $cb);
 }
 
@@ -277,7 +276,6 @@ sub playerPlay {
     $class->_request('put', 'me/player/play', {
         _accountId => $accountId,
         _noCache   => 1,
-        _method    => 'PUT',
     }, $cb);
 }
 
@@ -288,7 +286,6 @@ sub playerVolume {
     $class->_request('put', 'me/player/volume', {
         _accountId      => $accountId,
         _noCache        => 1,
-        _method         => 'PUT',
         volume_percent  => int($volumePct),
     }, $cb);
 }
@@ -300,7 +297,6 @@ sub playerSeek {
     $class->_request('put', 'me/player/seek', {
         _accountId  => $accountId,
         _noCache    => 1,
-        _method     => 'PUT',
         position_ms => int($positionMs),
     }, $cb);
 }
