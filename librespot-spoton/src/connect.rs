@@ -585,18 +585,12 @@ pub async fn http_stream_server(
                                 }
                             }
 
-                            // CR-01 / T-05-04: reject concurrent relay attempts.
+                            // Connection takeover: if relay_active is true, the old relay
+                            // is likely stuck (idle loop, no PCM data, client disconnected
+                            // but not detected). Force-clear and accept the new connection.
+                            // The old relay task will exit on its next conn_tx.send() failure.
                             if relay_active.swap(true, Ordering::AcqRel) {
-                                let body = Full::new(Bytes::new())
-                                    .map_err(|e| match e {})
-                                    .boxed();
-                                let resp = Response::builder()
-                                    .status(StatusCode::SERVICE_UNAVAILABLE)
-                                    .header("Retry-After", "1")
-                                    .header("Content-Length", "0")
-                                    .body(body)
-                                    .expect("static 503 relay-busy builder");
-                                return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
+                                log::warn!("[spoton] /stream: relay_active was true — taking over (old relay likely stale)");
                             }
 
                             // Drain stale pre-seek audio from the channel (D-03).

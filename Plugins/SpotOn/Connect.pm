@@ -549,7 +549,52 @@ sub _connectEvent {
         my $trackId  = $request->getParam('_p2');
         my $position = $request->getParam('_p3');
 
-        return unless __PACKAGE__->isSpotifyConnect($client);
+        # Check actual playing URL, not just the $_activeConnectPlayer flag.
+        # The flag stays set after source switch because 'stop' from Spotify
+        # (pause forwarding) doesn't clear it — only _onNewSong clears it.
+        my $song = $client->playingSong();
+        my $currentUrl = $song ? ($song->streamUrl || '') : '';
+        my $actuallyInConnect = ($currentUrl =~ m{spotify://connect-});
+
+        if (!$actuallyInConnect) {
+            # Player is NOT on a Connect stream (e.g. switched to Browse).
+            # Re-enter Connect by issuing playlist play — same path as 'start'.
+            main::INFOLOG && $log->is_info && $log->info(
+                "Resume while not on Connect stream — re-entering Connect via playlist play"
+            );
+
+            # Suppress transitional pause/stop events (same as 'start' handler):
+            # newTrack prevents _onPause from forwarding the LMS stop-before-play
+            # sequence to the binary, which would immediately re-pause Spotify.
+            $client->pluginData(connectPauseTs => 0);
+            $client->pluginData(newTrack => 1);
+            $client->pluginData(connectStartTime => Time::HiRes::time());
+
+            if ($currentUrl =~ m{^spotify://} && $currentUrl !~ m{spotify://connect-}) {
+                my $stopReq = Slim::Control::Request->new($client->id, ['stop']);
+                $stopReq->source(__PACKAGE__);
+                $stopReq->execute();
+            }
+
+            if ($trackId) {
+                $client->pluginData(eventTrackUri => "spotify:track:$trackId");
+            }
+
+            my $ts      = int(Time::HiRes::time() * 1000);
+            my $playReq = $client->execute([
+                'playlist', 'play',
+                sprintf("spotify://connect-%u", $ts)
+            ]);
+            $playReq->source(__PACKAGE__);
+
+            $client->pluginData(pendingConnect => 0);
+
+            if ($trackId) {
+                _fetchTrackMetadata($client, $trackId);
+            }
+
+            return;
+        }
 
         main::INFOLOG && $log->is_info && $log->info(
             "Resume event: trackId=$trackId position=$position"
