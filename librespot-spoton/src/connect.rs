@@ -851,8 +851,21 @@ pub async fn run_connect(
     let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig::default())?;
     let soft_volume = mixer.get_soft_volume();
 
-    // 4. Session (connect later via Spirc::new)
-    let session_config = SessionConfig::default();
+    // 4. Shared device_id — FNV-1a hash of cache_dir (same algorithm as Discovery uses).
+    //    Computed once here so both SessionConfig and Discovery use the same stable ID.
+    //    SessionConfig::default() would generate a random UUID each run, causing a
+    //    split-brain where Discovery announces one device_id via mDNS but Spirc
+    //    registers a different one with the Spotify Cloud.
+    let device_id_shared = {
+        let mut h: u64 = 14695981039346656037;
+        for b in cache_dir.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+        format!("{:016x}", h)
+    };
+    log::info!("[spoton] Device ID (shared): {device_id_shared}");
+
+    // 5. Session (connect later via Spirc::new)
+    let mut session_config = SessionConfig::default();
+    session_config.device_id = device_id_shared.clone();
     let session = Session::new(session_config.clone(), Some(cache.clone()));
 
     // spirc_active: set to true ONLY on SessionConnected (Pitfall 2 / T-05-06)
@@ -983,15 +996,10 @@ pub async fn run_connect(
     let mut discovery = if disable_discovery {
         None
     } else {
-        // Stable device_id from cache_dir via FNV-1a (not DefaultHasher which
-        // is version-specific and would cause duplicate Spotify devices on rebuild).
-        let device_id = {
-            let mut h: u64 = 14695981039346656037;
-            for b in cache_dir.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
-            format!("{:016x}", h)
-        };
+        // device_id_shared was computed above and is shared with SessionConfig.
+        // Do NOT recompute locally here — that was the original split-brain bug.
         const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
-        match librespot_discovery::Discovery::builder(device_id, KEYMASTER_CLIENT_ID.to_string())
+        match librespot_discovery::Discovery::builder(device_id_shared.clone(), KEYMASTER_CLIENT_ID.to_string())
             .name(device_name.to_string())
             .device_type(DeviceType::Speaker)
             .launch()
