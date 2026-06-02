@@ -446,6 +446,7 @@ sub _onPlaylistJump {
 #   volume — VolumeChanged (after suppress);    p1=volume 0-100, p2=""
 #   seek   — Seeked mid-playback;               p1=position in seconds (3 decimals), p2=""
 #   resume — Playing after Pause (same track); p1=track_id(base62), p2=position (seconds, 3 decimals)
+#   ready  — Spirc reconnected internally;      p1="", p2=""
 # ---------------------------------------------------------------------------
 sub _connectEvent {
     my $request = shift;
@@ -712,6 +713,33 @@ sub _connectEvent {
             $pauseReq->execute();
         }
 
+        return;
+    }
+
+    # -----------------------------------------------------------------
+    # Ready: Spirc reconnected internally (after session expiry or source switch).
+    # Binary sends this after successfully completing a Spirc::new() reconnect.
+    # Re-issue playlist play so LMS resumes streaming without user intervention.
+    # T-05.3-06: guard checks $_activeConnectPlayer eq $client->id before acting.
+    # T-05.3-07: source(__PACKAGE__) prevents the resulting playlist events from
+    # echoing back to the binary (T-05-13 loop prevention).
+    # -----------------------------------------------------------------
+    if ($cmd eq 'ready') {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Spirc reconnected (ready event) for " . $client->id . " — re-issuing Connect play"
+        );
+
+        # Only re-issue if this player was previously the active Connect player.
+        # If not (e.g. another player took over), ignore.
+        if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
+            $client->pluginData(connectStartTime => Time::HiRes::time());
+            my $ts      = int(Time::HiRes::time() * 1000);
+            my $playReq = $client->execute([
+                'playlist', 'play',
+                sprintf("spotify://connect-%u", $ts)
+            ]);
+            $playReq->source(__PACKAGE__);
+        }
         return;
     }
 
