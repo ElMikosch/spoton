@@ -146,22 +146,18 @@ sub handler {
             my $enableConnect = $paramRef->{'pref_enableSpotifyConnect'} ? 1 : 0;
             $prefs->client($client)->set('enableSpotifyConnect', $enableConnect);
 
-            require Plugins::SpotOn::Connect::DaemonManager;
-            Plugins::SpotOn::Connect::DaemonManager->initHelpers();
-
             # OGG-passthrough override (D-05, T-05-19): 'auto' | 'ogg' | 'pcm'
-            # Whitelist validation — default to 'auto' on invalid or absent input.
             if (defined $paramRef->{'pref_connectOggOverride'}) {
                 my $override = $paramRef->{'pref_connectOggOverride'};
                 $override = 'auto' unless $override =~ /^(?:auto|ogg|pcm)$/;
                 $prefs->client($client)->set('connectOggOverride', $override);
             }
 
-            # Per-player Discovery toggle (D-04, T-05.4-03: coerce to 0/1 — no arbitrary values stored)
-            # Checkbox unchecked = absent from params = disabled → disableDiscovery=1.
             my $disableDiscovery = $paramRef->{'pref_enableDiscovery'} ? 0 : 1;
             $prefs->client($client)->set('disableDiscovery', $disableDiscovery);
-            # initHelpers() call above already covers daemon restart
+
+            require Plugins::SpotOn::Connect::DaemonManager;
+            Plugins::SpotOn::Connect::DaemonManager->initHelpers();
         }
     }
 

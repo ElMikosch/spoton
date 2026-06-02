@@ -10,6 +10,8 @@ use MIME::Base64 qw(encode_base64);
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Timers;
+use Time::HiRes;
 
 # Disable discovery mode if we have to restart more than x times in y minutes
 use constant MAX_FAILURES_BEFORE_DISABLE_DISCOVERY => 3;

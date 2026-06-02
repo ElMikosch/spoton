@@ -212,7 +212,6 @@ impl LMS {
             PlayerEvent::Stopped { .. } => {
                 log::debug!("[spoton] Stopped: current_track={:?}", current_track.as_deref());
                 if current_track.is_some() {
-                    self.was_paused.store(true, Ordering::Release);
                     self.notify("stop", "", "").await;
                 }
             }

@@ -30,17 +30,6 @@ sub _isConnectEnabled {
         // $prefs->get('enableSpotifyConnect');
 }
 
-# Returns true if mDNS Discovery is enabled for this player.
-# Priority: crash-loop flag > per-player user checkbox > global fallback.
-# Returns false (discovery disabled) if any source is truthy.
-sub _isDiscoveryEnabled {
-    my $client = shift;
-    return 0 if $prefs->client($client)->get('discoveryDisabledByCrashLoop');
-    return 0 if $prefs->client($client)->get('disableDiscovery');
-    return 0 if $prefs->get('disableDiscovery');
-    return 1;
-}
-
 sub init {
     my $class = shift;
 
@@ -97,10 +86,12 @@ sub init {
             $prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
         }
     }
-    # Also reset global disableDiscovery if it was set by a crash-loop fallback
+    # D-01: Reset global disableDiscovery — only set by crash-loop fallback
+    # (when $client was undef in _checkStartTimes). No user-facing global
+    # toggle exists in the current UI; if added later, scope this reset.
     if ($prefs->get('disableDiscovery')) {
         main::INFOLOG && $log->is_info && $log->info(
-            "LMS-start: resetting global disableDiscovery flag"
+            "LMS-start: resetting global disableDiscovery flag (crash-loop fallback only)"
         );
         $prefs->set('disableDiscovery', 0);
     }
