@@ -851,14 +851,15 @@ pub async fn run_connect(
     let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig::default())?;
     let soft_volume = mixer.get_soft_volume();
 
-    // 4. Shared device_id — FNV-1a hash of cache_dir (same algorithm as Discovery uses).
-    //    Computed once here so both SessionConfig and Discovery use the same stable ID.
-    //    SessionConfig::default() would generate a random UUID each run, causing a
-    //    split-brain where Discovery announces one device_id via mDNS but Spirc
-    //    registers a different one with the Spotify Cloud.
+    // 4. Shared device_id — FNV-1a hash of cache_dir + player_mac.
+    //    Includes player_mac so each per-player daemon gets a unique device_id
+    //    even when sharing the same cache_dir (same Spotify account).
     let device_id_shared = {
         let mut h: u64 = 14695981039346656037;
         for b in cache_dir.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+        if let Some(mac) = player_mac {
+            for b in mac.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+        }
         format!("{:016x}", h)
     };
     log::info!("[spoton] Device ID (shared): {device_id_shared}");
