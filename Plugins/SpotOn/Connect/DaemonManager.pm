@@ -27,8 +27,7 @@ my %helperInstances;
 sub _isConnectEnabled {
     my $client = shift;
     return $prefs->client($client)->get('enableSpotifyConnect')
-        // $prefs->get('enableSpotifyConnect')
-        // 1;
+        // $prefs->get('enableSpotifyConnect');
 }
 
 sub init {
@@ -50,15 +49,24 @@ sub init {
 
         return if $request->isNotCommand([['sync']]);
 
-        main::INFOLOG && $log->is_info && $log->info("Sync group changed - differential Connect daemon restart");
+        my $client = $request->client();
+        my @affected;
+        if ($client) {
+            push @affected, $client->id;
+            if ($client->isSynced() && $client->master) {
+                push @affected, $client->master->id;
+                push @affected, map { $_->id } Slim::Player::Sync::slaves($client->master);
+            }
+        }
+
+        main::INFOLOG && $log->is_info && $log->info(
+            "Sync group changed - restarting affected daemons: " . join(', ', @affected)
+        );
 
         Slim::Utils::Timers::killTimers($class, \&initHelpers);
 
-        # Stop each daemon process while preserving cache dir.
-        # Do NOT delete from %helperInstances — initHelpers detects alive==0
-        # and calls startHelper which invokes $helper->start (existing logic).
-        foreach my $clientId (keys %helperInstances) {
-            $helperInstances{$clientId}->stopForSync();
+        for my $clientId (@affected) {
+            $helperInstances{$clientId}->stopForSync() if $helperInstances{$clientId};
         }
 
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.1, \&initHelpers);
@@ -90,23 +98,19 @@ sub initHelpers {
         ($b->isSynced() ? 1 : 0) <=> ($a->isSynced() ? 1 : 0)
     } Slim::Player::Client::clients();
 
-    my %seen;       # MAC => 1 — prevents duplicate processing
-    my %started;    # MAC => 1 — tracks which MACs got startHelper
+    # %handled: MAC => 'started' | 'seen'
+    # 'started' = daemon started for this MAC; 'seen' = processed, no daemon needed
+    my %handled;
 
     for my $client (@clients) {
-        # Skip duplicate MACs — the first encounter (synced) takes priority
-        next if $seen{$client->id}++;
+        next if $handled{$client->id};
 
         my $syncMaster;
 
-        # If the player is part of a sync group, only start daemon for the
-        # group master, not the individual slaves.
         if (Slim::Player::Sync::isSlave($client) && (my $master = $client->master)) {
             if (_isConnectEnabled($master)) {
                 $syncMaster = $master->id;
             }
-            # If the master does not have Connect enabled, pick the first slave
-            # that does (sorted for determinism).
             else {
                 ($syncMaster) = map { $_->id } grep {
                     _isConnectEnabled($_)
@@ -116,40 +120,36 @@ sub initHelpers {
 
         if ($syncMaster && $syncMaster eq $client->id) {
             main::INFOLOG && $log->is_info && $log->info(
-                "Not the sync group master itself, but first slave with Connect enabled: $syncMaster"
+                "Sync group Connect delegate (elected slave): $syncMaster"
             );
             $class->startHelper($client);
-            $started{$client->id} = 1;
+            $handled{$client->id} = 'started';
         }
         elsif ($syncMaster) {
             main::INFOLOG && $log->is_info && $log->info(
-                "Sync group slave, daemon runs on master $syncMaster: " . $client->id
+                "Sync group slave, daemon runs on $syncMaster: " . $client->id
             );
             $class->stopHelper($client);
+            $handled{$client->id} = 'seen';
 
-            # Ensure the sync master's daemon is started NOW and mark it as
-            # handled so a standalone duplicate doesn't spawn a second daemon.
-            if (!$started{$syncMaster}) {
-                my $masterClient = Slim::Player::Client::getClient($syncMaster);
-                if ($masterClient && _isConnectEnabled($masterClient)) {
+            if (!$handled{$syncMaster}) {
+                my $delegateClient = Slim::Player::Client::getClient($syncMaster);
+                if ($delegateClient && _isConnectEnabled($delegateClient)) {
                     main::INFOLOG && $log->is_info && $log->info(
-                        "Starting daemon for sync group master: $syncMaster"
+                        "Starting daemon for sync group delegate: $syncMaster"
                     );
-                    $class->startHelper($masterClient);
-                    $started{$syncMaster} = 1;
+                    $class->startHelper($delegateClient);
+                    $handled{$syncMaster} = 'started';
                 }
             }
-            $seen{$syncMaster} = 1;
         }
         elsif (!$syncMaster && _isConnectEnabled($client)) {
-            # Only start if we haven't already started a daemon for this MAC
-            # via the sync master path above.
-            if (!$started{$client->id}) {
+            if (!$handled{$client->id}) {
                 main::INFOLOG && $log->is_info && $log->info(
-                    "Sync group master or standalone player with Spotify Connect enabled: " . $client->id
+                    "Standalone player with Spotify Connect enabled: " . $client->id
                 );
                 $class->startHelper($client);
-                $started{$client->id} = 1;
+                $handled{$client->id} = 'started';
             }
         }
         else {
@@ -157,6 +157,7 @@ sub initHelpers {
                 "Standalone player with Spotify Connect disabled: " . $client->id
             );
             $class->stopHelper($client);
+            $handled{$client->id} = 'seen';
         }
     }
 
@@ -284,7 +285,7 @@ sub helperForClient {
 
     # Direct lookup — fastest path
     my $helper = $helperInstances{$clientId};
-    return $helper if $helper;
+    return $helper if $helper && $helper->alive;
 
     # Sync group fallback: if the direct MAC has no daemon, check the sync
     # master and all sync members. This covers the case where the daemon
@@ -296,12 +297,11 @@ sub helperForClient {
         my $master = $client->master;
         if ($master) {
             $helper = $helperInstances{$master->id};
-            return $helper if $helper;
+            return $helper if $helper && $helper->alive;
 
-            # Check all slaves
             for my $slave (Slim::Player::Sync::slaves($master)) {
                 $helper = $helperInstances{$slave->id};
-                return $helper if $helper;
+                return $helper if $helper && $helper->alive;
             }
         }
     }
