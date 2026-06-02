@@ -150,29 +150,27 @@ sub new {
 
 sub isRepeatingStream {
     my (undef, $song) = @_;
-    require Plugins::SpotOn::Connect;
-    return $song && Plugins::SpotOn::Connect->isSpotifyConnect($song->master());
+    return unless $song;
+    my $url = $song->track->url || '';
+    return $url =~ m{spotify://connect-} ? 1 : 0;
 }
 
-# canSeek($class, $client)
-# Returns 0 when in Connect mode — seeking is handled via startOffset (CON-13).
-# Returning 0 prevents LMS from using _JumpToTime which would restart the HTTP stream.
 sub canSeek {
     my ($class, $client) = @_;
     if ($client) {
-        require Plugins::SpotOn::Connect;
-        return 0 if Plugins::SpotOn::Connect->isSpotifyConnect($client);
+        my $song = $client->playingSong();
+        my $url = $song ? ($song->track->url || '') : '';
+        return 0 if $url =~ m{spotify://connect-};
     }
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
 
-# canTranscodeSeek($class, $client)
-# Same Connect guard as canSeek.
 sub canTranscodeSeek {
     my ($class, $client) = @_;
     if ($client) {
-        require Plugins::SpotOn::Connect;
-        return 0 if Plugins::SpotOn::Connect->isSpotifyConnect($client);
+        my $song = $client->playingSong();
+        my $url = $song ? ($song->track->url || '') : '';
+        return 0 if $url =~ m{spotify://connect-};
     }
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
