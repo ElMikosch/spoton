@@ -156,6 +156,12 @@ sub handler {
                 $override = 'auto' unless $override =~ /^(?:auto|ogg|pcm)$/;
                 $prefs->client($client)->set('connectOggOverride', $override);
             }
+
+            # Per-player Discovery toggle (D-04, T-05.4-03: coerce to 0/1 — no arbitrary values stored)
+            # Checkbox unchecked = absent from params = disabled → disableDiscovery=1.
+            my $disableDiscovery = $paramRef->{'pref_enableDiscovery'} ? 0 : 1;
+            $prefs->client($client)->set('disableDiscovery', $disableDiscovery);
+            # initHelpers() call above already covers daemon restart
         }
     }
 
@@ -185,6 +191,9 @@ sub handler {
     if ($client) {
         $paramRef->{connectEnabled}     = $prefs->client($client)->get('enableSpotifyConnect') // 1;
         $paramRef->{connectOggOverride} = $prefs->client($client)->get('connectOggOverride') || 'auto';
+        # Discovery toggle template vars (D-04, D-05)
+        $paramRef->{discoveryEnabled}     = $prefs->client($client)->get('disableDiscovery') ? 0 : 1;
+        $paramRef->{discoveryByCrashLoop} = $prefs->client($client)->get('discoveryDisabledByCrashLoop') || 0;
     }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);

@@ -30,6 +30,17 @@ sub _isConnectEnabled {
         // $prefs->get('enableSpotifyConnect');
 }
 
+# Returns true if mDNS Discovery is enabled for this player.
+# Priority: crash-loop flag > per-player user checkbox > global fallback.
+# Returns false (discovery disabled) if any source is truthy.
+sub _isDiscoveryEnabled {
+    my $client = shift;
+    return 0 if $prefs->client($client)->get('discoveryDisabledByCrashLoop');
+    return 0 if $prefs->client($client)->get('disableDiscovery');
+    return 0 if $prefs->get('disableDiscovery');
+    return 1;
+}
+
 sub init {
     my $class = shift;
 
@@ -75,6 +86,24 @@ sub init {
     # Per-player Connect toggle reaction is handled by Settings.pm calling
     # initHelpers() directly after saving — setChange on global prefs namespace
     # doesn't fire for per-player prefs (WR-01 fix).
+
+    # D-01: LMS-start reset — clear all per-player discoveryDisabledByCrashLoop flags.
+    # This ensures manual recovery via LMS restart works (dual safety with 30-min cooldown).
+    for my $client (Slim::Player::Client::clients()) {
+        if ($prefs->client($client)->get('discoveryDisabledByCrashLoop')) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "LMS-start: resetting discoveryDisabledByCrashLoop for " . $client->id
+            );
+            $prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
+        }
+    }
+    # Also reset global disableDiscovery if it was set by a crash-loop fallback
+    if ($prefs->get('disableDiscovery')) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "LMS-start: resetting global disableDiscovery flag"
+        );
+        $prefs->set('disableDiscovery', 0);
+    }
 
     # Immediate initial check — player may already be connected before listeners registered
     Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.5, \&initHelpers);
