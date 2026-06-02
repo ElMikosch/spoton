@@ -24,6 +24,13 @@ my $log   = logger('plugin.spoton');
 
 my %helperInstances;
 
+sub _isConnectEnabled {
+    my $client = shift;
+    return $prefs->client($client)->get('enableSpotifyConnect')
+        // $prefs->get('enableSpotifyConnect')
+        // 1;
+}
+
 sub init {
     my $class = shift;
 
@@ -75,20 +82,34 @@ sub initHelpers {
     # Shut down orphaned instances (players that disconnected)
     $class->shutdown('inactive-only');
 
-    for my $client (Slim::Player::Client::clients()) {
+    # Deduplicate by MAC: LMS may return multiple client objects for the same
+    # MAC address (e.g. UPnP bridge + squeezelite sharing a MAC). Process
+    # synced clients first so that sync group membership is detected before
+    # standalone duplicates are evaluated.
+    my @clients = sort {
+        ($b->isSynced() ? 1 : 0) <=> ($a->isSynced() ? 1 : 0)
+    } Slim::Player::Client::clients();
+
+    my %seen;       # MAC => 1 — prevents duplicate processing
+    my %started;    # MAC => 1 — tracks which MACs got startHelper
+
+    for my $client (@clients) {
+        # Skip duplicate MACs — the first encounter (synced) takes priority
+        next if $seen{$client->id}++;
+
         my $syncMaster;
 
         # If the player is part of a sync group, only start daemon for the
         # group master, not the individual slaves.
         if (Slim::Player::Sync::isSlave($client) && (my $master = $client->master)) {
-            if ($prefs->client($master)->get('enableSpotifyConnect')) {
+            if (_isConnectEnabled($master)) {
                 $syncMaster = $master->id;
             }
             # If the master does not have Connect enabled, pick the first slave
             # that does (sorted for determinism).
             else {
                 ($syncMaster) = map { $_->id } grep {
-                    $prefs->client($_)->get('enableSpotifyConnect')
+                    _isConnectEnabled($_)
                 } sort { $a->id cmp $b->id } Slim::Player::Sync::slaves($master);
             }
         }
@@ -98,18 +119,38 @@ sub initHelpers {
                 "Not the sync group master itself, but first slave with Connect enabled: $syncMaster"
             );
             $class->startHelper($client);
+            $started{$client->id} = 1;
         }
         elsif ($syncMaster) {
             main::INFOLOG && $log->is_info && $log->info(
-                "Not the sync group master, and not the first slave with Connect either: $syncMaster"
+                "Sync group slave, daemon runs on master $syncMaster: " . $client->id
             );
             $class->stopHelper($client);
+
+            # Ensure the sync master's daemon is started NOW and mark it as
+            # handled so a standalone duplicate doesn't spawn a second daemon.
+            if (!$started{$syncMaster}) {
+                my $masterClient = Slim::Player::Client::getClient($syncMaster);
+                if ($masterClient && _isConnectEnabled($masterClient)) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Starting daemon for sync group master: $syncMaster"
+                    );
+                    $class->startHelper($masterClient);
+                    $started{$syncMaster} = 1;
+                }
+            }
+            $seen{$syncMaster} = 1;
         }
-        elsif (!$syncMaster && $prefs->client($client)->get('enableSpotifyConnect')) {
-            main::INFOLOG && $log->is_info && $log->info(
-                "Sync group master or standalone player with Spotify Connect enabled: " . $client->id
-            );
-            $class->startHelper($client);
+        elsif (!$syncMaster && _isConnectEnabled($client)) {
+            # Only start if we haven't already started a daemon for this MAC
+            # via the sync master path above.
+            if (!$started{$client->id}) {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "Sync group master or standalone player with Spotify Connect enabled: " . $client->id
+                );
+                $class->startHelper($client);
+                $started{$client->id} = 1;
+            }
         }
         else {
             main::INFOLOG && $log->is_info && $log->info(
@@ -227,11 +268,45 @@ sub shutdown {
 
 # helperForClient($class, $clientId)
 # Returns the Daemon instance for a given player (by id or client object).
+# For synced players, also checks the sync group master and slaves if no
+# daemon is found directly — handles the case where the daemon is registered
+# under the sync master's MAC but the lookup uses a slave's MAC.
 sub helperForClient {
     my ($class, $clientId) = @_;
-    $clientId = $clientId->id if $clientId && blessed $clientId;
+
+    my $client;
+    if ($clientId && blessed $clientId) {
+        $client = $clientId;
+        $clientId = $clientId->id;
+    }
+
     return unless $clientId;
-    return $helperInstances{$clientId};
+
+    # Direct lookup — fastest path
+    my $helper = $helperInstances{$clientId};
+    return $helper if $helper;
+
+    # Sync group fallback: if the direct MAC has no daemon, check the sync
+    # master and all sync members. This covers the case where the daemon
+    # runs under the master's MAC but the lookup comes via a slave MAC.
+    if (!$client) {
+        $client = Slim::Player::Client::getClient($clientId);
+    }
+    if ($client && $client->isSynced()) {
+        my $master = $client->master;
+        if ($master) {
+            $helper = $helperInstances{$master->id};
+            return $helper if $helper;
+
+            # Check all slaves
+            for my $slave (Slim::Player::Sync::slaves($master)) {
+                $helper = $helperInstances{$slave->id};
+                return $helper if $helper;
+            }
+        }
+    }
+
+    return undef;
 }
 
 # streamPortForClient($class, $clientId)
@@ -239,7 +314,7 @@ sub helperForClient {
 sub streamPortForClient {
     my ($class, $clientId) = @_;
     $clientId = $clientId->id if $clientId && blessed $clientId;
-    my $helper = $helperInstances{$clientId} || return;
+    my $helper = $class->helperForClient($clientId) || return;
     return $helper->_streamPort;
 }
 
@@ -257,7 +332,7 @@ sub helperPids {
 sub uptime {
     my ($class, $clientId) = @_;
     return 0 unless $clientId;
-    my $helper = $helperInstances{$clientId} || return 0;
+    my $helper = $class->helperForClient($clientId) || return 0;
     return $helper->uptime();
 }
 
