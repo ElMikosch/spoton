@@ -341,7 +341,7 @@ sub _largestImage {
 
 # Regex pattern for Spotify-generated personal mix playlists (D-06).
 # Uses \s+ instead of literal spaces for whitespace variants.
-# Both call sites (_madeForYouFeed and _libraryPlaylistsFeed)
+# Both call sites (_madeForYouFeed and _userPlaylistsFeed)
 # use _isMadeForYou — changing only this function is sufficient (Pitfall 4: single detection point).
 my $PERSONAL_MIX_REGEX = qr/Daily\s+Mix|MixTape|Discover\s+Weekly|Mix\s+der\s+Woche|Release\s+Radar/i;
 
