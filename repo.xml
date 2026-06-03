@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    LMS Custom Repository descriptor for SpotOn.
+
+    SHA1 and download URL below are PLACEHOLDERS — they will be finalized in Phase 6.1
+    after multi-architecture binary builds (x86_64, aarch64, armhf, i386) are completed
+    and a versioned release zip is published on GitHub.
+
+    USERS: Add the raw GitHub URL of this file to:
+      LMS Settings → Plugins → Additional Repositories
+
+    MAINTAINERS: Replace PLACEHOLDER_SHA1_PHASE_6_1 and PLACEHOLDER_URL_PHASE_6_1
+    with the actual SHA1 checksum (sha1sum SpotOn.zip) and the direct download URL
+    of the release zip before announcing the plugin to users.
+-->
+<extensions>
+    <details>
+        <title lang="EN">SpotOn Repository</title>
+        <title lang="DE">SpotOn-Repository</title>
+    </details>
+    <plugins>
+        <plugin
+            name="SpotOn"
+            version="1.0.0"
+            target="unix|mac|windows"
+            minTarget="8.0"
+            maxTarget="*"
+            sha="PLACEHOLDER_SHA1_PHASE_6_1"
+            url="PLACEHOLDER_URL_PHASE_6_1"
+            category="musicservices"
+            creator="Marek Stiefenhofer"
+            email="sti@posteo.de"
+        >
+            <title lang="EN">SpotOn</title>
+            <title lang="DE">SpotOn</title>
+            <desc lang="EN">Spotify plugin for Lyrion Music Server</desc>
+            <desc lang="DE">Spotify-Plugin fuer Lyrion Music Server</desc>
+        </plugin>
+    </plugins>
+</extensions>
