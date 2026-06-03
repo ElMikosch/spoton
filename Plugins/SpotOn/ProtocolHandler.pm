@@ -78,6 +78,10 @@ sub canDirectStream {
     my ($class, $client, $url) = @_;
 
     return 0 unless $client;
+
+    # DirectStream is only valid for Connect streams — Browse tracks use son-* pipelines
+    return 0 unless $url && $url =~ m{spotify://connect-};
+
     $client = $client->master if $client->can('master');
 
     # Per-player streamFormat: pcm/flac/mp3 force transcoding — no DirectStream (D-11)
