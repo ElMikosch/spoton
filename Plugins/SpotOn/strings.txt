@@ -301,3 +301,8 @@ PLUGIN_SPOTON_BITRATE_OVERRIDE_DESC
 PLUGIN_SPOTON_BITRATE_GLOBAL
 	DE	Global (Standard)
 	EN	Global (Default)
+
+PLUGIN_SPOTON_RECOMMENDATIONS
+	DE	SpotOn Empfehlungen
+	EN	SpotOn Recommendations
+

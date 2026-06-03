@@ -83,6 +83,14 @@ sub initPlugin {
         'Plugins::SpotOn::ProtocolHandler'
     );
 
+    # D-06: Register as DSTM provider (Don't Stop The Music).
+    # Outside main::WEBUI guard — DSTM works headless too.
+    # isEnabled check prevents crash if DSTM plugin is not installed.
+    if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
+        require Plugins::SpotOn::DontStopTheMusic;
+        Plugins::SpotOn::DontStopTheMusic->init();
+    }
+
     if (main::WEBUI) {
         require Plugins::SpotOn::Settings;
         Plugins::SpotOn::Settings->new();
