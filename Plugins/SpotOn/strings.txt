@@ -870,17 +870,17 @@ PLUGIN_SPOTON_STREAM_FORMAT
 	SV	Streamingformat
 
 PLUGIN_SPOTON_STREAM_FORMAT_DESC
-	CS	Auto: OGG pro DirectStream, PCM jako záloha. OGG Passthrough: nejnižší zátěž CPU, ale ne všechny přehrávače podporují OGG. FLAC/MP3: vynucené překódování pro přehrávače bez podpory OGG/PCM.
-	DA	Auto: OGG til DirectStream, PCM som fallback. OGG Passthrough: laveste CPU-belastning, men ikke alle afspillere understøtter OGG. FLAC/MP3: tvungen omkodning til afspillere uden OGG/PCM-understøttelse.
-	DE	Auto: OGG bei DirectStream-fähigen Playern, PCM als Fallback. OGG Passthrough: Geringste CPU-Last, aber nicht alle Player unterstützen OGG. FLAC/MP3: Erzwingt Transkodierung für Player ohne OGG/PCM-Unterstützung.
-	EN	Auto: OGG for DirectStream-capable players, PCM as fallback. OGG Passthrough: Lowest CPU load, but not all players support OGG natively. FLAC/MP3: Forces transcoding for players without OGG/PCM support.
-	ES	Auto: OGG para reproductores con DirectStream, PCM como alternativa. OGG Passthrough: menor carga de CPU, pero no todos los reproductores soportan OGG. FLAC/MP3: fuerza transcodificación para reproductores sin soporte OGG/PCM.
-	FR	Auto : OGG pour les lecteurs DirectStream, PCM en secours. OGG Passthrough : charge CPU minimale, mais tous les lecteurs ne supportent pas l'OGG. FLAC/MP3 : force le transcodage pour les lecteurs sans support OGG/PCM.
-	IT	Auto: OGG per lettori DirectStream, PCM come fallback. OGG Passthrough: carico CPU minimo, ma non tutti i lettori supportano OGG. FLAC/MP3: forza la transcodifica per lettori senza supporto OGG/PCM.
-	NL	Auto: OGG voor DirectStream-spelers, PCM als terugval. OGG Passthrough: laagste CPU-belasting, maar niet alle spelers ondersteunen OGG. FLAC/MP3: forceert transcodering voor spelers zonder OGG/PCM-ondersteuning.
-	NO	Auto: OGG for DirectStream-spillere, PCM som reserve. OGG Passthrough: lavest CPU-belastning, men ikke alle spillere støtter OGG. FLAC/MP3: tvinger transkoding for spillere uten OGG/PCM-støtte.
-	PL	Auto: OGG dla odtwarzaczy DirectStream, PCM jako zapas. OGG Passthrough: najniższe obciążenie CPU, ale nie wszystkie odtwarzacze obsługują OGG. FLAC/MP3: wymusza transkodowanie dla odtwarzaczy bez obsługi OGG/PCM.
-	SV	Auto: OGG för DirectStream-spelare, PCM som reserv. OGG Passthrough: lägst CPU-belastning, men inte alla spelare stöder OGG. FLAC/MP3: tvingar transkodning för spelare utan OGG/PCM-stöd.
+	CS	Ovlivňuje pouze Browse mód. Connect vždy používá PCM DirectStream. Auto: OGG pro DirectStream, PCM jako záloha. OGG Passthrough: nejnižší zátěž CPU, ale ne všechny přehrávače podporují OGG. FLAC/MP3: vynucené překódování pro přehrávače bez podpory OGG/PCM.
+	DA	Påvirker kun Browse-tilstand. Connect bruger altid PCM DirectStream. Auto: OGG til DirectStream, PCM som fallback. OGG Passthrough: laveste CPU-belastning, men ikke alle afspillere understøtter OGG. FLAC/MP3: tvungen omkodning til afspillere uden OGG/PCM-understøttelse.
+	DE	Gilt nur für den Browse-Modus. Connect verwendet immer PCM DirectStream. Auto: OGG bei DirectStream-fähigen Playern, PCM als Fallback. OGG Passthrough: Geringste CPU-Last, aber nicht alle Player unterstützen OGG. FLAC/MP3: Erzwingt Transkodierung für Player ohne OGG/PCM-Unterstützung.
+	EN	Affects Browse mode only. Connect always uses PCM DirectStream. Auto: OGG for DirectStream-capable players, PCM as fallback. OGG Passthrough: Lowest CPU load, but not all players support OGG natively. FLAC/MP3: Forces transcoding for players without OGG/PCM support.
+	ES	Solo afecta al modo Browse. Connect siempre usa PCM DirectStream. Auto: OGG para reproductores con DirectStream, PCM como alternativa. OGG Passthrough: menor carga de CPU, pero no todos los reproductores soportan OGG. FLAC/MP3: fuerza transcodificación para reproductores sin soporte OGG/PCM.
+	FR	Affecte uniquement le mode Browse. Connect utilise toujours PCM DirectStream. Auto : OGG pour les lecteurs DirectStream, PCM en secours. OGG Passthrough : charge CPU minimale, mais tous les lecteurs ne supportent pas l'OGG. FLAC/MP3 : force le transcodage pour les lecteurs sans support OGG/PCM.
+	IT	Riguarda solo la modalità Browse. Connect usa sempre PCM DirectStream. Auto: OGG per lettori DirectStream, PCM come fallback. OGG Passthrough: carico CPU minimo, ma non tutti i lettori supportano OGG. FLAC/MP3: forza la transcodifica per lettori senza supporto OGG/PCM.
+	NL	Geldt alleen voor Browse-modus. Connect gebruikt altijd PCM DirectStream. Auto: OGG voor DirectStream-spelers, PCM als terugval. OGG Passthrough: laagste CPU-belasting, maar niet alle spelers ondersteunen OGG. FLAC/MP3: forceert transcodering voor spelers zonder OGG/PCM-ondersteuning.
+	NO	Påvirker kun Browse-modus. Connect bruker alltid PCM DirectStream. Auto: OGG for DirectStream-spillere, PCM som reserve. OGG Passthrough: lavest CPU-belastning, men ikke alle spillere støtter OGG. FLAC/MP3: tvinger transkoding for spillere uten OGG/PCM-støtte.
+	PL	Dotyczy tylko trybu Browse. Connect zawsze używa PCM DirectStream. Auto: OGG dla odtwarzaczy DirectStream, PCM jako zapas. OGG Passthrough: najniższe obciążenie CPU, ale nie wszystkie odtwarzacze obsługują OGG. FLAC/MP3: wymusza transkodowanie dla odtwarzaczy bez obsługi OGG/PCM.
+	SV	Påverkar bara Browse-läget. Connect använder alltid PCM DirectStream. Auto: OGG för DirectStream-spelare, PCM som reserv. OGG Passthrough: lägst CPU-belastning, men inte alla spelare stöder OGG. FLAC/MP3: tvingar transkodning för spelare utan OGG/PCM-stöd.
 
 PLUGIN_SPOTON_STREAM_FORMAT_AUTO
 	CS	Automaticky
