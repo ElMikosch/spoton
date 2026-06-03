@@ -18,7 +18,7 @@ use File::Basename;
 use File::Spec::Functions qw(catdir);
 use Slim::Player::TranscodingHelper;
 
-use constant KILL_PROCESS_INTERVAL => 3600;    # Stundlicher Orphaned-Process-Cleanup (STR-10)
+use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
@@ -67,7 +67,7 @@ sub initPlugin {
             \&_refreshAllTokens
         );
 
-        # Orphaned-Process-Cleanup-Timer starten (STR-10)
+        # Start orphaned-process cleanup timer (STR-10)
         Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
         Slim::Utils::Timers::setTimer(
             $class,
@@ -173,7 +173,7 @@ sub _killOrphanedProcesses {
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
-                    $name =~ s/[^A-Za-z0-9._-]//g;    # CR-02: Whitelist statt Blacklist — verhindert Shell-Injection via &, |, ;
+                    $name =~ s/[^A-Za-z0-9._-]//g;    # CR-02: allowlist not blocklist — prevents shell injection via &, |, ;
                     if ($name) {
                         system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
                     }
@@ -339,10 +339,10 @@ sub _largestImage {
     return $largest->{url} || '';
 }
 
-# Regex-Muster fuer Spotify-generierte Personal-Mix-Playlists (D-06).
-# Verwendet \s+ statt Leerzeichen fuer Whitespace-Varianten.
-# BEIDE Aufrufstellen (_madeForYouFeed und _libraryPlaylistsFeed)
-# nutzen _isMadeForYou — nur diese Funktion aendern reicht (RESEARCH.md Pitfall 4).
+# Regex pattern for Spotify-generated personal mix playlists (D-06).
+# Uses \s+ instead of literal spaces for whitespace variants.
+# Both call sites (_madeForYouFeed and _libraryPlaylistsFeed)
+# use _isMadeForYou — changing only this function is sufficient (Pitfall 4: single detection point).
 my $PERSONAL_MIX_REGEX = qr/Daily\s+Mix|MixTape|Discover\s+Weekly|Mix\s+der\s+Woche|Release\s+Radar/i;
 
 # _isMadeForYou($playlist_hashref)
@@ -412,7 +412,7 @@ sub _trackItem {
         url       => $spotify_url,
         play      => $spotify_url,
         on_select => 'play',
-        playall   => 1,    # Kontext-Queueing (D-09/D-10) — XMLBrowser reiht alle Items des Feeds ein
+        playall   => 1,    # Context queueing (D-09/D-10) — XMLBrowser enqueues all feed items
         image     => $image,
         duration  => $duration,
         type      => 'audio',
@@ -1150,7 +1150,7 @@ sub _albumTrackItem {
         url       => $spotify_url,
         play      => $spotify_url,
         on_select => 'play',
-        playall   => 1,    # Kontext-Queueing fuer Album-Track-Tap (D-09)
+        playall   => 1,    # Context queueing for album track tap (D-09)
         image     => $image,
         duration  => $duration,
         type      => 'audio',

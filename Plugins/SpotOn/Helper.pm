@@ -18,7 +18,7 @@ my $log   = logger('plugin.spoton');
 my ($helper, $helperVersion, $helperCapabilities);
 
 sub init {
-    # aarch64 kann als Fallback armhf-Binaries verwenden
+    # aarch64 can fall back to armhf binaries
     if ( !main::ISWINDOWS && !main::ISMAC
          && Slim::Utils::OSDetect::details()->{osArch} =~ /^aarch64/i ) {
         Slim::Utils::Misc::addFindBinPaths(
@@ -68,11 +68,11 @@ sub helperCheck {
     my $checkCmd = sprintf("'%s' -n 'SpotOn' --check", $safe);
     $$check = `$checkCmd 2>&1`;
 
-    # KRITISCH: 'spoton' nicht 'spotty' im Regex
+    # CRITICAL: match 'spoton', not 'spotty'
     if ( $$check && $$check =~ /^ok spoton v([\d\.]+)/i ) {
         my $version = $1;
 
-        # SpotOn-Erweiterung: Mindestversions-Pruefung
+        # Minimum version check
         if ( _versionCompare($version, MIN_BINARY_VERSION) < 0 ) {
             $log->warn("Binary version $version below minimum " . MIN_BINARY_VERSION);
             return 0;
@@ -112,7 +112,7 @@ sub version {
     return $class->getVersion();
 }
 
-# Angepasster Binary-Finder um findbin() von LMS zu nutzen
+# Custom binary finder wrapping LMS findbin()
 sub _findBin {
     my ($checkerCb, $customFirst) = @_;
 
@@ -120,13 +120,13 @@ sub _findBin {
     my $binary;
 
     if (Slim::Utils::OSDetect::OS() eq 'unix') {
-        # auf 64 bit x86 zuerst x86_64-Build versuchen
+        # on 64-bit x86, try the x86_64 build first
         if ( $Config::Config{'archname'} =~ /x86_64/ ) {
             push @candidates, HELPER . '-x86_64';
         }
     }
 
-    # Custom-Override zuerst (LMS-10 Vorbereitung)
+    # Custom override first (LMS-10 preparation)
     unshift @candidates, HELPER . '-custom';
 
     foreach my $name (@candidates) {

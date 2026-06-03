@@ -55,7 +55,7 @@ sub handler {
 
     my ($helperPath, $helperVersion) = Plugins::SpotOn::Helper->get();
 
-    # Binary-Status an Template uebergeben
+    # Pass binary status to template
     $paramRef->{helperMissing} = string('PLUGIN_SPOTON_BINARY_MISSING') unless $helperPath;
     $paramRef->{binaryVersion} = $helperVersion || '';
     $paramRef->{binaryPath}    = $helperPath    || '';
@@ -66,30 +66,30 @@ sub handler {
         $bitrate = 320 unless $valid_bitrates{$bitrate};
         $prefs->set('bitrate', $bitrate);
 
-        # Normalization pref speichern (STR-08, T-04-05)
-        # Checkbox: wenn nicht angehakt, sendet Browser keinen Wert — undef/leer wird zu 0
+        # Save normalization pref (STR-08, T-04-05)
+        # Checkbox: browser sends no value when unchecked — treat undef/empty as 0
         my $norm = $paramRef->{'pref_normalization'} ? 1 : 0;
         $prefs->set('normalization', $norm);
 
-        # Client-ID pref speichern (D-02, T-04.4-01)
-        # T-04.4-01: Input-Validierung — nur alphanumerische Zeichen, max 32 Zeichen.
-        # Spotify Client-IDs sind genau 32 hex-Zeichen — regex + Laengencheck
-        # eliminiert Shell-Metacharacter-Injection-Vektoren fuer --client-id Flag.
+        # Save Client-ID pref (D-02, T-04.4-01)
+        # T-04.4-01: Input validation — alphanumeric only, max 32 chars.
+        # Spotify Client-IDs are exactly 32 hex chars — regex + length check
+        # eliminates shell metacharacter injection vectors for --client-id flag.
         if (defined $paramRef->{pref_clientId}) {
             my $id = $paramRef->{pref_clientId} // '';
-            $id =~ s/[^a-zA-Z0-9]//g;  # T-04.4-01: nur alphanumerisch (Injection-Schutz)
-            $id = substr($id, 0, 32);   # T-04.4-01: max 32 Zeichen (Spotify Client-ID-Format)
+            $id =~ s/[^a-zA-Z0-9]//g;  # T-04.4-01: alphanumeric only (injection guard)
+            $id = substr($id, 0, 32);   # T-04.4-01: max 32 chars (Spotify Client-ID format)
             $prefs->set('clientId', $id);
         }
 
-        # ZeroConf Discovery starten (D-01)
+        # Start ZeroConf Discovery (D-01)
         # Use 'defined' — submit button value may be empty string when strings aren't loaded
         if (defined $paramRef->{startDiscovery}) {
             require Plugins::SpotOn::API::TokenManager;
             Plugins::SpotOn::API::TokenManager->startDiscovery();
         }
 
-        # ZeroConf Discovery stoppen
+        # Stop ZeroConf Discovery
         if (defined $paramRef->{stopDiscovery}) {
             require Plugins::SpotOn::API::TokenManager;
             Plugins::SpotOn::API::TokenManager->stopDiscovery();
@@ -193,7 +193,7 @@ sub handler {
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
     $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
 
-    # Client-ID und Degraded-Mode-Status fuer Template (D-02, D-03)
+    # Client-ID and degraded-mode status for template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
 
@@ -304,10 +304,10 @@ sub _discoveryStatusHandler {
 }
 
 # ============================================================
-# Helper: Degraded Mode pruefen (D-03)
-# Degraded = kein Custom-Client-ID konfiguriert.
-# Zeigt Hinweis in Settings damit User eigene Spotify Developer App eintragen kann.
-# Analog zu _isDiscoveryRunning unten.
+# Helper: check degraded mode (D-03)
+# Degraded = no custom Client-ID configured.
+# Shows a hint in Settings so the user can enter their own Spotify Developer App.
+# Analogous to _isDiscoveryRunning below.
 # ============================================================
 sub _isDegradedMode {
     my $customId = $prefs->get('clientId') || '';
