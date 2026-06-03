@@ -1297,20 +1297,15 @@ sub updateTranscodingTable {
             delete $commandTable->{'son-ogg-*-*'};
             delete $commandTable->{'soc-ogg-*-*'};
         }
-        # Force specific format: copy the desired pipeline to all son-* keys so LMS
-        # finds a match regardless of which output format the player negotiates.
-        if ($fmt eq 'flac' && $commandTable->{'son-flc-*-*'}) {
-            my $flcCmd = $commandTable->{'son-flc-*-*'};
-            $commandTable->{'son-pcm-*-*'} = $flcCmd;
-            $commandTable->{'son-mp3-*-*'} = $flcCmd;
-        } elsif ($fmt eq 'mp3' && $commandTable->{'son-mp3-*-*'}) {
-            my $mp3Cmd = $commandTable->{'son-mp3-*-*'};
-            $commandTable->{'son-pcm-*-*'} = $mp3Cmd;
-            $commandTable->{'son-flc-*-*'} = $mp3Cmd;
-        } elsif ($fmt eq 'pcm' && $commandTable->{'son-pcm-*-*'}) {
-            my $pcmCmd = $commandTable->{'son-pcm-*-*'};
-            $commandTable->{'son-flc-*-*'} = $pcmCmd;
-            $commandTable->{'son-mp3-*-*'} = $pcmCmd;
+        # Force FLAC/MP3: delete competing pipelines so LMS uses the desired one.
+        # PCM cannot be forced (LMS doesn't negotiate pcm as an output codec) —
+        # pcm/auto both use LMS's default format selection.
+        if ($fmt eq 'flac') {
+            delete $commandTable->{'son-mp3-*-*'};
+            delete $commandTable->{'son-pcm-*-*'};
+        } elsif ($fmt eq 'mp3') {
+            delete $commandTable->{'son-flc-*-*'};
+            delete $commandTable->{'son-pcm-*-*'};
         }
     }
 }

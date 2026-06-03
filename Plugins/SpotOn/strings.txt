@@ -909,17 +909,17 @@ PLUGIN_SPOTON_STREAM_FORMAT_OGG
 	SV	OGG Passthrough (DirectStream)
 
 PLUGIN_SPOTON_STREAM_FORMAT_PCM
-	CS	PCM (DirectStream)
-	DA	PCM (DirectStream)
-	DE	PCM (DirectStream)
-	EN	PCM (DirectStream)
-	ES	PCM (DirectStream)
-	FR	PCM (DirectStream)
-	IT	PCM (DirectStream)
-	NL	PCM (DirectStream)
-	NO	PCM (DirectStream)
-	PL	PCM (DirectStream)
-	SV	PCM (DirectStream)
+	CS	PCM (Standard)
+	DA	PCM (Standard)
+	DE	PCM (Standard)
+	EN	PCM (Standard)
+	ES	PCM (Estándar)
+	FR	PCM (Standard)
+	IT	PCM (Standard)
+	NL	PCM (Standaard)
+	NO	PCM (Standard)
+	PL	PCM (Standardowy)
+	SV	PCM (Standard)
 
 PLUGIN_SPOTON_STREAM_FORMAT_FLAC
 	CS	FLAC (transkódováno)
