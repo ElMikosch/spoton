@@ -1,308 +1,1066 @@
 PLUGIN_SPOTON
+	CS	SpotOn Spotify pro Squeezebox
+	DA	SpotOn Spotify til Squeezebox
 	DE	SpotOn Spotify für Squeezebox
 	EN	SpotOn Spotify for Squeezebox
+	ES	SpotOn Spotify para Squeezebox
+	FR	SpotOn Spotify pour Squeezebox
+	IT	SpotOn Spotify per Squeezebox
+	NL	SpotOn Spotify voor Squeezebox
+	NO	SpotOn Spotify for Squeezebox
+	PL	SpotOn Spotify dla Squeezebox
+	SV	SpotOn Spotify för Squeezebox
 
 PLUGIN_SPOTON_NAME
+	CS	SpotOn
+	DA	SpotOn
 	DE	SpotOn
 	EN	SpotOn
+	ES	SpotOn
+	FR	SpotOn
+	IT	SpotOn
+	NL	SpotOn
+	NO	SpotOn
+	PL	SpotOn
+	SV	SpotOn
 
 PLUGIN_SPOTON_BINARY_MISSING
+	CS	Binární soubor SpotOn chybí. Prosím přeinstalujte plugin nebo zadejte cestu v nastavení.
+	DA	SpotOn binærfilen mangler. Geninstallér venligst pluginet eller angiv stien i indstillingerne.
 	DE	Das SpotOn-Binary fehlt. Bitte das Plugin neu installieren oder den Pfad in den Einstellungen angeben.
 	EN	The SpotOn binary is missing. Please reinstall the plugin or specify the path in settings.
+	ES	Falta el binario de SpotOn. Por favor reinstala el plugin o especifica la ruta en los ajustes.
+	FR	Le binaire SpotOn est manquant. Veuillez réinstaller le plugin ou spécifier le chemin dans les paramètres.
+	IT	Il binario SpotOn è mancante. Reinstalla il plugin o specifica il percorso nelle impostazioni.
+	NL	Het SpotOn binair bestand ontbreekt. Herinstalleer de plugin of geef het pad op in de instellingen.
+	NO	SpotOn-binærfilen mangler. Installer pluginen på nytt eller angi stien i innstillingene.
+	PL	Brak pliku binarnego SpotOn. Zainstaluj ponownie wtyczkę lub podaj ścieżkę w ustawieniach.
+	SV	SpotOn-binärfilen saknas. Installera om pluginet eller ange sökvägen i inställningarna.
 
 PLUGIN_SPOTON_BINARY_STATUS
+	CS	Stav binárního souboru
+	DA	Binær status
 	DE	Binary-Status
 	EN	Binary Status
+	ES	Estado del binario
+	FR	État du binaire
+	IT	Stato del binario
+	NL	Binaire status
+	NO	Binærstatus
+	PL	Status pliku binarnego
+	SV	Binärstatus
 
 PLUGIN_SPOTON_ACCOUNT_SETTINGS
+	CS	Nastavení účtu
+	DA	Kontoindstillinger
 	DE	Konto-Einstellungen
 	EN	Account Settings
+	ES	Ajustes de cuenta
+	FR	Paramètres du compte
+	IT	Impostazioni account
+	NL	Accountinstellingen
+	NO	Kontoinnstillinger
+	PL	Ustawienia konta
+	SV	Kontoinställningar
 
 PLUGIN_SPOTON_BITRATE
+	CS	Přenosová rychlost
+	DA	Bithastighed
 	DE	Bitrate
 	EN	Bitrate
+	ES	Tasa de bits
+	FR	Débit binaire
+	IT	Bitrate
+	NL	Bitsnelheid
+	NO	Bithastighet
+	PL	Przepływność
+	SV	Bithastighet
 
 PLUGIN_SPOTON_NO_BINARY
+	CS	Nebyl nalezen žádný binární soubor SpotOn. Streamování není možné.
+	DA	Ingen SpotOn binærfil fundet. Streaming er ikke mulig.
 	DE	Kein SpotOn-Binary gefunden. Streaming ist nicht möglich.
 	EN	No SpotOn binary found. Streaming is not possible.
+	ES	No se encontró ningún binario de SpotOn. El streaming no es posible.
+	FR	Aucun binaire SpotOn trouvé. La diffusion en continu n'est pas possible.
+	IT	Nessun binario SpotOn trovato. Lo streaming non è possibile.
+	NL	Geen SpotOn binair bestand gevonden. Streaming is niet mogelijk.
+	NO	Ingen SpotOn-binærfil funnet. Streaming er ikke mulig.
+	PL	Nie znaleziono pliku binarnego SpotOn. Strumieniowanie nie jest możliwe.
+	SV	Ingen SpotOn-binärfil hittades. Streaming är inte möjligt.
 
 PLUGIN_SPOTON_ACTIVE_ACCOUNT
+	CS	Aktivní: %s [přepnout]
+	DA	Aktiv: %s [skift]
 	DE	Aktiv: %s [wechseln]
 	EN	Active: %s [switch]
+	ES	Activo: %s [cambiar]
+	FR	Actif: %s [changer]
+	IT	Attivo: %s [cambia]
+	NL	Actief: %s [wisselen]
+	NO	Aktiv: %s [bytt]
+	PL	Aktywne: %s [przełącz]
+	SV	Aktiv: %s [byt]
 
 PLUGIN_SPOTON_RATE_LIMIT_HINT
+	CS	Požadavky Spotify jsou omezeny -- prosím čekejte
+	DA	Spotify-anmodninger er begrænset -- vent venligst
 	DE	Spotify-Anfragen gedrosselt -- bitte warten
 	EN	Spotify requests throttled -- please wait
+	ES	Solicitudes de Spotify limitadas -- por favor espere
+	FR	Requêtes Spotify limitées -- veuillez patienter
+	IT	Richieste Spotify limitate -- attendere prego
+	NL	Spotify-verzoeken beperkt -- even geduld
+	NO	Spotify-forespørsler begrenset -- vennligst vent
+	PL	Żądania Spotify ograniczone -- proszę czekać
+	SV	Spotify-förfrågningar begränsade -- vänligen vänta
 
 PLUGIN_SPOTON_ACCOUNT_NONE
+	CS	Žádný účet není nakonfigurován
+	DA	Ingen konto konfigureret
 	DE	Kein Konto konfiguriert
 	EN	No account configured
+	ES	Ninguna cuenta configurada
+	FR	Aucun compte configuré
+	IT	Nessun account configurato
+	NL	Geen account geconfigureerd
+	NO	Ingen konto konfigurert
+	PL	Brak skonfigurowanego konta
+	SV	Inget konto konfigurerat
 
 PLUGIN_SPOTON_ACCOUNT_ACTIVE
+	CS	Aktivní
+	DA	Aktiv
 	DE	Aktiv
 	EN	Active
+	ES	Activo
+	FR	Actif
+	IT	Attivo
+	NL	Actief
+	NO	Aktiv
+	PL	Aktywne
+	SV	Aktiv
 
 PLUGIN_SPOTON_ACCOUNT_SWITCH
+	CS	Přepnout
+	DA	Skift
 	DE	Wechseln
 	EN	Switch
+	ES	Cambiar
+	FR	Changer
+	IT	Cambia
+	NL	Wisselen
+	NO	Bytt
+	PL	Przełącz
+	SV	Byt
 
 PLUGIN_SPOTON_ACCOUNT_REMOVE
+	CS	Odebrat
+	DA	Fjern
 	DE	Entfernen
 	EN	Remove
+	ES	Eliminar
+	FR	Supprimer
+	IT	Rimuovi
+	NL	Verwijderen
+	NO	Fjern
+	PL	Usuń
+	SV	Ta bort
 
 PLUGIN_SPOTON_AUTH_ERROR
+	CS	Přihlášení selhalo
+	DA	Godkendelse mislykkedes
 	DE	Anmeldung fehlgeschlagen
 	EN	Authentication failed
+	ES	Error de autenticación
+	FR	Échec de l'authentification
+	IT	Autenticazione fallita
+	NL	Authenticatie mislukt
+	NO	Godkjenning mislyktes
+	PL	Uwierzytelnianie nie powiodło się
+	SV	Autentisering misslyckades
 
 PLUGIN_SPOTON_STEP1_TITLE
+	CS	Krok 1: Otevřete Spotify App
+	DA	Trin 1: Åbn Spotify App
 	DE	Schritt 1: Spotify App öffnen
 	EN	Step 1: Open Spotify App
+	ES	Paso 1: Abrir la App de Spotify
+	FR	Étape 1: Ouvrir l'application Spotify
+	IT	Passo 1: Apri l'app Spotify
+	NL	Stap 1: Open de Spotify App
+	NO	Trinn 1: Åpne Spotify App
+	PL	Krok 1: Otwórz aplikację Spotify
+	SV	Steg 1: Öppna Spotify-appen
 
 PLUGIN_SPOTON_STEP2_TITLE
+	CS	Krok 2: Vyberte zařízení
+	DA	Trin 2: Vælg enhed
 	DE	Schritt 2: Gerät auswählen
 	EN	Step 2: Select device
+	ES	Paso 2: Seleccionar dispositivo
+	FR	Étape 2: Sélectionner l'appareil
+	IT	Passo 2: Seleziona il dispositivo
+	NL	Stap 2: Selecteer apparaat
+	NO	Trinn 2: Velg enhet
+	PL	Krok 2: Wybierz urządzenie
+	SV	Steg 2: Välj enhet
 
 PLUGIN_SPOTON_ADD_ANOTHER
+	CS	Přidat další účet
+	DA	Tilføj endnu en konto
 	DE	Weiteres Konto hinzufügen
 	EN	Add Another Account
+	ES	Añadir otra cuenta
+	FR	Ajouter un autre compte
+	IT	Aggiungi un altro account
+	NL	Nog een account toevoegen
+	NO	Legg til en annen konto
+	PL	Dodaj kolejne konto
+	SV	Lägg till ett annat konto
 
 PLUGIN_SPOTON_CONNECTED_AS
+	CS	Připojeno jako
+	DA	Forbundet som
 	DE	Verbunden als
 	EN	Connected as
+	ES	Conectado como
+	FR	Connecté en tant que
+	IT	Connesso come
+	NL	Verbonden als
+	NO	Tilkoblet som
+	PL	Połączono jako
+	SV	Ansluten som
 
 PLUGIN_SPOTON_ACCOUNT_REMOVE_CONFIRM
+	CS	Opravdu odebrat tento účet? Tuto akci nelze vrátit zpět.
+	DA	Fjern denne konto? Dette kan ikke fortrydes.
 	DE	Konto wirklich entfernen? Dieser Schritt kann nicht rückgängig gemacht werden.
 	EN	Remove this account? This cannot be undone.
+	ES	¿Eliminar esta cuenta? Esta acción no se puede deshacer.
+	FR	Supprimer ce compte? Cette action est irréversible.
+	IT	Rimuovere questo account? Questa azione non può essere annullata.
+	NL	Dit account verwijderen? Dit kan niet ongedaan worden gemaakt.
+	NO	Fjerne denne kontoen? Dette kan ikke angres.
+	PL	Usunąć to konto? Tej operacji nie można cofnąć.
+	SV	Ta bort detta konto? Det går inte att ångra.
 
 PLUGIN_SPOTON_HOME
+	CS	Domů
+	DA	Forside
 	DE	Home
 	EN	Home
+	ES	Inicio
+	FR	Accueil
+	IT	Home
+	NL	Start
+	NO	Hjem
+	PL	Strona główna
+	SV	Hem
 
 PLUGIN_SPOTON_SEARCH
+	CS	Hledat
+	DA	Søg
 	DE	Suche
 	EN	Search
+	ES	Buscar
+	FR	Rechercher
+	IT	Cerca
+	NL	Zoeken
+	NO	Søk
+	PL	Szukaj
+	SV	Sök
 
 PLUGIN_SPOTON_LIBRARY
+	CS	Knihovna
+	DA	Bibliotek
 	DE	Bibliothek
 	EN	Library
+	ES	Biblioteca
+	FR	Bibliothèque
+	IT	Libreria
+	NL	Bibliotheek
+	NO	Bibliotek
+	PL	Biblioteka
+	SV	Bibliotek
 
 PLUGIN_SPOTON_RECENTLY_PLAYED
+	CS	Nedávno přehráváno
+	DA	Senest afspillet
 	DE	Kürzlich gehört
 	EN	Recently Played
+	ES	Reproducido recientemente
+	FR	Récemment écouté
+	IT	Ascoltato di recente
+	NL	Onlangs afgespeeld
+	NO	Nylig spilt
+	PL	Ostatnio odtwarzane
+	SV	Nyligen spelat
 
 PLUGIN_SPOTON_MADE_FOR_YOU
+	CS	Vytvořeno pro vás
+	DA	Lavet til dig
 	DE	Für dich gemacht
 	EN	Made For You
+	ES	Hecho para ti
+	FR	Fait pour vous
+	IT	Fatto per te
+	NL	Gemaakt voor jou
+	NO	Laget for deg
+	PL	Stworzone dla Ciebie
+	SV	Gjort för dig
 
 PLUGIN_SPOTON_TOP_TRACKS
+	CS	Nejlepší skladby
+	DA	Top numre
 	DE	Top Tracks
 	EN	Top Tracks
+	ES	Canciones principales
+	FR	Titres les plus écoutés
+	IT	Brani principali
+	NL	Topnummers
+	NO	Toppspor
+	PL	Najpopularniejsze utwory
+	SV	Toppspår
 
 PLUGIN_SPOTON_LIKED_SONGS
+	CS	Oblíbené skladby
+	DA	Synes godt om sange
 	DE	Gefällt mir
 	EN	Liked Songs
+	ES	Canciones que te gustan
+	FR	Titres aimés
+	IT	Canzoni che ti piacciono
+	NL	Leuke nummers
+	NO	Likte sanger
+	PL	Polubione utwory
+	SV	Gillade låtar
 
 PLUGIN_SPOTON_ALBUMS
+	CS	Alba
+	DA	Album
 	DE	Alben
 	EN	Albums
+	ES	Álbumes
+	FR	Albums
+	IT	Album
+	NL	Albums
+	NO	Album
+	PL	Albumy
+	SV	Album
 
 PLUGIN_SPOTON_ARTISTS
+	CS	Interpreti
+	DA	Kunstnere
 	DE	Künstler
 	EN	Artists
+	ES	Artistas
+	FR	Artistes
+	IT	Artisti
+	NL	Artiesten
+	NO	Artister
+	PL	Wykonawcy
+	SV	Artister
 
 PLUGIN_SPOTON_PLAYLISTS
+	CS	Seznamy skladeb
+	DA	Afspilningslister
 	DE	Playlists
 	EN	Playlists
+	ES	Listas de reproducción
+	FR	Listes de lecture
+	IT	Playlist
+	NL	Afspeellijsten
+	NO	Spillelister
+	PL	Playlisty
+	SV	Spellistor
 
 PLUGIN_SPOTON_SINGLES
+	CS	Singly
+	DA	Singler
 	DE	Singles
 	EN	Singles
+	ES	Singles
+	FR	Singles
+	IT	Singoli
+	NL	Singles
+	NO	Singler
+	PL	Single
+	SV	Singlar
 
 PLUGIN_SPOTON_COMPILATIONS
+	CS	Kompilace
+	DA	Opsamlinger
 	DE	Compilations
 	EN	Compilations
+	ES	Compilaciones
+	FR	Compilations
+	IT	Raccolte
+	NL	Compilaties
+	NO	Samlinger
+	PL	Składanki
+	SV	Samlingar
 
 PLUGIN_SPOTON_APPEARS_ON
+	CS	Objevuje se na
+	DA	Medvirker på
 	DE	Erscheint auf
 	EN	Appears On
+	ES	Aparece en
+	FR	Apparaît sur
+	IT	Appare su
+	NL	Verschijnt op
+	NO	Vises på
+	PL	Pojawia się na
+	SV	Visas på
 
 PLUGIN_SPOTON_TOP_RESULT
+	CS	Nejlepší výsledek
+	DA	Bedste resultat
 	DE	Bestes Ergebnis
 	EN	Top Result
+	ES	Mejor resultado
+	FR	Meilleur résultat
+	IT	Risultato principale
+	NL	Beste resultaat
+	NO	Beste resultat
+	PL	Najlepszy wynik
+	SV	Bästa resultat
 
 PLUGIN_SPOTON_TRACKS
+	CS	Skladby
+	DA	Numre
 	DE	Tracks
 	EN	Tracks
+	ES	Canciones
+	FR	Titres
+	IT	Brani
+	NL	Nummers
+	NO	Spor
+	PL	Utwory
+	SV	Spår
 
 PLUGIN_SPOTON_NO_RESULTS
+	CS	Žádné výsledky
+	DA	Ingen resultater
 	DE	Keine Ergebnisse
 	EN	No results
+	ES	Sin resultados
+	FR	Aucun résultat
+	IT	Nessun risultato
+	NL	Geen resultaten
+	NO	Ingen resultater
+	PL	Brak wyników
+	SV	Inga resultat
 
 PLUGIN_SPOTON_ARTIST_VIEW
+	CS	Zobrazit interpreta
+	DA	Vis kunstner
 	DE	Künstler anzeigen
 	EN	View Artist
+	ES	Ver artista
+	FR	Voir l'artiste
+	IT	Visualizza artista
+	NL	Artiest bekijken
+	NO	Vis artist
+	PL	Pokaż wykonawcę
+	SV	Visa artist
 
 PLUGIN_SPOTON_ALBUM_VIEW
+	CS	Zobrazit album
+	DA	Vis album
 	DE	Album anzeigen
 	EN	View Album
+	ES	Ver álbum
+	FR	Voir l'album
+	IT	Visualizza album
+	NL	Album bekijken
+	NO	Vis album
+	PL	Pokaż album
+	SV	Visa album
 
 PLUGIN_SPOTON_STREAMING_SETTINGS
+	CS	Nastavení streamování
+	DA	Streaming-indstillinger
 	DE	Streaming-Einstellungen
 	EN	Streaming Settings
+	ES	Ajustes de streaming
+	FR	Paramètres de diffusion
+	IT	Impostazioni streaming
+	NL	Streaming-instellingen
+	NO	Strømmeinnstillinger
+	PL	Ustawienia strumieniowania
+	SV	Streaminginställningar
 
 PLUGIN_SPOTON_NORMALIZATION
+	CS	Normalizace hlasitosti
+	DA	Lydstyrkenormalisering
 	DE	Lautstärkenormalisierung
 	EN	Volume Normalization
+	ES	Normalización de volumen
+	FR	Normalisation du volume
+	IT	Normalizzazione volume
+	NL	Volumenormalisatie
+	NO	Volumnormalisering
+	PL	Normalizacja głośności
+	SV	Volymsnormalisering
 
 PLUGIN_SPOTON_NORMALIZATION_DESC
+	CS	Aktivuje normalizaci hlasitosti (ReplayGain) pro konzistentní úroveň přehrávání
+	DA	Aktiverer lydstyrkenormalisering (ReplayGain) for ensartet afspilningsstyrke
 	DE	Aktiviert Lautstärkenormalisierung (ReplayGain) für gleichmäßige Lautstärke
 	EN	Enables volume normalization (ReplayGain) for consistent playback volume
+	ES	Activa la normalización de volumen (ReplayGain) para un volumen de reproducción uniforme
+	FR	Active la normalisation du volume (ReplayGain) pour un volume de lecture uniforme
+	IT	Abilita la normalizzazione del volume (ReplayGain) per un volume di riproduzione uniforme
+	NL	Activeert volumenormalisatie (ReplayGain) voor consistent afspeelvolume
+	NO	Aktiverer volumnormalisering (ReplayGain) for jevnt avspillingsvolum
+	PL	Włącza normalizację głośności (ReplayGain) dla jednolitego poziomu odtwarzania
+	SV	Aktiverar volymsnormalisering (ReplayGain) för jämn uppspelningsvolym
 
 PLUGIN_SPOTON_NORMALIZATION_LABEL
+	CS	Normalizovat hlasitost (ReplayGain)
+	DA	Normaliser lydstyrke (ReplayGain)
 	DE	Lautstärke normalisieren (ReplayGain)
 	EN	Normalize volume (ReplayGain)
+	ES	Normalizar volumen (ReplayGain)
+	FR	Normaliser le volume (ReplayGain)
+	IT	Normalizza volume (ReplayGain)
+	NL	Volume normaliseren (ReplayGain)
+	NO	Normaliser volum (ReplayGain)
+	PL	Normalizuj głośność (ReplayGain)
+	SV	Normalisera volym (ReplayGain)
 
 PLUGIN_SPOTON_ZEROCONF_SETUP
+	CS	Připojit Spotify
+	DA	Tilslut Spotify
 	DE	Spotify verbinden
 	EN	Connect Spotify
+	ES	Conectar Spotify
+	FR	Connecter Spotify
+	IT	Connetti Spotify
+	NL	Spotify verbinden
+	NO	Koble til Spotify
+	PL	Połącz Spotify
+	SV	Anslut Spotify
 
 PLUGIN_SPOTON_ZEROCONF_STEP1
+	CS	Připojit přes Spotify App
+	DA	Tilslut via Spotify App
 	DE	Mit der Spotify App verbinden
 	EN	Connect with the Spotify App
+	ES	Conectar con la App de Spotify
+	FR	Se connecter avec l'application Spotify
+	IT	Connetti con l'app Spotify
+	NL	Verbinden met de Spotify App
+	NO	Koble til via Spotify-appen
+	PL	Połącz przez aplikację Spotify
+	SV	Anslut via Spotify-appen
 
 PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS
+	CS	Otevřete aplikaci Spotify v telefonu. Klepněte na ikonu zařízení (vpravo dole) a vyberte svůj LMS server ze seznamu zařízení.
+	DA	Åbn Spotify-appen på din telefon. Tryk på enhedsikonet (nederst til højre) og vælg din LMS-server fra enhedslisten.
 	DE	Öffne die Spotify App auf deinem Handy. Tippe auf das Geräte-Symbol (unten rechts) und wähle deinen LMS-Server aus der Geräteliste.
 	EN	Open the Spotify app on your phone. Tap the device icon (bottom right) and select your LMS server from the device list.
+	ES	Abre la App de Spotify en tu teléfono. Pulsa el icono de dispositivo (abajo a la derecha) y selecciona tu servidor LMS de la lista de dispositivos.
+	FR	Ouvrez l'application Spotify sur votre téléphone. Appuyez sur l'icône de l'appareil (en bas à droite) et sélectionnez votre serveur LMS dans la liste des appareils.
+	IT	Apri l'app Spotify sul tuo telefono. Tocca l'icona del dispositivo (in basso a destra) e seleziona il tuo server LMS dall'elenco dei dispositivi.
+	NL	Open de Spotify-app op uw telefoon. Tik op het apparaatpictogram (rechtsonder) en selecteer uw LMS-server uit de apparatenlijst.
+	NO	Åpne Spotify-appen på telefonen din. Trykk på enhetsikonet (nederst til høyre) og velg LMS-serveren din fra enhetslisten.
+	PL	Otwórz aplikację Spotify na swoim telefonie. Dotknij ikony urządzenia (prawy dolny róg) i wybierz swój serwer LMS z listy urządzeń.
+	SV	Öppna Spotify-appen på din telefon. Tryck på enhetsikonen (nere till höger) och välj din LMS-server från enhetslistan.
 
 PLUGIN_SPOTON_WAITING_FOR_CONNECTION
+	CS	Čekání na připojení přes Spotify App...
+	DA	Venter på forbindelse via Spotify-app...
 	DE	Warte auf Verbindung über Spotify App...
 	EN	Waiting for connection via Spotify app...
+	ES	Esperando conexión a través de la App de Spotify...
+	FR	En attente de connexion via l'application Spotify...
+	IT	In attesa di connessione tramite l'app Spotify...
+	NL	Wachten op verbinding via Spotify-app...
+	NO	Venter på tilkobling via Spotify-appen...
+	PL	Oczekiwanie na połączenie przez aplikację Spotify...
+	SV	Väntar på anslutning via Spotify-appen...
 
 PLUGIN_SPOTON_START_DISCOVERY
+	CS	Spustit zjišťování
+	DA	Start søgning
 	DE	Erkennung starten
 	EN	Start Discovery
+	ES	Iniciar descubrimiento
+	FR	Démarrer la découverte
+	IT	Avvia rilevamento
+	NL	Detectie starten
+	NO	Start oppdagelse
+	PL	Uruchom wykrywanie
+	SV	Starta identifiering
 
 PLUGIN_SPOTON_STOP_DISCOVERY
+	CS	Zastavit zjišťování
+	DA	Stop søgning
 	DE	Erkennung stoppen
 	EN	Stop Discovery
+	ES	Detener descubrimiento
+	FR	Arrêter la découverte
+	IT	Ferma rilevamento
+	NL	Detectie stoppen
+	NO	Stopp oppdagelse
+	PL	Zatrzymaj wykrywanie
+	SV	Stoppa identifiering
 
 PLUGIN_SPOTON_CONNECT_HINT_ALT
+	CS	Výběr zařízení v aplikaci Spotify
+	DA	Spotify app enhedsvalg
 	DE	Spotify App Geräteauswahl
 	EN	Spotify app device picker
+	ES	Selector de dispositivos de la App de Spotify
+	FR	Sélecteur d'appareils de l'application Spotify
+	IT	Selettore dispositivi nell'app Spotify
+	NL	Spotify-app apparaatkiezer
+	NO	Enhetsvelger i Spotify-appen
+	PL	Wybór urządzenia w aplikacji Spotify
+	SV	Enhetsväljare i Spotify-appen
 
 PLUGIN_SPOTON_CLIENT_ID_SETTINGS
+	CS	Vlastní Spotify App
+	DA	Brugerdefineret Spotify App
 	DE	Eigene Spotify App
 	EN	Custom Spotify App
+	ES	App de Spotify personalizada
+	FR	Application Spotify personnalisée
+	IT	App Spotify personalizzata
+	NL	Aangepaste Spotify App
+	NO	Egendefinert Spotify App
+	PL	Własna aplikacja Spotify
+	SV	Anpassad Spotify App
 
 PLUGIN_SPOTON_CLIENT_ID_DESC
+	CS	Volitelné vlastní ID Spotify Developer App pro vyšší limity přenosové rychlosti
+	DA	Valgfrit brugerdefineret Spotify Developer App-ID for højere rategrænser
 	DE	Optionale eigene Spotify Developer App-ID für höhere Rate-Limits
 	EN	Optional custom Spotify Developer App ID for higher rate limits
+	ES	ID de app Spotify Developer personalizado para límites de velocidad más altos (opcional)
+	FR	ID d'application Spotify Developer personnalisé pour des limites de débit plus élevées (optionnel)
+	IT	ID app Spotify Developer personalizzato per limiti di frequenza più elevati (opzionale)
+	NL	Optioneel aangepast Spotify Developer App-ID voor hogere tarieflimieten
+	NO	Valgfritt egendefinert Spotify Developer App-ID for høyere hastighetsbegrensninger
+	PL	Opcjonalny własny identyfikator Spotify Developer App dla wyższych limitów szybkości
+	SV	Valfritt anpassat Spotify Developer App-ID för högre hastighetsgränser
 
 PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
+	CS	Spotify Client-ID (32 znaků, alfanumerické)
+	DA	Spotify Client-ID (32 tegn, alfanumerisk)
 	DE	Spotify Client-ID (32 Zeichen, alphanumerisch)
 	EN	Spotify Client ID (32 characters, alphanumeric)
+	ES	Spotify Client ID (32 caracteres, alfanumérico)
+	FR	Spotify Client ID (32 caractères, alphanumérique)
+	IT	Spotify Client ID (32 caratteri, alfanumerico)
+	NL	Spotify Client-ID (32 tekens, alfanumeriek)
+	NO	Spotify Client-ID (32 tegn, alfanumerisk)
+	PL	Spotify Client ID (32 znaki, alfanumeryczne)
+	SV	Spotify Client-ID (32 tecken, alfanumeriskt)
 
 PLUGIN_SPOTON_DEGRADED_MODE_WARNING
+	CS	Není nakonfigurováno vlastní Spotify App ID. Pro plnou funkčnost prosím zaregistrujte vlastní aplikaci:
+	DA	Intet brugerdefineret Spotify App-ID konfigureret. For fuld funktionalitet, registrér venligst din egen app:
 	DE	Keine eigene Spotify App-ID konfiguriert. Für volle Funktionalität bitte eigene App registrieren:
 	EN	No custom Spotify App ID configured. For full functionality, please register your own app:
+	ES	No hay ID de App de Spotify personalizado configurado. Para funcionalidad completa, registra tu propia app:
+	FR	Aucun ID d'application Spotify personnalisé configuré. Pour une fonctionnalité complète, veuillez enregistrer votre propre application:
+	IT	Nessun ID app Spotify personalizzato configurato. Per la piena funzionalità, registra la tua app:
+	NL	Geen aangepast Spotify App-ID geconfigureerd. Voor volledige functionaliteit, registreer uw eigen app:
+	NO	Ingen egendefinert Spotify App-ID konfigurert. For full funksjonalitet, registrer din egen app:
+	PL	Brak skonfigurowanego własnego identyfikatora Spotify App. Aby uzyskać pełną funkcjonalność, zarejestruj własną aplikację:
+	SV	Inget anpassat Spotify App-ID konfigurerat. För full funktionalitet, registrera din egen app:
 
 PLUGIN_SPOTON_REGISTER_APP_LINK
+	CS	Zaregistrovat vlastní aplikaci
+	DA	Registrér din egen app
 	DE	Eigene App registrieren
 	EN	Register your own app
+	ES	Registrar tu propia app
+	FR	Enregistrer votre propre application
+	IT	Registra la tua app
+	NL	Registreer uw eigen app
+	NO	Registrer din egen app
+	PL	Zarejestruj własną aplikację
+	SV	Registrera din egen app
 
 PLUGIN_SPOTON_CONNECT_ENABLED
+	CS	Spotify Connect
+	DA	Spotify Connect
 	DE	Spotify Connect
 	EN	Spotify Connect
+	ES	Spotify Connect
+	FR	Spotify Connect
+	IT	Spotify Connect
+	NL	Spotify Connect
+	NO	Spotify Connect
+	PL	Spotify Connect
+	SV	Spotify Connect
 
 PLUGIN_SPOTON_CONNECT_ENABLED_DESC
+	CS	Aktivovat Spotify Connect pro tohoto přehrávače
+	DA	Aktiver Spotify Connect for denne afspiller
 	DE	Spotify Connect fuer diesen Player aktivieren
 	EN	Enable Spotify Connect for this player
+	ES	Activar Spotify Connect para este reproductor
+	FR	Activer Spotify Connect pour ce lecteur
+	IT	Abilita Spotify Connect per questo player
+	NL	Spotify Connect inschakelen voor deze speler
+	NO	Aktiver Spotify Connect for denne spilleren
+	PL	Włącz Spotify Connect dla tego odtwarzacza
+	SV	Aktivera Spotify Connect för denna spelare
 
 PLUGIN_SPOTON_CONNECT_ENABLED_LABEL
+	CS	Aktivovat Spotify Connect
+	DA	Aktiver Spotify Connect
 	DE	Spotify Connect aktivieren
 	EN	Enable Spotify Connect
+	ES	Activar Spotify Connect
+	FR	Activer Spotify Connect
+	IT	Abilita Spotify Connect
+	NL	Spotify Connect inschakelen
+	NO	Aktiver Spotify Connect
+	PL	Włącz Spotify Connect
+	SV	Aktivera Spotify Connect
 
 PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE
+	CS	Audio formát (Connect)
+	DA	Lydformat (Connect)
 	DE	Audio-Format (Connect)
 	EN	Audio Format (Connect)
+	ES	Formato de audio (Connect)
+	FR	Format audio (Connect)
+	IT	Formato audio (Connect)
+	NL	Audioformaat (Connect)
+	NO	Lydformat (Connect)
+	PL	Format audio (Connect)
+	SV	Ljudformat (Connect)
 
 PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC
+	CS	Audio formát pro přehrávání Spotify Connect
+	DA	Lydformat til Spotify Connect-afspilning
 	DE	Audio-Format fuer Spotify Connect Wiedergabe
 	EN	Audio format for Spotify Connect playback
+	ES	Formato de audio para la reproducción de Spotify Connect
+	FR	Format audio pour la lecture Spotify Connect
+	IT	Formato audio per la riproduzione Spotify Connect
+	NL	Audioformaat voor Spotify Connect-afspeling
+	NO	Lydformat for Spotify Connect-avspilling
+	PL	Format audio do odtwarzania Spotify Connect
+	SV	Ljudformat för Spotify Connect-uppspelning
 
 PLUGIN_SPOTON_CONNECT_OGG_AUTO
+	CS	Automaticky (závisí na přehrávači)
+	DA	Auto (afhænger af afspiller)
 	DE	Automatisch (Player-abhaengig)
 	EN	Auto (player dependent)
+	ES	Automático (depende del reproductor)
+	FR	Auto (dépend du lecteur)
+	IT	Auto (dipende dal player)
+	NL	Auto (afhankelijk van speler)
+	NO	Auto (avhengig av spiller)
+	PL	Auto (zależne od odtwarzacza)
+	SV	Auto (beroende av spelare)
 
 PLUGIN_SPOTON_DISCOVERY_ENABLED
+	CS	mDNS zjišťování
+	DA	mDNS-søgning
 	DE	mDNS-Discovery
 	EN	mDNS Discovery
+	ES	Descubrimiento mDNS
+	FR	Découverte mDNS
+	IT	Rilevamento mDNS
+	NL	mDNS-detectie
+	NO	mDNS-oppdagelse
+	PL	Wykrywanie mDNS
+	SV	mDNS-identifiering
 
 PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC
+	CS	Oznámit zařízení přes mDNS v místní síti (Spotify App najde zařízení bez síťového obchvatu)
+	DA	Annoncer enhed via mDNS i det lokale netværk (Spotify-appen finder enheden uden netværksomvej)
 	DE	Geraet via mDNS im lokalen Netzwerk ankuendigen (Spotify-App findet Geraet ohne Netzwerkumweg)
 	EN	Announce device via mDNS in local network (Spotify app discovers device without network detour)
+	ES	Anunciar dispositivo a través de mDNS en la red local (la App de Spotify descubre el dispositivo sin desvío de red)
+	FR	Annoncer l'appareil via mDNS sur le réseau local (l'application Spotify découvre l'appareil sans détour réseau)
+	IT	Annuncia dispositivo via mDNS nella rete locale (l'app Spotify scopre il dispositivo senza deviazioni di rete)
+	NL	Apparaat via mDNS aankondigen in lokaal netwerk (Spotify-app ontdekt apparaat zonder netwerkomweg)
+	NO	Kunngjør enhet via mDNS i lokalt nettverk (Spotify-appen finner enheten uten nettverksomvei)
+	PL	Ogłoś urządzenie przez mDNS w sieci lokalnej (aplikacja Spotify wykrywa urządzenie bez obejścia sieciowego)
+	SV	Annonsera enhet via mDNS i lokalt nätverk (Spotify-appen hittar enheten utan nätverksomväg)
 
 PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL
+	CS	mDNS zjišťování aktivní
+	DA	mDNS-søgning aktiveret
 	DE	mDNS-Discovery aktiviert
 	EN	mDNS Discovery enabled
+	ES	Descubrimiento mDNS habilitado
+	FR	Découverte mDNS activée
+	IT	Rilevamento mDNS abilitato
+	NL	mDNS-detectie ingeschakeld
+	NO	mDNS-oppdagelse aktivert
+	PL	Wykrywanie mDNS włączone
+	SV	mDNS-identifiering aktiverad
 
 PLUGIN_SPOTON_DISCOVERY_CRASH_LOOP_WARNING
+	CS	Zjišťování bylo automaticky deaktivováno po příliš mnoha pádech. Bude obnoveno po 30 minutách nebo po restartu LMS.
+	DA	Søgning blev automatisk deaktiveret efter for mange nedbrud. Gendannes efter 30 minutter eller genstart af LMS.
 	DE	Discovery wurde nach zu vielen Abstuerzen automatisch deaktiviert. Wird nach 30 Minuten oder LMS-Neustart wiederhergestellt.
 	EN	Discovery was automatically disabled after too many crashes. Will be restored after 30 minutes or LMS restart.
+	ES	El descubrimiento fue desactivado automáticamente después de demasiados fallos. Se restaurará después de 30 minutos o al reiniciar LMS.
+	FR	La découverte a été automatiquement désactivée après trop de plantages. Elle sera restaurée après 30 minutes ou au redémarrage de LMS.
+	IT	Il rilevamento è stato disabilitato automaticamente dopo troppi crash. Verrà ripristinato dopo 30 minuti o al riavvio di LMS.
+	NL	Detectie werd automatisch uitgeschakeld na te veel crashes. Wordt hersteld na 30 minuten of herstart van LMS.
+	NO	Oppdagelse ble automatisk deaktivert etter for mange krasjer. Vil bli gjenopprettet etter 30 minutter eller omstart av LMS.
+	PL	Wykrywanie zostało automatycznie wyłączone po zbyt wielu awariach. Zostanie przywrócone po 30 minutach lub ponownym uruchomieniu LMS.
+	SV	Identifiering inaktiverades automatiskt efter för många krascher. Återställs efter 30 minuter eller omstart av LMS.
 
 PLUGIN_SPOTON_SETTINGS_PLAYER_SECTION
+	CS	Nastavení přehrávače
+	DA	Afspillerindstillinger
 	DE	Player-Einstellungen
 	EN	Player Settings
+	ES	Ajustes del reproductor
+	FR	Paramètres du lecteur
+	IT	Impostazioni player
+	NL	Spelerinstellingen
+	NO	Spillerinnstillinger
+	PL	Ustawienia odtwarzacza
+	SV	Spelarinställningar
 
 PLUGIN_SPOTON_SETTINGS_PLAYER_HINT
+	CS	Prosím vyberte přehrávač výše, chcete-li změnit jeho nastavení.
+	DA	Vælg venligst en afspiller ovenfor for at ændre dens indstillinger.
 	DE	Bitte oben einen Player auswaehlen, um seine Einstellungen zu aendern.
 	EN	Please select a player above to change its settings.
+	ES	Por favor, selecciona un reproductor arriba para cambiar sus ajustes.
+	FR	Veuillez sélectionner un lecteur ci-dessus pour modifier ses paramètres.
+	IT	Seleziona un player sopra per modificarne le impostazioni.
+	NL	Selecteer een speler hierboven om de instellingen te wijzigen.
+	NO	Velg en spiller ovenfor for å endre innstillingene.
+	PL	Wybierz odtwarzacz powyżej, aby zmienić jego ustawienia.
+	SV	Välj en spelare ovan för att ändra dess inställningar.
 
 PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION
+	CS	Globální nastavení
+	DA	Globale indstillinger
 	DE	Globale Einstellungen
 	EN	Global Settings
+	ES	Ajustes globales
+	FR	Paramètres globaux
+	IT	Impostazioni globali
+	NL	Algemene instellingen
+	NO	Globale innstillinger
+	PL	Ustawienia globalne
+	SV	Globala inställningar
 
 PLUGIN_SPOTON_STREAM_FORMAT
+	CS	Formát streamování
+	DA	Streamingformat
 	DE	Streaming-Format
 	EN	Streaming Format
+	ES	Formato de streaming
+	FR	Format de diffusion
+	IT	Formato streaming
+	NL	Streamingformaat
+	NO	Strømmeformat
+	PL	Format strumieniowania
+	SV	Streamingformat
 
 PLUGIN_SPOTON_STREAM_FORMAT_DESC
+	CS	Formát pro Connect a Browse. FLAC/MP3 používají překódování.
+	DA	Format til Connect og Browse. FLAC/MP3 bruger omkodning.
 	DE	Format fuer Connect und Browse. Bei FLAC/MP3 wird transkodiert.
 	EN	Format for Connect and Browse. FLAC/MP3 use transcoding.
+	ES	Formato para Connect y Browse. FLAC/MP3 usan transcodificación.
+	FR	Format pour Connect et Browse. FLAC/MP3 utilisent le transcodage.
+	IT	Formato per Connect e Browse. FLAC/MP3 usano la transcodifica.
+	NL	Formaat voor Connect en Browse. FLAC/MP3 gebruiken transcodering.
+	NO	Format for Connect og Browse. FLAC/MP3 bruker transkoding.
+	PL	Format dla Connect i Browse. FLAC/MP3 używają transkodowania.
+	SV	Format för Connect och Browse. FLAC/MP3 använder transkodning.
 
 PLUGIN_SPOTON_STREAM_FORMAT_AUTO
+	CS	Automaticky
+	DA	Automatisk
 	DE	Automatisch
 	EN	Automatic
+	ES	Automático
+	FR	Automatique
+	IT	Automatico
+	NL	Automatisch
+	NO	Automatisk
+	PL	Automatyczny
+	SV	Automatisk
 
 PLUGIN_SPOTON_STREAM_FORMAT_OGG
+	CS	OGG Passthrough (DirectStream)
+	DA	OGG Passthrough (DirectStream)
 	DE	OGG Passthrough (DirectStream)
 	EN	OGG Passthrough (DirectStream)
+	ES	OGG Passthrough (DirectStream)
+	FR	OGG Passthrough (DirectStream)
+	IT	OGG Passthrough (DirectStream)
+	NL	OGG Passthrough (DirectStream)
+	NO	OGG Passthrough (DirectStream)
+	PL	OGG Passthrough (DirectStream)
+	SV	OGG Passthrough (DirectStream)
 
 PLUGIN_SPOTON_STREAM_FORMAT_PCM
+	CS	PCM (DirectStream)
+	DA	PCM (DirectStream)
 	DE	PCM (DirectStream)
 	EN	PCM (DirectStream)
+	ES	PCM (DirectStream)
+	FR	PCM (DirectStream)
+	IT	PCM (DirectStream)
+	NL	PCM (DirectStream)
+	NO	PCM (DirectStream)
+	PL	PCM (DirectStream)
+	SV	PCM (DirectStream)
 
 PLUGIN_SPOTON_STREAM_FORMAT_FLAC
+	CS	FLAC (transkódováno)
+	DA	FLAC (transkoderet)
 	DE	FLAC (transkodiert)
 	EN	FLAC (transcoded)
+	ES	FLAC (transcodificado)
+	FR	FLAC (transcodé)
+	IT	FLAC (transcodificato)
+	NL	FLAC (getranscodeerd)
+	NO	FLAC (transkodert)
+	PL	FLAC (transkodowane)
+	SV	FLAC (transkodad)
 
 PLUGIN_SPOTON_STREAM_FORMAT_MP3
+	CS	MP3 (transkódováno)
+	DA	MP3 (transkoderet)
 	DE	MP3 (transkodiert)
 	EN	MP3 (transcoded)
+	ES	MP3 (transcodificado)
+	FR	MP3 (transcodé)
+	IT	MP3 (transcodificato)
+	NL	MP3 (getranscodeerd)
+	NO	MP3 (transkodert)
+	PL	MP3 (transkodowane)
+	SV	MP3 (transkodad)
 
 PLUGIN_SPOTON_BITRATE_OVERRIDE
+	CS	Přenosová rychlost (přehrávač)
+	DA	Bithastighed (afspiller)
 	DE	Bitrate (Player)
 	EN	Bitrate (Player)
+	ES	Tasa de bits (reproductor)
+	FR	Débit binaire (lecteur)
+	IT	Bitrate (player)
+	NL	Bitsnelheid (speler)
+	NO	Bithastighet (spiller)
+	PL	Przepływność (odtwarzacz)
+	SV	Bithastighet (spelare)
 
 PLUGIN_SPOTON_BITRATE_OVERRIDE_DESC
+	CS	Přepíše globální přenosovou rychlost pro tohoto přehrávače. Výchozí nastavení používá globální hodnotu.
+	DA	Tilsidesætter den globale bithastighed for denne afspiller. Standard bruger den globale værdi.
 	DE	Ueberschreibt die globale Bitrate fuer diesen Player. Standard nutzt den globalen Wert.
 	EN	Overrides global bitrate for this player. Default uses the global value.
+	ES	Anula la tasa de bits global para este reproductor. El predeterminado usa el valor global.
+	FR	Remplace le débit binaire global pour ce lecteur. Par défaut, utilise la valeur globale.
+	IT	Sostituisce il bitrate globale per questo player. Il valore predefinito usa il valore globale.
+	NL	Overschrijft de globale bitsnelheid voor deze speler. Standaard gebruikt de globale waarde.
+	NO	Overstyrer global bithastighet for denne spilleren. Standard bruker den globale verdien.
+	PL	Zastępuje globalną przepływność dla tego odtwarzacza. Domyślnie używa wartości globalnej.
+	SV	Åsidosätter den globala bithastigheten för denna spelare. Standard använder det globala värdet.
 
 PLUGIN_SPOTON_BITRATE_GLOBAL
+	CS	Globální (výchozí)
+	DA	Global (standard)
 	DE	Global (Standard)
 	EN	Global (Default)
+	ES	Global (predeterminado)
+	FR	Global (par défaut)
+	IT	Globale (predefinito)
+	NL	Globaal (standaard)
+	NO	Global (standard)
+	PL	Globalny (domyślny)
+	SV	Global (standard)
 
 PLUGIN_SPOTON_RECOMMENDATIONS
+	CS	SpotOn doporučení
+	DA	SpotOn anbefalinger
 	DE	SpotOn Empfehlungen
 	EN	SpotOn Recommendations
+	ES	Recomendaciones de SpotOn
+	FR	Recommandations SpotOn
+	IT	Raccomandazioni SpotOn
+	NL	SpotOn aanbevelingen
+	NO	SpotOn-anbefalinger
+	PL	Rekomendacje SpotOn
+	SV	SpotOn-rekommendationer
+
+PLUGIN_SPOTON_SETUP_GUIDE_TITLE
+	CS	Začínáme se SpotOn
+	DA	Kom godt i gang med SpotOn
+	DE	Erste Schritte mit SpotOn
+	EN	Getting Started with SpotOn
+	ES	Primeros pasos con SpotOn
+	FR	Démarrer avec SpotOn
+	IT	Iniziare con SpotOn
+	NL	Aan de slag met SpotOn
+	NO	Kom i gang med SpotOn
+	PL	Pierwsze kroki z SpotOn
+	SV	Kom igång med SpotOn
+
+PLUGIN_SPOTON_SETUP_GUIDE_STEP1
+	CS	Vytvořte Spotify Developer App na
+	DA	Opret en Spotify Developer App på
+	DE	Erstelle eine Spotify Developer App auf
+	EN	Create a Spotify Developer App at
+	ES	Crea una Spotify Developer App en
+	FR	Créez une application Spotify Developer sur
+	IT	Crea una Spotify Developer App su
+	NL	Maak een Spotify Developer App aan op
+	NO	Opprett en Spotify Developer App på
+	PL	Utwórz aplikację Spotify Developer App na
+	SV	Skapa en Spotify Developer App på
+
+PLUGIN_SPOTON_SETUP_GUIDE_STEP2
+	CS	Zadejte Client-ID do pole níže
+	DA	Indtast din Client-ID i feltet nedenfor
+	DE	Trage deine Client-ID im Feld unten ein
+	EN	Enter your Client-ID in the field below
+	ES	Introduce tu Client-ID en el campo de abajo
+	FR	Saisissez votre Client-ID dans le champ ci-dessous
+	IT	Inserisci il tuo Client-ID nel campo qui sotto
+	NL	Voer uw Client-ID in het onderstaande veld in
+	NO	Skriv inn Client-ID i feltet nedenfor
+	PL	Wpisz swój Client-ID w polu poniżej
+	SV	Ange din Client-ID i fältet nedan
+
+PLUGIN_SPOTON_SETUP_GUIDE_STEP3
+	CS	Otevřete Spotify App a připojte se ke svému přehrávači
+	DA	Åbn Spotify-appen og opret forbindelse til din afspiller
+	DE	Oeffne die Spotify-App und verbinde dich mit deinem Player
+	EN	Open the Spotify app and connect to your player
+	ES	Abre la App de Spotify y conéctate a tu reproductor
+	FR	Ouvrez l'application Spotify et connectez-vous à votre lecteur
+	IT	Apri l'app Spotify e connettiti al tuo player
+	NL	Open de Spotify-app en verbind met uw speler
+	NO	Åpne Spotify-appen og koble til spilleren din
+	PL	Otwórz aplikację Spotify i połącz się ze swoim odtwarzaczem
+	SV	Öppna Spotify-appen och anslut till din spelare
+
+PLUGIN_SPOTON_CREDITS
+	CS	SpotOn používá librespot. Inspirováno pluginem Spotty od Hergera.
+	DA	SpotOn bruger librespot. Inspireret af Hergers Spotty-plugin.
+	DE	SpotOn nutzt librespot. Inspiriert von Hergers Spotty Plugin.
+	EN	SpotOn uses librespot. Inspired by Herger's Spotty plugin.
+	ES	SpotOn usa librespot. Inspirado en el plugin Spotty de Herger.
+	FR	SpotOn utilise librespot. Inspiré par le plugin Spotty de Herger.
+	IT	SpotOn usa librespot. Ispirato dal plugin Spotty di Herger.
+	NL	SpotOn gebruikt librespot. Geïnspireerd door Hergers Spotty-plugin.
+	NO	SpotOn bruker librespot. Inspirert av Hergers Spotty-plugin.
+	PL	SpotOn używa librespot. Inspirowany wtyczką Spotty Hergera.
+	SV	SpotOn använder librespot. Inspirerat av Hergers Spotty-plugin.
 
