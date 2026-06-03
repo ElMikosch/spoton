@@ -20,7 +20,13 @@ use constant TOKEN_REFRESH_TIMER   => 45 * 60;   # 45 minute proactive refresh c
 use constant DISCOVERY_TIMEOUT     => 60 * 15;   # 15 min Proc::Background watchdog
 use constant DISCOVER_DIR          => '__DISCOVER__'; # temp dir during ZeroConf
 use constant SPOTIFY_ME_URL        => 'https://api.spotify.com/v1/me';
-use constant SPOTON_DEFAULT_CLIENT_ID => '93aac68fb06348598c1e67734dfaceee';
+# Import SPOTON_DEFAULT_CLIENT_ID from Client.pm (single source of truth — D-04).
+# Using require + direct call avoids circular compile-time dependency
+# (TokenManager is require'd by Client.pm at runtime via _doFlavouredRequest).
+use constant SPOTON_DEFAULT_CLIENT_ID => do {
+    require Plugins::SpotOn::API::Client;
+    Plugins::SpotOn::API::Client::SPOTON_DEFAULT_CLIENT_ID();
+};
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
