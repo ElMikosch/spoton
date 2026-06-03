@@ -147,10 +147,25 @@ sub handler {
             $prefs->client($client)->set('enableSpotifyConnect', $enableConnect);
 
             # OGG-passthrough override (D-05, T-05-19): 'auto' | 'ogg' | 'pcm'
+            # Kept for backward compatibility — new code uses streamFormat
             if (defined $paramRef->{'pref_connectOggOverride'}) {
                 my $override = $paramRef->{'pref_connectOggOverride'};
                 $override = 'auto' unless $override =~ /^(?:auto|ogg|pcm)$/;
                 $prefs->client($client)->set('connectOggOverride', $override);
+            }
+
+            # Per-player streaming format (D-11, D-12, T-06-04): 'auto' | 'ogg' | 'pcm' | 'flac' | 'mp3'
+            if (defined $paramRef->{'pref_streamFormat'}) {
+                my $fmt = $paramRef->{'pref_streamFormat'};
+                $fmt = 'auto' unless $fmt =~ /^(?:auto|ogg|pcm|flac|mp3)$/;
+                $prefs->client($client)->set('streamFormat', $fmt);
+            }
+
+            # Per-player bitrate override (D-01, T-06-03): '96' | '160' | '320' | '' (empty = use global)
+            if (defined $paramRef->{'pref_bitrateOverride'}) {
+                my $override = $paramRef->{'pref_bitrateOverride'} // '';
+                $override = '' unless $override =~ /^(?:96|160|320)$/;
+                $prefs->client($client)->set('bitrateOverride', $override);
             }
 
             my $disableDiscovery = $paramRef->{'pref_enableDiscovery'} ? 0 : 1;
@@ -190,6 +205,12 @@ sub handler {
         # Discovery toggle template vars (D-04, D-05)
         $paramRef->{discoveryEnabled}     = $prefs->client($client)->get('disableDiscovery') ? 0 : 1;
         $paramRef->{discoveryByCrashLoop} = $prefs->client($client)->get('discoveryDisabledByCrashLoop') || 0;
+        # Per-player format and bitrate override template vars (D-01, D-11)
+        $paramRef->{bitrateOverride} = $prefs->client($client)->get('bitrateOverride') || '';
+        # streamFormat: migration fallback — read old connectOggOverride if new key is empty
+        $paramRef->{streamFormat} = $prefs->client($client)->get('streamFormat')
+                                 || $prefs->client($client)->get('connectOggOverride')
+                                 || 'auto';
     }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);

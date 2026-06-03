@@ -24,11 +24,22 @@
 		<label for="pref_enableDiscovery">[% 'PLUGIN_SPOTON_DISCOVERY_ENABLED_LABEL' | string %]</label>
 	[% END %]
 
-	[% WRAPPER setting title="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE" desc="PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC" %]
-		<select class="stdedit" name="pref_connectOggOverride" id="pref_connectOggOverride">
-			<option value="auto" [% IF connectOggOverride == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_CONNECT_OGG_AUTO' | string %]</option>
-			<option value="ogg"  [% IF connectOggOverride == 'ogg'  %]selected[% END %]>OGG Passthrough</option>
-			<option value="pcm"  [% IF connectOggOverride == 'pcm'  %]selected[% END %]>PCM (force)</option>
+	[% WRAPPER setting title="PLUGIN_SPOTON_STREAM_FORMAT" desc="PLUGIN_SPOTON_STREAM_FORMAT_DESC" %]
+		<select class="stdedit" name="pref_streamFormat" id="pref_streamFormat">
+			<option value="auto" [% IF streamFormat == 'auto' %]selected[% END %]>[% 'PLUGIN_SPOTON_STREAM_FORMAT_AUTO' | string %]</option>
+			<option value="ogg"  [% IF streamFormat == 'ogg'  %]selected[% END %]>[% 'PLUGIN_SPOTON_STREAM_FORMAT_OGG'  | string %]</option>
+			<option value="pcm"  [% IF streamFormat == 'pcm'  %]selected[% END %]>[% 'PLUGIN_SPOTON_STREAM_FORMAT_PCM'  | string %]</option>
+			<option value="flac" [% IF streamFormat == 'flac' %]selected[% END %]>[% 'PLUGIN_SPOTON_STREAM_FORMAT_FLAC' | string %]</option>
+			<option value="mp3"  [% IF streamFormat == 'mp3'  %]selected[% END %]>[% 'PLUGIN_SPOTON_STREAM_FORMAT_MP3'  | string %]</option>
+		</select>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_BITRATE_OVERRIDE" desc="PLUGIN_SPOTON_BITRATE_OVERRIDE_DESC" %]
+		<select class="stdedit" name="pref_bitrateOverride" id="pref_bitrateOverride">
+			<option value=""    [% IF bitrateOverride == '' %]selected[% END %]>[% 'PLUGIN_SPOTON_BITRATE_GLOBAL' | string %]</option>
+			<option value="320" [% IF bitrateOverride == 320 %]selected[% END %]>320 kbps</option>
+			<option value="160" [% IF bitrateOverride == 160 %]selected[% END %]>160 kbps</option>
+			<option value="96"  [% IF bitrateOverride == 96  %]selected[% END %]>96 kbps</option>
 		</select>
 	[% END %]
 

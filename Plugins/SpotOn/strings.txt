@@ -261,3 +261,43 @@ PLUGIN_SPOTON_SETTINGS_PLAYER_HINT
 PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION
 	DE	Globale Einstellungen
 	EN	Global Settings
+
+PLUGIN_SPOTON_STREAM_FORMAT
+	DE	Streaming-Format
+	EN	Streaming Format
+
+PLUGIN_SPOTON_STREAM_FORMAT_DESC
+	DE	Format fuer Connect und Browse. Bei FLAC/MP3 wird transkodiert.
+	EN	Format for Connect and Browse. FLAC/MP3 use transcoding.
+
+PLUGIN_SPOTON_STREAM_FORMAT_AUTO
+	DE	Automatisch
+	EN	Automatic
+
+PLUGIN_SPOTON_STREAM_FORMAT_OGG
+	DE	OGG Passthrough (DirectStream)
+	EN	OGG Passthrough (DirectStream)
+
+PLUGIN_SPOTON_STREAM_FORMAT_PCM
+	DE	PCM (DirectStream)
+	EN	PCM (DirectStream)
+
+PLUGIN_SPOTON_STREAM_FORMAT_FLAC
+	DE	FLAC (transkodiert)
+	EN	FLAC (transcoded)
+
+PLUGIN_SPOTON_STREAM_FORMAT_MP3
+	DE	MP3 (transkodiert)
+	EN	MP3 (transcoded)
+
+PLUGIN_SPOTON_BITRATE_OVERRIDE
+	DE	Bitrate (Player)
+	EN	Bitrate (Player)
+
+PLUGIN_SPOTON_BITRATE_OVERRIDE_DESC
+	DE	Ueberschreibt die globale Bitrate fuer diesen Player. Standard nutzt den globalen Wert.
+	EN	Overrides global bitrate for this player. Default uses the global value.
+
+PLUGIN_SPOTON_BITRATE_GLOBAL
+	DE	Global (Standard)
+	EN	Global (Default)
