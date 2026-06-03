@@ -1328,11 +1328,9 @@ sub updateTranscodingTable {
             delete $commandTable->{'soc-ogg-*-*'};
             delete $commandTable->{'son-flc-*-*'};
             delete $commandTable->{'son-mp3-*-*'};
-        } else {
-            # auto: remove OGG unless passthrough is available (handled by guard above)
-            delete $commandTable->{'son-ogg-*-*'};
-            delete $commandTable->{'soc-ogg-*-*'};
         }
+        # auto: all pipelines stay — passthrough guard above already removed
+        # son-ogg if the binary lacks passthrough capability.
     }
 }
 
