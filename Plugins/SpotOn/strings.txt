@@ -1051,6 +1051,19 @@ PLUGIN_SPOTON_SETUP_GUIDE_STEP3
 	PL	Otwórz aplikację Spotify i połącz się ze swoim odtwarzaczem
 	SV	Öppna Spotify-appen och anslut till din spelare
 
+PLUGIN_SPOTON_DSTM_HINT
+	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music.
+	DA	Tip: Automatisk afspilning (Don't Stop The Music) konfigureres under Afspillerindstillinger > Don't Stop The Music.
+	DE	Tipp: Automatische Wiedergabe (Don't Stop The Music) wird unter Playereinstellungen > Don't Stop The Music konfiguriert.
+	EN	Tip: Auto-play (Don't Stop The Music) is configured in Player Settings > Don't Stop The Music.
+	ES	Consejo: La reproducción automática (Don't Stop The Music) se configura en Ajustes del reproductor > Don't Stop The Music.
+	FR	Astuce : la lecture automatique (Don't Stop The Music) se configure dans Paramètres du lecteur > Don't Stop The Music.
+	IT	Suggerimento: la riproduzione automatica (Don't Stop The Music) si configura in Impostazioni lettore > Don't Stop The Music.
+	NL	Tip: automatisch afspelen (Don't Stop The Music) wordt ingesteld via Spelerinstellingen > Don't Stop The Music.
+	NO	Tips: Automatisk avspilling (Don't Stop The Music) konfigureres under Spillerinnstillinger > Don't Stop The Music.
+	PL	Wskazówka: automatyczne odtwarzanie (Don't Stop The Music) konfiguruje się w Ustawienia odtwarzacza > Don't Stop The Music.
+	SV	Tips: Automatisk uppspelning (Don't Stop The Music) konfigureras under Spelarinställningar > Don't Stop The Music.
+
 PLUGIN_SPOTON_CREDITS
 	CS	SpotOn používá librespot. Inspirováno pluginem Spotty od Hergera.
 	DA	SpotOn bruger librespot. Inspireret af Hergers Spotty-plugin.
