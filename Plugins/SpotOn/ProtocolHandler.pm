@@ -80,13 +80,12 @@ sub canDirectStream {
     return 0 unless $client;
     $client = $client->master if $client->can('master');
 
-    # Per-player streamFormat: flac/mp3 force transcoding — no DirectStream (D-11)
-    # pcm/auto use DirectStream (LMS default). PCM cannot be forced via transcoding table.
+    # Per-player streamFormat: pcm/flac/mp3 force transcoding — no DirectStream (D-11)
     {
         my $fmt = $prefs->client($client)->get('streamFormat')
                || $prefs->client($client)->get('connectOggOverride')
                || 'auto';
-        if ($fmt =~ /^(?:flac|mp3)$/) {
+        if ($fmt =~ /^(?:pcm|flac|mp3)$/) {
             main::INFOLOG && $log->is_info && $log->info(
                 "canDirectStream: 0 (streamFormat=$fmt forces transcoding)"
             );

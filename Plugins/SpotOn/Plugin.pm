@@ -1248,6 +1248,20 @@ sub updateTranscodingTable {
     my $helperName = $helper ? basename($helper) : 'spoton';
 
     my $commandTable = Slim::Player::TranscodingHelper::Conversions();
+
+    # Restore base son-* pipelines deleted by a previous call (shared mutable state).
+    # Without this, switching format (e.g. FLAC→PCM) accumulates deletions and leaves
+    # no valid pipeline. Snapshot taken on first call from custom-convert.conf state.
+    our %_baseSonPipelines;
+    if (!%_baseSonPipelines) {
+        for my $k (keys %$commandTable) {
+            $_baseSonPipelines{$k} = $commandTable->{$k} if $k =~ /^son-/ && $commandTable->{$k} =~ /single-track/;
+        }
+    }
+    for my $k (keys %_baseSonPipelines) {
+        $commandTable->{$k} = $_baseSonPipelines{$k} unless exists $commandTable->{$k};
+    }
+
     foreach my $key (keys %{$commandTable}) {
         # Only modify son-* entries that use --single-track (skip Connect/other pipelines)
         next unless $key =~ /^son-/ && $commandTable->{$key} =~ /single-track/;
@@ -1297,15 +1311,17 @@ sub updateTranscodingTable {
             delete $commandTable->{'son-ogg-*-*'};
             delete $commandTable->{'soc-ogg-*-*'};
         }
-        # Force FLAC/MP3: delete competing pipelines so LMS uses the desired one.
-        # PCM cannot be forced (LMS doesn't negotiate pcm as an output codec) —
-        # pcm/auto both use LMS's default format selection.
+        # Force specific format: delete competing pipelines so LMS uses the desired one.
+        # Pipelines are restored from snapshot at the top of this function on every call.
         if ($fmt eq 'flac') {
             delete $commandTable->{'son-mp3-*-*'};
             delete $commandTable->{'son-pcm-*-*'};
         } elsif ($fmt eq 'mp3') {
             delete $commandTable->{'son-flc-*-*'};
             delete $commandTable->{'son-pcm-*-*'};
+        } elsif ($fmt eq 'pcm') {
+            delete $commandTable->{'son-flc-*-*'};
+            delete $commandTable->{'son-mp3-*-*'};
         }
     }
 }
