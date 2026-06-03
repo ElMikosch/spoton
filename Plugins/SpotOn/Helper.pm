@@ -68,9 +68,14 @@ sub helperCheck {
 
     $$check = '' unless $check && ref $check;
 
-    # Shell-safe quoting to prevent command injection from user-supplied binary paths
-    (my $safe = $candidate) =~ s/'/'\\''/g;
-    my $checkCmd = sprintf("'%s' -n 'SpotOn' --check", $safe);
+    my $checkCmd;
+    if ( main::ISWINDOWS ) {
+        (my $safe = $candidate) =~ s/"/""/g;
+        $checkCmd = sprintf('"%s" -n "SpotOn" --check', $safe);
+    } else {
+        (my $safe = $candidate) =~ s/'/'\\''/g;
+        $checkCmd = sprintf("'%s' -n 'SpotOn' --check", $safe);
+    }
     $$check = `$checkCmd 2>&1`;
 
     # CRITICAL: match 'spoton', not 'spotty'
