@@ -1213,6 +1213,13 @@ sub updateTranscodingTable {
     my $bitrate   = $prefs->get('bitrate')      || 320;
     my $normalize = $prefs->get('normalization') || 0;    # Phase 4: global toggle (D-06)
 
+    # Per-player bitrate override (D-01, T-06-05): re-validated here before regex substitution
+    # Only valid numeric values (96/160/320) reach the --bitrate regex — prevents injection
+    if ($client) {
+        my $override = $prefs->client($client)->get('bitrateOverride');
+        $bitrate = $override if $override && $override =~ /^(?:96|160|320)$/;
+    }
+
     # Compute librespot credentials/session cache dir (Pattern 4)
     # Multi-account: inject active accountId into cache path (RESEARCH Pitfall 6)
     # This ensures --single-track finds the correct credentials.json for the active account.
@@ -1272,12 +1279,16 @@ sub updateTranscodingTable {
         delete $commandTable->{'soc-ogg-*-*'};    # same guard for Connect OGG passthrough
     }
 
-    # Per-player OGG override: delete soc-ogg-*-* when player pref forces PCM mode (D-05)
+    # Per-player streamFormat: controls which OGG pipeline entries are active (D-11, D-12)
+    # Migration fallback: read new streamFormat first, fall back to old connectOggOverride
     if ($client) {
-        my $override = $prefs->client($client)->get('connectOggOverride')
-                    || $prefs->get('connectOggOverride')
-                    || 'auto';
-        if ($override eq 'pcm') {
+        my $fmt = $prefs->client($client)->get('streamFormat')
+               || $prefs->client($client)->get('connectOggOverride')
+               || 'auto';
+        # Only keep OGG pipeline entries when user explicitly selects 'ogg' format
+        # For pcm/flac/mp3/auto: remove OGG entries so LMS uses the PCM/son pipeline
+        if ($fmt ne 'ogg') {
+            delete $commandTable->{'son-ogg-*-*'};
             delete $commandTable->{'soc-ogg-*-*'};
         }
     }

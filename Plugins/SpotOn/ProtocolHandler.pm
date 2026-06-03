@@ -48,14 +48,24 @@ sub formatOverride {
     require Plugins::SpotOn::Plugin;
     Plugins::SpotOn::Plugin->updateTranscodingTable($client);
 
+    # Per-player streamFormat pref: determines Browse mode pipeline (D-11, D-12)
+    # Migration fallback: read new streamFormat first, fall back to old connectOggOverride
+    my $fmt = $client
+        ? ($prefs->client($client)->get('streamFormat')
+           || $prefs->client($client)->get('connectOggOverride')
+           || 'auto')
+        : 'auto';
+
     if ($url =~ m{spotify://connect-}) {
         require Plugins::SpotOn::Connect::DaemonManager;
         my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
         if ($helper && $helper->_streamMode) {
-            return 'soc';
+            return 'soc';  # Connect: always 'soc', independent of streamFormat
         }
     }
 
+    # Browse mode: OGG passthrough if explicitly selected, otherwise PCM/son pipeline
+    return 'ogg' if $fmt eq 'ogg';
     return 'son';
 }
 
@@ -69,6 +79,20 @@ sub canDirectStream {
 
     return 0 unless $client;
     $client = $client->master if $client->can('master');
+
+    # Per-player streamFormat: pcm/flac/mp3 force transcoding — no DirectStream (D-11)
+    # Migration fallback: read new streamFormat first, fall back to old connectOggOverride
+    {
+        my $fmt = $prefs->client($client)->get('streamFormat')
+               || $prefs->client($client)->get('connectOggOverride')
+               || 'auto';
+        if ($fmt =~ /^(?:pcm|flac|mp3)$/) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "canDirectStream: 0 (streamFormat=$fmt forces transcoding)"
+            );
+            return 0;
+        }
+    }
 
     require Plugins::SpotOn::Connect::DaemonManager;
     my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
