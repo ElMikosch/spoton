@@ -2,7 +2,6 @@ package Plugins::SpotOn::Helper;
 
 use strict;
 use warnings;
-use Config;
 use File::Spec::Functions qw(catdir);
 use JSON::XS::VersionOneAndTwo;
 
@@ -23,6 +22,12 @@ sub init {
          && Slim::Utils::OSDetect::details()->{osArch} =~ /^aarch64/i ) {
         Slim::Utils::Misc::addFindBinPaths(
             catdir(Plugins::SpotOn::Plugin->_pluginDataFor('basedir'), 'Bin', 'armhf-linux')
+        );
+    }
+
+    if ( main::ISWINDOWS ) {
+        Slim::Utils::Misc::addFindBinPaths(
+            catdir(Plugins::SpotOn::Plugin->_pluginDataFor('basedir'), 'Bin', 'x86_64-win64')
         );
     }
 
@@ -118,13 +123,6 @@ sub _findBin {
 
     my @candidates = (HELPER);    # 'spoton'
     my $binary;
-
-    if (Slim::Utils::OSDetect::OS() eq 'unix') {
-        # on 64-bit x86, try the x86_64 build first
-        if ( $Config::Config{'archname'} =~ /x86_64/ ) {
-            push @candidates, HELPER . '-x86_64';
-        }
-    }
 
     # Custom override first (LMS-10 preparation)
     unshift @candidates, HELPER . '-custom';
