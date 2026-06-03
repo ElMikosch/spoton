@@ -64,8 +64,8 @@ sub formatOverride {
         }
     }
 
-    # Browse mode: OGG passthrough if explicitly selected, otherwise PCM/son pipeline
-    return 'ogg' if $fmt eq 'ogg';
+    # Browse mode: always 'son' — pipeline selection via updateTranscodingTable deletion.
+    # OGG passthrough uses son-ogg-*-* (not ogg-*-*-* which doesn't exist).
     return 'son';
 }
 

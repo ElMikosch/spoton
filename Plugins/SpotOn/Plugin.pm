@@ -1307,21 +1307,31 @@ sub updateTranscodingTable {
         my $fmt = $prefs->client($client)->get('streamFormat')
                || $prefs->client($client)->get('connectOggOverride')
                || 'auto';
-        if ($fmt ne 'ogg') {
-            delete $commandTable->{'son-ogg-*-*'};
-            delete $commandTable->{'soc-ogg-*-*'};
-        }
         # Force specific format: delete competing pipelines so LMS uses the desired one.
         # Pipelines are restored from snapshot at the top of this function on every call.
-        if ($fmt eq 'flac') {
+        if ($fmt eq 'ogg') {
+            delete $commandTable->{'son-pcm-*-*'};
+            delete $commandTable->{'son-flc-*-*'};
+            delete $commandTable->{'son-mp3-*-*'};
+        } elsif ($fmt eq 'flac') {
+            delete $commandTable->{'son-ogg-*-*'};
+            delete $commandTable->{'soc-ogg-*-*'};
             delete $commandTable->{'son-mp3-*-*'};
             delete $commandTable->{'son-pcm-*-*'};
         } elsif ($fmt eq 'mp3') {
+            delete $commandTable->{'son-ogg-*-*'};
+            delete $commandTable->{'soc-ogg-*-*'};
             delete $commandTable->{'son-flc-*-*'};
             delete $commandTable->{'son-pcm-*-*'};
         } elsif ($fmt eq 'pcm') {
+            delete $commandTable->{'son-ogg-*-*'};
+            delete $commandTable->{'soc-ogg-*-*'};
             delete $commandTable->{'son-flc-*-*'};
             delete $commandTable->{'son-mp3-*-*'};
+        } else {
+            # auto: remove OGG unless passthrough is available (handled by guard above)
+            delete $commandTable->{'son-ogg-*-*'};
+            delete $commandTable->{'soc-ogg-*-*'};
         }
     }
 }
