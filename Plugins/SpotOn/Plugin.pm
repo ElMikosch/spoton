@@ -1293,11 +1293,20 @@ sub updateTranscodingTable {
         my $fmt = $prefs->client($client)->get('streamFormat')
                || $prefs->client($client)->get('connectOggOverride')
                || 'auto';
-        # Only keep OGG pipeline entries when user explicitly selects 'ogg' format
-        # For pcm/flac/mp3/auto: remove OGG entries so LMS uses the PCM/son pipeline
         if ($fmt ne 'ogg') {
             delete $commandTable->{'son-ogg-*-*'};
             delete $commandTable->{'soc-ogg-*-*'};
+        }
+        # Force specific format: remove competing pipelines so LMS picks the right one
+        if ($fmt eq 'flac') {
+            delete $commandTable->{'son-mp3-*-*'};
+            delete $commandTable->{'son-pcm-*-*'};
+        } elsif ($fmt eq 'mp3') {
+            delete $commandTable->{'son-flc-*-*'};
+            delete $commandTable->{'son-pcm-*-*'};
+        } elsif ($fmt eq 'pcm') {
+            delete $commandTable->{'son-flc-*-*'};
+            delete $commandTable->{'son-mp3-*-*'};
         }
     }
 }
