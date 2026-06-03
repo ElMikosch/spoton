@@ -23,7 +23,7 @@ use constant MAX_CONCURRENT_REQUESTS    => 3;
 use constant API_BASE                   => 'https://api.spotify.com/v1';
 use constant REQUEST_TIMEOUT            => 30;
 use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
-# Source: Spotty API.pm:18 (verifiziert: michaelherger/Spotty-Plugin/API.pm)
+# Source: Spotty API.pm:18 (verified: michaelherger/Spotty-Plugin/API.pm)
 
 # Dual-token routing constants (D-01 through D-06)
 # Source: Spotty-NG API.pm:93-98 adapted for SpotOn
