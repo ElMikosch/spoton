@@ -1,0 +1,38 @@
+# Cross.toml — cross-rs target configuration for librespot-spoton
+#
+# Supported targets for LMS plugin deployment (Phase 8 — Multi-Arch Binary Distribution).
+# No image overrides are needed — the default cross-rs images for these musl targets
+# include musl-tools and work with rustls-tls (no OpenSSL system dependency).
+#
+# Build commands (run from librespot-spoton/ directory):
+#   cross build --release --target x86_64-unknown-linux-musl
+#   cross build --release --target aarch64-unknown-linux-musl
+#   cross build --release --target armv7-unknown-linux-musleabihf
+#   cross build --release --target arm-unknown-linux-musleabihf
+#   cross build --release --target i686-unknown-linux-musl
+#   cross build --release --target x86_64-pc-windows-gnu
+#
+# Directory mapping (Rust triple -> Plugins/SpotOn/Bin/ subdirectory):
+#   x86_64-unknown-linux-musl     -> x86_64-linux/
+#   aarch64-unknown-linux-musl    -> aarch64-linux/
+#   armv7-unknown-linux-musleabihf -> armhf-linux/
+#   arm-unknown-linux-musleabihf  -> arm-linux/
+#   i686-unknown-linux-musl       -> i386-linux/
+#   x86_64-pc-windows-gnu         -> x86_64-win64/
+#
+# P-42: Never use +crt-static on GNU targets (breaks proc-macro on Rust >= 1.87).
+#       musl targets handle static linking natively.
+# P-44: macOS targets cannot use cross-rs — native runners required (deferred to v1.2).
+# P-46: Windows must use GNU target (x86_64-pc-windows-gnu), not MSVC.
+
+[target.x86_64-unknown-linux-musl]
+
+[target.aarch64-unknown-linux-musl]
+
+[target.armv7-unknown-linux-musleabihf]
+
+[target.arm-unknown-linux-musleabihf]
+
+[target.i686-unknown-linux-musl]
+
+[target.x86_64-pc-windows-gnu]
