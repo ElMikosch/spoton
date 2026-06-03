@@ -7,11 +7,13 @@ use Digest::MD5 qw(md5_hex);
 
 use Slim::Plugin::DontStopTheMusic::Plugin;
 use Slim::Schema;
+use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 
 my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+my $cache = Slim::Utils::Cache->new();
 
 # init()
 # Registers SpotOn as a DSTM provider.
@@ -189,14 +191,7 @@ sub _getRecommendations {
         my $tracks = shift || [];
 
         if ($tracks && ref $tracks && scalar @$tracks) {
-            # T-06-07: URI extraction via strict regex — only alphanumeric track IDs pass
-            my @uris = map {
-                my $uri = '';
-                if ($_->{uri} && $_->{uri} =~ /(track:[a-z0-9]+)/i) {
-                    $uri = "spotify://$1";
-                }
-                $uri ? $uri : ()
-            } @$tracks;
+            my @uris = _cacheAndExtractUris($tracks);
 
             if (@uris) {
                 $cb->($client, \@uris);
@@ -231,7 +226,6 @@ sub _searchFallback {
         "SpotOn DSTM: falling back to artist search (artist=$seedArtist, offset=$offset)"
     );
 
-    # T-06-07: URI extraction via strict regex — only alphanumeric track IDs pass
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => sprintf('artist:"%s"', $seedArtist),
         type   => 'track',
@@ -242,13 +236,7 @@ sub _searchFallback {
         my $tracks = ($result && $result->{tracks} && $result->{tracks}{items})
             ? $result->{tracks}{items} : [];
 
-        my @uris = map {
-            my $uri = '';
-            if ($_->{uri} && $_->{uri} =~ /(track:[a-z0-9]+)/i) {
-                $uri = "spotify://$1";
-            }
-            $uri ? $uri : ()
-        } @$tracks;
+        my @uris = _cacheAndExtractUris($tracks);
 
         if (@uris) {
             $cb->($client, \@uris);
@@ -257,6 +245,35 @@ sub _searchFallback {
             $cb->($client);
         }
     });
+}
+
+sub _cacheAndExtractUris {
+    my ($tracks) = @_;
+    my @uris;
+
+    for my $track (@$tracks) {
+        next unless $track->{uri} && $track->{uri} =~ /(track:[a-z0-9]+)/i;
+        my $uri = "spotify://$1";
+
+        my $artist = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
+        my $images = $track->{album}{images} || [];
+        my $image  = @$images ? (sort { ($b->{width}||0) <=> ($a->{width}||0) } @$images)[0]->{url} : '';
+
+        $cache->set('spoton_meta_' . md5_hex($uri), {
+            title    => $track->{name} // '',
+            artist   => $artist,
+            album    => $track->{album}{name} // '',
+            duration => ($track->{duration_ms} || 0) / 1000,
+            cover    => $image,
+            icon     => $image,
+            bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+            type     => 'Spotify',
+        }, 3600);
+
+        push @uris, $uri;
+    }
+
+    return @uris;
 }
 
 1;
