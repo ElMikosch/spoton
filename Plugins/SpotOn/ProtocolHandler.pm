@@ -277,7 +277,18 @@ sub getMetadataFor {
         }
     }
 
-    return $cache->get('spoton_meta_' . md5_hex($url)) || {};
+    my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+    return {} unless $meta;
+
+    if ($client) {
+        require Plugins::SpotOn::Plugin;
+        return { %$meta,
+            type    => Plugins::SpotOn::Plugin->_typeString($client, 'Browse'),
+            bitrate => Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k',
+        };
+    }
+
+    return $meta;
 }
 
 1;
