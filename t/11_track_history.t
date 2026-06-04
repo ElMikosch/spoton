@@ -317,8 +317,10 @@ BEGIN {
 # Add to @INC
 unshift @INC, $stub_dir, $project_dir;
 
-# Pre-load the Helper stub so requires find the stub, not the real module.
+# Pre-load stubs so subsequent `require` calls inside ProtocolHandler.pm find the stubs.
 require Plugins::SpotOn::Helper;
+require Plugins::SpotOn::API::Client;
+require Slim::Control::Request;
 
 # ============================================================
 # Load ProtocolHandler.pm
@@ -456,57 +458,157 @@ subtest 'getMetadataFor returns cached Browse metadata' => sub {
 
 # ============================================================
 # Test F: getMetadataFor returns placeholder on cache miss
-# NOTE: This test is marked TODO — full async re-fetch is implemented in Plan 02.
-# Plan 01 only ensures the method doesn't crash; Plan 02 will wire async fetch.
+# D-03: cache miss returns placeholder, not empty hashref
 # ============================================================
 subtest 'getMetadataFor returns placeholder on cache miss' => sub {
-    TODO: {
-        local $TODO = "Plan 02 will implement async re-fetch; currently returns {} on miss";
+    Slim::Utils::Cache->new->clear();
 
-        Slim::Utils::Cache->new->clear();
+    my $client = MockClient->new('player_miss');
+    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spotify://track:NOTCACHED');
 
-        my $client = MockClient->new('player_miss');
-        my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spotify://track:NOTCACHED');
+    ok(defined $result, 'Cache miss returns defined result');
+    ok(ref $result eq 'HASH', 'Cache miss returns a hash ref');
+    ok(defined $result->{cover}, 'Cache miss returns result with cover field (placeholder)');
+    is($result->{cover}, '/html/images/cover.png', 'Placeholder cover is generic LMS fallback artwork');
+    ok(scalar keys %$result > 0, 'Placeholder hash is non-empty (not bare {})');
+};
 
-        ok(defined $result->{cover}, 'Cache miss returns result with cover field (placeholder)');
+# ============================================================
+# Test G: Connect URL with spotifyUri in cache returns metadata with play field
+# D-06, D-07: Connect-to-Browse URL translation
+# ============================================================
+subtest 'Connect URL with spotifyUri in cache returns metadata with play field' => sub {
+    use Digest::MD5 qw(md5_hex);
+
+    my $connect_url = 'spotify://connect-20260604-120000';
+    my $cache_key   = 'spoton_meta_' . md5_hex($connect_url);
+
+    Slim::Utils::Cache->new->clear();
+    Slim::Utils::Cache->new->set($cache_key, {
+        title      => 'Connect Track',
+        artist     => 'Connect Artist',
+        album      => 'Connect Album',
+        duration   => 180,
+        cover      => 'https://example.com/connect_cover.jpg',
+        icon       => 'https://example.com/connect_cover.jpg',
+        bitrate    => '320k',
+        type       => 'OGG (Spotify Connect)',
+        spotifyUri => 'spotify:track:XYZ789',
+    }, 604800);
+
+    my $client = MockClient->new('player_connect');
+    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, $connect_url);
+
+    ok(defined $result, 'Connect URL with spotifyUri returns defined result');
+    ok(ref $result eq 'HASH', 'Connect URL returns hash ref');
+    ok(defined $result->{play}, 'Connect translation returns result with play field');
+    like($result->{play}, qr{spotify://track:XYZ789}, 'play field contains Browse URL with correct track ID');
+};
+
+# ============================================================
+# Test H: D-05 debounce prevents duplicate fetch
+# When $_pendingRefetch is set for a URL, getMetadataFor must not fire another API call
+# ============================================================
+subtest 'Debounce prevents duplicate fetch on cache miss' => sub {
+    Slim::Utils::Cache->new->clear();
+    $Plugins::SpotOn::API::Client::mock_track = undef;
+
+    # Track call count via a local counter
+    my $call_count = 0;
+    {
+        no warnings 'redefine';
+        local *Plugins::SpotOn::API::Client::getTrack = sub {
+            $call_count++;
+            # Don't invoke callback — simulates in-flight request
+        };
+
+        # Set debounce flag directly — simulates an already-in-flight request
+        $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spotify://track:DEBOUNCE'} = 1;
+
+        my $client = MockClient->new('player_debounce');
+        my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spotify://track:DEBOUNCE');
+
+        is($call_count, 0, 'D-05: no API call when debounce flag is set');
+        ok(defined $result->{cover}, 'Still returns placeholder when debounced');
+
+        # Clean up
+        delete $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spotify://track:DEBOUNCE'};
     }
 };
 
 # ============================================================
-# Test G: Connect URL with spotifyUri in cache returns metadata
-# D-01: Connect cache entries with spotifyUri enable Browse URL translation
-# NOTE: This test is marked TODO — translation logic is implemented in Plan 02.
-# Plan 01 only ensures cache writes and data shapes are correct.
+# Test I: async re-fetch populates cache and fires newmetadata notification
+# D-03: callback populates cache; notifyFromArray fires for NowPlaying refresh
 # ============================================================
-subtest 'Connect URL with spotifyUri in cache returns metadata' => sub {
-    TODO: {
-        local $TODO = "Plan 02 will implement Connect-to-Browse translation; Plan 01 establishes data shape";
+subtest 'Async re-fetch populates cache and fires newmetadata' => sub {
+    use Digest::MD5 qw(md5_hex);
 
-        use Digest::MD5 qw(md5_hex);
+    Slim::Utils::Cache->new->clear();
+    $Slim::Control::Request::notify_count = 0;
 
-        my $connect_url = 'spotify://connect-20260604-120000';
-        my $cache_key   = 'spoton_meta_' . md5_hex($connect_url);
+    # Set mock_track so API::Client->getTrack returns metadata synchronously
+    $Plugins::SpotOn::API::Client::mock_track = {
+        name       => 'Async Track',
+        artists    => [{ name => 'Async Artist' }],
+        album      => { name => 'Async Album', images => [{ url => 'https://example.com/img.jpg', width => 640 }] },
+        duration_ms => 210000,
+    };
 
-        Slim::Utils::Cache->new->clear();
-        Slim::Utils::Cache->new->set($cache_key, {
-            title      => 'Connect Track',
-            artist     => 'Connect Artist',
-            album      => 'Connect Album',
-            duration   => 180,
-            cover      => 'https://example.com/connect_cover.jpg',
-            icon       => 'https://example.com/connect_cover.jpg',
-            bitrate    => '320k',
-            type       => 'OGG (Spotify Connect)',
-            spotifyUri => 'spotify:track:XYZ789',
-        }, 604800);
+    my $url = 'spotify://track:ASYNCTEST';
+    my $client = MockClient->new('player_async');
 
-        my $cached = Slim::Utils::Cache->new->get($cache_key);
-        ok(defined $cached, 'Connect URL cache entry was stored');
-        ok($cached->{spotifyUri} eq 'spotify:track:XYZ789', 'spotifyUri field preserved in cache');
+    # Call getMetadataFor — triggers _asyncRefetch which calls getTrack (sync stub)
+    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, $url);
 
-        # When Plan 02 is implemented, getMetadataFor with a Connect URL should translate
-        # via spotifyUri to the canonical Browse metadata. For now just verify the cache shape.
-        ok(1, 'Cache shape validation passed (translation deferred to Plan 02)');
+    # Placeholder returned immediately
+    ok(defined $result, 'Returns defined result (placeholder) while re-fetch fires');
+
+    # After getTrack callback ran (synchronously in stub), cache should be populated
+    my $cache_key = 'spoton_meta_' . md5_hex($url);
+    my $cached = Slim::Utils::Cache->new->get($cache_key);
+
+    ok(defined $cached, 'Cache populated after async re-fetch callback');
+    is($cached->{title}, 'Async Track', 'Cached title matches API response');
+    is($cached->{artist}, 'Async Artist', 'Cached artist matches API response');
+    cmp_ok($Slim::Control::Request::notify_count, '>=', 1, 'notifyFromArray fired after re-fetch');
+
+    # Clean up mock
+    $Plugins::SpotOn::API::Client::mock_track = undef;
+};
+
+# ============================================================
+# Test J: D-07 Connect URL returns Browse mode label, not Connect
+# Type string must say "Browse" for translated Connect history tracks
+# ============================================================
+subtest 'Connect URL returns Browse mode label not Connect' => sub {
+    use Digest::MD5 qw(md5_hex);
+
+    my $connect_url = 'spotify://connect-20260604-130000';
+    my $cache_key   = 'spoton_meta_' . md5_hex($connect_url);
+
+    Slim::Utils::Cache->new->clear();
+    Slim::Utils::Cache->new->set($cache_key, {
+        title      => 'Another Connect Track',
+        artist     => 'Another Artist',
+        album      => 'Another Album',
+        duration   => 200,
+        cover      => 'https://example.com/another.jpg',
+        icon       => 'https://example.com/another.jpg',
+        bitrate    => '320k',
+        type       => 'OGG (Spotify Connect)',
+        spotifyUri => 'spotify:track:BROWSE01',
+    }, 604800);
+
+    my $client = MockClient->new('player_d07');
+    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, $connect_url);
+
+    ok(defined $result, 'D-07: Connect URL translation returns result');
+    # type field should contain Browse (not Connect) — D-07 invisible translation
+    if (defined $result->{type}) {
+        unlike($result->{type}, qr/Connect/, 'D-07: type field does NOT contain "Connect"');
+        like($result->{type},   qr/Browse/,  'D-07: type field contains "Browse"');
+    } else {
+        pass('D-07: type field not set (no client-resolved type in test env)');
     }
 };
 

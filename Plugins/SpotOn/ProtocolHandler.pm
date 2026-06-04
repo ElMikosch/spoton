@@ -17,6 +17,9 @@ my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new();
 my $CRLF  = "\x0d\x0a";
 
+# D-05: debounce — one in-flight re-fetch per URL
+our %_pendingRefetch;
+
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
@@ -277,6 +280,29 @@ sub getMetadataFor {
         }
     }
 
+    # D-06, D-07: Connect history URL translation — cache hit with spotifyUri
+    # History items don't have an active playingSong, so we reach here for connect- URLs
+    # that were cached by _fetchTrackMetadata in Connect.pm.
+    if ($url && $url =~ m{spotify://connect-}) {
+        my $connect_meta = $cache->get('spoton_meta_' . md5_hex($url));
+        if ($connect_meta && $connect_meta->{spotifyUri}
+            && $connect_meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
+            my $trackId    = $1;
+            my $browseUrl  = "spotify://track:$trackId";
+            # D-07: return Browse mode label — Connect origin is invisible to the user
+            require Plugins::SpotOn::Plugin;
+            if ($client) {
+                return { %$connect_meta,
+                    type    => Plugins::SpotOn::Plugin->_typeString($client, 'Browse'),
+                    bitrate => Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k',
+                    play    => $browseUrl,
+                };
+            }
+            return { %$connect_meta, play => $browseUrl };
+        }
+        # No cached spotifyUri — fall through to async re-fetch path below
+    }
+
     # Normalize: cache is keyed on spotify://track:ID but LMS may pass spotify:track:ID
     my $canonical = $url;
     if ($canonical && $canonical =~ m{^spotify:(?!//)}) {
@@ -290,7 +316,11 @@ sub getMetadataFor {
         $meta = $cache->get('spoton_meta_' . md5_hex($url));
     }
 
-    return {} unless $meta;
+    # D-03, D-04, D-05: cache miss — return placeholder immediately, fire async re-fetch
+    unless ($meta) {
+        _asyncRefetch($class, $client, $url, $canonical);
+        return _placeholderMeta($url);
+    }
 
     if ($client) {
         require Plugins::SpotOn::Plugin;
@@ -301,6 +331,109 @@ sub getMetadataFor {
     }
 
     return $meta;
+}
+
+# _placeholderMeta($url)
+# Returns minimal metadata for immediate display while async re-fetch is in progress.
+# D-03: cache miss returns placeholder, not empty hashref.
+sub _placeholderMeta {
+    my ($url) = @_;
+    my $title = ($url && $url =~ m{spotify://track:}) ? 'Loading...' : '';
+    return {
+        cover => '/html/images/cover.png',
+        icon  => '/html/images/cover.png',
+        title => $title,
+    };
+}
+
+# _asyncRefetch($class, $client, $url, $canonical)
+# Fires an async API::Client->getTrack call for a cache-miss URL.
+# D-04: extracts track ID from Browse URL or from cached spotifyUri for Connect URLs.
+# D-05: debounce via %_pendingRefetch — one in-flight re-fetch per URL.
+# Pitfall 4: delete from debounce hash is the FIRST action in the callback.
+# Pitfall 3: Connect re-fetch stores result under Browse URL cache key.
+sub _asyncRefetch {
+    my ($class, $client, $url, $canonical) = @_;
+
+    # D-05: debounce — skip if already fetching this URL
+    return if $_pendingRefetch{$url || ''};
+
+    # Extract track ID from Browse URL or from cached connect entry's spotifyUri
+    my $trackId;
+    if ($canonical && $canonical =~ m{spotify://track:([A-Za-z0-9]+)}) {
+        $trackId = $1;
+    } elsif ($url && $url =~ m{spotify://connect-}) {
+        my $connect_meta = $cache->get('spoton_meta_' . md5_hex($url));
+        if ($connect_meta && $connect_meta->{spotifyUri}
+            && $connect_meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
+            $trackId = $1;
+        }
+    }
+    return unless $trackId;
+
+    # Resolve accountId — T-11-03: only alphanumeric track IDs reach here
+    my $accountId;
+    if ($client) {
+        $accountId = $prefs->client($client)->get('activeAccount')
+                  || $prefs->get('activeAccount')
+                  || '';
+    } else {
+        $accountId = $prefs->get('activeAccount') || '';
+    }
+
+    # D-05: mark in-flight
+    $_pendingRefetch{$url} = 1;
+
+    require Plugins::SpotOn::API::Client;
+
+    Plugins::SpotOn::API::Client->getTrack($accountId, $trackId, sub {
+        my ($trackInfo) = @_;
+
+        # Pitfall 4: ALWAYS clear debounce first — even on error
+        delete $_pendingRefetch{$url};
+
+        return unless $trackInfo && $trackInfo->{name};
+
+        my $title    = $trackInfo->{name};
+        my $artist   = join(', ', map { $_->{name} } @{ $trackInfo->{artists} || [] });
+        my $album    = ($trackInfo->{album} || {})->{name} || '';
+        my $duration = ($trackInfo->{duration_ms} || 0) / 1000;
+        my $cover    = _largestImage(($trackInfo->{album} || {})->{images})
+                    || '/html/images/cover.png';
+
+        my %new_meta = (
+            title    => $title,
+            artist   => $artist,
+            album    => $album,
+            duration => $duration,
+            cover    => $cover,
+            icon     => $cover,
+        );
+
+        # Pitfall 3: for Connect URLs, store under Browse URL key so future lookups find it
+        my $cacheUrl = ($url && $url =~ m{spotify://connect-})
+            ? "spotify://track:$trackId"
+            : $canonical;
+
+        $cache->set('spoton_meta_' . md5_hex($cacheUrl), \%new_meta, 604800);
+
+        # Notify LMS to refresh NowPlaying display
+        if ($client) {
+            require Slim::Control::Request;
+            Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
+        }
+    });
+}
+
+# _largestImage($images_arrayref)
+# Returns the URL of the largest image (by width) from a Spotify images array.
+# Returns '' if the array is empty or undef.
+# Local copy — avoids importing from Connect.pm (Pitfall 1).
+sub _largestImage {
+    my ($images) = @_;
+    return '' unless ref $images eq 'ARRAY' && @{$images};
+    my ($largest) = sort { ($b->{width} || 0) <=> ($a->{width} || 0) } @{$images};
+    return $largest->{url} || '';
 }
 
 1;
