@@ -3,3 +3,12 @@ librespot-spoton/target/
 
 # Perl test artifacts
 *.bak
+
+# Internal development files (not part of the plugin)
+.planning/
+.claude/
+CLAUDE.md
+REQUIREMENTS.md
+claude-spotty.sudoers
+test_keymaster_*.py
+test_pkce_token.py
