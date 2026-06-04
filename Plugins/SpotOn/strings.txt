@@ -703,7 +703,7 @@ PLUGIN_SPOTON_CONNECT_ENABLED
 PLUGIN_SPOTON_CONNECT_ENABLED_DESC
 	CS	Aktivovat Spotify Connect pro tohoto přehrávače
 	DA	Aktiver Spotify Connect for denne afspiller
-	DE	Spotify Connect fuer diesen Player aktivieren
+	DE	Spotify Connect für diesen Player aktivieren
 	EN	Enable Spotify Connect for this player
 	ES	Activar Spotify Connect para este reproductor
 	FR	Activer Spotify Connect pour ce lecteur
@@ -742,7 +742,7 @@ PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE
 PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE_DESC
 	CS	Audio formát pro přehrávání Spotify Connect
 	DA	Lydformat til Spotify Connect-afspilning
-	DE	Audio-Format fuer Spotify Connect Wiedergabe
+	DE	Audio-Format für Spotify Connect Wiedergabe
 	EN	Audio format for Spotify Connect playback
 	ES	Formato de audio para la reproducción de Spotify Connect
 	FR	Format audio pour la lecture Spotify Connect
@@ -781,7 +781,7 @@ PLUGIN_SPOTON_DISCOVERY_ENABLED
 PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC
 	CS	Oznámit zařízení přes mDNS v místní síti (Spotify App najde zařízení bez síťového obchvatu)
 	DA	Annoncer enhed via mDNS i det lokale netværk (Spotify-appen finder enheden uden netværksomvej)
-	DE	Geraet via mDNS im lokalen Netzwerk ankuendigen (Spotify-App findet Geraet ohne Netzwerkumweg)
+	DE	Gerät via mDNS im lokalen Netzwerk ankündigen (Spotify-App findet Gerät ohne Netzwerkumweg)
 	EN	Announce device via mDNS in local network (Spotify app discovers device without network detour)
 	ES	Anunciar dispositivo a través de mDNS en la red local (la App de Spotify descubre el dispositivo sin desvío de red)
 	FR	Annoncer l'appareil via mDNS sur le réseau local (l'application Spotify découvre l'appareil sans détour réseau)
@@ -963,7 +963,7 @@ PLUGIN_SPOTON_BITRATE_OVERRIDE
 PLUGIN_SPOTON_BITRATE_OVERRIDE_DESC
 	CS	Přepíše globální přenosovou rychlost pro tohoto přehrávače. Výchozí nastavení používá globální hodnotu.
 	DA	Tilsidesætter den globale bithastighed for denne afspiller. Standard bruger den globale værdi.
-	DE	Ueberschreibt die globale Bitrate fuer diesen Player. Standard nutzt den globalen Wert.
+	DE	Überschreibt die globale Bitrate für diesen Player. Standard nutzt den globalen Wert.
 	EN	Overrides global bitrate for this player. Default uses the global value.
 	ES	Anula la tasa de bits global para este reproductor. El predeterminado usa el valor global.
 	FR	Remplace le débit binaire global pour ce lecteur. Par défaut, utilise la valeur globale.
@@ -1025,6 +1025,19 @@ PLUGIN_SPOTON_SETUP_GUIDE_STEP1
 	PL	Utwórz aplikację Spotify Developer App na
 	SV	Skapa en Spotify Developer App på
 
+PLUGIN_SPOTON_SETUP_GUIDE_STEP1B
+	CS	Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DA	Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DE	Trage als Redirect URI ein: http://127.0.0.1:9000/plugins/SpotOn/callback
+	EN	Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
+	ES	Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
+	FR	Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
+	IT	Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NL	Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NO	Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
+	PL	Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
+	SV	Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
+
 PLUGIN_SPOTON_SETUP_GUIDE_STEP2
 	CS	Zadejte Client-ID do pole níže
 	DA	Indtast din Client-ID i feltet nedenfor
@@ -1041,7 +1054,7 @@ PLUGIN_SPOTON_SETUP_GUIDE_STEP2
 PLUGIN_SPOTON_SETUP_GUIDE_STEP3
 	CS	Otevřete Spotify App a připojte se ke svému přehrávači
 	DA	Åbn Spotify-appen og opret forbindelse til din afspiller
-	DE	Oeffne die Spotify-App und verbinde dich mit deinem Player
+	DE	Öffne die Spotify-App und verbinde dich mit deinem Player
 	EN	Open the Spotify app and connect to your player
 	ES	Abre la App de Spotify y conéctate a tu reproductor
 	FR	Ouvrez l'application Spotify et connectez-vous à votre lecteur
