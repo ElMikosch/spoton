@@ -76,26 +76,6 @@ sub init {
     # initHelpers() directly after saving — setChange on global prefs namespace
     # doesn't fire for per-player prefs (WR-01 fix).
 
-    # D-01: LMS-start reset — clear all per-player discoveryDisabledByCrashLoop flags.
-    # This ensures manual recovery via LMS restart works (dual safety with 30-min cooldown).
-    for my $client (Slim::Player::Client::clients()) {
-        if ($prefs->client($client)->get('discoveryDisabledByCrashLoop')) {
-            main::INFOLOG && $log->is_info && $log->info(
-                "LMS-start: resetting discoveryDisabledByCrashLoop for " . $client->id
-            );
-            $prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
-        }
-    }
-    # D-01: Reset global disableDiscovery — only set by crash-loop fallback
-    # (when $client was undef in _checkStartTimes). No user-facing global
-    # toggle exists in the current UI; if added later, scope this reset.
-    if ($prefs->get('disableDiscovery')) {
-        main::INFOLOG && $log->is_info && $log->info(
-            "LMS-start: resetting global disableDiscovery flag (crash-loop fallback only)"
-        );
-        $prefs->set('disableDiscovery', 0);
-    }
-
     # Immediate initial check — player may already be connected before listeners registered
     Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.5, \&initHelpers);
 }
@@ -104,6 +84,23 @@ sub initHelpers {
     my $class = __PACKAGE__;
 
     Slim::Utils::Timers::killTimers($class, \&initHelpers);
+
+    # D-01: Reset crash-loop flags BEFORE evaluating daemons. Done here (not in
+    # init()) because players may not be connected yet when init() runs at startup.
+    for my $client (Slim::Player::Client::clients()) {
+        if ($prefs->client($client)->get('discoveryDisabledByCrashLoop')) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Resetting discoveryDisabledByCrashLoop for " . $client->id
+            );
+            $prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
+        }
+    }
+    if ($prefs->get('disableDiscovery')) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Resetting global disableDiscovery flag (crash-loop fallback)"
+        );
+        $prefs->set('disableDiscovery', 0);
+    }
 
     main::INFOLOG && $log->is_info && $log->info("Checking SpotOn Connect helper daemons...");
 
