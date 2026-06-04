@@ -2,6 +2,7 @@ package Plugins::SpotOn::Connect;
 
 use strict;
 
+use Digest::MD5 qw(md5_hex);
 use File::Path qw(mkpath);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
@@ -855,6 +856,26 @@ sub _fetchTrackMetadata {
             originalType => $type_str,
             type         => $type_str,
         });
+
+        # D-01/D-02: Persist Connect metadata to cache for history replay
+        # Cache key uses connect-timestamp URL; spotifyUri enables future Browse translation.
+        if ($song->streamUrl) {
+            Slim::Utils::Cache->new()->set(
+                'spoton_meta_' . md5_hex($song->streamUrl),
+                {
+                    title      => $title,
+                    artist     => $artist,
+                    album      => $album,
+                    duration   => $duration,
+                    cover      => $cover,
+                    icon       => $cover,
+                    bitrate    => $bitrate . 'k',
+                    type       => $type_str,
+                    spotifyUri => $trackInfo->{uri},
+                },
+                604800,
+            );
+        }
 
         # Update song duration for progress bar
         if ($duration) {
