@@ -251,6 +251,9 @@ sub _cacheAndExtractUris {
     my ($tracks) = @_;
     my @uris;
 
+    require Plugins::SpotOn::Plugin;
+    my $type_str = Plugins::SpotOn::Plugin->_typeString(undef, 'Browse');
+
     for my $track (@$tracks) {
         next unless $track->{uri} && $track->{uri} =~ /(track:[a-z0-9]+)/i;
         my $uri = "spotify://$1";
@@ -267,7 +270,7 @@ sub _cacheAndExtractUris {
             cover    => $image,
             icon     => $image,
             bitrate  => ($prefs->get('bitrate') || 320) . 'k',
-            type     => 'Spotify',
+            type     => $type_str,
         }, 3600);
 
         push @uris, $uri;

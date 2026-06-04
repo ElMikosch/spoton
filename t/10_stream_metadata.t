@@ -243,6 +243,10 @@ BEGIN {
 # Add to @INC
 unshift @INC, $stub_dir, $project_dir;
 
+# Pre-load the Helper stub so _typeString's require finds the stub, not the real module.
+# The stub uses a package variable ($helperCapabilities) that tests can control.
+require Plugins::SpotOn::Helper;
+
 # ============================================================
 # Load Plugin.pm
 # ============================================================

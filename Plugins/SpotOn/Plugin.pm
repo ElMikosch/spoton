@@ -402,7 +402,7 @@ sub _trackItem {
         cover    => $image,
         icon     => $image,
         bitrate  => ($prefs->get('bitrate') || 320) . 'k',
-        type     => 'Spotify',
+        type     => __PACKAGE__->_typeString($client, 'Browse'),
     }, 3600);
 
     my %item = (
@@ -1140,7 +1140,7 @@ sub _albumTrackItem {
         cover    => $image,
         icon     => $image,
         bitrate  => ($prefs->get('bitrate') || 320) . 'k',
-        type     => 'Spotify',
+        type     => __PACKAGE__->_typeString($client, 'Browse'),
     }, 3600);
 
     my %item = (
@@ -1332,6 +1332,49 @@ sub updateTranscodingTable {
         # auto: all pipelines stay — passthrough guard above already removed
         # son-ogg if the binary lacks passthrough capability.
     }
+}
+
+# _typeString($client, $mode)
+# Returns the display string for the 'type' metadata field in Songinfo.
+# $mode: 'Browse' or 'Connect'
+# Template (D-01): "{bitrate}k, {format} (Spotify {mode})"
+# Guard (D-04): absent bitrate => "{format} (Spotify {mode})"
+sub _typeString {
+    my ($class, $client, $mode) = @_;
+
+    # Sync-group normalization: read prefs from the master player,
+    # consistent with ProtocolHandler::getMetadataFor and Connect.pm patterns.
+    $client = $client->master if $client && $client->can('master');
+
+    # D-07: Bitrate — global pref with per-player override (mirrors updateTranscodingTable).
+    # D-04: Guard — if bitrate is somehow absent (0/undef), omit from display string.
+    my $bitrate = $prefs->get('bitrate');
+    if ($client) {
+        my $override = $prefs->client($client)->get('bitrateOverride');
+        $bitrate = $override if $override && $override =~ /^(?:96|160|320)$/;
+    }
+
+    # D-05: streamFormat per-player pref with migration fallback (mirrors formatOverride)
+    my $fmt = $client
+        ? ($prefs->client($client)->get('streamFormat')
+           || $prefs->client($client)->get('connectOggOverride')
+           || 'auto')
+        : 'auto';
+
+    # D-05 discretion: resolve 'auto' via passthrough capability
+    if ($fmt eq 'auto') {
+        require Plugins::SpotOn::Helper;
+        $fmt = Plugins::SpotOn::Helper->getCapability('passthrough') ? 'ogg' : 'pcm';
+    }
+
+    # D-03: Short format labels
+    my %LABEL = (ogg => 'OGG', flac => 'FLAC', mp3 => 'MP3', pcm => 'PCM');
+    my $fmtLabel = $LABEL{$fmt} || uc($fmt);
+
+    # D-01 / D-04: assemble display string
+    return $bitrate
+        ? "${bitrate}k, ${fmtLabel} (Spotify ${mode})"
+        : "${fmtLabel} (Spotify ${mode})";
 }
 
 1;

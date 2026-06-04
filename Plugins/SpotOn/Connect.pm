@@ -841,6 +841,8 @@ sub _fetchTrackMetadata {
         );
 
         # Full metadata for Now Playing display
+        require Plugins::SpotOn::Plugin;
+        my $type_str = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
         $song->pluginData(info => {
             title        => $title,
             artist       => $artist,
@@ -848,8 +850,8 @@ sub _fetchTrackMetadata {
             duration     => $duration,
             cover        => $cover,
             url          => $song->streamUrl,
-            originalType => 'Ogg Vorbis (Spotify)',
-            type         => 'Ogg Vorbis (Spotify)',
+            originalType => $type_str,
+            type         => $type_str,
         });
 
         # Update song duration for progress bar
