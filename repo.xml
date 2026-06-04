@@ -2,16 +2,12 @@
 <!--
     LMS Custom Repository descriptor for SpotOn.
 
-    SHA1 and download URL below are PLACEHOLDERS — they will be finalized in Phase 6.1
-    after multi-architecture binary builds (x86_64, aarch64, armhf, i386) are completed
-    and a versioned release zip is published on GitHub.
-
     USERS: Add the raw GitHub URL of this file to:
       LMS Settings → Plugins → Additional Repositories
+      URL: https://raw.githubusercontent.com/stiefenm/spoton/main/repo.xml
 
-    MAINTAINERS: Replace PLACEHOLDER_SHA1_PHASE_6_1 and PLACEHOLDER_URL_PHASE_6_1
-    with the actual SHA1 checksum (sha1sum SpotOn.zip) and the direct download URL
-    of the release zip before announcing the plugin to users.
+    MAINTAINERS: When publishing a new version, update sha (sha1sum of zip)
+    and url (GitHub release asset URL).
 -->
 <extensions>
     <details>
@@ -25,8 +21,8 @@
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="PLACEHOLDER_SHA1_PHASE_6_1"
-            url="PLACEHOLDER_URL_PHASE_6_1"
+            sha="dd6b4a94ac8db659b2df6412c0938a0435aa2d9b"
+            url="https://github.com/stiefenm/spoton/releases/download/v1.1.0/SpotOn-v1.1.0.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
             email="sti@posteo.de"
