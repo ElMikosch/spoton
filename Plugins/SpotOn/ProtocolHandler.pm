@@ -277,7 +277,19 @@ sub getMetadataFor {
         }
     }
 
-    my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+    # Normalize: cache is keyed on spotify://track:ID but LMS may pass spotify:track:ID
+    my $canonical = $url;
+    if ($canonical && $canonical =~ m{^spotify:(?!//)}) {
+        $canonical =~ s{^spotify:}{spotify://};
+    }
+
+    my $meta = $cache->get('spoton_meta_' . md5_hex($canonical));
+
+    # Fallback: try original URL if normalization didn't help
+    if (!$meta && $canonical ne $url) {
+        $meta = $cache->get('spoton_meta_' . md5_hex($url));
+    }
+
     return {} unless $meta;
 
     if ($client) {
