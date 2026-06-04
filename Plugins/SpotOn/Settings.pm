@@ -232,10 +232,12 @@ sub handler {
                                  || 'auto';
         # Autoplay toggle template vars (D-10, D-13, D-14)
         $paramRef->{canAutoplay}     = Plugins::SpotOn::Helper->getCapability('autoplay') ? 1 : 0;
-        $paramRef->{autoplayEnabled} = $prefs->client($client)->get('enableAutoplay') // 1;
-        # D-13/D-14: reverse sync — read DSTM provider at page-load to derive autoplayEnabled
-        # Implemented as page-load read (no pref-change callback), avoiding loop risk (Pitfall 3)
-        if ( $paramRef->{canAutoplay}
+        my $rawAutoplay = $prefs->client($client)->get('enableAutoplay');
+        $paramRef->{autoplayEnabled} = $rawAutoplay // 1;
+        # D-13/D-14: reverse sync — read DSTM provider at page-load to derive autoplayEnabled.
+        # Only when pref was explicitly set (not undef) — otherwise the default 1 applies
+        # for existing players that never saved this pref yet.
+        if ( defined $rawAutoplay && $paramRef->{canAutoplay}
              && Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
             my $dstmPrefs    = preferences('plugin.dontstopthemusic');
             my $dstmProvider = $dstmPrefs->client($client)->get('provider') // '';
