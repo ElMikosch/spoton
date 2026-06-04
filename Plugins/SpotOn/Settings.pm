@@ -171,7 +171,26 @@ sub handler {
             my $disableDiscovery = $paramRef->{'pref_enableDiscovery'} ? 0 : 1;
             $prefs->client($client)->set('disableDiscovery', $disableDiscovery);
 
+            # Autoplay toggle (D-08, D-09, D-11, D-12, T-10-02)
+            # Checkbox unchecked = absent from params = 0 (established coerce pattern)
+            my $enableAutoplay = $paramRef->{'pref_enableAutoplay'} ? 1 : 0;
+            $prefs->client($client)->set('enableAutoplay', $enableAutoplay);
+
+            # Bidirectional DSTM sync (D-11/D-12): sync LMS DSTM provider pref
+            if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
+                my $dstmPrefs = preferences('plugin.dontstopthemusic');
+                if ($enableAutoplay) {
+                    $dstmPrefs->client($client)->set('provider', 'PLUGIN_SPOTON_RECOMMENDATIONS');
+                } else {
+                    $dstmPrefs->client($client)->set('provider', 0);
+                }
+            }
+
+            # Daemon restart: stop live daemon first (Pitfall 1: startHelper skips alive daemons)
             require Plugins::SpotOn::Connect::DaemonManager;
+            my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
+            $helper->stopForSync() if $helper && $helper->alive;
+
             Plugins::SpotOn::Connect::DaemonManager->initHelpers();
         }
     }
@@ -211,6 +230,17 @@ sub handler {
         $paramRef->{streamFormat} = $prefs->client($client)->get('streamFormat')
                                  || $prefs->client($client)->get('connectOggOverride')
                                  || 'auto';
+        # Autoplay toggle template vars (D-10, D-13, D-14)
+        $paramRef->{canAutoplay}     = Plugins::SpotOn::Helper->getCapability('autoplay') ? 1 : 0;
+        $paramRef->{autoplayEnabled} = $prefs->client($client)->get('enableAutoplay') // 1;
+        # D-13/D-14: reverse sync — read DSTM provider at page-load to derive autoplayEnabled
+        # Implemented as page-load read (no pref-change callback), avoiding loop risk (Pitfall 3)
+        if ( $paramRef->{canAutoplay}
+             && Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
+            my $dstmPrefs    = preferences('plugin.dontstopthemusic');
+            my $dstmProvider = $dstmPrefs->client($client)->get('provider') // '';
+            $paramRef->{autoplayEnabled} = ($dstmProvider eq 'PLUGIN_SPOTON_RECOMMENDATIONS') ? 1 : 0;
+        }
     }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
