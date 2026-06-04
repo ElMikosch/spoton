@@ -401,7 +401,7 @@ sub _trackItem {
         duration => $duration,
         cover    => $image,
         icon     => $image,
-        bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+        bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
     }, 3600);
 
@@ -1139,7 +1139,7 @@ sub _albumTrackItem {
         duration => $duration,
         cover    => $image,
         icon     => $image,
-        bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+        bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
     }, 3600);
 
