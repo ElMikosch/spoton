@@ -107,6 +107,8 @@ sub initPlugin {
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3, \&_startConnectDaemons);
     }
 
+    _deployMaterialSkinIcon();
+
     $class->SUPER::initPlugin(
         feed   => \&handleFeed,
         tag    => 'spoton',
@@ -115,6 +117,27 @@ sub initPlugin {
         weight => 100,
         icon   => 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png',
     );
+}
+
+# Material Skin resolves app icons via /material/svg/{tag} from its own
+# images dir, with a fallback to {prefs_dir}/material-skin/images/.
+# Deploy our SVG there so the icon renders in the Material Skin grid.
+sub _deployMaterialSkinIcon {
+    my $src = catdir(dirname(__FILE__), 'HTML', 'EN', 'plugins', 'SpotOn',
+                     'html', 'images', 'spoton_material.svg');
+    return unless -e $src;
+
+    my $destDir = catdir(Slim::Utils::Prefs::dir(), 'material-skin', 'images');
+    my $dest    = catdir($destDir, 'spoton.svg');
+    return if -e $dest && (stat($dest))[9] >= (stat($src))[9];
+
+    eval {
+        require File::Path;
+        File::Path::make_path($destDir) unless -d $destDir;
+        require File::Copy;
+        File::Copy::copy($src, $dest);
+    };
+    $log->warn("Material Skin icon deploy failed: $@") if $@;
 }
 
 # _refreshAllTokens()
