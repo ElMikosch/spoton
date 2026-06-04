@@ -47,6 +47,7 @@ sub initPlugin {
         enableSpotifyConnect => 1,     # CON-10: per-player Connect toggle, default on
         connectOggOverride   => 'auto', # D-05: OGG passthrough override ('auto'|'ogg'|'pcm')
         disableDiscovery     => 0,     # D-04: global discovery toggle, default on (Pitfall 4)
+        enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (controls Connect autoplay + DSTM)
     });
 
     require Plugins::SpotOn::Helper;

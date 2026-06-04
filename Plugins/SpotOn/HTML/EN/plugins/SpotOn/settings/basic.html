@@ -25,6 +25,15 @@
 		<label for="pref_enableSpotifyConnect">[% 'PLUGIN_SPOTON_CONNECT_ENABLED_LABEL' | string %]</label>
 	[% END %]
 
+	[% IF canAutoplay %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_AUTOPLAY_ENABLED" desc="PLUGIN_SPOTON_AUTOPLAY_ENABLED_DESC" %]
+		<input type="checkbox" class="stdedit" name="pref_enableAutoplay"
+		       id="pref_enableAutoplay"
+		       value="1" [% IF autoplayEnabled %]checked[% END %]/>
+		<label for="pref_enableAutoplay">[% 'PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL' | string %]</label>
+	[% END %]
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_DISCOVERY_ENABLED" desc="PLUGIN_SPOTON_DISCOVERY_ENABLED_DESC" %]
 		[% IF discoveryByCrashLoop %]
 		<div style="color: orange; margin-bottom:8px">

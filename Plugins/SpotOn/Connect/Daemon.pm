@@ -119,6 +119,13 @@ sub start {
 	push @helperArgs, '--disable-discovery' if $disableDiscovery;
 	push @helperArgs, '--enable-volume-normalisation' if $prefs->get('normalization');
 
+	# D-09: Pass --autoplay on/off based on per-player pref, gated on binary capability
+	if ( Plugins::SpotOn::Helper->getCapability('autoplay') ) {
+		my $enableAutoplay = $prefs->client($client)->get('enableAutoplay');
+		$enableAutoplay = 1 unless defined $enableAutoplay;  # D-08: default on
+		push @helperArgs, '--autoplay', ($enableAutoplay ? 'on' : 'off');
+	}
+
 	# T-05-08: Log the command BEFORE adding --lms-auth (security: no password in logs)
 	if (main::INFOLOG && $log->is_info) {
 		$log->info("Starting SpotOn Connect daemon:\n$helperPath " . join(' ', @helperArgs));
