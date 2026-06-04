@@ -108,6 +108,7 @@ async fn main() {
     let mut lms_auth = String::new();
     let mut disable_discovery = false;
     let mut buffer_latency_ms: u64 = 2000;
+    let mut autoplay: Option<bool> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -185,6 +186,16 @@ async fn main() {
                     i += 1;
                 }
             }
+            "--autoplay" => {
+                if i + 1 < args.len() {
+                    autoplay = match args[i + 1].as_str() {
+                        "on"  => Some(true),
+                        "off" => Some(false),
+                        _     => None,
+                    };
+                    i += 1;
+                }
+            }
             "--disable-audio-cache" => {
                 disable_audio_cache = true;
             }
@@ -243,6 +254,7 @@ async fn main() {
             let has_passthrough = cfg!(feature = "passthrough-decoder");
             let json = serde_json::json!({
                 "version": VERSION,
+                "autoplay": true,
                 "discover-once": true,
                 "lms-auth": false,
                 "ogg-direct": has_passthrough,
@@ -315,6 +327,7 @@ async fn main() {
                 if lms_auth.is_empty() { None } else { Some(&lms_auth) },
                 disable_discovery,
                 buffer_latency_ms,
+                autoplay,
             )
             .await
             {
