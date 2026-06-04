@@ -418,6 +418,7 @@ sub _trackItem {
     my $spotify_url = 'spotify://' . $track_path;
 
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
+    # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
     $cache->set('spoton_meta_' . md5_hex($spotify_url), {
         title    => $title,
         artist   => $artist,
@@ -427,7 +428,7 @@ sub _trackItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
-    }, 3600);
+    }, 604800);
 
     my %item = (
         name      => "$title \x{2014} $artist",    # em-dash fallback for older clients
@@ -1156,6 +1157,7 @@ sub _albumTrackItem {
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display.
     # WR-01: Album name passed from caller; fallback to empty if undef (e.g., future callers).
     $albumName //= '';
+    # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
     $cache->set('spoton_meta_' . md5_hex($spotify_url), {
         title    => $title,
         artist   => $artists,
@@ -1165,7 +1167,7 @@ sub _albumTrackItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
-    }, 3600);
+    }, 604800);
 
     my %item = (
         name      => ($trackNum ? "$trackNum. " : '') . $title,
