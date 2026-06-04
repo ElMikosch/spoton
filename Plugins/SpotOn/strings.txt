@@ -726,6 +726,45 @@ PLUGIN_SPOTON_CONNECT_ENABLED_LABEL
 	PL	Włącz Spotify Connect
 	SV	Aktivera Spotify Connect
 
+PLUGIN_SPOTON_AUTOPLAY_ENABLED
+	CS	Automatické přehrávání (Autoplay)
+	DA	Automatisk afspilning (Autoplay)
+	DE	Automatische Wiedergabe (Autoplay)
+	EN	Auto-play (Autoplay)
+	ES	Reproducción automática (Autoplay)
+	FR	Lecture automatique (Autoplay)
+	IT	Riproduzione automatica (Autoplay)
+	NL	Automatisch afspelen (Autoplay)
+	NO	Automatisk avspilling (Autoplay)
+	PL	Automatyczne odtwarzanie (Autoplay)
+	SV	Automatisk uppspelning (Autoplay)
+
+PLUGIN_SPOTON_AUTOPLAY_ENABLED_DESC
+	CS	Pokračovat v přehrávání s doporučenými skladbami, když skončí fronta
+	DA	Fortsæt afspilning med anbefalede numre, når køen er tom
+	DE	Wiedergabe mit empfohlenen Titeln fortsetzen, wenn die Warteschlange endet
+	EN	Continue playback with recommended tracks when the queue ends
+	ES	Continuar la reproducción con canciones recomendadas cuando se acabe la cola
+	FR	Continuer la lecture avec des titres recommandés quand la file d'attente se termine
+	IT	Continua la riproduzione con brani consigliati quando la coda finisce
+	NL	Doorgaan met afspelen met aanbevolen nummers als de wachtrij leeg is
+	NO	Fortsett avspilling med anbefalte spor når køen er tom
+	PL	Kontynuuj odtwarzanie z polecanymi utworami, gdy kolejka się skończy
+	SV	Fortsätt uppspelning med rekommenderade låtar när kön tar slut
+
+PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL
+	CS	Automatické přehrávání aktivovat
+	DA	Aktiver automatisk afspilning
+	DE	Automatische Wiedergabe aktivieren
+	EN	Enable auto-play
+	ES	Activar reproducción automática
+	FR	Activer la lecture automatique
+	IT	Abilita riproduzione automatica
+	NL	Automatisch afspelen inschakelen
+	NO	Aktiver automatisk avspilling
+	PL	Włącz automatyczne odtwarzanie
+	SV	Aktivera automatisk uppspelning
+
 PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE
 	CS	Audio formát (Connect)
 	DA	Lydformat (Connect)
