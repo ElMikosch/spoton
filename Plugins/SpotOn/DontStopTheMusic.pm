@@ -269,7 +269,7 @@ sub _cacheAndExtractUris {
             duration => ($track->{duration_ms} || 0) / 1000,
             cover    => $image,
             icon     => $image,
-            bitrate  => ($prefs->get('bitrate') || 320) . 'k',
+            bitrate  => Plugins::SpotOn::Plugin->_bitrateForClient(undef) . 'k',
             type     => $type_str,
         }, 3600);
 

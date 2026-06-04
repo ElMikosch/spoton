@@ -1334,9 +1334,6 @@ sub updateTranscodingTable {
     }
 }
 
-# _typeString($client, $mode)
-# Returns the display string for the 'type' metadata field in Songinfo.
-# $mode: 'Browse' or 'Connect'
 sub _bitrateForClient {
     my ($class, $client) = @_;
 
