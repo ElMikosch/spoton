@@ -17,12 +17,12 @@
     <plugins>
         <plugin
             name="SpotOn"
-            version="1.1.1"
+            version="1.1.2"
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="87b46e4411646c6273f7f67bb596cbebb8925bae"
-            url="https://github.com/stiefenm/spoton/releases/download/v1.1.1/SpotOn-v1.1.1.zip"
+            sha="99827da4fd116f5f56b300a2efe0b52f407881d9"
+            url="https://github.com/stiefenm/spoton/releases/download/v1.1.2/SpotOn-v1.1.2.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
             email="sti@posteo.de"
