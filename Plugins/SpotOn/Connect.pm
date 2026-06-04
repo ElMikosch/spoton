@@ -843,6 +843,7 @@ sub _fetchTrackMetadata {
         # Full metadata for Now Playing display
         require Plugins::SpotOn::Plugin;
         my $type_str = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
+        my $bitrate = Plugins::SpotOn::Plugin->_bitrateForClient($client);
         $song->pluginData(info => {
             title        => $title,
             artist       => $artist,
@@ -850,6 +851,7 @@ sub _fetchTrackMetadata {
             duration     => $duration,
             cover        => $cover,
             url          => $song->streamUrl,
+            bitrate      => $bitrate . 'k',
             originalType => $type_str,
             type         => $type_str,
         });

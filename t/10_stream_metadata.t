@@ -288,8 +288,7 @@ sub setup_prefs {
 }
 
 # ============================================================
-# Test 1: _typeString with streamFormat=ogg, bitrate=320, mode=Browse
-# D-01: "{bitrate}k, {format} (Spotify {mode})"
+# Test 1: _typeString returns format + mode only (LMS shows bitrate separately)
 # ============================================================
 {
     my $client = MockClient->new('player_ogg');
@@ -299,54 +298,50 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '320k, OGG (Spotify Browse)',
-        'D-01/META-02: streamFormat=ogg, bitrate=320, mode=Browse => "320k, OGG (Spotify Browse)"');
+    is($result, 'OGG (Spotify Browse)',
+        'META-02: streamFormat=ogg, mode=Browse => "OGG (Spotify Browse)"');
 }
 
 # ============================================================
-# Test 2: _typeString with streamFormat=flac, bitrate=160, mode=Connect
+# Test 2: _typeString with streamFormat=flac, mode=Connect
 # ============================================================
 {
     my $client = MockClient->new('player_flac');
     setup_prefs(
-        bitrate      => 160,
         client       => $client,
         streamFormat => 'flac',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
-    is($result, '160k, FLAC (Spotify Connect)',
-        'META-02: streamFormat=flac, bitrate=160, mode=Connect => "160k, FLAC (Spotify Connect)"');
+    is($result, 'FLAC (Spotify Connect)',
+        'META-02: streamFormat=flac, mode=Connect => "FLAC (Spotify Connect)"');
 }
 
 # ============================================================
-# Test 3: _typeString with streamFormat=mp3, bitrate=96, mode=Browse
-# D-08: MP3 shows Spotify source bitrate, not LAME output bitrate
+# Test 3: _typeString with streamFormat=mp3
 # ============================================================
 {
     my $client = MockClient->new('player_mp3');
     setup_prefs(
-        bitrate      => 96,
         client       => $client,
         streamFormat => 'mp3',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '96k, MP3 (Spotify Browse)',
-        'D-08/META-02: streamFormat=mp3, bitrate=96 => "96k, MP3 (Spotify Browse)"');
+    is($result, 'MP3 (Spotify Browse)',
+        'META-02: streamFormat=mp3 => "MP3 (Spotify Browse)"');
 }
 
 # ============================================================
-# Test 4: _typeString with streamFormat=pcm, bitrate=320, mode=Browse
+# Test 4: _typeString with streamFormat=pcm
 # ============================================================
 {
     my $client = MockClient->new('player_pcm');
     setup_prefs(
-        bitrate      => 320,
         client       => $client,
         streamFormat => 'pcm',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '320k, PCM (Spotify Browse)',
-        'META-02: streamFormat=pcm, bitrate=320 => "320k, PCM (Spotify Browse)"');
+    is($result, 'PCM (Spotify Browse)',
+        'META-02: streamFormat=pcm => "PCM (Spotify Browse)"');
 }
 
 # ============================================================
@@ -356,14 +351,13 @@ sub setup_prefs {
 {
     my $client = MockClient->new('player_auto_pt');
     setup_prefs(
-        bitrate      => 320,
         client       => $client,
         streamFormat => 'auto',
         passthrough  => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '320k, OGG (Spotify Browse)',
-        'D-05: streamFormat=auto + passthrough=1 => "320k, OGG (Spotify Browse)"');
+    is($result, 'OGG (Spotify Browse)',
+        'D-05: streamFormat=auto + passthrough=1 => "OGG (Spotify Browse)"');
 }
 
 # ============================================================
@@ -373,14 +367,13 @@ sub setup_prefs {
 {
     my $client = MockClient->new('player_auto_nopt');
     setup_prefs(
-        bitrate      => 320,
         client       => $client,
         streamFormat => 'auto',
         passthrough  => 0,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '320k, PCM (Spotify Browse)',
-        'D-05: streamFormat=auto + passthrough=0 => "320k, PCM (Spotify Browse)"');
+    is($result, 'PCM (Spotify Browse)',
+        'D-05: streamFormat=auto + passthrough=0 => "PCM (Spotify Browse)"');
 }
 
 # ============================================================
@@ -388,16 +381,15 @@ sub setup_prefs {
 # ============================================================
 {
     setup_prefs(
-        bitrate     => 320,
         passthrough => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString(undef, 'Browse');
-    is($result, '320k, OGG (Spotify Browse)',
-        'META-03: undef client uses global bitrate, auto+passthrough=1 => "320k, OGG (Spotify Browse)"');
+    is($result, 'OGG (Spotify Browse)',
+        'META-03: undef client, auto+passthrough=1 => "OGG (Spotify Browse)"');
 }
 
 # ============================================================
-# Test 8: bitrateOverride 160 overrides global 320
+# Test 8: _bitrateForClient — bitrateOverride 160 overrides global 320
 # D-07: per-player bitrateOverride takes precedence
 # ============================================================
 {
@@ -406,41 +398,37 @@ sub setup_prefs {
         bitrate         => 320,
         client          => $client,
         bitrateOverride => 160,
-        streamFormat    => 'ogg',
     );
-    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, '160k, OGG (Spotify Browse)',
-        'D-07: bitrateOverride=160 overrides global 320 => "160k, OGG (Spotify Browse)"');
+    my $result = Plugins::SpotOn::Plugin->_bitrateForClient($client);
+    is($result, 160,
+        'D-07: bitrateOverride=160 overrides global 320');
 }
 
 # ============================================================
-# Test 9: D-04 guard -- bitrate=0 omits bitrate slot
+# Test 9: _bitrateForClient — defaults to global bitrate
 # ============================================================
 {
-    my $client = MockClient->new('player_nobitrate');
+    my $client = MockClient->new('player_global');
     setup_prefs(
-        bitrate      => 0,
-        client       => $client,
-        streamFormat => 'ogg',
+        bitrate         => 320,
+        client          => $client,
+        bitrateOverride => undef,
     );
-    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG (Spotify Browse)',
-        'D-04: bitrate=0 => "OGG (Spotify Browse)" (no leading comma)');
+    my $result = Plugins::SpotOn::Plugin->_bitrateForClient($client);
+    is($result, 320,
+        'D-07: no override => global bitrate 320');
 }
 
 # ============================================================
-# Test 10: D-04 guard -- bitrate=undef omits bitrate slot
+# Test 10: _bitrateForClient — undef client uses global
 # ============================================================
 {
-    my $client = MockClient->new('player_undefbitrate');
     setup_prefs(
-        bitrate      => undef,
-        client       => $client,
-        streamFormat => 'ogg',
+        bitrate => 96,
     );
-    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG (Spotify Browse)',
-        'D-04: bitrate=undef => "OGG (Spotify Browse)" (no leading comma)');
+    my $result = Plugins::SpotOn::Plugin->_bitrateForClient(undef);
+    is($result, 96,
+        'D-07: undef client => global bitrate 96');
 }
 
 # ============================================================
