@@ -826,6 +826,7 @@ pub async fn run_connect(
     lms_auth: Option<&str>,
     disable_discovery: bool,
     buffer_latency_ms: u64,
+    autoplay: Option<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Cache + Credentials
     let cache = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None)?;
@@ -866,6 +867,10 @@ pub async fn run_connect(
     // 5. Session (connect later via Spirc::new)
     let mut session_config = SessionConfig::default();
     session_config.device_id = device_id_shared.clone();
+    // Autoplay override: set BEFORE Session::new() — SessionConfig is cloned at session creation (Pitfall 4)
+    if let Some(ap) = autoplay {
+        session_config.autoplay = Some(ap);
+    }
     let session = Session::new(session_config.clone(), Some(cache.clone()));
 
     // spirc_active: set to true ONLY on SessionConnected (Pitfall 2 / T-05-06)
