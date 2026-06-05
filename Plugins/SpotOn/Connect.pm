@@ -96,6 +96,17 @@ sub isSpotifyConnect {
     return $_activeConnectPlayer && $_activeConnectPlayer eq $client->id ? 1 : 0;
 }
 
+# _isDeadHistoryUrl($url)
+# Returns true if a spotify://connect-* URL is a dead history record (not a live session).
+# Detection: cache entry with spotifyUri field exists — set only by _fetchTrackMetadata
+# after a Connect track has finished playing. Live session URLs have no cache entry yet.
+sub _isDeadHistoryUrl {
+    my ($url) = @_;
+    return 0 unless $url && $url =~ m{spotify://connect-};
+    my $meta = Slim::Utils::Cache->new()->get('spoton_meta_' . md5_hex($url));
+    return ($meta && $meta->{spotifyUri}) ? 1 : 0;
+}
+
 # shutdown($class)
 # Cleanly unsubscribes all event handlers and stops all Connect daemons.
 sub shutdown {
@@ -147,6 +158,21 @@ sub _stopConnectDaemon {
     if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
         $_activeConnectPlayer = undef;
     }
+}
+
+# _isDeadHistoryUrl($url)
+# Returns true if the given spotify://connect-* URL is a dead history URL —
+# i.e. the cache entry for it has a spotifyUri field, which means it was
+# recorded from a previous Connect session and can be translated to Browse.
+# Active Connect sessions also match connect-* but do NOT have spotifyUri in
+# the cache during playback (it is written by _fetchTrackMetadata after the
+# session ends or mid-stream). This distinction lets _onPause and _connectEvent
+# skip daemon-forwarding for history replays.
+sub _isDeadHistoryUrl {
+    my ($url) = @_;
+    return 0 unless $url && $url =~ m{spotify://connect-};
+    my $meta = Slim::Utils::Cache->new()->get('spoton_meta_' . md5_hex($url));
+    return ($meta && $meta->{spotifyUri}) ? 1 : 0;
 }
 
 # _sendControlCommand($client, $endpoint, $body_hashref)
@@ -323,6 +349,23 @@ sub _onPause {
             "Ignoring stop/pause from " . $client->id . " - active Connect player is $_activeConnectPlayer"
         );
         return;
+    }
+
+    # History-replay guard: if the current URL is a dead Connect history URL
+    # (i.e. it has cached spotifyUri from a previous session), this is a history
+    # replay initiated by "What Was That Tune" or similar. Do not forward to
+    # the daemon — let the Browse pipeline (getNextTrack) handle the translation.
+    # Forwarding would cause a spurious resume event from the daemon that then
+    # re-enters Connect mode instead of Browse.
+    if ($isUnpause) {
+        my $song = $client->playingSong();
+        my $songUrl = $song ? ($song->track->url || $song->streamUrl || '') : '';
+        if (_isDeadHistoryUrl($songUrl)) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Skipping daemon unpause — history replay URL detected: $songUrl"
+            );
+            return;
+        }
     }
 
     if ($isUnpause) {
@@ -555,11 +598,27 @@ sub _connectEvent {
         # (pause forwarding) doesn't clear it — only _onNewSong clears it.
         my $song = $client->playingSong();
         my $currentUrl = $song ? ($song->streamUrl || '') : '';
-        my $actuallyInConnect = ($currentUrl =~ m{spotify://connect-});
+
+        # A URL matches connect- but may be a dead history URL that the user
+        # is replaying via "What Was That Tune". Dead history URLs have a cached
+        # spotifyUri (written by _fetchTrackMetadata) — they are NOT active sessions.
+        # Treat them as non-Connect so Browse pipeline handles playback instead.
+        my $actuallyInConnect = ($currentUrl =~ m{spotify://connect-})
+                             && !_isDeadHistoryUrl($currentUrl);
 
         if (!$actuallyInConnect) {
-            # Player is NOT on a Connect stream (e.g. switched to Browse).
-            # Re-enter Connect by issuing playlist play — same path as 'start'.
+            # Player is NOT on an active Connect stream (e.g. switched to Browse,
+            # or replaying a history URL). Re-enter Connect by issuing playlist play
+            # only if the current URL is NOT a history replay we want Browse to handle.
+            # History replay: _onPause already skipped the daemon forward, so this
+            # resume event is spurious — drop it and let getNextTrack do the translation.
+            if ($currentUrl =~ m{spotify://connect-} && _isDeadHistoryUrl($currentUrl)) {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "Dropping spurious resume for dead history URL — Browse pipeline handles playback"
+                );
+                return;
+            }
+
             main::INFOLOG && $log->is_info && $log->info(
                 "Resume while not on Connect stream — re-entering Connect via playlist play"
             );
