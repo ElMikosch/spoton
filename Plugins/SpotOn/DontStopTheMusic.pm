@@ -13,7 +13,7 @@ use Slim::Utils::Prefs;
 
 my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new();
+my $cache = Slim::Utils::Cache->new('spoton', 2);
 
 # init()
 # Registers SpotOn as a DSTM provider.
@@ -256,7 +256,7 @@ sub _cacheAndExtractUris {
 
     for my $track (@$tracks) {
         next unless $track->{uri} && $track->{uri} =~ /(track:[a-z0-9]+)/i;
-        my $uri = "spotify://$1";
+        my $uri = "spoton://$1";
 
         my $artist = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
         my $images = $track->{album}{images} || [];

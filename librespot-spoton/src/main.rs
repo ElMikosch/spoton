@@ -663,8 +663,8 @@ async fn run_single_track(
         move || backend(None, audio_format),
     );
 
-    // Normalize URI: LMS passes spotify://track:ID, librespot needs spotify:track:ID
-    let normalized_uri = track_uri.replace("spotify://", "spotify:");
+    // Normalize URI: LMS passes spoton://track:ID, librespot needs spotify:track:ID
+    let normalized_uri = track_uri.replace("spoton://", "spotify:");
 
     // SpotifyUri::from_uri validates the URI format; malformed URIs return Err (T-04.1-05)
     let track_id = SpotifyUri::from_uri(&normalized_uri)?;

@@ -19,9 +19,10 @@ use File::Spec::Functions qw(catdir);
 use Slim::Player::TranscodingHelper;
 
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
+use constant SPOTON_CACHE_VERSION  => 2;       # Bump to flush all SpotOn cache entries (D-01/D-02)
 
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new();
+my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
 
 my $log = Slim::Utils::Log->addLogCategory( {
     category     => 'plugin.spoton',
@@ -48,7 +49,14 @@ sub initPlugin {
         connectOggOverride   => 'auto', # D-05: OGG passthrough override ('auto'|'ogg'|'pcm')
         disableDiscovery     => 0,     # D-04: global discovery toggle, default on (Pitfall 4)
         enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (controls Connect autoplay + DSTM)
+        cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
     });
+
+    # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
+    if ( ($prefs->get('cacheSchemaVersion') || 0) < SPOTON_CACHE_VERSION ) {
+        $log->info("SpotOn cache schema version changed - cache cleared by namespace version bump");
+        $prefs->set('cacheSchemaVersion', SPOTON_CACHE_VERSION);
+    }
 
     require Plugins::SpotOn::Helper;
     Plugins::SpotOn::Helper->init();
@@ -80,7 +88,7 @@ sub initPlugin {
     $VERSION = $class->_pluginDataFor('version');
 
     Slim::Player::ProtocolHandlers->registerHandler(
-        'spotify',
+        'spoton',
         'Plugins::SpotOn::ProtocolHandler'
     );
 
@@ -179,7 +187,7 @@ sub _killOrphanedProcesses {
     for my $client (Slim::Player::Client::clients()) {
         my $song = $client->playingSong() || next;
         my $url  = $song->currentTrack() ? $song->currentTrack()->url : '';
-        next unless $url =~ m{^spotify://};
+        next unless $url =~ m{^spoton://};
 
         if ($client->isPlaying()) {
             main::DEBUGLOG && $log->is_debug && $log->debug("Spotify player " . $client->name() . " is busy, skipping orphan cleanup");
@@ -415,11 +423,11 @@ sub _trackItem {
     # spotify:track:ID -> track:ID; fallback preserves original URI if no match.
     my ($track_path) = ($track->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
     $track_path //= ($track->{uri} // '');
-    my $spotify_url = 'spotify://' . $track_path;
+    my $spoton_url = 'spoton://' . $track_path;
 
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
-    $cache->set('spoton_meta_' . md5_hex($spotify_url), {
+    $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
         artist   => $artist,
         album    => $album,
@@ -434,8 +442,8 @@ sub _trackItem {
         name      => "$title \x{2014} $artist",    # em-dash fallback for older clients
         line1     => $title,
         line2     => $artist . ($album ? " \x{2022} $album" : ''),
-        url       => $spotify_url,
-        play      => $spotify_url,
+        url       => $spoton_url,
+        play      => $spoton_url,
         on_select => 'play',
         playall   => 1,    # Context queueing (D-09/D-10) — XMLBrowser enqueues all feed items
         image     => $image,
@@ -1152,13 +1160,13 @@ sub _albumTrackItem {
     # spotify:track:ID -> track:ID; fallback preserves original URI if no match.
     my ($track_path) = ($track->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
     $track_path //= ($track->{uri} // '');
-    my $spotify_url = 'spotify://' . $track_path;
+    my $spoton_url = 'spoton://' . $track_path;
 
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display.
     # WR-01: Album name passed from caller; fallback to empty if undef (e.g., future callers).
     $albumName //= '';
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
-    $cache->set('spoton_meta_' . md5_hex($spotify_url), {
+    $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
         artist   => $artists,
         album    => $albumName,
@@ -1173,8 +1181,8 @@ sub _albumTrackItem {
         name      => ($trackNum ? "$trackNum. " : '') . $title,
         line1     => ($trackNum ? "$trackNum. " : '') . $title,
         line2     => $line2,
-        url       => $spotify_url,
-        play      => $spotify_url,
+        url       => $spoton_url,
+        play      => $spoton_url,
         on_select => 'play',
         playall   => 1,    # Context queueing for album track tap (D-09)
         image     => $image,

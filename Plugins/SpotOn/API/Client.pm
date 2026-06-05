@@ -32,7 +32,7 @@ use constant SPOTON_DEFAULT_CLIENT_ID => 'd420a117a32841c2b3474932e49fb54b';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new();
+my $cache = Slim::Utils::Cache->new('spoton', 2);
 
 # Module-level concurrency counter.
 # Must be reset to 0 in Plugin.pm::initPlugin via Client->reset()

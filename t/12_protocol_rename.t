@@ -81,20 +81,29 @@ sub _find_pm_files {
 
 # ============================================================
 # PROTO-02: ProtocolHandler registered as 'spoton' not 'spotify' in Plugin.pm
+# Multi-line match: registerHandler( may be on a different line than the scheme string.
+# Read whole file content and remove comment lines, then do multi-line pattern match.
 # ============================================================
 {
     my $plugin_file = "$project_dir/Plugins/SpotOn/Plugin.pm";
 
-    my @spoton_matches  = _grep_file($plugin_file, qr{registerHandler\s*\(\s*['"]spoton['"]});
-    my @spotify_matches = _grep_file($plugin_file, qr{registerHandler\s*\(\s*['"]spotify['"]});
+    open(my $fh, '<', $plugin_file) or BAIL_OUT("Cannot read Plugin.pm: $!");
+    my $content = do { local $/; <$fh> };
+    close($fh);
 
-    is(scalar @spoton_matches, 1,
+    # Remove comment lines for analysis
+    $content =~ s/^\s*#[^\n]*\n//gm;
+
+    my $spoton_count  = () = ($content =~ m{registerHandler\s*\(\s*\n?\s*['"]spoton['"]}g);
+    my $spotify_count = () = ($content =~ m{registerHandler\s*\(\s*\n?\s*['"]spotify['"]}g);
+
+    is($spoton_count, 1,
         "PROTO-02: Plugin.pm registers handler as 'spoton' exactly once (found: "
-        . scalar(@spoton_matches) . ")");
+        . $spoton_count . ")");
 
-    is(scalar @spotify_matches, 0,
+    is($spotify_count, 0,
         "PROTO-02: Plugin.pm does NOT register handler as 'spotify' (found: "
-        . scalar(@spotify_matches) . ")");
+        . $spotify_count . ")");
 }
 
 # ============================================================
@@ -119,18 +128,24 @@ sub _find_pm_files {
 
     ok(scalar @pm_files > 0, "PROTO-05: found .pm files under Plugins/SpotOn/");
 
-    my @bad_matches;
+    my $bad_count = 0;
+    my @bad_files;
     for my $file (@pm_files) {
-        for my $line (_noncomment_lines($file)) {
-            if ($line =~ qr{registerHandler\s*\(\s*['"]spotify['"]}) {
-                push @bad_matches, "$file: $line";
-            }
+        open(my $fh, '<', $file) or die "Cannot open $file: $!";
+        my $content = do { local $/; <$fh> };
+        close($fh);
+        # Remove comment lines
+        $content =~ s/^\s*#[^\n]*\n//gm;
+        my $matches = () = ($content =~ m{registerHandler\s*\(\s*\n?\s*['"]spotify['"]}g);
+        if ($matches) {
+            $bad_count += $matches;
+            push @bad_files, "$file ($matches)";
         }
     }
 
-    is(scalar @bad_matches, 0,
+    is($bad_count, 0,
         "PROTO-05: zero registerHandler('spotify') across all SpotOn .pm files (found: "
-        . scalar(@bad_matches) . ")");
+        . $bad_count . (scalar(@bad_files) ? ": " . join(", ", @bad_files) : "") . ")");
 }
 
 # ============================================================
