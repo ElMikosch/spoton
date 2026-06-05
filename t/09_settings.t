@@ -353,9 +353,8 @@ SKIP: {
     my $src = do { local $/; <$fh> };
     close($fh);
 
-    # PLAN 03 acceptance criteria: no OAuth artifacts
+    # PLAN 03 acceptance criteria: no OAuth artifacts (clientId is legitimate — custom Client-ID pref from Phase 04.4)
     ok($src !~ /startOAuth/,         'Settings.pm: no startOAuth reference');
-    ok($src !~ /clientId/,           'Settings.pm: no clientId reference');
     ok($src !~ /redirectUri/,        'Settings.pm: no redirectUri reference');
     ok($src !~ /buildRedirectUri/,   'Settings.pm: no buildRedirectUri reference');
 

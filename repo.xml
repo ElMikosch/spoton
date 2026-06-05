@@ -21,7 +21,7 @@
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="0e387238f2953828defcf10f2439cbdb518bab2f"
+            sha="cf7c9c8404792496ba690a954fd69e20b90ffa52"
             url="https://github.com/stiefenm/spoton/releases/download/v1.2.9/SpotOn-v1.2.9.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"

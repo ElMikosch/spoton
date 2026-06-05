@@ -354,19 +354,19 @@ SKIP: {
     # AUTH-02: _cacheToken stores access token with correct key and TTL
     {
         reset_state();
-        Plugins::SpotOn::API::TokenManager->_cacheToken('testacct', 'tok123', 3600);
+        Plugins::SpotOn::API::TokenManager->_cacheToken('testacct', 'own', 'tok123', 3600);
         my $cache = Slim::Utils::Cache->new();
-        is($cache->get('spoton_token_testacct'), 'tok123',
-            'AUTH-02: _cacheToken stores token under spoton_token_<accountId>');
-        is($cache->ttl('spoton_token_testacct'), 3300,
+        is($cache->get('spoton_token_testacct_own'), 'tok123',
+            'AUTH-02: _cacheToken stores token under spoton_token_<accountId>_<flavor>');
+        is($cache->ttl('spoton_token_testacct_own'), 3300,
             'AUTH-02: _cacheToken TTL is expires_in(3600) - 300 = 3300');
     }
 
     # AUTH-02: _cacheToken with expiresIn between 60 and 300 uses expiresIn directly
     {
         reset_state();
-        Plugins::SpotOn::API::TokenManager->_cacheToken('shortacct', 'tok456', 200);
-        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_token_shortacct');
+        Plugins::SpotOn::API::TokenManager->_cacheToken('shortacct', 'own', 'tok456', 200);
+        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_token_shortacct_own');
         is($ttl, 200, 'AUTH-02: _cacheToken uses expiresIn(200) as TTL when expiresIn < TOKEN_EXPIRY_BUFFER');
     }
 
@@ -400,14 +400,14 @@ SKIP: {
         preferences('plugin.spoton')->set('accounts', {
             'remove_me' => { displayName => 'Remove', spotifyUserId => 'removeme' },
         });
-        Slim::Utils::Cache->new()->set('spoton_token_remove_me', 'cached_tok', 3600);
+        Slim::Utils::Cache->new()->set('spoton_token_remove_me_own', 'cached_tok', 3600);
 
         Plugins::SpotOn::API::TokenManager->removeAccount('remove_me');
 
         my %accts = map { $_ => 1 } Plugins::SpotOn::API::TokenManager->getAccountIds();
         ok(!exists $accts{remove_me},
             'AUTH-05: removeAccount removes account from prefs');
-        ok(!defined Slim::Utils::Cache->new()->get('spoton_token_remove_me'),
+        ok(!defined Slim::Utils::Cache->new()->get('spoton_token_remove_me_own'),
             'AUTH-05: removeAccount clears cached access token');
     }
 
@@ -429,7 +429,7 @@ SKIP: {
     # --------------------------------------------------------
     {
         reset_state();
-        Slim::Utils::Cache->new()->set('spoton_token_cached_acct', 'existing_tok', 3300);
+        Slim::Utils::Cache->new()->set('spoton_token_cached_acct_own', 'existing_tok', 3300);
 
         my $got_token;
         Plugins::SpotOn::API::TokenManager->getToken('cached_acct', sub {
@@ -446,7 +446,7 @@ SKIP: {
     {
         reset_state();
         # Clear any cached token for this account
-        Slim::Utils::Cache->new()->remove('spoton_token_keymaster_acct');
+        Slim::Utils::Cache->new()->remove('spoton_token_keymaster_acct_own');
 
         # Override the binary spawn via local *CORE::GLOBAL::readpipe — not feasible.
         # Instead test the deferred timer path: verify that a setTimer call was made.
@@ -459,7 +459,7 @@ SKIP: {
             };
 
             # Must reload the module's reference — use direct call
-            Plugins::SpotOn::API::TokenManager->_fetchKeymasterToken('keymaster_acct', sub {
+            Plugins::SpotOn::API::TokenManager->_fetchKeymasterToken('keymaster_acct', 'own', sub {
                 # callback intentionally not reached (timer not executed)
             });
         }

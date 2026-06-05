@@ -334,11 +334,17 @@ write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
 our $mock_token = 'mock_token_abc123';
 sub getToken {
-    my ($class, $accountId, $cb) = @_;
+    my ($class, $accountId, $flavorOrCb, $cb) = @_;
+    if (ref $flavorOrCb eq 'CODE') {
+        $cb = $flavorOrCb;
+    }
     $cb->($mock_token);
 }
 sub refreshToken {
-    my ($class, $accountId, $cb) = @_;
+    my ($class, $accountId, $flavorOrCb, $cb) = @_;
+    if (ref $flavorOrCb eq 'CODE') {
+        $cb = $flavorOrCb;
+    }
     $cb->($mock_token);
 }
 1;
@@ -432,7 +438,7 @@ SKIP: {
         is($ttl_pl,     300,  'API-03: _cacheTTL returns 300 for playlists/<id>');
     }
 
-    # API-04: 429 response sets RATE_LIMIT_CACHE_KEY with Retry-After TTL
+    # API-04: 429 response sets per-flavor rate-limit key with Retry-After TTL
     {
         Slim::Utils::Cache->new()->clear();
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
@@ -446,11 +452,10 @@ SKIP: {
             ($result, $err) = @_;
         });
 
-        my $rl_key = Plugins::SpotOn::API::Client->RATE_LIMIT_CACHE_KEY();
-        my $cache  = Slim::Utils::Cache->new();
-        ok($cache->get($rl_key), 'API-04: RATE_LIMIT_CACHE_KEY set in cache after 429');
+        my $cache = Slim::Utils::Cache->new();
+        ok($cache->get('spoton_rate_limit_own'), 'API-04: per-flavor rate-limit key set in cache after 429');
 
-        my $ttl = $cache->ttl($rl_key);
+        my $ttl = $cache->ttl('spoton_rate_limit_own');
         is($ttl, 60, 'API-04: Rate limit cache TTL equals Retry-After header value');
 
         # Reset for next test
@@ -470,8 +475,7 @@ SKIP: {
 
         Plugins::SpotOn::API::Client->getMe('testacct', sub { });
 
-        my $rl_key = Plugins::SpotOn::API::Client->RATE_LIMIT_CACHE_KEY();
-        my $ttl    = Slim::Utils::Cache->new()->ttl($rl_key);
+        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_rate_limit_own');
         ok($ttl <= 300,
             "API-04: Retry-After capped at 300s (got $ttl)");
 
