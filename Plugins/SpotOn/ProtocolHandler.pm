@@ -418,7 +418,8 @@ sub _asyncRefetch {
     my ($class, $client, $url, $canonical) = @_;
 
     # D-05: debounce — skip if already fetching this URL
-    return if $_pendingRefetch{$url || ''};
+    return unless $url;
+    return if $_pendingRefetch{$url};
 
     # Extract track ID from Browse URL or from cached connect entry's spotifyUri
     my $trackId;

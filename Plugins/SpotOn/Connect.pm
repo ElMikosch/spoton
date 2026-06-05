@@ -40,6 +40,7 @@ my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
 
 my $initialized;
+my $cache = Slim::Utils::Cache->new();
 
 # Track the MAC of the player currently owning the active Connect session.
 # Used by _onPause to suppress stale stop events from old players when switching.
@@ -98,12 +99,13 @@ sub isSpotifyConnect {
 
 # _isDeadHistoryUrl($url)
 # Returns true if a spotify://connect-* URL is a dead history record (not a live session).
-# Detection: cache entry with spotifyUri field exists — set only by _fetchTrackMetadata
-# after a Connect track has finished playing. Live session URLs have no cache entry yet.
+# Detection: cache entry with spotifyUri field exists — set by _fetchTrackMetadata.
+# NOTE: live Connect tracks ALSO get spotifyUri cached during playback. Callers must
+# additionally check $song->pluginData('info') to distinguish live from history.
 sub _isDeadHistoryUrl {
     my ($url) = @_;
     return 0 unless $url && $url =~ m{spotify://connect-};
-    my $meta = Slim::Utils::Cache->new()->get('spoton_meta_' . md5_hex($url));
+    my $meta = $cache->get('spoton_meta_' . md5_hex($url));
     return ($meta && $meta->{spotifyUri}) ? 1 : 0;
 }
 
@@ -158,21 +160,6 @@ sub _stopConnectDaemon {
     if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
         $_activeConnectPlayer = undef;
     }
-}
-
-# _isDeadHistoryUrl($url)
-# Returns true if the given spotify://connect-* URL is a dead history URL —
-# i.e. the cache entry for it has a spotifyUri field, which means it was
-# recorded from a previous Connect session and can be translated to Browse.
-# Active Connect sessions also match connect-* but do NOT have spotifyUri in
-# the cache during playback (it is written by _fetchTrackMetadata after the
-# session ends or mid-stream). This distinction lets _onPause and _connectEvent
-# skip daemon-forwarding for history replays.
-sub _isDeadHistoryUrl {
-    my ($url) = @_;
-    return 0 unless $url && $url =~ m{spotify://connect-};
-    my $meta = Slim::Utils::Cache->new()->get('spoton_meta_' . md5_hex($url));
-    return ($meta && $meta->{spotifyUri}) ? 1 : 0;
 }
 
 # _sendControlCommand($client, $endpoint, $body_hashref)
@@ -351,16 +338,14 @@ sub _onPause {
         return;
     }
 
-    # History-replay guard: if the current URL is a dead Connect history URL
-    # (i.e. it has cached spotifyUri from a previous session), this is a history
-    # replay initiated by "What Was That Tune" or similar. Do not forward to
-    # the daemon — let the Browse pipeline (getNextTrack) handle the translation.
-    # Forwarding would cause a spurious resume event from the daemon that then
-    # re-enters Connect mode instead of Browse.
+    # History-replay guard: skip daemon forward for dead history URLs.
+    # IMPORTANT: also check !pluginData('info') — live Connect tracks get spotifyUri
+    # cached during playback by _fetchTrackMetadata, so _isDeadHistoryUrl alone
+    # would false-positive on live tracks and break unpause.
     if ($isUnpause) {
         my $song = $client->playingSong();
         my $songUrl = $song ? ($song->track->url || $song->streamUrl || '') : '';
-        if (_isDeadHistoryUrl($songUrl)) {
+        if ($song && !$song->pluginData('info') && _isDeadHistoryUrl($songUrl)) {
             main::INFOLOG && $log->is_info && $log->info(
                 "Skipping daemon unpause — history replay URL detected: $songUrl"
             );
@@ -599,20 +584,19 @@ sub _connectEvent {
         my $song = $client->playingSong();
         my $currentUrl = $song ? ($song->streamUrl || '') : '';
 
-        # A URL matches connect- but may be a dead history URL that the user
-        # is replaying via "What Was That Tune". Dead history URLs have a cached
-        # spotifyUri (written by _fetchTrackMetadata) — they are NOT active sessions.
-        # Treat them as non-Connect so Browse pipeline handles playback instead.
+        # Determine if the player is on a live Connect stream.
+        # pluginData('info') is set by _fetchTrackMetadata for live sessions.
+        # _isDeadHistoryUrl alone is insufficient: live tracks also get spotifyUri
+        # cached during playback, so we must check pluginData to avoid false positives.
+        my $hasLiveMetadata = $song && $song->pluginData('info');
         my $actuallyInConnect = ($currentUrl =~ m{spotify://connect-})
-                             && !_isDeadHistoryUrl($currentUrl);
+                             && ($hasLiveMetadata || !_isDeadHistoryUrl($currentUrl));
 
         if (!$actuallyInConnect) {
-            # Player is NOT on an active Connect stream (e.g. switched to Browse,
-            # or replaying a history URL). Re-enter Connect by issuing playlist play
-            # only if the current URL is NOT a history replay we want Browse to handle.
             # History replay: _onPause already skipped the daemon forward, so this
             # resume event is spurious — drop it and let getNextTrack do the translation.
-            if ($currentUrl =~ m{spotify://connect-} && _isDeadHistoryUrl($currentUrl)) {
+            if ($currentUrl =~ m{spotify://connect-}
+                && !$hasLiveMetadata && _isDeadHistoryUrl($currentUrl)) {
                 main::INFOLOG && $log->is_info && $log->info(
                     "Dropping spurious resume for dead history URL — Browse pipeline handles playback"
                 );
@@ -920,7 +904,7 @@ sub _fetchTrackMetadata {
         # Cache key uses connect-timestamp URL; spotifyUri enables future Browse translation.
         my $cacheUrl = $song->track->url || $song->streamUrl;
         if ($cacheUrl) {
-            Slim::Utils::Cache->new()->set(
+            $cache->set(
                 'spoton_meta_' . md5_hex($cacheUrl),
                 {
                     title      => $title,
