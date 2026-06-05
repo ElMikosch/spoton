@@ -40,7 +40,7 @@ my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
 
 my $initialized;
-my $cache = Slim::Utils::Cache->new();
+my $cache = Slim::Utils::Cache->new('spoton', 2);
 
 # Track the MAC of the player currently owning the active Connect session.
 # Used by _onPause to suppress stale stop events from old players when switching.
@@ -98,13 +98,13 @@ sub isSpotifyConnect {
 }
 
 # _isDeadHistoryUrl($url)
-# Returns true if a spotify://connect-* URL is a dead history record (not a live session).
+# Returns true if a spoton://connect-* URL is a dead history record (not a live session).
 # Detection: cache entry with spotifyUri field exists — set by _fetchTrackMetadata.
 # NOTE: live Connect tracks ALSO get spotifyUri cached during playback. Callers must
 # additionally check $song->pluginData('info') to distinguish live from history.
 sub _isDeadHistoryUrl {
     my ($url) = @_;
-    return 0 unless $url && $url =~ m{spotify://connect-};
+    return 0 unless $url && $url =~ m{spoton://connect-};
     my $meta = $cache->get('spoton_meta_' . md5_hex($url));
     return ($meta && $meta->{spotifyUri}) ? 1 : 0;
 }
@@ -282,7 +282,7 @@ sub _onNewSong {
     if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
         my $song = $client->playingSong();
         my $url  = $song ? ($song->streamUrl || '') : '';
-        unless ($url =~ m{spotify://connect-}) {
+        unless ($url =~ m{spoton://connect-}) {
             main::INFOLOG && $log->is_info && $log->info(
                 "New song without Connect URL — clearing active Connect state for " . $client->id
             );
@@ -589,13 +589,13 @@ sub _connectEvent {
         # _isDeadHistoryUrl alone is insufficient: live tracks also get spotifyUri
         # cached during playback, so we must check pluginData to avoid false positives.
         my $hasLiveMetadata = $song && $song->pluginData('info');
-        my $actuallyInConnect = ($currentUrl =~ m{spotify://connect-})
+        my $actuallyInConnect = ($currentUrl =~ m{spoton://connect-})
                              && ($hasLiveMetadata || !_isDeadHistoryUrl($currentUrl));
 
         if (!$actuallyInConnect) {
             # History replay: _onPause already skipped the daemon forward, so this
             # resume event is spurious — drop it and let getNextTrack do the translation.
-            if ($currentUrl =~ m{spotify://connect-}
+            if ($currentUrl =~ m{spoton://connect-}
                 && !$hasLiveMetadata && _isDeadHistoryUrl($currentUrl)) {
                 main::INFOLOG && $log->is_info && $log->info(
                     "Dropping spurious resume for dead history URL — Browse pipeline handles playback"
@@ -614,7 +614,7 @@ sub _connectEvent {
             $client->pluginData(newTrack => 1);
             $client->pluginData(connectStartTime => Time::HiRes::time());
 
-            if ($currentUrl =~ m{^spotify://} && $currentUrl !~ m{spotify://connect-}) {
+            if ($currentUrl =~ m{^spoton://} && $currentUrl !~ m{spoton://connect-}) {
                 my $stopReq = Slim::Control::Request->new($client->id, ['stop']);
                 $stopReq->source(__PACKAGE__);
                 $stopReq->execute();
@@ -627,7 +627,7 @@ sub _connectEvent {
             my $ts      = int(Time::HiRes::time() * 1000);
             my $playReq = $client->execute([
                 'playlist', 'play',
-                sprintf("spotify://connect-%u", $ts)
+                sprintf("spoton://connect-%u", $ts)
             ]);
             $playReq->source(__PACKAGE__);
 
@@ -680,7 +680,7 @@ sub _connectEvent {
     }
 
     # -----------------------------------------------------------------
-    # Start: issue playlist play with spotify://connect-<ts> URL
+    # Start: issue playlist play with spoton://connect-<ts> URL
     # (CON-17: progress stored BEFORE playlist play command)
     # -----------------------------------------------------------------
     if ($cmd eq 'start') {
@@ -692,7 +692,7 @@ sub _connectEvent {
         # D-08 mutual exclusion: stop any Browse playback on this player
         my $song = $client->playingSong();
         my $currentUrl = $song ? ($song->streamUrl || '') : '';
-        if ($currentUrl =~ m{^spotify://} && $currentUrl !~ m{spotify://connect-}) {
+        if ($currentUrl =~ m{^spoton://} && $currentUrl !~ m{spoton://connect-}) {
             main::INFOLOG && $log->is_info && $log->info(
                 "D-08: Connect start stopping Browse playback on " . $client->id
             );
@@ -714,12 +714,12 @@ sub _connectEvent {
             $client->pluginData(eventTrackUri => "spotify:track:$trackId");
         }
 
-        # The spotify://connect-<ts> URL signals Connect mode to ProtocolHandler.pm
+        # The spoton://connect-<ts> URL signals Connect mode to ProtocolHandler.pm
         # which returns 'soc' from formatOverride() and provides canDirectStream URL.
         my $ts      = int(Time::HiRes::time() * 1000);
         my $playReq = $client->execute([
             'playlist', 'play',
-            sprintf("spotify://connect-%u", $ts)
+            sprintf("spoton://connect-%u", $ts)
         ]);
         $playReq->source(__PACKAGE__);
 
@@ -825,7 +825,7 @@ sub _connectEvent {
             my $ts      = int(Time::HiRes::time() * 1000);
             my $playReq = $client->execute([
                 'playlist', 'play',
-                sprintf("spotify://connect-%u", $ts)
+                sprintf("spoton://connect-%u", $ts)
             ]);
             $playReq->source(__PACKAGE__);
         }

@@ -429,7 +429,7 @@ subtest 'Connect cache persistence has spotifyUri' => sub {
 subtest 'getMetadataFor returns cached Browse metadata' => sub {
     use Digest::MD5 qw(md5_hex);
 
-    my $browse_url = 'spotify://track:ABC123';
+    my $browse_url = 'spoton://track:ABC123';
     my $cache_key  = 'spoton_meta_' . md5_hex($browse_url);
 
     # Clear cache state and set a known entry
@@ -464,7 +464,7 @@ subtest 'getMetadataFor returns placeholder on cache miss' => sub {
     Slim::Utils::Cache->new->clear();
 
     my $client = MockClient->new('player_miss');
-    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spotify://track:NOTCACHED');
+    my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spoton://track:NOTCACHED');
 
     ok(defined $result, 'Cache miss returns defined result');
     ok(ref $result eq 'HASH', 'Cache miss returns a hash ref');
@@ -480,7 +480,7 @@ subtest 'getMetadataFor returns placeholder on cache miss' => sub {
 subtest 'Connect URL with spotifyUri in cache returns metadata with play field' => sub {
     use Digest::MD5 qw(md5_hex);
 
-    my $connect_url = 'spotify://connect-20260604-120000';
+    my $connect_url = 'spoton://connect-20260604-120000';
     my $cache_key   = 'spoton_meta_' . md5_hex($connect_url);
 
     Slim::Utils::Cache->new->clear();
@@ -502,7 +502,7 @@ subtest 'Connect URL with spotifyUri in cache returns metadata with play field' 
     ok(defined $result, 'Connect URL with spotifyUri returns defined result');
     ok(ref $result eq 'HASH', 'Connect URL returns hash ref');
     ok(defined $result->{play}, 'Connect translation returns result with play field');
-    like($result->{play}, qr{spotify://track:XYZ789}, 'play field contains Browse URL with correct track ID');
+    like($result->{play}, qr{spoton://track:XYZ789}, 'play field contains Browse URL with correct track ID');
 };
 
 # ============================================================
@@ -523,16 +523,16 @@ subtest 'Debounce prevents duplicate fetch on cache miss' => sub {
         };
 
         # Set debounce flag directly — simulates an already-in-flight request
-        $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spotify://track:DEBOUNCE'} = 1;
+        $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spoton://track:DEBOUNCE'} = 1;
 
         my $client = MockClient->new('player_debounce');
-        my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spotify://track:DEBOUNCE');
+        my $result = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, 'spoton://track:DEBOUNCE');
 
         is($call_count, 0, 'D-05: no API call when debounce flag is set');
         ok(defined $result->{cover}, 'Still returns placeholder when debounced');
 
         # Clean up
-        delete $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spotify://track:DEBOUNCE'};
+        delete $Plugins::SpotOn::ProtocolHandler::_pendingRefetch{'spoton://track:DEBOUNCE'};
     }
 };
 
@@ -554,7 +554,7 @@ subtest 'Async re-fetch populates cache and fires newmetadata' => sub {
         duration_ms => 210000,
     };
 
-    my $url = 'spotify://track:ASYNCTEST';
+    my $url = 'spoton://track:ASYNCTEST';
     my $client = MockClient->new('player_async');
 
     # Call getMetadataFor — triggers _asyncRefetch which calls getTrack (sync stub)
@@ -583,7 +583,7 @@ subtest 'Async re-fetch populates cache and fires newmetadata' => sub {
 subtest 'Connect URL returns Browse mode label not Connect' => sub {
     use Digest::MD5 qw(md5_hex);
 
-    my $connect_url = 'spotify://connect-20260604-130000';
+    my $connect_url = 'spoton://connect-20260604-130000';
     my $cache_key   = 'spoton_meta_' . md5_hex($connect_url);
 
     Slim::Utils::Cache->new->clear();

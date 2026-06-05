@@ -14,7 +14,7 @@ use Digest::MD5 qw(md5_hex);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new();
+my $cache = Slim::Utils::Cache->new('spoton', 2);
 my $CRLF  = "\x0d\x0a";
 
 # D-05: debounce — one in-flight re-fetch per URL
@@ -29,11 +29,11 @@ sub isRemote    { 1 }
 
 # getFormatForURL($class, $url)
 # Returns content type for a given URL:
-# - 'soc' for Connect URLs (spotify://connect-*)
+# - 'soc' for Connect URLs (spoton://connect-*)
 # - 'son' for single-track Browse URLs (default)
 sub getFormatForURL {
     my ($class, $url) = @_;
-    return 'soc' if $url && $url =~ m{spotify://connect-};
+    return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
     return 'son';
 }
@@ -62,7 +62,7 @@ sub formatOverride {
            || 'auto')
         : 'auto';
 
-    if ($url =~ m{spotify://connect-}) {
+    if ($url =~ m{spoton://connect-}) {
         # Dead history URL → use Browse pipeline ('son'), not Connect ('soc')
         my $meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($meta && $meta->{spotifyUri}) {
@@ -92,7 +92,7 @@ sub canDirectStream {
     return 0 unless $client;
 
     # DirectStream is only valid for Connect streams — Browse tracks use son-* pipelines
-    return 0 unless $url && $url =~ m{spotify://connect-};
+    return 0 unless $url && $url =~ m{spoton://connect-};
 
     # Translated history URL — use Browse transcoding pipeline, not Connect DirectStream
     if (delete $_translatedConnectUrls{$url}) {
@@ -195,7 +195,7 @@ sub canEnhanceHTTP {
 # Two responsibilities:
 # (a) D-08 Browse→Connect mutual exclusion: son:// URL starting while Connect is active
 #     → stop the Connect daemon before returning normal stream object
-# (b) D-06 Sync-group proxy: spotify://connect-* URL for synced players
+# (b) D-06 Sync-group proxy: spoton://connect-* URL for synced players
 #     → substitute HTTP URL so all sync members get audio from binary's HTTP server
 #
 # Note: DaemonManager require is on-demand (not at top level) per plan acceptance criteria.
@@ -204,9 +204,9 @@ sub new {
 
     my $url = $args->{url} || '';
 
-    # (a) D-08: spotify:// (Browse/single-track) URL while Connect is active
+    # (a) D-08: spoton:// (Browse/single-track) URL while Connect is active
     # Stop the Connect daemon so Browse can proceed cleanly.
-    if ($url =~ m{^spotify://(?!connect-)}) {
+    if ($url =~ m{^spoton://(?!connect-)}) {
         my $client = $args->{client};
         if ($client) {
             $client = $client->master if $client->can('master');
@@ -220,8 +220,8 @@ sub new {
         }
     }
 
-    # (b) D-06: spotify://connect-* URL — substitute HTTP stream URL for sync-group proxy
-    if ($url =~ m{spotify://connect-}) {
+    # (b) D-06: spoton://connect-* URL — substitute HTTP stream URL for sync-group proxy
+    if ($url =~ m{spoton://connect-}) {
         my $client = $args->{client};
         if ($client) {
             $client = $client->master if $client->can('master');
@@ -249,12 +249,12 @@ sub new {
 # getNextTrack($class, $song, $successCb, $errorCb)
 # Called by StreamingController before transcoding pipeline starts.
 # Translates dead Connect history URLs to Browse URLs so the binary
-# receives a valid spotify://track:ID instead of spotify://connect-TIMESTAMP.
+# receives a valid spoton://track:ID instead of spoton://connect-TIMESTAMP.
 sub getNextTrack {
     my ($class, $song, $successCb, $errorCb) = @_;
 
     my $url = $song->track->url || '';
-    if ($url =~ m{spotify://connect-}) {
+    if ($url =~ m{spoton://connect-}) {
         my $client = $song->master;
 
         # Dead history URL check FIRST — takes priority over active Connect session.
@@ -264,7 +264,7 @@ sub getNextTrack {
         my $meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($meta && $meta->{spotifyUri}
             && $meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
-            my $browseUrl = "spotify://track:$1";
+            my $browseUrl = "spoton://track:$1";
             main::INFOLOG && $log->is_info && $log->info(
                 "getNextTrack: translating dead Connect URL to $browseUrl"
             );
@@ -295,7 +295,7 @@ sub isRepeatingStream {
     my (undef, $song) = @_;
     return unless $song;
     my $url = $song->track->url || '';
-    return $url =~ m{spotify://connect-} ? 1 : 0;
+    return $url =~ m{spoton://connect-} ? 1 : 0;
 }
 
 sub canSeek {
@@ -303,7 +303,7 @@ sub canSeek {
     if ($client) {
         my $song = $client->playingSong();
         my $url = $song ? ($song->track->url || '') : '';
-        return 0 if $url =~ m{spotify://connect-};
+        return 0 if $url =~ m{spoton://connect-};
     }
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
@@ -313,7 +313,7 @@ sub canTranscodeSeek {
     if ($client) {
         my $song = $client->playingSong();
         my $url = $song ? ($song->track->url || '') : '';
-        return 0 if $url =~ m{spotify://connect-};
+        return 0 if $url =~ m{spoton://connect-};
     }
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
@@ -334,7 +334,7 @@ sub getMetadataFor {
     my ($class, $client, $url) = @_;
 
     # For Connect streams: try pluginData info first (set by Connect.pm _fetchTrackMetadata)
-    if ($url && $url =~ m{spotify://connect-} && $client) {
+    if ($url && $url =~ m{spoton://connect-} && $client) {
         $client = $client->master if $client->can('master');
         my $song = $client->playingSong();
         if ($song && (my $info = $song->pluginData('info'))) {
@@ -345,12 +345,12 @@ sub getMetadataFor {
     # D-06, D-07: Connect history URL translation — cache hit with spotifyUri
     # History items don't have an active playingSong, so we reach here for connect- URLs
     # that were cached by _fetchTrackMetadata in Connect.pm.
-    if ($url && $url =~ m{spotify://connect-}) {
+    if ($url && $url =~ m{spoton://connect-}) {
         my $connect_meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($connect_meta && $connect_meta->{spotifyUri}
             && $connect_meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
             my $trackId    = $1;
-            my $browseUrl  = "spotify://track:$trackId";
+            my $browseUrl  = "spoton://track:$trackId";
             # D-07: return Browse mode label — Connect origin is invisible to the user
             require Plugins::SpotOn::Plugin;
             if ($client) {
@@ -365,10 +365,10 @@ sub getMetadataFor {
         # No cached spotifyUri — fall through to async re-fetch path below
     }
 
-    # Normalize: cache is keyed on spotify://track:ID but LMS may pass spotify:track:ID
+    # Normalize: cache is keyed on spoton://track:ID but LMS may pass spoton:track:ID
     my $canonical = $url;
-    if ($canonical && $canonical =~ m{^spotify:(?!//)}) {
-        $canonical =~ s{^spotify:}{spotify://};
+    if ($canonical && $canonical =~ m{^spoton:(?!//)}) {
+        $canonical =~ s{^spoton:}{spoton://};
     }
 
     my $meta = $cache->get('spoton_meta_' . md5_hex($canonical));
@@ -400,7 +400,7 @@ sub getMetadataFor {
 # D-03: cache miss returns placeholder, not empty hashref.
 sub _placeholderMeta {
     my ($url) = @_;
-    my $title = ($url && $url =~ m{spotify://track:}) ? 'Loading...' : '';
+    my $title = ($url && $url =~ m{spoton://track:}) ? 'Loading...' : '';
     return {
         cover => '/html/images/cover.png',
         icon  => '/html/images/cover.png',
@@ -423,9 +423,9 @@ sub _asyncRefetch {
 
     # Extract track ID from Browse URL or from cached connect entry's spotifyUri
     my $trackId;
-    if ($canonical && $canonical =~ m{spotify://track:([A-Za-z0-9]+)}) {
+    if ($canonical && $canonical =~ m{spoton://track:([A-Za-z0-9]+)}) {
         $trackId = $1;
-    } elsif ($url && $url =~ m{spotify://connect-}) {
+    } elsif ($url && $url =~ m{spoton://connect-}) {
         my $connect_meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($connect_meta && $connect_meta->{spotifyUri}
             && $connect_meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
@@ -474,8 +474,8 @@ sub _asyncRefetch {
         );
 
         # Pitfall 3: for Connect URLs, store under Browse URL key so future lookups find it
-        my $cacheUrl = ($url && $url =~ m{spotify://connect-})
-            ? "spotify://track:$trackId"
+        my $cacheUrl = ($url && $url =~ m{spoton://connect-})
+            ? "spoton://track:$trackId"
             : $canonical;
 
         $cache->set('spoton_meta_' . md5_hex($cacheUrl), \%new_meta, 604800);
