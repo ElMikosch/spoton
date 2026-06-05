@@ -26,10 +26,9 @@ use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
 # Source: Spotty API.pm:18 (verified: michaelherger/Spotty-Plugin/API.pm)
 
 # Dual-token routing constants (D-01 through D-06)
-# Source: Spotty-NG API.pm:93-98 adapted for SpotOn
 use constant BUNDLED_HINT_TTL        => 86400;             # 24h hint persistence
 use constant BUNDLED_HINT_KEY_PREFIX => 'spoton_bundled_hint_';
-use constant SPOTON_DEFAULT_CLIENT_ID => '93aac68fb06348598c1e67734dfaceee';
+use constant SPOTON_DEFAULT_CLIENT_ID => 'd420a117a32841c2b3474932e49fb54b';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
