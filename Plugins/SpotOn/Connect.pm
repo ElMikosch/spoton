@@ -859,9 +859,10 @@ sub _fetchTrackMetadata {
 
         # D-01/D-02: Persist Connect metadata to cache for history replay
         # Cache key uses connect-timestamp URL; spotifyUri enables future Browse translation.
-        if ($song->streamUrl) {
+        my $cacheUrl = $song->track->url || $song->streamUrl;
+        if ($cacheUrl) {
             Slim::Utils::Cache->new()->set(
-                'spoton_meta_' . md5_hex($song->streamUrl),
+                'spoton_meta_' . md5_hex($cacheUrl),
                 {
                     title      => $title,
                     artist     => $artist,

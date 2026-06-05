@@ -20,6 +20,9 @@ my $CRLF  = "\x0d\x0a";
 # D-05: debounce — one in-flight re-fetch per URL
 our %_pendingRefetch;
 
+# Track Connect URLs translated to Browse by getNextTrack
+my %_translatedConnectUrls;
+
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
@@ -84,6 +87,14 @@ sub canDirectStream {
 
     # DirectStream is only valid for Connect streams — Browse tracks use son-* pipelines
     return 0 unless $url && $url =~ m{spotify://connect-};
+
+    # Translated history URL — use Browse transcoding pipeline, not Connect DirectStream
+    if (delete $_translatedConnectUrls{$url}) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "canDirectStream: 0 (translated Connect history URL)"
+        );
+        return 0;
+    }
 
     $client = $client->master if $client->can('master');
 
@@ -227,6 +238,48 @@ sub new {
     }
 
     return Slim::Player::Protocols::HTTP->new($args);
+}
+
+# getNextTrack($class, $song, $successCb, $errorCb)
+# Called by StreamingController before transcoding pipeline starts.
+# Translates dead Connect history URLs to Browse URLs so the binary
+# receives a valid spotify://track:ID instead of spotify://connect-TIMESTAMP.
+sub getNextTrack {
+    my ($class, $song, $successCb, $errorCb) = @_;
+
+    my $url = $song->track->url || '';
+    if ($url =~ m{spotify://connect-}) {
+        my $client = $song->master;
+
+        # Active Connect session — let the normal Connect pipeline handle it
+        require Plugins::SpotOn::Connect;
+        if (Plugins::SpotOn::Connect->isSpotifyConnect($client)) {
+            $successCb->();
+            return;
+        }
+
+        # Dead Connect URL — look up spotifyUri from cache
+        my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+        if ($meta && $meta->{spotifyUri}
+            && $meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
+            my $browseUrl = "spotify://track:$1";
+            main::INFOLOG && $log->is_info && $log->info(
+                "getNextTrack: translating dead Connect URL to $browseUrl"
+            );
+            $song->streamUrl($browseUrl);
+            $_translatedConnectUrls{$url} = 1;
+            $successCb->();
+            return;
+        }
+
+        main::INFOLOG && $log->is_info && $log->info(
+            "getNextTrack: dead Connect URL with no cached spotifyUri — cannot translate"
+        );
+        $errorCb->('PROBLEM_OPENING', 'No cached track ID for Connect history URL');
+        return;
+    }
+
+    $successCb->();
 }
 
 sub isRepeatingStream {
