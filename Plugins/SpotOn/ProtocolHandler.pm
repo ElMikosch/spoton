@@ -63,6 +63,12 @@ sub formatOverride {
         : 'auto';
 
     if ($url =~ m{spotify://connect-}) {
+        # Dead history URL → use Browse pipeline ('son'), not Connect ('soc')
+        my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+        if ($meta && $meta->{spotifyUri}) {
+            return 'son';
+        }
+
         require Plugins::SpotOn::Connect::DaemonManager;
         my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
         if ($helper && $helper->_streamMode) {
@@ -251,14 +257,10 @@ sub getNextTrack {
     if ($url =~ m{spotify://connect-}) {
         my $client = $song->master;
 
-        # Active Connect session — let the normal Connect pipeline handle it
-        require Plugins::SpotOn::Connect;
-        if (Plugins::SpotOn::Connect->isSpotifyConnect($client)) {
-            $successCb->();
-            return;
-        }
-
-        # Dead Connect URL — look up spotifyUri from cache
+        # Dead history URL check FIRST — takes priority over active Connect session.
+        # A history URL has a cached spotifyUri (written by _fetchTrackMetadata after
+        # the original Connect playback). Translate to Browse regardless of whether
+        # the phone is still connected.
         my $meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($meta && $meta->{spotifyUri}
             && $meta->{spotifyUri} =~ m/^spotify:track:([A-Za-z0-9]+)$/) {
@@ -268,6 +270,13 @@ sub getNextTrack {
             );
             $song->streamUrl($browseUrl);
             $_translatedConnectUrls{$url} = 1;
+            $successCb->();
+            return;
+        }
+
+        # No cached spotifyUri — either a live Connect session or an untranslatable URL
+        require Plugins::SpotOn::Connect;
+        if (Plugins::SpotOn::Connect->isSpotifyConnect($client)) {
             $successCb->();
             return;
         }
