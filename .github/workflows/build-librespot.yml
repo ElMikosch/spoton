@@ -21,14 +21,23 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             bin_dir: x86_64-linux
+            use_cross: true
           - target: aarch64-unknown-linux-musl
             bin_dir: aarch64-linux
+            use_cross: true
           - target: armv7-unknown-linux-musleabihf
             bin_dir: armhf-linux
+            use_cross: true
           - target: arm-unknown-linux-musleabi
             bin_dir: arm-linux
+            use_cross: true
           - target: i686-unknown-linux-musl
             bin_dir: i386-linux
+            use_cross: true
+          - target: x86_64-pc-windows-gnu
+            bin_dir: x86_64-win64
+            binary_ext: .exe
+            use_cross: false
 
     steps:
       - name: Checkout repository
@@ -39,27 +48,50 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross
+      - name: Install cross (Linux targets only)
+        if: matrix.use_cross == true
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build binary
+      - name: Install MinGW-w64 (Windows target only)
+        if: matrix.use_cross == false
+        run: sudo apt-get install -y gcc-mingw-w64-x86-64-posix
+
+      - name: Configure linker for Windows target
+        if: matrix.use_cross == false
+        run: |
+          mkdir -p $HOME/.cargo
+          cat >> $HOME/.cargo/config.toml <<'EOF'
+          [target.x86_64-pc-windows-gnu]
+          linker = "x86_64-w64-mingw32-gcc"
+          EOF
+
+      - name: Build binary (cross)
+        if: matrix.use_cross == true
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           cross build --release --target ${{ matrix.target }}
 
+      - name: Build binary (cargo)
+        if: matrix.use_cross == false
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
       - name: Prepare binary
         run: |
-          BINARY_PATH="${{ env.SOURCE_DIR }}/target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}"
+          EXT="${{ matrix.binary_ext }}"
+          BINARY_PATH="${{ env.SOURCE_DIR }}/target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${EXT}"
           DEST_DIR="Plugins/SpotOn/Bin/${{ matrix.bin_dir }}"
           mkdir -p "$DEST_DIR"
-          cp "$BINARY_PATH" "$DEST_DIR/${{ env.BINARY_NAME }}"
-          chmod 755 "$DEST_DIR/${{ env.BINARY_NAME }}"
+          cp "$BINARY_PATH" "$DEST_DIR/${{ env.BINARY_NAME }}${EXT}"
+          chmod 755 "$DEST_DIR/${{ env.BINARY_NAME }}${EXT}"
           # Remove .gitkeep if present (binary replaces placeholder)
           rm -f "$DEST_DIR/.gitkeep"
 
       - name: Verify binary
         run: |
-          BINARY="Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/${{ env.BINARY_NAME }}"
+          EXT="${{ matrix.binary_ext }}"
+          BINARY="Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/${{ env.BINARY_NAME }}${EXT}"
           echo "=== Binary info ==="
           file "$BINARY"
           echo "=== Binary size ==="
@@ -71,7 +103,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: spoton-${{ matrix.bin_dir }}
-          path: Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/spoton
+          path: Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/spoton${{ matrix.binary_ext }}
           retention-days: 30
 
   release:
@@ -97,7 +129,7 @@ jobs:
       - name: Create checksums
         run: |
           cd release-artifacts
-          find . -name "spoton" -exec sha256sum {} \; > SHA256SUMS.txt
+          find . \( -name "spoton" -o -name "spoton.exe" \) -exec sha256sum {} \; > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
@@ -105,6 +137,7 @@ jobs:
         with:
           files: |
             release-artifacts/**/spoton
+            release-artifacts/**/spoton.exe
             release-artifacts/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
