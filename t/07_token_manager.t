@@ -292,6 +292,15 @@ sub content { $_[0]->{_content} }
 1;
 END
 
+# Stub: URI::Escape — uri_escape is used by Client.pm
+write_stub($stub_dir, 'URI::Escape', <<'END');
+package URI::Escape;
+use Exporter 'import';
+our @EXPORT_OK = qw(uri_escape);
+sub uri_escape { my ($s) = @_; $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge; return $s; }
+1;
+END
+
 # Stub: Plugins::SpotOn::Helper — returns configurable fake binary path
 my $fake_binary = '/fake/spoton';
 write_stub($stub_dir, 'Plugins::SpotOn::Helper', <<"END");
