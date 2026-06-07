@@ -19,6 +19,8 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/API/TokenManager.pm",
     "$project_dir/Plugins/SpotOn/API/Client.pm",
     "$project_dir/Plugins/SpotOn/Settings/Callback.pm",
+    "$project_dir/Plugins/SpotOn/Connect.pm",
+    "$project_dir/Plugins/SpotOn/Connect/Daemon.pm",
 );
 
 # Check which files actually exist
@@ -260,6 +262,62 @@ END
 write_stub($stub_dir, 'Slim::Web::Pages', <<'END');
 package Slim::Web::Pages;
 sub addPageFunction { }
+1;
+END
+
+# Stub: Slim::Utils::Accessor (base class for Connect/Daemon.pm)
+write_stub($stub_dir, 'Slim::Utils::Accessor', <<'END');
+package Slim::Utils::Accessor;
+sub new { bless {}, shift }
+sub mk_accessor { }
+sub AUTOLOAD { }
+sub can { 1 }
+1;
+END
+
+# Stub: Slim::Player::Client (Daemon.pm calls getClient() at runtime)
+write_stub($stub_dir, 'Slim::Player::Client', <<'END');
+package Slim::Player::Client;
+sub getClient { undef }
+sub AUTOLOAD { }
+sub can { 1 }
+1;
+END
+
+# Stub: Slim::Player::Sync (Daemon.pm calls syncname() at runtime)
+write_stub($stub_dir, 'Slim::Player::Sync', <<'END');
+package Slim::Player::Sync;
+sub syncname { '' }
+1;
+END
+
+# Stub: Slim::Control::Request (Connect.pm uses for event dispatch/subscription)
+write_stub($stub_dir, 'Slim::Control::Request', <<'END');
+package Slim::Control::Request;
+sub new { bless {}, shift }
+sub addDispatch { }
+sub subscribe { }
+sub unsubscribe { }
+sub notifyFromArray { }
+sub AUTOLOAD { }
+sub can { 1 }
+1;
+END
+
+# Stub: Slim::Music::Info (Connect.pm references for metadata)
+write_stub($stub_dir, 'Slim::Music::Info', <<'END');
+package Slim::Music::Info;
+sub setCurrentTitle { }
+sub setRemoteMetadata { }
+sub AUTOLOAD { }
+sub can { 1 }
+1;
+END
+
+# Stub: Slim::Player::Source (Connect.pm calls songTime())
+write_stub($stub_dir, 'Slim::Player::Source', <<'END');
+package Slim::Player::Source;
+sub songTime { 0 }
 1;
 END
 
