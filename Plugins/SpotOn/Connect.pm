@@ -24,7 +24,7 @@ use constant IMG_TRACK => '/html/images/cover.png';
 # Seconds; CON-11 — ignore volume events within this window after daemon start.
 # The binary's suppress_next_volume AtomicBool handles the very first VolumeChanged after
 # SessionConnected. This grace period suppresses subsequent echoes during session setup.
-use constant VOLUME_GRACE_PERIOD => 20;
+use constant VOLUME_GRACE_PERIOD => 3;
 
 # Seconds; suppress spurious stop events during session setup (mid-playback transfer)
 use constant CONNECT_START_GRACE => 12;

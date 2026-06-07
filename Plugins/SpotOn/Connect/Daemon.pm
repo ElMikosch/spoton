@@ -84,13 +84,10 @@ sub start {
 		0, 60
 	));
 
-	# Per-account cache dir (same pattern as Plugin.pm::updateTranscodingTable)
-	my $activeAccountId = $prefs->client($client)->get('activeAccount')
-	                   || $prefs->get('activeAccount')
-	                   || '';
-	my $cacheDir = $activeAccountId
-		? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
-		: catdir($serverPrefs->get('cachedir'), 'spoton');
+	# CON-01 / P-49: Per-player cache dir isolation — each Connect daemon gets its own
+	# credential cache keyed by player MAC (without colons). Prevents credential overwrite
+	# when different Spotify users connect to different players simultaneously.
+	my $cacheDir = catdir($serverPrefs->get('cachedir'), 'spoton', 'connect-' . $self->id);
 	$self->cache($cacheDir);
 
 	# Reset stream state before attempt (WR-04: stale _streamMode after failed restart)
@@ -118,6 +115,14 @@ sub start {
 	    || $prefs->get('disableDiscovery');
 	push @helperArgs, '--disable-discovery' if $disableDiscovery;
 	push @helperArgs, '--enable-volume-normalisation' if $prefs->get('normalization');
+
+	# CON-02 / P-50: Volume synchronization at Connect session start.
+	# --volume-ctrl linear: matches squeezelite's SoftMixer linear curve so LMS volume
+	# maps 1:1 to librespot volume (no logarithmic mismatch).
+	# --initial-volume: seeds librespot with the current LMS player volume so the Spotify
+	# app shows the correct value immediately (no initial mismatch echo).
+	push @helperArgs, '--volume-ctrl', 'linear';
+	push @helperArgs, '--initial-volume', int($client->volume // 50);
 
 	# D-09: Pass --autoplay on/off based on per-player pref, gated on binary capability
 	if ( Plugins::SpotOn::Helper->getCapability('autoplay') ) {
