@@ -35,7 +35,7 @@ Plugins/SpotOn/          Plugin source (Perl modules)
   API/                   Spotify Web API client + token management
   Connect/               librespot process management + Spirc sync
   ProtocolHandler.pm     spoton:// URI scheme handler
-  Settings/              LMS settings pages
+  Settings.pm            LMS settings page
 
 t/                       Test suite (12 files, ~230 tests)
   00_load.t              Module load check
@@ -46,11 +46,11 @@ t/                       Test suite (12 files, ~230 tests)
   perl-tests.yml         Perl test matrix (5.36 + 5.38)
   build-librespot.yml    librespot cross-compilation
 
-Bin/                     librespot binaries (per architecture, auto-selected)
-  x86_64-linux/
-  aarch64-linux/
-  armv7-linux/
-  ...
+  Bin/                   librespot binaries (per architecture, auto-selected)
+    x86_64-linux/
+    aarch64-linux/
+    armhf-linux/
+    ...
 ```
 
 ## Pull Request Guidelines

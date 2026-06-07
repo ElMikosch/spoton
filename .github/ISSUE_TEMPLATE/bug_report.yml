@@ -3,6 +3,14 @@ description: Report a problem with SpotOn
 labels: ["bug"]
 body:
   - type: input
+    id: spoton-version
+    attributes:
+      label: SpotOn Version
+      placeholder: "e.g. 1.2.9"
+    validations:
+      required: true
+
+  - type: input
     id: lms-version
     attributes:
       label: LMS Version
