@@ -41,7 +41,7 @@ use librespot_core::cache::Cache;
 use librespot_core::config::SessionConfig;
 use librespot_core::Session;
 use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot_playback::config::{AudioFormat, PlayerConfig};
+use librespot_playback::config::{AudioFormat, PlayerConfig, VolumeCtrl};
 use librespot_playback::convert::Converter;
 use librespot_playback::decoder::AudioPacket;
 use librespot_playback::mixer::softmixer::SoftMixer;
@@ -827,6 +827,8 @@ pub async fn run_connect(
     disable_discovery: bool,
     buffer_latency_ms: u64,
     autoplay: Option<bool>,
+    initial_volume: Option<u16>,
+    volume_ctrl_str: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Cache + Credentials
     let cache = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None)?;
@@ -846,9 +848,16 @@ pub async fn run_connect(
     let flush_tx_for_lms = flush_tx.clone();
 
     // 3. SoftMixer — required for Spirc volume control (Pitfall 8)
+    // Parse volume_ctrl_str into VolumeCtrl enum (T-14-02: unknown values default to Log)
+    let volume_ctrl_enum = match volume_ctrl_str {
+        "linear" => VolumeCtrl::Linear,
+        "fixed" => VolumeCtrl::Fixed,
+        _ => VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE),
+    };
+
     let mixer_fn = librespot_playback::mixer::find(Some(SoftMixer::NAME))
         .ok_or("SoftMixer not found")?;
-    let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig::default())?;
+    let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig { volume_ctrl: volume_ctrl_enum, ..MixerConfig::default() })?;
     let soft_volume = mixer.get_soft_volume();
 
     // 4. Shared device_id — FNV-1a hash of cache_dir + player_mac.
@@ -967,7 +976,7 @@ pub async fn run_connect(
     let connect_config = ConnectConfig {
         name: device_name.to_string(),
         device_type: DeviceType::Speaker,
-        initial_volume: u16::MAX / 2, // 50%
+        initial_volume: initial_volume.unwrap_or(u16::MAX / 2),
         disable_volume: false,        // has volume control
         ..ConnectConfig::default()
     };
@@ -1062,7 +1071,7 @@ pub async fn run_connect(
                 let new_connect_config = ConnectConfig {
                     name: device_name.to_string(),
                     device_type: DeviceType::Speaker,
-                    initial_volume: u16::MAX / 2,
+                    initial_volume: initial_volume.unwrap_or(u16::MAX / 2),
                     disable_volume: false,
                     ..ConnectConfig::default()
                 };
@@ -1072,7 +1081,7 @@ pub async fn run_connect(
                     current_session.clone(),
                     last_credentials.clone().unwrap(),
                     player.clone(),
-                    mixer_fn(MixerConfig::default()).unwrap_or_else(|_| panic!("mixer")),
+                    mixer_fn(MixerConfig { volume_ctrl: volume_ctrl_enum, ..MixerConfig::default() }).unwrap_or_else(|_| panic!("mixer")),
                 ).await {
                     Ok((new_spirc, new_task)) => {
                         {
