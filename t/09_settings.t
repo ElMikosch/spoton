@@ -281,6 +281,15 @@ sub reset_calls {
 1;
 END
 
+# Stub: URI::Escape — not Perl core, bundled by LMS
+write_stub($stub_dir, 'URI::Escape', <<'END');
+package URI::Escape;
+use Exporter 'import';
+our @EXPORT_OK = qw(uri_escape);
+sub uri_escape { my ($s) = @_; $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge; return $s; }
+1;
+END
+
 # ============================================================
 # main:: constants
 # ============================================================
