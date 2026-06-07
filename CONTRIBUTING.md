@@ -46,11 +46,11 @@ t/                       Test suite (12 files, ~230 tests)
   perl-tests.yml         Perl test matrix (5.36 + 5.38)
   build-librespot.yml    librespot cross-compilation
 
-  Bin/                   librespot binaries (per architecture, auto-selected)
-    x86_64-linux/
-    aarch64-linux/
-    armhf-linux/
-    ...
+Plugins/SpotOn/Bin/      librespot binaries (per architecture, auto-selected)
+  x86_64-linux/
+  aarch64-linux/
+  armhf-linux/
+  ...
 ```
 
 ## Pull Request Guidelines
