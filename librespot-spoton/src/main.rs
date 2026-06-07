@@ -109,6 +109,8 @@ async fn main() {
     let mut disable_discovery = false;
     let mut buffer_latency_ms: u64 = 2000;
     let mut autoplay: Option<bool> = None;
+    let mut initial_volume_lms: Option<u8> = None;
+    let mut volume_ctrl_str = String::from("log");
 
     let mut i = 1;
     while i < args.len() {
@@ -196,6 +198,18 @@ async fn main() {
                     i += 1;
                 }
             }
+            "--initial-volume" => {
+                if i + 1 < args.len() {
+                    initial_volume_lms = args[i + 1].parse::<u8>().ok().map(|v| v.min(100));
+                    i += 1;
+                }
+            }
+            "--volume-ctrl" => {
+                if i + 1 < args.len() {
+                    volume_ctrl_str = args[i + 1].clone();
+                    i += 1;
+                }
+            }
             "--disable-audio-cache" => {
                 disable_audio_cache = true;
             }
@@ -245,6 +259,9 @@ async fn main() {
         }
         i += 1;
     }
+
+    // Convert LMS volume scale (0-100) to librespot u16 scale (0-65535)
+    let initial_volume_u16: Option<u16> = initial_volume_lms.map(|v| (v as u32 * 65535 / 100) as u16);
 
     match mode {
         Mode::Check => {
@@ -328,6 +345,8 @@ async fn main() {
                 disable_discovery,
                 buffer_latency_ms,
                 autoplay,
+                initial_volume_u16,
+                &volume_ctrl_str,
             )
             .await
             {
