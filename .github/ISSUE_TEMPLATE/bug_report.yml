@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report a problem with SpotOn
+labels: ["bug"]
+body:
+  - type: input
+    id: lms-version
+    attributes:
+      label: LMS Version
+      placeholder: "e.g. 9.1.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux x86_64
+        - Linux ARM - Raspberry Pi
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log Excerpt
+      description: "Relevant lines from LMS server.log"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: player-type
+    attributes:
+      label: Player Type
+      options:
+        - squeezelite
+        - UPnPBridge-BridgeSDK
+        - piCorePlayer
+        - Other
+    validations:
+      required: false
