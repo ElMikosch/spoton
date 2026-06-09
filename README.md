@@ -15,6 +15,7 @@ A Spotify plugin for Lyrion Music Server (LMS).
 
 - LMS 8.0+ (LMS 9.x recommended)
 - Spotify Premium account
+- Spotify Developer App (strongly recommended) — [create one here](https://developer.spotify.com/dashboard), then enter your Client ID in SpotOn settings. Without your own app, API requests share a default Client ID with stricter rate limits.
 
 ## Installation
 
