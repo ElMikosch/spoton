@@ -106,10 +106,93 @@ jobs:
           path: Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/spoton${{ matrix.binary_ext }}
           retention-days: 30
 
+  build-macos:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            os: macos-15
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build binary
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare binary
+        run: |
+          BINARY_PATH="${{ env.SOURCE_DIR }}/target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}"
+          chmod 755 "$BINARY_PATH"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-${{ matrix.arch }}-darwin
+          path: ${{ env.SOURCE_DIR }}/target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}
+          retention-days: 30
+
+  lipo:
+    name: Create macOS Universal Binary
+    runs-on: macos-15
+    needs: build-macos
+
+    steps:
+      - name: Download ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: spoton-aarch64-darwin
+          path: arm64
+
+      - name: Download x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: spoton-x86_64-darwin
+          path: x86_64
+
+      - name: Create Universal Binary
+        run: |
+          lipo -create -output spoton arm64/${{ env.BINARY_NAME }} x86_64/${{ env.BINARY_NAME }}
+          chmod 755 spoton
+
+      - name: Ad-hoc code sign
+        run: codesign --force --sign - spoton
+
+      - name: Verify Universal Binary
+        run: |
+          echo "=== lipo -info ==="
+          lipo -info spoton
+          echo "=== file ==="
+          file spoton
+          echo "=== codesign -dv ==="
+          codesign -dv spoton 2>&1
+          echo "=== SHA256 ==="
+          shasum -a 256 spoton
+
+      - name: Upload Universal Binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-darwin
+          path: spoton
+          retention-days: 30
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, lipo]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
