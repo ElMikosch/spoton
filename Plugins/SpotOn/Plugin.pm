@@ -447,6 +447,36 @@ sub SpotOnUnlike {
     _doLibraryAction($client, $cb, $args, 'removeTracks', 'PLUGIN_SPOTON_UNLIKED');
 }
 
+sub _toggleLike {
+    my ($client, $cb, $params, $args) = @_;
+    my $trackUri  = $args->{trackUri};
+    my $accountId = $args->{accountId};
+
+    (my $trackId) = $trackUri =~ /^spotify:track:(.+)$/;
+    my $cacheKey = "spoton_liked_${accountId}_${trackId}";
+    my $fullArgs = { trackUri => $trackUri, accountId => $accountId, cacheKey => $cacheKey };
+
+    my $doToggle = sub {
+        my ($isLiked) = @_;
+        my $method     = $isLiked ? 'removeTracks' : 'saveTracks';
+        my $successKey = $isLiked ? 'PLUGIN_SPOTON_UNLIKED' : 'PLUGIN_SPOTON_LIKED';
+        _doLibraryAction($client, $cb, $fullArgs, $method, $successKey);
+    };
+
+    my $cached = $cache->get($cacheKey);
+    if (defined $cached) {
+        $doToggle->($cached);
+        return;
+    }
+
+    Plugins::SpotOn::API::Client->checkTracks($accountId, [$trackUri], sub {
+        my ($result, $err) = @_;
+        my $isLiked = ($result && ref $result eq 'ARRAY' && $result->[0]) ? 1 : 0;
+        $cache->set($cacheKey, $isLiked, 60) unless $err;
+        $doToggle->($isLiked);
+    });
+}
+
 sub _doLibraryAction {
     my ($client, $cb, $args, $apiMethod, $successKey) = @_;
     my $trackUri  = $args->{trackUri};
@@ -535,7 +565,7 @@ sub _trackItem {
         if ($accountId) {
             push @contextItems, {
                 name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
-                url         => \&SpotOnManageLike,
+                url         => \&_toggleLike,
                 passthrough => [{ trackUri => $track->{uri}, accountId => $accountId }],
                 type        => 'link',
             };
