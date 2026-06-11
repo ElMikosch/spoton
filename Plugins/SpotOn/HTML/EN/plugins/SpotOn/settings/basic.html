@@ -78,6 +78,11 @@
 			<p>[% binaryPath | html %] (v[% binaryVersion | html %])</p>
 		[% ELSE %]
 			<div style="color: red">[% 'PLUGIN_SPOTON_BINARY_MISSING' | string %]</div>
+			[% IF isMac %]
+			<div style="color: orange; margin-top:8px">
+				[% 'PLUGIN_SPOTON_GATEKEEPER_HINT' | string %]
+			</div>
+			[% END %]
 		[% END %]
 	[% END %]
 

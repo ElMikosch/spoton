@@ -59,6 +59,7 @@ sub handler {
     $paramRef->{helperMissing} = string('PLUGIN_SPOTON_BINARY_MISSING') unless $helperPath;
     $paramRef->{binaryVersion} = $helperVersion || '';
     $paramRef->{binaryPath}    = $helperPath    || '';
+    $paramRef->{isMac}         = main::ISMAC ? 1 : 0;
 
     if ($paramRef->{saveSettings}) {
         my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
