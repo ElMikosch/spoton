@@ -14,7 +14,7 @@ use Digest::MD5 qw(md5_hex);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 2);
+my $cache = Slim::Utils::Cache->new('spoton', 3);
 my $CRLF  = "\x0d\x0a";
 
 # D-05: debounce — one in-flight re-fetch per URL
@@ -393,6 +393,34 @@ sub getMetadataFor {
     }
 
     return $meta;
+}
+
+sub trackInfoURL {
+    my ($class, $client, $url) = @_;
+
+    my ($trackId) = ($url // '') =~ m{spoton:(?://)?track:([A-Za-z0-9]+)};
+    return unless $trackId;
+
+    my $meta = $class->getMetadataFor($client, $url) || {};
+
+    require Plugins::SpotOn::Plugin;
+    my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
+
+    my @items;
+    if ($accountId) {
+        push @items, {
+            name        => Slim::Utils::Strings::cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+            url         => \&Plugins::SpotOn::Plugin::_toggleLike,
+            passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
+            type        => 'link',
+        };
+    }
+
+    return {
+        name  => $meta->{title} || $url,
+        type  => 'opml',
+        items => \@items,
+    };
 }
 
 # _placeholderMeta($url)
