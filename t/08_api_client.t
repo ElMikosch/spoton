@@ -257,6 +257,7 @@ package Slim::Networking::SimpleAsyncHTTP;
 our @requests  = ();  # Each entry: { method, url, headers, success_cb, error_cb }
 our $auto_mode = 'success';  # 'success', 'error_429', 'error_generic', 'none'
 our $last_response_headers = {};
+our $auto_response_content = undef;  # Override response body (undef = use default)
 
 sub new {
     my ($class, $success_cb, $error_cb, $opts) = @_;
@@ -267,9 +268,10 @@ sub new {
     }, $class;
 }
 
-sub get  { _dispatch(shift, 'GET',  @_) }
-sub post { _dispatch(shift, 'POST', @_) }
-sub put  { _dispatch(shift, 'PUT',  @_) }
+sub get    { _dispatch(shift, 'GET',    @_) }
+sub post   { _dispatch(shift, 'POST',   @_) }
+sub put    { _dispatch(shift, 'PUT',    @_) }
+sub delete { _dispatch(shift, 'DELETE', @_) }
 
 sub _dispatch {
     my ($self, $method, $url, %headers) = @_;
@@ -284,8 +286,11 @@ sub _dispatch {
     push @requests, $entry;
 
     if ($auto_mode eq 'success') {
+        my $content = defined($auto_response_content)
+            ? $auto_response_content
+            : '{"display_name":"Test User","id":"spotify_user"}';
         my $mock_response = bless {
-            _content => '{"display_name":"Test User","id":"spotify_user"}',
+            _content => $content,
             _code    => 200,
         }, 'Slim::Networking::SimpleAsyncHTTP::Response';
         $self->{success_cb}->($mock_response);
@@ -307,7 +312,7 @@ sub _dispatch {
     # 'none': no callback, simulates hanging request
 }
 
-sub reset_requests { @requests = (); $auto_mode = 'success'; $last_response_headers = {} }
+sub reset_requests { @requests = (); $auto_mode = 'success'; $last_response_headers = {}; $auto_response_content = undef }
 
 package Slim::Networking::SimpleAsyncHTTP::Response;
 sub content  { $_[0]->{_content} }
@@ -506,6 +511,122 @@ SKIP: {
 
     unlike($source, qr/\bgetTracks\b|\bgetAlbums\b|\bgetArtists\b/,
         'API-05: No batch methods (getTracks/getAlbums/getArtists) in Client.pm');
+}
+
+# LIB-01: saveTracks sends PUT to /me/library with uris query param
+SKIP: {
+    skip "Client.pm not yet created", 3
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '';  # Empty body — 200 OK
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->saveTracks('testacct', ['spotify:track:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-01: saveTracks dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'PUT', 'LIB-01: saveTracks uses PUT method');
+    like($reqs[0]->{url}, qr{/me/library}, 'LIB-01: saveTracks URL contains /me/library');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-01: saveTracks URL contains uris= query param');
+    is($got_err, undef, 'LIB-01: Empty-body guard — saveTracks callback receives no error on 200 empty response');
+}
+
+# LIB-02: removeTracks sends DELETE to /me/library with uris query param
+SKIP: {
+    skip "Client.pm not yet created", 3
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '';  # Empty body — 200 OK
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->removeTracks('testacct', ['spotify:track:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-02: removeTracks dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'DELETE', 'LIB-02: removeTracks uses DELETE method');
+    like($reqs[0]->{url}, qr{/me/library}, 'LIB-02: removeTracks URL contains /me/library');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-02: removeTracks URL contains uris= query param');
+    is($got_err, undef, 'LIB-02: Empty-body guard — removeTracks callback receives no error on 200 empty response');
+}
+
+# LIB-03: checkTracks sends GET to /me/library/contains, returns [true]/[false]
+SKIP: {
+    skip "Client.pm not yet created", 4
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '[true]';
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->checkTracks('testacct', ['spotify:track:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-03: checkTracks dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'GET', 'LIB-03: checkTracks uses GET method');
+    like($reqs[0]->{url}, qr{/me/library/contains}, 'LIB-03: checkTracks URL contains /me/library/contains');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-03: checkTracks URL contains uris= query param');
+    ok($got_result && ref($got_result) eq 'ARRAY' && $got_result->[0], 'LIB-03: checkTracks returns [true] array');
+    is($got_err, undef, 'LIB-03: checkTracks callback receives no error');
+}
+
+# LIB-04: checkTracks with _noCache => 1 always dispatches an HTTP request
+# (Client.pm does NOT cache — caching responsibility lies in Plugin.pm per D-07)
+SKIP: {
+    skip "Client.pm not yet created", 2
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    Slim::Utils::Cache->new()->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '[false]';
+
+    # First call
+    Plugins::SpotOn::API::Client->checkTracks('testacct', ['spotify:track:XYZ999'], sub { });
+    my $first_count = scalar(@Slim::Networking::SimpleAsyncHTTP::requests);
+    is($first_count, 1, 'LIB-04: First checkTracks call issues one HTTP request');
+
+    # Second call with same args — Client.pm must issue another request (_noCache => 1)
+    Plugins::SpotOn::API::Client->checkTracks('testacct', ['spotify:track:XYZ999'], sub { });
+    my $second_count = scalar(@Slim::Networking::SimpleAsyncHTTP::requests);
+    is($second_count, 2,
+        'LIB-04: checkTracks with _noCache => 1 always dispatches HTTP (Client.pm does not cache)');
+}
+
+# LIB-05: SPOTON_CACHE_VERSION is 3 in Plugin.pm; cache namespace version is 3 in Client.pm
+SKIP: {
+    skip "Client.pm not yet created", 2
+        unless -f $client_module;
+
+    my $plugin_file = "$project_dir/Plugins/SpotOn/Plugin.pm";
+    SKIP: {
+        skip "Plugin.pm not yet created", 1 unless -f $plugin_file;
+        open(my $fh, '<', $plugin_file) or die "Cannot open $plugin_file: $!";
+        my $src = do { local $/; <$fh> };
+        close($fh);
+        like($src, qr/SPOTON_CACHE_VERSION\s*=>\s*3\b/,
+            'LIB-05: Plugin.pm SPOTON_CACHE_VERSION is 3');
+    }
+
+    open(my $cfh, '<', $client_module) or die "Cannot open $client_module: $!";
+    my $csrc = do { local $/; <$cfh> };
+    close($cfh);
+    like($csrc, qr/new\('spoton',\s*3\)/,
+        "LIB-05: Client.pm cache namespace version is 3");
 }
 
 # API-06: No LWP or SimpleSyncHTTP in API/ modules — grep test (runs immediately)

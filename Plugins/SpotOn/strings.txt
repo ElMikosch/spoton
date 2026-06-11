@@ -1129,3 +1129,44 @@ PLUGIN_SPOTON_CREDITS
 	PL	SpotOn używa librespot. Inspirowany wtyczką Spotty Hergera.
 	SV	SpotOn använder librespot. Inspirerat av Hergers Spotty-plugin.
 
+PLUGIN_SPOTON_LIKE
+	CS	Líbit se
+	DA	Synes om
+	DE	Gefällt mir
+	EN	Like
+	ES	Me gusta
+	FR	J'aime
+	IT	Mi piace
+	NL	Vind ik leuk
+	NO	Lik
+	PL	Lubię to
+	SV	Gilla
+
+PLUGIN_SPOTON_UNLIKE
+	CS	Přestat se líbit
+	DA	Synes ikke om
+	DE	Gefällt mir nicht mehr
+	EN	Unlike
+	ES	Ya no me gusta
+	FR	Je n'aime plus
+	IT	Non mi piace più
+	NL	Vind ik niet meer leuk
+	NO	Fjern like
+	PL	Nie lubię
+	SV	Ogilla
+
+PLUGIN_SPOTON_LIKED
+	EN	Liked!
+
+PLUGIN_SPOTON_UNLIKED
+	EN	Removed
+
+PLUGIN_SPOTON_LIKE_ERROR
+	EN	Could not save track
+
+PLUGIN_SPOTON_LIKE_ERROR_SCOPE
+	EN	Could not save track - missing user-library-modify scope. Re-authenticate via Settings.
+
+PLUGIN_SPOTON_MANAGE_LIKE
+	EN	Like / Unlike
+

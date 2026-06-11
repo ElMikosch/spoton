@@ -51,6 +51,8 @@ SKIP: {
         PLUGIN_SPOTON_NORMALIZATION
         PLUGIN_SPOTON_NORMALIZATION_DESC
         PLUGIN_SPOTON_NORMALIZATION_LABEL
+        PLUGIN_SPOTON_LIKE
+        PLUGIN_SPOTON_UNLIKE
     );
 
     # Obsolete keys that must NOT be present
@@ -84,7 +86,13 @@ SKIP: {
     );
 
     # Keys that only require EN (format identifiers etc.)
-    my @en_only_keys = ();
+    my @en_only_keys = qw(
+        PLUGIN_SPOTON_LIKED
+        PLUGIN_SPOTON_UNLIKED
+        PLUGIN_SPOTON_LIKE_ERROR
+        PLUGIN_SPOTON_LIKE_ERROR_SCOPE
+        PLUGIN_SPOTON_MANAGE_LIKE
+    );
 
     # Build lookup of what exists
     # strings.txt format: KEY\n\tEN\tvalue\n\tDE\tvalue\n
