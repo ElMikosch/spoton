@@ -693,7 +693,7 @@ sub _fetchAllPersonalMixes {
     Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%params, sub {
         my $data = shift;
         my $items = $data && $data->{playlists} ? $data->{playlists}{items} : [];
-        my @valid = grep { $_ && $_->{id} } @$items;
+        my @valid = grep { $_ && $_->{id} && ($_->{name} // '') =~ /\S/ } @$items;
         my $total = $data && $data->{playlists} ? ($data->{playlists}{total} || 0) : 0;
 
         if ($total > 50) {
@@ -702,7 +702,7 @@ sub _fetchAllPersonalMixes {
             Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%p2, sub {
                 my $page2 = shift;
                 if ($page2 && $page2->{playlists} && $page2->{playlists}{items}) {
-                    push @valid, grep { $_ && $_->{id} } @{ $page2->{playlists}{items} };
+                    push @valid, grep { $_ && $_->{id} && ($_->{name} // '') =~ /\S/ } @{ $page2->{playlists}{items} };
                 }
                 $cb->(\@valid);
             });
