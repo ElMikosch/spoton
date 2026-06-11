@@ -1170,3 +1170,16 @@ PLUGIN_SPOTON_LIKE_ERROR_SCOPE
 PLUGIN_SPOTON_MANAGE_LIKE
 	EN	Like / Unlike
 
+PLUGIN_SPOTON_GATEKEEPER_HINT
+	CS	SpotOn binary je blokován systémem macOS. Spusťte v Terminálu: xattr -d com.apple.quarantine /cesta/k/spoton
+	DA	SpotOn binærfilen blokeres af macOS. Kør i Terminal: xattr -d com.apple.quarantine /sti/til/spoton
+	DE	Das SpotOn-Binary wird von macOS blockiert. Im Terminal ausführen: xattr -d com.apple.quarantine /pfad/zu/spoton
+	EN	The SpotOn binary is blocked by macOS. Run in Terminal: xattr -d com.apple.quarantine /path/to/spoton
+	ES	El binario de SpotOn está bloqueado por macOS. Ejecuta en Terminal: xattr -d com.apple.quarantine /ruta/al/spoton
+	FR	Le binaire SpotOn est bloqué par macOS. Exécutez dans le Terminal : xattr -d com.apple.quarantine /chemin/vers/spoton
+	IT	Il binario SpotOn è bloccato da macOS. Esegui nel Terminale: xattr -d com.apple.quarantine /percorso/di/spoton
+	NL	Het SpotOn binair bestand wordt geblokkeerd door macOS. Voer uit in Terminal: xattr -d com.apple.quarantine /pad/naar/spoton
+	NO	SpotOn-binærfilen er blokkert av macOS. Kjør i Terminal: xattr -d com.apple.quarantine /sti/til/spoton
+	PL	Plik binarny SpotOn jest blokowany przez macOS. Uruchom w Terminalu: xattr -d com.apple.quarantine /ścieżka/do/spoton
+	SV	SpotOn-binärfilen blockeras av macOS. Kör i Terminal: xattr -d com.apple.quarantine /sökväg/till/spoton
+
