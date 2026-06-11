@@ -125,6 +125,13 @@ sub initPlugin {
         weight => 100,
         icon   => 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png',
     );
+
+    # D-01: Register Like/Unlike action in Track Info menu (LIB-01/LIB-02/LIB-03)
+    # require (not use) — Slim::Menu::TrackInfo may not be available at compile time in all LMS contexts
+    require Slim::Menu::TrackInfo;
+    Slim::Menu::TrackInfo->registerInfoProvider( spotonTrackInfo => (
+        func => \&trackInfoMenu,
+    ) );
 }
 
 # Material Skin resolves app icons via /material/svg/{tag} from its own
@@ -358,6 +365,132 @@ sub _getAccountId {
     return $prefs->client($client)->get('activeAccount')
         || $prefs->get('activeAccount')
         || '';
+}
+
+# ============================================================
+# Like / Unlike (Phase 15)
+# ============================================================
+
+# trackInfoMenu($client, $url, $track, $remoteMeta, $tags)
+# LMS Track Info menu hook — registered via registerInfoProvider in initPlugin.
+# Called for every track's Info context menu (all sources, not just SpotOn).
+# Guards reject non-SpotOn URIs and clients with no active account.
+# Per D-01, D-02, D-04; T-15-01 URI validation.
+sub trackInfoMenu {
+    my ($client, $url, $track, $remoteMeta, $tags) = @_;
+
+    # Guard: only handle SpotOn-sourced tracks (T-15-01, Pitfall 1+4 from RESEARCH.md)
+    my $trackUri = $remoteMeta ? $remoteMeta->{uri} : undef;
+    return unless $trackUri && $trackUri =~ /^spotify:track:[A-Za-z0-9]+$/;
+
+    my $accountId = _getAccountId($client);
+    return unless $accountId;
+
+    return { items => [{
+        name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+        url         => \&SpotOnManageLike,
+        passthrough => [{ trackUri => $trackUri, accountId => $accountId }],
+    }] };
+}
+
+# SpotOnManageLike($client, $cb, $params, $args)
+# Resolves liked state (cache-first, then API) and builds a dynamic Like/Unlike menu item.
+# D-03: shows 'Like' or 'Unlike' based on current liked state.
+# D-06: on-demand state check — no pre-fetch.
+# D-07: 60s TTL cache — cache hit avoids API call.
+sub SpotOnManageLike {
+    my ($client, $cb, $params, $args) = @_;
+
+    my $trackUri  = $args->{trackUri};
+    my $accountId = $args->{accountId};
+
+    (my $trackId) = $trackUri =~ /^spotify:track:(.+)$/;
+    my $cacheKey = "spoton_liked_${accountId}_${trackId}";
+
+    my $buildMenu = sub {
+        my ($isLiked) = @_;
+        $cb->({ items => [{
+            name        => cstring($client, $isLiked ? 'PLUGIN_SPOTON_UNLIKE' : 'PLUGIN_SPOTON_LIKE'),
+            url         => $isLiked ? \&SpotOnUnlike : \&SpotOnLike,
+            passthrough => [{ trackUri => $trackUri, accountId => $accountId, cacheKey => $cacheKey }],
+            nextWindow  => 'grandparent',
+        }] });
+    };
+
+    # D-07: Cache hit = zero delay (60s TTL)
+    my $cached = $cache->get($cacheKey);
+    if (defined $cached) {
+        $buildMenu->($cached);
+        return;
+    }
+
+    # D-06: On-demand API call only on cache miss
+    Plugins::SpotOn::API::Client->checkTracks($accountId, [$trackUri], sub {
+        my ($result, $err) = @_;
+        my $isLiked = ($result && ref $result eq 'ARRAY' && $result->[0]) ? 1 : 0;
+        $cache->set($cacheKey, $isLiked, 60);  # D-07: 60s TTL
+        $buildMenu->($isLiked);
+    });
+}
+
+# SpotOnLike($client, $cb, $params, $args)
+# Saves track to Spotify library. Invalidates liked-state cache on success.
+# D-09: shows brief confirmation + navigates back to grandparent menu on success.
+# D-10: shows user-visible error on API failure; 403 shows scope-specific hint.
+# D-11: 429 handled by Client.pm standard retry — no special handling here.
+sub SpotOnLike {
+    my ($client, $cb, $params, $args) = @_;
+    my $trackUri  = $args->{trackUri};
+    my $accountId = $args->{accountId};
+    my $cacheKey  = $args->{cacheKey};
+
+    Plugins::SpotOn::API::Client->saveTracks($accountId, [$trackUri], sub {
+        my ($result, $err) = @_;
+        # Success contract (Plan 01 empty-body guard): $err is undef on 200 OK empty body.
+        # Error: $err is a hashref with {code => HTTP_STATUS} on HTTP errors.
+        if ($err && ref $err eq 'HASH' && $err->{code} && $err->{code} >= 400) {
+            my $msg = ($err->{code} == 403)
+                ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
+                : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
+            $cb->({ items => [{ name => $msg, showBriefly => 1 }] });
+            return;
+        }
+        $cache->remove($cacheKey);  # D-08: immediate cache invalidation
+        $cb->({ items => [{
+            name        => cstring($client, 'PLUGIN_SPOTON_LIKED'),
+            showBriefly => 1,
+            nextWindow  => 'grandparent',
+        }] });
+    });
+}
+
+# SpotOnUnlike($client, $cb, $params, $args)
+# Removes track from Spotify library. Invalidates liked-state cache on success.
+# D-09: shows brief confirmation + navigates back to grandparent menu on success.
+# D-10: shows user-visible error on API failure; 403 shows scope-specific hint.
+sub SpotOnUnlike {
+    my ($client, $cb, $params, $args) = @_;
+    my $trackUri  = $args->{trackUri};
+    my $accountId = $args->{accountId};
+    my $cacheKey  = $args->{cacheKey};
+
+    Plugins::SpotOn::API::Client->removeTracks($accountId, [$trackUri], sub {
+        my ($result, $err) = @_;
+        # Success contract (Plan 01 empty-body guard): $err is undef on 200 OK empty body.
+        if ($err && ref $err eq 'HASH' && $err->{code} && $err->{code} >= 400) {
+            my $msg = ($err->{code} == 403)
+                ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
+                : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
+            $cb->({ items => [{ name => $msg, showBriefly => 1 }] });
+            return;
+        }
+        $cache->remove($cacheKey);  # D-08: immediate cache invalidation
+        $cb->({ items => [{
+            name        => cstring($client, 'PLUGIN_SPOTON_UNLIKED'),
+            showBriefly => 1,
+            nextWindow  => 'grandparent',
+        }] });
+    });
 }
 
 # _largestImage($images_arrayref)
