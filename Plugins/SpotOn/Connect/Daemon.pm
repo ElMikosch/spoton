@@ -4,6 +4,7 @@ use strict;
 
 use base qw(Slim::Utils::Accessor);
 
+use File::Copy;
 use File::Spec::Functions qw(catdir catfile);
 use IO::Select;
 use MIME::Base64 qw(encode_base64);
@@ -89,6 +90,21 @@ sub start {
 	# when different Spotify users connect to different players simultaneously.
 	my $cacheDir = catdir($serverPrefs->get('cachedir'), 'spoton', 'connect-' . $self->id);
 	$self->cache($cacheDir);
+
+	# One-time credential migration: copy from account-level dir to per-player dir
+	my $credFile = catfile($cacheDir, 'credentials.json');
+	if (! -f $credFile) {
+		my $activeAccountId = $prefs->get('activeAccount') || '';
+		if ($activeAccountId) {
+			my $srcFile = catfile($serverPrefs->get('cachedir'), 'spoton', $activeAccountId, 'credentials.json');
+			if (-f $srcFile) {
+				mkdir $cacheDir unless -d $cacheDir;
+				if (copy($srcFile, $credFile)) {
+					main::INFOLOG && $log->is_info && $log->info("Migrated credentials to per-player cache: $cacheDir");
+				}
+			}
+		}
+	}
 
 	# Reset stream state before attempt (WR-04: stale _streamMode after failed restart)
 	$self->_streamMode(0);
