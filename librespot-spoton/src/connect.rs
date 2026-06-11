@@ -1060,11 +1060,11 @@ pub async fn run_connect(
                 }
             },
 
-            // Reconnect with new credentials
+            // Reconnect with new credentials — no cache so ZeroConf credentials
+            // are never persisted to disk (protects master credentials.json)
             _ = async {}, if connecting && last_credentials.is_some() => {
                 if current_session.is_invalid() {
-                    let cache2 = Cache::new(Some(cache_dir), None::<&str>, None::<&str>, None).ok();
-                    current_session = Session::new(session_config.clone(), cache2);
+                    current_session = Session::new(session_config.clone(), None);
                     player.set_session(current_session.clone());
                 }
 
