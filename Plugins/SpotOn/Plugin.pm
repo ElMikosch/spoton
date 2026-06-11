@@ -405,11 +405,11 @@ sub trackInfoMenu {
 sub SpotOnManageLike {
     my ($client, $cb, $params, $args) = @_;
 
-    my $trackUri  = $args->{trackUri};
+    my $trackUri  = $args->{trackUri} // '';
+    return unless $trackUri =~ /^spotify:track:[A-Za-z0-9]+$/;
     my $accountId = $args->{accountId};
 
-    (my $trackId) = $trackUri =~ /^spotify:track:(.+)$/;
-    my $cacheKey = "spoton_liked_${accountId}_${trackId}";
+    my $cacheKey = _likedCacheKey($accountId, $trackUri);
 
     my $buildMenu = sub {
         my ($isLiked) = @_;
@@ -447,13 +447,19 @@ sub SpotOnUnlike {
     _doLibraryAction($client, $cb, $args, 'removeTracks', 'PLUGIN_SPOTON_UNLIKED');
 }
 
+sub _likedCacheKey {
+    my ($accountId, $trackUri) = @_;
+    my ($trackId) = $trackUri =~ /^spotify:track:(.+)$/;
+    return "spoton_liked_${accountId}_${trackId}";
+}
+
 sub _toggleLike {
     my ($client, $cb, $params, $args) = @_;
-    my $trackUri  = $args->{trackUri};
+    my $trackUri  = $args->{trackUri} // '';
+    return unless $trackUri =~ /^spotify:track:[A-Za-z0-9]+$/;
     my $accountId = $args->{accountId};
 
-    (my $trackId) = $trackUri =~ /^spotify:track:(.+)$/;
-    my $cacheKey = "spoton_liked_${accountId}_${trackId}";
+    my $cacheKey = _likedCacheKey($accountId, $trackUri);
     my $fullArgs = { trackUri => $trackUri, accountId => $accountId, cacheKey => $cacheKey };
 
     my $doToggle = sub {

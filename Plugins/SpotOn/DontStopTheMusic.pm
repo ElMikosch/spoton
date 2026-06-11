@@ -13,7 +13,7 @@ use Slim::Utils::Prefs;
 
 my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 2);
+my $cache = Slim::Utils::Cache->new('spoton', 3);
 
 # init()
 # Registers SpotOn as a DSTM provider.

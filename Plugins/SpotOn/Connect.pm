@@ -40,7 +40,7 @@ my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
 
 my $initialized;
-my $cache = Slim::Utils::Cache->new('spoton', 2);
+my $cache = Slim::Utils::Cache->new('spoton', 3);
 
 # Track the MAC of the player currently owning the active Connect session.
 # Used by _onPause to suppress stale stop events from old players when switching.

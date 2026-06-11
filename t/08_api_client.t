@@ -515,7 +515,7 @@ SKIP: {
 
 # LIB-01: saveTracks sends PUT to /me/library with uris query param
 SKIP: {
-    skip "Client.pm not yet created", 3
+    skip "Client.pm not yet created", 5
         unless -f $client_module;
 
     Slim::Networking::SimpleAsyncHTTP::reset_requests();
@@ -538,7 +538,7 @@ SKIP: {
 
 # LIB-02: removeTracks sends DELETE to /me/library with uris query param
 SKIP: {
-    skip "Client.pm not yet created", 3
+    skip "Client.pm not yet created", 5
         unless -f $client_module;
 
     Slim::Networking::SimpleAsyncHTTP::reset_requests();
@@ -561,7 +561,7 @@ SKIP: {
 
 # LIB-03: checkTracks sends GET to /me/library/contains, returns [true]/[false]
 SKIP: {
-    skip "Client.pm not yet created", 4
+    skip "Client.pm not yet created", 6
         unless -f $client_module;
 
     Slim::Networking::SimpleAsyncHTTP::reset_requests();

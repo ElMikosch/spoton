@@ -7,6 +7,7 @@ use base qw(Slim::Formats::RemoteStream);
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Strings qw(cstring);
 use Slim::Utils::Versions;
 use Slim::Utils::Cache;
 use Slim::Utils::Network;
@@ -409,7 +410,7 @@ sub trackInfoURL {
     my @items;
     if ($accountId) {
         push @items, {
-            name        => Slim::Utils::Strings::cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+            name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
             url         => \&Plugins::SpotOn::Plugin::_toggleLike,
             passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
             type        => 'link',
