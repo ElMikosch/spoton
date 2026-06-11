@@ -211,22 +211,29 @@ jobs:
           rm -rf release-artifacts/spoton-aarch64-darwin
           rm -rf release-artifacts/spoton-x86_64-darwin
 
-      - name: List downloaded artifacts
-        run: find release-artifacts -type f -ls
+      - name: Flatten binaries with platform suffix
+        run: |
+          mkdir -p release-flat
+          for dir in release-artifacts/spoton-*/; do
+            name=$(basename "$dir")
+            if [ -f "$dir/spoton.exe" ]; then
+              cp "$dir/spoton.exe" "release-flat/${name}.exe"
+            elif [ -f "$dir/spoton" ]; then
+              cp "$dir/spoton" "release-flat/$name"
+            fi
+          done
+          ls -la release-flat/
 
       - name: Create checksums
         run: |
-          cd release-artifacts
-          find . \( -name "spoton" -o -name "spoton.exe" \) -exec sha256sum {} \; > SHA256SUMS.txt
+          cd release-flat
+          sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release-artifacts/**/spoton
-            release-artifacts/**/spoton.exe
-            release-artifacts/SHA256SUMS.txt
+          files: release-flat/*
           generate_release_notes: true
           draft: false
           prerelease: false
