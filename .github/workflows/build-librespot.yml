@@ -224,6 +224,23 @@ jobs:
           done
           ls -la release-flat/
 
+      - name: Assemble plugin zip
+        run: |
+          for dir in release-artifacts/spoton-*/; do
+            bin_dir=$(basename "$dir" | sed 's/^spoton-//')
+            dest="Plugins/SpotOn/Bin/$bin_dir"
+            mkdir -p "$dest"
+            cp "$dir"/* "$dest/"
+            chmod 755 "$dest"/*
+            rm -f "$dest/.gitkeep"
+          done
+          VERSION="${GITHUB_REF_NAME}"
+          zip -r "release-flat/SpotOn-${VERSION}.zip" Plugins/SpotOn/
+          echo "=== Plugin zip ==="
+          ls -lh "release-flat/SpotOn-${VERSION}.zip"
+          echo "=== SHA1 for repo.xml ==="
+          sha1sum "release-flat/SpotOn-${VERSION}.zip"
+
       - name: Create checksums
         run: |
           cd release-flat
