@@ -14,7 +14,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 |--|--------|--------|
 | **Like / Unlike** | One-click toggle from any track menu | Not available |
 | **Audio formats** | OGG, FLAC, PCM, MP3 — configurable per player | PCM, FLAC, MP3 — global setting |
-| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Currently disabled (re-enable in progress) |
+| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Currently disabled |
 | **Made For You** | Daily Mixes, Discover Weekly, Daylist, Release Radar | Daily Mixes, Discover Weekly, Release Radar |
 
 ## Features
