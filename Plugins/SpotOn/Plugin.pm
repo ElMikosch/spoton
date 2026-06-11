@@ -530,6 +530,18 @@ sub _trackItem {
         };
     }
 
+    if ($track->{uri} && $track->{uri} =~ /^spotify:track:[A-Za-z0-9]+$/) {
+        my $accountId = _getAccountId($client);
+        if ($accountId) {
+            push @contextItems, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+                url         => \&SpotOnManageLike,
+                passthrough => [{ trackUri => $track->{uri}, accountId => $accountId }],
+                type        => 'link',
+            };
+        }
+    }
+
     # T-04.1-01: Extract path from Spotify URI to prevent double-prefix.
     # spotify:track:ID -> track:ID; fallback preserves original URI if no match.
     my ($track_path) = ($track->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
