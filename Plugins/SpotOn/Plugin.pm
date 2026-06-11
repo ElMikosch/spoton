@@ -125,6 +125,13 @@ sub initPlugin {
         weight => 100,
         icon   => 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png',
     );
+
+    # D-01: Register Like/Unlike action in Track Info menu (LIB-01/LIB-02/LIB-03)
+    # require (not use) — Slim::Menu::TrackInfo may not be available at compile time in all LMS contexts
+    require Slim::Menu::TrackInfo;
+    Slim::Menu::TrackInfo->registerInfoProvider( spotonTrackInfo => (
+        func => \&trackInfoMenu,
+    ) );
 }
 
 # Material Skin resolves app icons via /material/svg/{tag} from its own
