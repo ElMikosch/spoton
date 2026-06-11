@@ -225,7 +225,7 @@ impl LMS {
                     // Suppress initial volume echo from Spotify on connect (CON-11)
                     return;
                 }
-                let pct = u32::from(*volume) * 100 / 65535;
+                let pct = (u32::from(*volume) * 100 + 32767) / 65535;
                 self.notify("volume", &pct.to_string(), "").await;
             }
 
@@ -261,6 +261,7 @@ impl LMS {
                     }
                     Some(_) => {
                         self.needs_position_sync.store(false, Ordering::Release);
+                        self.was_paused.store(false, Ordering::Release);
                         let prev = current_track.replace(new_id.clone()).unwrap_or_default();
                         self.notify("change", &new_id, &prev).await;
                     }
@@ -575,7 +576,7 @@ pub async fn http_stream_server(
                             // permanently blocked.
                             if relay_active.load(Ordering::Acquire) {
                                 let stuck = {
-                                    let t = last_data_time.lock().unwrap();
+                                    let t = last_data_time.lock().unwrap_or_else(|e| e.into_inner());
                                     t.map(|ts| ts.elapsed() > Duration::from_secs(60)).unwrap_or(false)
                                 };
                                 if stuck {
@@ -594,7 +595,7 @@ pub async fn http_stream_server(
 
                             // Drain stale pre-seek audio from the channel (D-03).
                             {
-                                let mut rx = pcm_rx.lock().unwrap();
+                                let mut rx = pcm_rx.lock().unwrap_or_else(|e| e.into_inner());
                                 let mut drained = 0u64;
                                 while rx.try_recv().is_ok() { drained += 1; }
                                 log::debug!("[spoton] /stream: relay starting, drained {} stale chunks", drained);
@@ -617,7 +618,7 @@ pub async fn http_stream_server(
 
                                 // Initialise last_seen_gen to avoid draining on first iteration.
                                 let mut last_seen_gen: u64 = {
-                                    let rx = flush_rx_clone.lock().unwrap();
+                                    let rx = flush_rx_clone.lock().unwrap_or_else(|e| e.into_inner());
                                     let val: u64 = *rx.borrow();
                                     drop(rx);
                                     val
@@ -626,21 +627,21 @@ pub async fn http_stream_server(
                                 loop {
                                     // Seek-flush drain: poll before each read.
                                     let flush_pending = {
-                                        let rx = flush_rx_clone.lock().unwrap();
+                                        let rx = flush_rx_clone.lock().unwrap_or_else(|e| e.into_inner());
                                         let changed = rx.has_changed().unwrap_or(false);
                                         drop(rx);
                                         changed
                                     };
                                     if flush_pending {
                                         let new_gen = {
-                                            let mut rx = flush_rx_clone.lock().unwrap();
+                                            let mut rx = flush_rx_clone.lock().unwrap_or_else(|e| e.into_inner());
                                             let val: u64 = *rx.borrow_and_update();
                                             drop(rx);
                                             val
                                         };
                                         if new_gen > last_seen_gen {
                                             let mut count: u64 = 0;
-                                            let mut rx = pcm_rx_clone.lock().unwrap();
+                                            let mut rx = pcm_rx_clone.lock().unwrap_or_else(|e| e.into_inner());
                                             while rx.try_recv().is_ok() {
                                                 count += 1;
                                             }
@@ -651,7 +652,7 @@ pub async fn http_stream_server(
 
                                     // Normal relay — poll once, release lock before await.
                                     let chunk = {
-                                        let mut rx = pcm_rx_clone.lock().unwrap();
+                                        let mut rx = pcm_rx_clone.lock().unwrap_or_else(|e| e.into_inner());
                                         rx.try_recv().ok()
                                     };
                                     match chunk {
@@ -662,7 +663,7 @@ pub async fn http_stream_server(
                                             }
                                             // T-05.3-03: record last successful data delivery time
                                             // so the health-check in the accept loop can detect stuck relay_active.
-                                            *last_data_time_clone.lock().unwrap() = Some(Instant::now());
+                                            *last_data_time_clone.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
                                         }
                                         None => {
                                             // No data available; sleep 1ms to avoid hot-loop.
@@ -701,7 +702,13 @@ pub async fn http_stream_server(
                                 }
                             };
 
-                            let spirc_guard = spirc_handle.lock().unwrap();
+                            let spirc_guard = match spirc_handle.lock() {
+                                Ok(g) => g,
+                                Err(_) => return Ok(Response::builder()
+                                    .status(StatusCode::SERVICE_UNAVAILABLE)
+                                    .body(BoxBody::new(Full::new(Bytes::from("Spirc mutex poisoned")).map_err(|e| match e {})))
+                                    .unwrap()),
+                            };
                             let result = if let Some(spirc) = spirc_guard.as_ref() {
                                 match cmd {
                                     "pause" => spirc.pause().ok(),
@@ -994,7 +1001,7 @@ pub async fn run_connect(
 
     // Store Spirc in shared handle so http_stream_server can dispatch control commands (D-14).
     {
-        let mut guard = spirc_handle.lock().unwrap();
+        let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
         *guard = Some(spirc);
     }
 
@@ -1046,7 +1053,7 @@ pub async fn run_connect(
                     last_credentials = Some(creds);
                     // Shutdown existing Spirc
                     {
-                        let mut guard = spirc_handle.lock().unwrap();
+                        let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
                         if let Some(ref s) = *guard {
                             let _ = s.shutdown();
                         }
@@ -1085,7 +1092,7 @@ pub async fn run_connect(
                 ).await {
                     Ok((new_spirc, new_task)) => {
                         {
-                            let mut guard = spirc_handle.lock().unwrap();
+                            let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
                             *guard = Some(new_spirc);
                         }
                         current_spirc_task = Some(tokio::spawn(new_task));
@@ -1096,8 +1103,8 @@ pub async fn run_connect(
                         log::debug!("[spoton] Spirc reconnected (new credentials) — notified LMS 'ready'");
                     }
                     Err(e) => {
-                        eprintln!("Spirc reconnect failed: {e}");
-                        process::exit(1);
+                        log::error!("[spoton] Spirc reconnect failed: {e}");
+                        break;
                     }
                 }
             },
@@ -1147,7 +1154,7 @@ pub async fn run_connect(
 
     // Graceful shutdown
     {
-        let mut guard = spirc_handle.lock().unwrap();
+        let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ref s) = *guard {
             let _ = s.shutdown();
         }
@@ -1161,6 +1168,3 @@ pub async fn run_connect(
 
     Ok(())
 }
-
-// Allow process::exit in the reconnect error path
-use std::process;
