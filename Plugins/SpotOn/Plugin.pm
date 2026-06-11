@@ -428,65 +428,39 @@ sub SpotOnManageLike {
     Plugins::SpotOn::API::Client->checkTracks($accountId, [$trackUri], sub {
         my ($result, $err) = @_;
         my $isLiked = ($result && ref $result eq 'ARRAY' && $result->[0]) ? 1 : 0;
-        $cache->set($cacheKey, $isLiked, 60);  # D-07: 60s TTL
+        $cache->set($cacheKey, $isLiked, 60) unless $err;
         $buildMenu->($isLiked);
     });
 }
 
-# SpotOnLike($client, $cb, $params, $args)
-# Saves track to Spotify library. Invalidates liked-state cache on success.
-# D-09: shows brief confirmation + navigates back to grandparent menu on success.
-# D-10: shows user-visible error on API failure; 403 shows scope-specific hint.
-# D-11: 429 handled by Client.pm standard retry — no special handling here.
 sub SpotOnLike {
     my ($client, $cb, $params, $args) = @_;
-    my $trackUri  = $args->{trackUri};
-    my $accountId = $args->{accountId};
-    my $cacheKey  = $args->{cacheKey};
-
-    Plugins::SpotOn::API::Client->saveTracks($accountId, [$trackUri], sub {
-        my ($result, $err) = @_;
-        # Success contract (Plan 01 empty-body guard): $err is undef on 200 OK empty body.
-        # Error: $err is a hashref with {code => HTTP_STATUS} on HTTP errors.
-        if ($err && ref $err eq 'HASH' && $err->{code} && $err->{code} >= 400) {
-            my $msg = ($err->{code} == 403)
-                ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
-                : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
-            $cb->({ items => [{ name => $msg, showBriefly => 1 }] });
-            return;
-        }
-        $cache->remove($cacheKey);  # D-08: immediate cache invalidation
-        $cb->({ items => [{
-            name        => cstring($client, 'PLUGIN_SPOTON_LIKED'),
-            showBriefly => 1,
-            nextWindow  => 'grandparent',
-        }] });
-    });
+    _doLibraryAction($client, $cb, $args, 'saveTracks', 'PLUGIN_SPOTON_LIKED');
 }
 
-# SpotOnUnlike($client, $cb, $params, $args)
-# Removes track from Spotify library. Invalidates liked-state cache on success.
-# D-09: shows brief confirmation + navigates back to grandparent menu on success.
-# D-10: shows user-visible error on API failure; 403 shows scope-specific hint.
 sub SpotOnUnlike {
     my ($client, $cb, $params, $args) = @_;
+    _doLibraryAction($client, $cb, $args, 'removeTracks', 'PLUGIN_SPOTON_UNLIKED');
+}
+
+sub _doLibraryAction {
+    my ($client, $cb, $args, $apiMethod, $successKey) = @_;
     my $trackUri  = $args->{trackUri};
     my $accountId = $args->{accountId};
     my $cacheKey  = $args->{cacheKey};
 
-    Plugins::SpotOn::API::Client->removeTracks($accountId, [$trackUri], sub {
+    Plugins::SpotOn::API::Client->$apiMethod($accountId, [$trackUri], sub {
         my ($result, $err) = @_;
-        # Success contract (Plan 01 empty-body guard): $err is undef on 200 OK empty body.
-        if ($err && ref $err eq 'HASH' && $err->{code} && $err->{code} >= 400) {
-            my $msg = ($err->{code} == 403)
+        if ($err) {
+            my $msg = (ref $err eq 'HASH' && $err->{code} && $err->{code} == 403)
                 ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
                 : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
             $cb->({ items => [{ name => $msg, showBriefly => 1 }] });
             return;
         }
-        $cache->remove($cacheKey);  # D-08: immediate cache invalidation
+        $cache->remove($cacheKey);
         $cb->({ items => [{
-            name        => cstring($client, 'PLUGIN_SPOTON_UNLIKED'),
+            name        => cstring($client, $successKey),
             showBriefly => 1,
             nextWindow  => 'grandparent',
         }] });
