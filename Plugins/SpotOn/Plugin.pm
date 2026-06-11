@@ -380,8 +380,12 @@ sub trackInfoMenu {
     my ($client, $url, $track, $remoteMeta, $tags) = @_;
 
     # Guard: only handle SpotOn-sourced tracks (T-15-01, Pitfall 1+4 from RESEARCH.md)
-    my $trackUri = $remoteMeta ? $remoteMeta->{uri} : undef;
-    return unless $trackUri && $trackUri =~ /^spotify:track:[A-Za-z0-9]+$/;
+    # $url is spoton://track:ID — extract Spotify URI from it
+    my $trackUri;
+    if ($url && $url =~ m{^spoton:(?://)?track:([A-Za-z0-9]+)}) {
+        $trackUri = "spotify:track:$1";
+    }
+    return unless $trackUri;
 
     my $accountId = _getAccountId($client);
     return unless $accountId;
