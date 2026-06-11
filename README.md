@@ -10,16 +10,11 @@ Herger's Spotty plugin was archived in 2022. Since then, Spotify has removed doz
 
 | | SpotOn | Spotty |
 |--|--------|--------|
-| **Spotify API** | Feb 2026 unified endpoints | Pre-2022 (many endpoints removed) |
+| **Spotify API** | Current (Feb 2026 unified endpoints) | Archived 2022, uses deprecated endpoints |
 | **Like / Unlike** | One-click toggle from any track menu | Not available |
-| **Audio formats** | OGG, FLAC, PCM, MP3 — per player | OGG only |
-| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | One-way, zombie daemon issues |
-| **Made For You** | Daily Mixes, Discover Weekly, Daylist, Release Radar | Broken (browse/categories removed) |
-| **Don't Stop The Music** | Spotify recommendations feed LMS autoplay | Basic integration |
-| **Multi-account** | Quick account switcher | Single account |
-| **Rate limits** | Dual-token routing, user-visible throttle feedback | Silent failures, 429 bursts |
-| **Crash recovery** | Orphan cleanup, auto-restart, crash-loop detection | Manual restart required |
-| **Maintained** | Active development | Archived since 2022 |
+| **Audio formats** | OGG, FLAC, PCM, MP3 — per player | Per player |
+| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Disabled / discontinued |
+| **Made For You** | Daily Mixes, Discover Weekly, Daylist, Release Radar | Made For You or Liked Songs only |
 
 ## Features
 
