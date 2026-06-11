@@ -32,7 +32,7 @@ use constant SPOTON_DEFAULT_CLIENT_ID => 'd420a117a32841c2b3474932e49fb54b';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 2);
+my $cache = Slim::Utils::Cache->new('spoton', 3);
 
 # Module-level concurrency counter.
 # Must be reset to 0 in Plugin.pm::initPlugin via Client->reset()
@@ -199,6 +199,48 @@ sub getFollowedArtists {
     );
     $reqParams{after} = $params->{after} if defined $params->{after};
     $class->_request('get', 'me/following', \%reqParams, $cb);
+}
+
+# saveTracks($class, $accountId, $uris, $cb)
+# Saves tracks to the user's library (PUT /me/library?uris=...).
+# D-12: Uses unified library endpoint with full Spotify URIs (e.g. spotify:track:ID).
+# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Scope: user-library-modify
+sub saveTracks {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('put', 'me/library', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
+# removeTracks($class, $accountId, $uris, $cb)
+# Removes tracks from the user's library (DELETE /me/library?uris=...).
+# D-13: Uses unified library endpoint with full Spotify URIs.
+# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Scope: user-library-modify
+sub removeTracks {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('delete', 'me/library', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
+# checkTracks($class, $accountId, $uris, $cb)
+# Checks if tracks are saved in the user's library (GET /me/library/contains?uris=...).
+# D-14: Response is an array of booleans, e.g. [true] or [false].
+# _noCache => 1: caching is managed manually in Plugin.pm with 60s TTL (D-07, Pitfall 2).
+# Scope: user-library-read
+sub checkTracks {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('get', 'me/library/contains', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
 }
 
 # getUserPlaylists($class, $accountId, $params, $cb)
@@ -481,11 +523,19 @@ sub _doFlavouredRequest {
             sub {
                 # Success callback — parse JSON, cache, then check for bundled hint write
                 my $http = shift;
-                my $result = eval { from_json($http->content) };
-                if ($@) {
-                    $log->error("Client: JSON parse error for $cleanPath [flavor=$flavor]: $@");
-                    $userCb->(undef, { error => 'parse_error' });
-                    return;
+                my $content = $http->content // '';
+
+                # Pitfall 6: PUT/DELETE /me/library returns 200 OK with empty body.
+                # from_json('') throws an exception — treat empty/whitespace body as
+                # success with undef result (not a parse error). Contract: $err is undef.
+                my $result;
+                if ($content =~ /\S/) {
+                    $result = eval { from_json($content) };
+                    if ($@) {
+                        $log->error("Client: JSON parse error for $cleanPath [flavor=$flavor]: $@");
+                        $userCb->(undef, { error => 'parse_error' });
+                        return;
+                    }
                 }
 
                 # Cache response with domain-specific TTL (API-03).
