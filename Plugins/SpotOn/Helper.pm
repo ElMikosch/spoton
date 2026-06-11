@@ -31,6 +31,12 @@ sub init {
         );
     }
 
+    if ( main::ISMAC ) {
+        Slim::Utils::Misc::addFindBinPaths(
+            catdir(Plugins::SpotOn::Plugin->_pluginDataFor('basedir'), 'Bin', 'darwin')
+        );
+    }
+
     $prefs->setChange( sub {
         $helper = $helperVersion = $helperCapabilities = undef;
     }, 'binary') if !main::SCANNER;
