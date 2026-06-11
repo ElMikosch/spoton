@@ -206,6 +206,11 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Remove intermediate macOS artifacts
+        run: |
+          rm -rf release-artifacts/spoton-aarch64-darwin
+          rm -rf release-artifacts/spoton-x86_64-darwin
+
       - name: List downloaded artifacts
         run: find release-artifacts -type f -ls
 
