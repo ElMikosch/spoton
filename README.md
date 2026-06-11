@@ -2,19 +2,20 @@
 
 # SpotOn
 
-A Spotify plugin for Lyrion Music Server (LMS) — built from scratch for the 2026 Spotify API.
+A Spotify plugin for Lyrion Music Server (LMS).
 
-## Why SpotOn?
+## Background
 
-Herger's Spotty plugin was archived in 2022. Since then, Spotify has removed dozens of API endpoints, tightened developer mode restrictions, and changed authentication flows. SpotOn is a clean-room implementation that works with the current Spotify Web API — no legacy workarounds, no deprecated endpoints.
+SpotOn builds on the foundation that [Michael Herger](https://github.com/michaelherger) laid with his [Spotty plugin](https://github.com/michaelherger/Spotty-Plugin) — the original Spotify integration for LMS that served the community for years. Without Herger's pioneering work on Spotty and the broader LMS plugin ecosystem, SpotOn would not exist. Thank you, Michael.
+
+SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed around the current Spotify Web API (including the [February 2026 changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026)) and the latest librespot releases. Where Spotty had to work around years of accumulated API changes, SpotOn could start fresh.
 
 | | SpotOn | Spotty |
 |--|--------|--------|
-| **Spotify API** | Current (Feb 2026 unified endpoints) | Archived 2022, uses deprecated endpoints |
 | **Like / Unlike** | One-click toggle from any track menu | Not available |
-| **Audio formats** | OGG, FLAC, PCM, MP3 — per player | Per player |
-| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Disabled / discontinued |
-| **Made For You** | Daily Mixes, Discover Weekly, Daylist, Release Radar | Made For You or Liked Songs only |
+| **Audio formats** | OGG, FLAC, PCM, MP3 — configurable per player | PCM, FLAC, MP3 — global setting |
+| **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Currently disabled (re-enable in progress) |
+| **Made For You** | Daily Mixes, Discover Weekly, Daylist, Release Radar | Daily Mixes, Discover Weekly, Release Radar |
 
 ## Features
 
