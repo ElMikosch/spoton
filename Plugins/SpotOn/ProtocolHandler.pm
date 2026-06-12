@@ -411,7 +411,7 @@ sub trackInfoURL {
     if ($accountId) {
         push @items, {
             name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
-            url         => \&Plugins::SpotOn::Plugin::_toggleLike,
+            url         => \&Plugins::SpotOn::Plugin::SpotOnManageLike,
             passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
             type        => 'link',
         };

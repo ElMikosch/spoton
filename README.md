@@ -21,7 +21,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 - **Browse** — Search tracks, albums, artists, and playlists; full artist discography with albums, singles, compilations
 - **Library** — Liked Songs, Albums, Artists, Playlists, Recently Played, Top Tracks
-- **Like / Unlike** — Save or remove tracks from your Liked Songs directly from browse menus
+- **Like / Unlike** — Save or remove tracks from your Liked Songs directly from any track context menu. In Material Skin, open the track's "..." menu → "Mehr" → "Like / Unlike" — the plugin checks Spotify for the current state and shows either "Like" (to save) or "Unlike" (to remove). In Classic Skin, the same flow is available via the Track Info panel. After the action, a popup confirms "Liked!" or "Removed" and the menu navigates back automatically.
 - **Streaming** — Per-player format selection (OGG passthrough, FLAC, PCM, MP3) with 96/160/320 kbps bitrate and volume normalization
 - **Spotify Connect** — Full bidirectional control: appear as a Connect device, control from any Spotify client, state syncs both ways
 - **Made For You** — Daily Mixes, Discover Weekly, Daylist, Release Radar with locale-aware sorting

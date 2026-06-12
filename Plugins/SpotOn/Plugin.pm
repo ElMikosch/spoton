@@ -379,8 +379,6 @@ sub _getAccountId {
 sub trackInfoMenu {
     my ($client, $url, $track, $remoteMeta, $tags) = @_;
 
-    # Guard: only handle SpotOn-sourced tracks (T-15-01, Pitfall 1+4 from RESEARCH.md)
-    # $url is spoton://track:ID — extract Spotify URI from it
     my $trackUri;
     if ($url && $url =~ m{^spoton:(?://)?track:([A-Za-z0-9]+)}) {
         $trackUri = "spotify:track:$1";
@@ -390,11 +388,12 @@ sub trackInfoMenu {
     my $accountId = _getAccountId($client);
     return unless $accountId;
 
-    return { items => [{
+    return {
         name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
         url         => \&SpotOnManageLike,
         passthrough => [{ trackUri => $trackUri, accountId => $accountId }],
-    }] };
+        favorites   => 0,
+    };
 }
 
 # SpotOnManageLike($client, $cb, $params, $args)
@@ -453,36 +452,6 @@ sub _likedCacheKey {
     return "spoton_liked_${accountId}_${trackId}";
 }
 
-sub _toggleLike {
-    my ($client, $cb, $params, $args) = @_;
-    my $trackUri  = $args->{trackUri} // '';
-    return unless $trackUri =~ /^spotify:track:[A-Za-z0-9]+$/;
-    my $accountId = $args->{accountId};
-
-    my $cacheKey = _likedCacheKey($accountId, $trackUri);
-    my $fullArgs = { trackUri => $trackUri, accountId => $accountId, cacheKey => $cacheKey };
-
-    my $doToggle = sub {
-        my ($isLiked) = @_;
-        my $method     = $isLiked ? 'removeTracks' : 'saveTracks';
-        my $successKey = $isLiked ? 'PLUGIN_SPOTON_UNLIKED' : 'PLUGIN_SPOTON_LIKED';
-        _doLibraryAction($client, $cb, $fullArgs, $method, $successKey);
-    };
-
-    my $cached = $cache->get($cacheKey);
-    if (defined $cached) {
-        $doToggle->($cached);
-        return;
-    }
-
-    Plugins::SpotOn::API::Client->checkTracks($accountId, [$trackUri], sub {
-        my ($result, $err) = @_;
-        my $isLiked = ($result && ref $result eq 'ARRAY' && $result->[0]) ? 1 : 0;
-        $cache->set($cacheKey, $isLiked, 60) unless $err;
-        $doToggle->($isLiked);
-    });
-}
-
 sub _doLibraryAction {
     my ($client, $cb, $args, $apiMethod, $successKey) = @_;
     my $trackUri  = $args->{trackUri};
@@ -495,17 +464,21 @@ sub _doLibraryAction {
             my $msg = (ref $err eq 'HASH' && $err->{code} && $err->{code} == 403)
                 ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
                 : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
-            $cb->({ items => [{ name => $msg, showBriefly => 1 }] });
+            $cb->({ items => [{ name => $msg }] });
             return;
         }
-        $cache->remove($cacheKey);
+        my $newState = ($apiMethod eq 'saveTracks') ? 1 : 0;
+        $cache->set($cacheKey, $newState, 60);
+        $client->showBriefly({
+            jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
+        }) if $client;
         $cb->({ items => [{
             name        => cstring($client, $successKey),
-            showBriefly => 1,
             nextWindow  => 'grandparent',
         }] });
     });
 }
+
 
 # _largestImage($images_arrayref)
 # Returns the URL of the largest image (by width) from a Spotify images array.
@@ -571,7 +544,7 @@ sub _trackItem {
         if ($accountId) {
             push @contextItems, {
                 name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
-                url         => \&_toggleLike,
+                url         => \&SpotOnManageLike,
                 passthrough => [{ trackUri => $track->{uri}, accountId => $accountId }],
                 type        => 'link',
             };
