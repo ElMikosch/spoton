@@ -12,9 +12,46 @@ env:
   SOURCE_DIR: librespot-spoton
 
 jobs:
+  detect-changes:
+    name: Detect Rust source changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust_changed: ${{ steps.check.outputs.rust_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Rust source changes
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "workflow_dispatch detected — forcing full build"
+            RUST_CHANGED=true
+          else
+            PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+            if [ -z "$PREV_TAG" ]; then
+              echo "No previous tag found — forcing full build"
+              RUST_CHANGED=true
+            else
+              echo "Previous tag: $PREV_TAG"
+              CHANGED=$(git diff --name-only "$PREV_TAG" "$GITHUB_REF_NAME" -- librespot-spoton/ | head -1)
+              if [ -n "$CHANGED" ]; then
+                RUST_CHANGED=true
+              else
+                RUST_CHANGED=false
+              fi
+            fi
+          fi
+          echo "Rust changed: $RUST_CHANGED"
+          echo "rust_changed=$RUST_CHANGED" >> $GITHUB_OUTPUT
+
   build:
     name: Build ${{ matrix.target }}
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.rust_changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -109,6 +146,8 @@ jobs:
   build-macos:
     name: Build macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.rust_changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -189,11 +228,96 @@ jobs:
           path: spoton
           retention-days: 30
 
+  reuse-binaries:
+    name: Reuse binaries from previous release
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.rust_changed == 'false'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Find previous release tag
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREV_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --json tagName --jq '.[].tagName' | grep '^v' | head -1)
+          echo "Downloading binaries from $PREV_TAG"
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Download binaries from previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ steps.prev.outputs.prev_tag }}" --repo "$GITHUB_REPOSITORY" -p 'spoton-*' -D prev-binaries/
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/{x86_64-linux,aarch64-linux,armhf-linux,arm-linux,i386-linux,x86_64-win64,darwin}
+          cp prev-binaries/spoton-x86_64-linux artifacts/x86_64-linux/spoton
+          cp prev-binaries/spoton-aarch64-linux artifacts/aarch64-linux/spoton
+          cp prev-binaries/spoton-armhf-linux artifacts/armhf-linux/spoton
+          cp prev-binaries/spoton-arm-linux artifacts/arm-linux/spoton
+          cp prev-binaries/spoton-i386-linux artifacts/i386-linux/spoton
+          cp prev-binaries/spoton-x86_64-win64.exe artifacts/x86_64-win64/spoton.exe
+          cp prev-binaries/spoton-darwin artifacts/darwin/spoton
+          chmod 755 artifacts/*/spoton*
+
+      - name: Upload spoton-x86_64-linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-x86_64-linux
+          path: artifacts/x86_64-linux/spoton
+          retention-days: 30
+
+      - name: Upload spoton-aarch64-linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-aarch64-linux
+          path: artifacts/aarch64-linux/spoton
+          retention-days: 30
+
+      - name: Upload spoton-armhf-linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-armhf-linux
+          path: artifacts/armhf-linux/spoton
+          retention-days: 30
+
+      - name: Upload spoton-arm-linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-arm-linux
+          path: artifacts/arm-linux/spoton
+          retention-days: 30
+
+      - name: Upload spoton-i386-linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-i386-linux
+          path: artifacts/i386-linux/spoton
+          retention-days: 30
+
+      - name: Upload spoton-x86_64-win64
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-x86_64-win64
+          path: artifacts/x86_64-win64/spoton.exe
+          retention-days: 30
+
+      - name: Upload spoton-darwin
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-darwin
+          path: artifacts/darwin/spoton
+          retention-days: 30
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build, lipo]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [detect-changes, build, lipo, reuse-binaries]
+    if: startsWith(github.ref, 'refs/tags/') && !cancelled() && !failure()
     permissions:
       contents: write
 
