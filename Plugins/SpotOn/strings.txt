@@ -1155,20 +1155,83 @@ PLUGIN_SPOTON_UNLIKE
 	PL	Nie lubię
 	SV	Ogilla
 
+PLUGIN_SPOTON_ACCOUNT_SWITCHED
+	CS	Konto %s aktivováno
+	DA	Konto %s aktiveret
+	DE	Konto %s aktiviert
+	EN	Account %s activated
+	ES	Cuenta %s activada
+	FR	Compte %s activé
+	IT	Account %s attivato
+	NL	Account %s geactiveerd
+	NO	Konto %s aktivert
+	PL	Konto %s aktywowane
+	SV	Konto %s aktiverat
+
 PLUGIN_SPOTON_LIKED
+	CS	Uloženo!
+	DA	Gemt!
+	DE	Gespeichert!
 	EN	Liked!
+	ES	¡Guardado!
+	FR	Enregistré !
+	IT	Salvato!
+	NL	Opgeslagen!
+	NO	Lagret!
+	PL	Zapisano!
+	SV	Sparad!
 
 PLUGIN_SPOTON_UNLIKED
+	CS	Odebráno
+	DA	Fjernet
+	DE	Entfernt
 	EN	Removed
+	ES	Eliminado
+	FR	Retiré
+	IT	Rimosso
+	NL	Verwijderd
+	NO	Fjernet
+	PL	Usunięto
+	SV	Borttagen
 
 PLUGIN_SPOTON_LIKE_ERROR
+	CS	Nelze uložit skladbu
+	DA	Kunne ikke gemme nummer
+	DE	Track konnte nicht gespeichert werden
 	EN	Could not save track
+	ES	No se pudo guardar la pista
+	FR	Impossible d'enregistrer le titre
+	IT	Impossibile salvare il brano
+	NL	Kan nummer niet opslaan
+	NO	Kunne ikke lagre sporet
+	PL	Nie można zapisać utworu
+	SV	Kunde inte spara spåret
 
 PLUGIN_SPOTON_LIKE_ERROR_SCOPE
-	EN	Could not save track - missing user-library-modify scope. Re-authenticate via Settings.
+	CS	Nelze uložit skladbu – chybí oprávnění user-library-modify. Přihlaste se znovu v Nastavení.
+	DA	Kunne ikke gemme nummer – mangler user-library-modify tilladelse. Log ind igen via Indstillinger.
+	DE	Track konnte nicht gespeichert werden – fehlende Berechtigung user-library-modify. Erneut anmelden unter Einstellungen.
+	EN	Could not save track – missing user-library-modify scope. Re-authenticate via Settings.
+	ES	No se pudo guardar la pista – falta el permiso user-library-modify. Vuelva a autenticarse en Ajustes.
+	FR	Impossible d'enregistrer le titre – autorisation user-library-modify manquante. Reconnectez-vous via les Paramètres.
+	IT	Impossibile salvare il brano – autorizzazione user-library-modify mancante. Riautenticarsi nelle Impostazioni.
+	NL	Kan nummer niet opslaan – user-library-modify machtiging ontbreekt. Opnieuw aanmelden via Instellingen.
+	NO	Kunne ikke lagre sporet – mangler user-library-modify tillatelse. Logg inn på nytt via Innstillinger.
+	PL	Nie można zapisać utworu – brak uprawnienia user-library-modify. Zaloguj się ponownie w Ustawieniach.
+	SV	Kunde inte spara spåret – behörighet user-library-modify saknas. Logga in igen via Inställningar.
 
 PLUGIN_SPOTON_MANAGE_LIKE
+	CS	Líbit se / Přestat
+	DA	Synes om / Fjern
+	DE	Gefällt mir / Entfernen
 	EN	Like / Unlike
+	ES	Me gusta / Quitar
+	FR	J'aime / Retirer
+	IT	Mi piace / Rimuovi
+	NL	Leuk / Verwijderen
+	NO	Lik / Fjern
+	PL	Lubię / Usuń
+	SV	Gilla / Ogilla
 
 PLUGIN_SPOTON_GATEKEEPER_HINT
 	CS	SpotOn binary je blokován systémem macOS. Spusťte v Terminálu: xattr -d com.apple.quarantine /cesta/k/spoton

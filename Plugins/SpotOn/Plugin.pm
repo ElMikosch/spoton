@@ -327,7 +327,6 @@ sub _accountSwitcherFeed {
             url         => \&_switchAccount,
             passthrough => [{ accountId => $id }],
             type        => 'link',
-            nextWindow  => 'refreshOrigin',
         };
     }
 
@@ -335,22 +334,35 @@ sub _accountSwitcherFeed {
 }
 
 # _switchAccount()
-# Updates per-client activeAccount preference and refreshes origin menu.
+# Updates per-client activeAccount preference and navigates back to root.
 sub _switchAccount {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $accountId = $passthrough ? $passthrough->{accountId} : undef;
+    my $name;
 
     if ($accountId && $client) {
         $prefs->client($client)->set('activeAccount', $accountId);
-        # Also update global default if none is set yet
         $prefs->set('activeAccount', $accountId) unless $prefs->get('activeAccount');
+        my $accounts = $prefs->get('accounts') || {};
+        $name = $accounts->{$accountId}{displayName} if $accounts->{$accountId};
     }
 
-    $callback->({
-        items      => [{ name => 'OK', type => 'textarea', showBriefly => 1 }],
-        nextWindow => 'refreshOrigin',
-    });
+    my $msg = $name
+        ? cstring($client, 'PLUGIN_SPOTON_ACCOUNT_SWITCHED', $name)
+        : 'OK';
+
+    $callback->({ items => [
+        {
+            name        => $msg,
+            type        => 'text',
+        },
+        {
+            name        => cstring($client, 'PLUGIN_SPOTON_NAME'),
+            url         => \&handleFeed,
+            type        => 'link',
+        },
+    ] });
 }
 
 # ============================================================

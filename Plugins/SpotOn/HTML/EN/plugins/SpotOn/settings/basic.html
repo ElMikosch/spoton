@@ -187,11 +187,49 @@
 			[% END %]
 			</table>
 
+			[% IF discoveryRunning %]
+			<div style="background:#f8f8f8; border:1px solid #ddd; padding:16px; margin-top:12px; border-radius:4px">
+				<div style="text-align:center; margin-bottom:15px">
+					<img src="/plugins/SpotOn/html/images/connect-hint.png"
+					     style="max-width:300px; border-radius:8px"
+					     alt="[% 'PLUGIN_SPOTON_CONNECT_HINT_ALT' | string %]"/>
+				</div>
+				<p><strong>[% 'PLUGIN_SPOTON_ZEROCONF_STEP1' | string %]</strong></p>
+				<p>[% 'PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS' | string %]</p>
+				<div id="discovery-status" style="color:#888">
+					[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
+				</div>
+				<script type="text/javascript">
+				(function() {
+					var timer = setInterval(function() {
+						var xhr = new XMLHttpRequest();
+						xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
+						xhr.onload = function() {
+							if (xhr.status === 200) {
+								var data = JSON.parse(xhr.responseText);
+								if (data.status === 'connected') {
+									clearInterval(timer);
+									location.reload();
+								}
+							}
+						};
+						xhr.send();
+					}, 3000);
+				})();
+				</script>
+				<p>
+					<input type="submit" name="stopDiscovery"
+					       value="[% 'PLUGIN_SPOTON_STOP_DISCOVERY' | string %]"
+					       class="submit"/>
+				</p>
+			</div>
+			[% ELSE %]
 			<p>
 				<input type="submit" name="startDiscovery"
 				       value="[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]"
 				       class="submit"/>
 			</p>
+			[% END %]
 		[% ELSE %]
 			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
 		[% END %]
