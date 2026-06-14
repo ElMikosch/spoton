@@ -607,7 +607,7 @@ SKIP: {
         'LIB-04: checkTracks with _noCache => 1 always dispatches HTTP (Client.pm does not cache)');
 }
 
-# LIB-05: SPOTON_CACHE_VERSION is 3 in Plugin.pm; cache namespace version is 3 in Client.pm
+# LIB-05: SPOTON_CACHE_VERSION is 4 in Plugin.pm; cache namespace version is 4 in Client.pm
 SKIP: {
     skip "Client.pm not yet created", 2
         unless -f $client_module;
@@ -618,15 +618,15 @@ SKIP: {
         open(my $fh, '<', $plugin_file) or die "Cannot open $plugin_file: $!";
         my $src = do { local $/; <$fh> };
         close($fh);
-        like($src, qr/SPOTON_CACHE_VERSION\s*=>\s*3\b/,
-            'LIB-05: Plugin.pm SPOTON_CACHE_VERSION is 3');
+        like($src, qr/SPOTON_CACHE_VERSION\s*=>\s*4\b/,
+            'LIB-05: Plugin.pm SPOTON_CACHE_VERSION is 4');
     }
 
     open(my $cfh, '<', $client_module) or die "Cannot open $client_module: $!";
     my $csrc = do { local $/; <$cfh> };
     close($cfh);
-    like($csrc, qr/new\('spoton',\s*3\)/,
-        "LIB-05: Client.pm cache namespace version is 3");
+    like($csrc, qr/new\('spoton',\s*4\)/,
+        "LIB-05: Client.pm cache namespace version is 4");
 }
 
 # API-06: No LWP or SimpleSyncHTTP in API/ modules — grep test (runs immediately)
