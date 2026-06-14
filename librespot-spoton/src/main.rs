@@ -688,8 +688,12 @@ async fn run_single_track(
     // SpotifyUri::from_uri validates the URI format; malformed URIs return Err (T-04.1-05)
     let track_id = SpotifyUri::from_uri(&normalized_uri)?;
 
-    // Start playback; position in milliseconds
-    let start_position_ms = (start_position_secs * 1000.0) as u32;
+    // Start playback; position in milliseconds (clamped to valid u32 range)
+    let start_position_ms = if start_position_secs < 0.0 {
+        0u32
+    } else {
+        (start_position_secs * 1000.0).min(u32::MAX as f64) as u32
+    };
     player.load(track_id, true, start_position_ms);
 
     // Wait for EndOfTrack or Stopped; await_end_of_track handles event loop internally

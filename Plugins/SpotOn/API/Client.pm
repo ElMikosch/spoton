@@ -291,6 +291,8 @@ sub getPersonalMixes {
 # Fetches a single artist by ID (/artists/{artistId}).
 sub getArtist {
     my ($class, $accountId, $artistId, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $artistId && $artistId =~ /^[A-Za-z0-9]{1,40}$/;
     $class->_request('get', "artists/$artistId", { _accountId => $accountId }, $cb);
 }
 
@@ -300,6 +302,8 @@ sub getArtist {
 # Combined values break pagination — callers issue separate requests per type.
 sub getArtistAlbums {
     my ($class, $accountId, $artistId, $params, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $artistId && $artistId =~ /^[A-Za-z0-9]{1,40}$/;
     my %reqParams = (
         _accountId     => $accountId,
         offset         => $params->{offset} // 0,
@@ -314,6 +318,8 @@ sub getArtistAlbums {
 # Fetches album metadata including first page of tracks (/albums/{albumId}).
 sub getAlbum {
     my ($class, $accountId, $albumId, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $albumId && $albumId =~ /^[A-Za-z0-9]{1,40}$/;
     $class->_request('get', "albums/$albumId", { _accountId => $accountId }, $cb);
 }
 
@@ -322,6 +328,8 @@ sub getAlbum {
 # Offset-paginated; max limit 50.
 sub getAlbumTracks {
     my ($class, $accountId, $albumId, $params, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $albumId && $albumId =~ /^[A-Za-z0-9]{1,40}$/;
     $class->_request('get', "albums/$albumId/tracks", {
         _accountId => $accountId,
         offset     => $params->{offset} // 0,
@@ -370,6 +378,8 @@ sub getEpisode {
 # Offset-paginated; max limit 100.
 sub getPlaylistItems {
     my ($class, $accountId, $playlistId, $params, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $playlistId && $playlistId =~ /^[A-Za-z0-9]{1,40}$/;
     $class->_request('get', "playlists/$playlistId/items", {
         _accountId => $accountId,
         offset     => $params->{offset} // 0,
@@ -383,6 +393,8 @@ sub getPlaylistItems {
 # Track endpoint is available in dev mode (batch GET /tracks removed, but GET /tracks/{id} works).
 sub getTrack {
     my ($class, $accountId, $trackId, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $trackId && $trackId =~ /^[A-Za-z0-9]{1,40}$/;
     $class->_request('get', "tracks/$trackId", { _accountId => $accountId }, $cb);
 }
 
@@ -489,7 +501,7 @@ sub _request {
         $cb->(@_);
     };
 
-    # Step 6: Dispatch to flavor-aware request with optional bundled fallback
+    # Step 5: Dispatch to flavor-aware request with optional bundled fallback
     $class->_doFlavouredRequest($method, $cleanPath, $params, $userCb, $startFlavor, 0, $isMeFamily);
 }
 
@@ -508,7 +520,7 @@ sub _resolveStartFlavor {
     return 'bundled' if $hintFlavor;
 
     # D-03: Degraded mode — no own Client-ID configured → fall back to bundled
-    my $hasOwnId = ($prefs->get('clientId') || SPOTON_DEFAULT_CLIENT_ID) ? 1 : 0;
+    my $hasOwnId = $prefs->get('clientId') ? 1 : 0;
     return $hasOwnId ? 'own' : 'bundled';
 }
 
