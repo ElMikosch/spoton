@@ -14,6 +14,7 @@ use Slim::Utils::Timers;
 use Slim::Utils::Cache;
 use Digest::MD5 qw(md5_hex);
 use Time::HiRes;
+use Time::Local qw(timelocal);
 use File::Basename;
 use File::Spec::Functions qw(catdir);
 use Slim::Player::TranscodingHelper;
@@ -296,6 +297,11 @@ sub handleFeed {
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_LIBRARY'),
             url  => \&_libraryFeed,
+            type => 'link',
+        };
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_PODCASTS'),
+            url  => \&_podcastsFeed,
             type => 'link',
         };
     } else {
@@ -969,6 +975,346 @@ sub _userPlaylistsFeed {
         my @user  = grep { !_isMadeForYou($_) } @{ $data->{items} || [] };
         my @items = map  { _playlistItem($client, $_) } @user;
         $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+    });
+}
+
+# ============================================================
+# Podcast Feeds (POD-01, POD-02, POD-03, NAV-01, NAV-02)
+# ============================================================
+
+# _podcastsFeed($client, $callback, $args)
+# Top-level Podcasts menu container.
+# Per NAV-01: top-level entry after Bibliothek.
+# Shows two items: "Meine Podcasts" (link) and "Podcast-Suche" (search input).
+sub _podcastsFeed {
+    my ($client, $callback, $args) = @_;
+
+    my @items = (
+        {
+            name => cstring($client, 'PLUGIN_SPOTON_MY_PODCASTS'),
+            url  => \&_savedShowsFeed,
+            type => 'link',
+        },
+        {
+            name => cstring($client, 'PLUGIN_SPOTON_PODCAST_SEARCH'),
+            url  => \&_podcastSearchFeed,
+            type => 'search',
+        },
+    );
+
+    $callback->({ items => \@items });
+}
+
+# _savedShowsFeed($client, $callback, $args)
+# Paginated list of user's saved podcast shows.
+# Per POD-01: uses getSavedShows with OPMLBased offset/limit pagination.
+# Per D-03 (Pitfall 1): API response wraps show under {show} key.
+sub _savedShowsFeed {
+    my ($client, $callback, $args) = @_;
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;    # Spotify /me/shows max = 50
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->getSavedShows($accountId, {
+        offset => $offset,
+        limit  => $limit,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+        # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
+        my @items = map { _showItem($client, $_->{show}) } @{ $data->{items} || [] };
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+    });
+}
+
+# _showItem($client, $show)
+# Builds an OPML link item for a podcast show.
+# Per D-01: line2 = publisher. Per D-02: type='link'. Per D-04: largest image.
+# Passthrough carries showImages for episode artwork fallback (D-08).
+sub _showItem {
+    my ($client, $show) = @_;
+    return {
+        name          => $show->{name} // '',
+        url           => \&_showFeed,
+        passthrough   => [{ showId => $show->{id}, showImages => $show->{images} }],
+        image         => _largestImage($show->{images}),
+        line2         => $show->{publisher} // '',
+        favorites_url => $show->{uri},
+        type          => 'link',
+    };
+}
+
+# _showFeed($client, $callback, $args, $passthrough)
+# Paginated episode list for a podcast show.
+# Per POD-02: always uses getShowEpisodes (no embedded-episodes shortcut).
+# Per Pitfall 2: response is { items, total } directly, not nested.
+# Per D-09: API default order is newest first.
+sub _showFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $showId     = $passthrough->{showId}     // '';
+    my $showImages = $passthrough->{showImages};
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
+        offset => $offset,
+        limit  => $limit,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+        my @items = map { _episodeItem($client, $_, $showImages) } @{ $data->{items} || [] };
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+    });
+}
+
+# _episodeItem($client, $episode, $showImages)
+# Builds an OPML audio item for a podcast episode.
+# Per POD-03: uses spoton://episode:ID URI for playback.
+# Per D-08: episode images first, show images as fallback.
+# Per D-05: line2 = duration + date via _formatEpisodeLine2.
+# No playall (D-09: episodes not queued like music albums).
+sub _episodeItem {
+    my ($client, $episode, $showImages) = @_;
+
+    my $title    = $episode->{name}         // '';
+    my $duration = ($episode->{duration_ms} || 0) / 1000;
+    my $date     = $episode->{release_date} // '';
+
+    # D-08: Episode artwork preferred; show artwork fallback; search result fallback via show.images
+    my $image = _largestImage($episode->{images})
+             || _largestImage($showImages)
+             || _largestImage($episode->{show}{images});
+
+    # D-05/D-06/D-07: line2 = "45 Min · 12. Jun"
+    my $line2 = _formatEpisodeLine2($duration, $date);
+
+    # T-04.1-01: Extract path from Spotify URI to prevent double-prefix.
+    # spotify:episode:ID -> episode:ID; fallback preserves original URI if no match.
+    my ($ep_path) = ($episode->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
+    $ep_path //= ($episode->{uri} // '');
+    my $spoton_url = 'spoton://' . $ep_path;
+
+    # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
+    # D-02: 7-day TTL (604800s)
+    $cache->set('spoton_meta_' . md5_hex($spoton_url), {
+        title    => $title,
+        artist   => $episode->{show}{name} // '',    # Show name as "Artist"
+        album    => '',
+        duration => $duration,
+        cover    => $image,
+        icon     => $image,
+        bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
+        type     => __PACKAGE__->_typeString($client, 'Browse'),
+    }, 604800);
+
+    return {
+        name      => $title,
+        line1     => $title,
+        line2     => $line2,
+        url       => $spoton_url,
+        play      => $spoton_url,
+        on_select => 'play',
+        image     => $image,
+        duration  => $duration,
+        type      => 'audio',
+    };
+}
+
+# _formatEpisodeLine2($duration_sec, $release_date)
+# Builds the line2 string for episode items: "45 Min · 12. Jun"
+# Per D-05: duration + date separated by middle dot U+00B7.
+# Per D-06: German duration units ("Min", "Std").
+# Per D-07: relative date via _formatRelativeDate.
+sub _formatEpisodeLine2 {
+    my ($duration_sec, $release_date) = @_;
+
+    # D-06: Human-readable duration in German units
+    my $dur_str = '';
+    if ($duration_sec > 0) {
+        my $hours = int($duration_sec / 3600);
+        my $mins  = int(($duration_sec % 3600) / 60);
+        if ($hours > 0) {
+            $dur_str = "$hours Std $mins Min";
+        } else {
+            $dur_str = "$mins Min";
+        }
+    }
+
+    # D-07: Relative or absolute date
+    my $date_str = _formatRelativeDate($release_date);
+
+    # Combine with middle dot separator
+    if ($dur_str && $date_str) {
+        return "$dur_str \x{00B7} $date_str";
+    }
+    return $dur_str || $date_str || '';
+}
+
+# _formatRelativeDate($iso_date)
+# Converts an ISO date string (YYYY-MM-DD) to a relative or absolute German date.
+# Per D-07: "Heute", "Gestern", "Vor N Tagen", then "14. Jun", "14. Jun 2025".
+# Per Pitfall 5: timelocal wrapped in eval; regex guard against partial dates.
+sub _formatRelativeDate {
+    my ($iso_date) = @_;
+    return '' unless $iso_date && $iso_date =~ /^(\d{4})-(\d{2})-(\d{2})/;
+
+    my ($year, $month, $day) = ($1, $2, $3);
+
+    # Current date via localtime
+    my @now         = localtime(time);
+    my $today_year  = $now[5] + 1900;
+    my $today_month = $now[4] + 1;
+    my $today_day   = $now[3];
+
+    # Delta in days (Pitfall 5: eval guard for invalid dates)
+    my $ep_time    = eval { timelocal(0, 0, 12, $day, $month - 1, $year) } // 0;
+    my $today_time = eval { timelocal(0, 0, 12, $today_day, $today_month - 1, $today_year) } // 0;
+    my $delta_days = ($ep_time && $today_time)
+        ? int(($today_time - $ep_time) / 86400)
+        : -1;
+
+    if ($delta_days == 0) { return 'Heute' }
+    if ($delta_days == 1) { return 'Gestern' }
+    if ($delta_days >= 2 && $delta_days <= 6) { return "Vor $delta_days Tagen" }
+
+    # Absolute date with German month abbreviations (D-06: no locale dependency)
+    my @months_de = qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez);
+    my $mon_str = $months_de[$month - 1] // '';
+
+    if ($year == $today_year) {
+        return "$day. $mon_str";
+    } else {
+        return "$day. $mon_str $year";
+    }
+}
+
+# Podcast Search (NAV-03, SRC-01, SRC-02, SRC-03, D-10/D-11/D-12)
+
+# _podcastSearchFeed($client, $callback, $args)
+# Entry point for podcast text search. LMS passes query in $args->{search}.
+# Per D-10: full search in Phase 19. Per D-11: separate Show/Episode result sections.
+# Per D-12: limit=10 (Dev Mode). No top-result (simpler than global search).
+sub _podcastSearchFeed {
+    my ($client, $callback, $args) = @_;
+
+    my $query = $args->{search} // '';
+    if ($query eq '') {
+        $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+        return;
+    }
+
+    my $accountId = _getAccountId($client);
+
+    # Single API call for combined show+episode counts
+    Plugins::SpotOn::API::Client->search($accountId, {
+        q      => $query,
+        type   => 'show,episode',
+        limit  => 10,
+        offset => 0,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        my @items;
+
+        my $showsTotal    = $data->{shows}{total}    // 0;
+        my $episodesTotal = $data->{episodes}{total} // 0;
+
+        if ($showsTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_SHOWS'),
+                url         => \&_podcastSearchTypeFeed,
+                passthrough => [{ query => $query, type => 'show' }],
+                type        => 'link',
+                line2       => "$showsTotal Ergebnisse",
+            };
+        }
+        if ($episodesTotal > 0) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_EPISODES'),
+                url         => \&_podcastSearchTypeFeed,
+                passthrough => [{ query => $query, type => 'episode' }],
+                type        => 'link',
+                line2       => "$episodesTotal Ergebnisse",
+            };
+        }
+
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+
+        $callback->({ items => \@items });
+    });
+}
+
+# _podcastSearchTypeFeed($client, $callback, $args, $passthrough)
+# Typed search result list for shows or episodes.
+# Per D-12: limit capped at 10 (Dev Mode). Dispatches to _showItem or _episodeItem.
+# Per Pitfall 4: episode search results use $episode->{show}{images} as artwork fallback.
+sub _podcastSearchTypeFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $query  = $passthrough->{query} // '';
+    my $type   = $passthrough->{type}  // 'show';
+
+    my $offset = $args->{index}    || 0;
+    my $qty    = $args->{quantity} || 10;
+    my $limit  = $qty > 10 ? 10 : $qty;    # D-12: Dev Mode limit
+
+    my $accountId = _getAccountId($client);
+
+    Plugins::SpotOn::API::Client->search($accountId, {
+        q      => $query,
+        type   => $type,
+        limit  => $limit,
+        offset => $offset,
+    }, sub {
+        my $data = shift;
+        unless ($data) {
+            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        my %typeToKey = (show => 'shows', episode => 'episodes');
+        my $key      = $typeToKey{$type} // "${type}s";
+        my $typeData = $data->{$key} || {};
+        my $results  = $typeData->{items} || [];
+        my $total    = $typeData->{total}  // 0;
+
+        my @items;
+        if ($type eq 'show') {
+            @items = map { _showItem($client, $_) } @{$results};
+        } elsif ($type eq 'episode') {
+            # Search result episodes: no $showImages context; _episodeItem falls back to
+            # $episode->{show}{images} internally (D-08/Pitfall 4)
+            @items = map { _episodeItem($client, $_, undef) } @{$results};
+        }
+
+        if (!@items) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        }
+
+        $callback->({ items => \@items, offset => $offset, total => $total });
     });
 }
 
