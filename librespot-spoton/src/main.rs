@@ -522,7 +522,7 @@ async fn run_get_token(
         // Default scopes required by SpotOn plugin
         "user-read-private,user-read-email,user-library-read,user-library-modify,\
          user-read-playback-state,user-modify-playback-state,user-read-currently-playing,\
-         user-read-recently-played,user-top-read,\
+         user-read-recently-played,user-top-read,user-read-playback-position,\
          playlist-read-private,playlist-read-collaborative,\
          playlist-modify-public,playlist-modify-private,\
          user-follow-read,user-follow-modify"
