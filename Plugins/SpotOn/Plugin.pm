@@ -1028,7 +1028,10 @@ sub _savedShowsFeed {
             return;
         }
         # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
-        my @items = map { _showItem($client, $_->{show}) } @{ $data->{items} || [] };
+        # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
+        my @items = map  { _showItem($client, $_->{show}) }
+                    grep { defined $_->{show} }
+                    @{ $data->{items} || [] };
         $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
 }
