@@ -1168,6 +1168,19 @@ PLUGIN_SPOTON_SETUP_GUIDE_STEP3
 	PL	Otwórz aplikację Spotify i połącz się ze swoim odtwarzaczem
 	SV	Öppna Spotify-appen och anslut till din spelare
 
+PLUGIN_SPOTON_SETUP_GUIDE_HINT
+	CS	Poznámka: Po první aktivaci SpotOn může být nutný restart LMS, aby funkce rozpoznávání detekovala váš účet Spotify.
+	DA	Bemærk: Efter første aktivering af SpotOn kan en genstart af LMS være nødvendig, før opdagelsen kan finde din Spotify-konto.
+	DE	Hinweis: Nach der erstmaligen Aktivierung von SpotOn kann ein LMS-Neustart nötig sein, damit die Erkennung dein Spotify-Konto findet.
+	EN	Note: After enabling SpotOn for the first time, an LMS restart may be required for discovery to detect your Spotify account.
+	ES	Nota: Después de habilitar SpotOn por primera vez, puede ser necesario reiniciar LMS para que el descubrimiento detecte tu cuenta de Spotify.
+	FR	Remarque : Après avoir activé SpotOn pour la première fois, un redémarrage de LMS peut être nécessaire pour que la découverte détecte votre compte Spotify.
+	IT	Nota: Dopo aver attivato SpotOn per la prima volta, potrebbe essere necessario riavviare LMS affinché il rilevamento rilevi il tuo account Spotify.
+	NL	Opmerking: Na de eerste activering van SpotOn kan een herstart van LMS nodig zijn zodat de detectie uw Spotify-account kan vinden.
+	NO	Merk: Etter første gangs aktivering av SpotOn kan en omstart av LMS være nødvendig for at oppdagelsen skal finne Spotify-kontoen din.
+	PL	Uwaga: Po pierwszym włączeniu SpotOn może być konieczny restart LMS, aby wykrywanie wykryło Twoje konto Spotify.
+	SV	Observera: Efter första aktiveringen av SpotOn kan en omstart av LMS behövas för att identifieringen ska hitta ditt Spotify-konto.
+
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".
 	DA	Tip: Automatisk afspilning (Don't Stop The Music) konfigureres under Afspillerindstillinger > Don't Stop The Music. Vælg „SpotOn anbefalinger".
