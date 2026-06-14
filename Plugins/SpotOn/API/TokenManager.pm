@@ -8,8 +8,6 @@ use JSON::XS::VersionOneAndTwo;
 
 use File::Spec::Functions qw(catdir catfile);
 
-use POSIX ':sys_wait_h';
-
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -391,63 +389,30 @@ sub _fetchKeymasterToken {
     }
     main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor)");
 
-    # Non-blocking fork + waitpid poll — avoids event-loop block (WR-03 fix)
+    # Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
+    # WR-03: blocking backtick is a known limitation; non-blocking fork+waitpid
+    # interferes with Perl's open('-|') child management. Proper async requires
+    # Proc::Background or AnyEvent — deferred to a future phase.
     Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.1, sub {
-        my $pid = open(my $pipe, '-|');
+        my $output = `$cmd`;
+        my $exit   = $? >> 8;
 
-        if (!defined $pid) {
-            $log->error("TokenManager: fork failed for --get-token: $!");
+        if ($exit != 0 || !$output) {
+            $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
             $cb->(undef);
             return;
         }
 
-        if ($pid == 0) {
-            exec('/bin/sh', '-c', $cmd);
-            POSIX::_exit(1);
+        my $result = eval { from_json($output) };
+        if ($@ || !$result->{accessToken}) {
+            $log->error("TokenManager: JSON parse error on --get-token for $accountId ($flavor): $@");
+            $cb->(undef);
+            return;
         }
 
-        my $pollCount = 0;
-        my $pollCb;
-        $pollCb = sub {
-            my $kid = waitpid($pid, WNOHANG);
-            if ($kid == 0) {
-                if (++$pollCount > 100) {
-                    kill('TERM', $pid);
-                    waitpid($pid, 0);
-                    close($pipe);
-                    $log->error("TokenManager: --get-token timed out for $accountId ($flavor)");
-                    $cb->(undef);
-                    return;
-                }
-                Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 0.05, $pollCb);
-                return;
-            }
-
-            # Save $? before close() clobbers it (child already reaped by waitpid)
-            my $childStatus = $?;
-            local $/;
-            my $output = <$pipe>;
-            close($pipe);
-            my $exit = $childStatus >> 8;
-
-            if ($exit != 0 || !$output) {
-                $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
-                $cb->(undef);
-                return;
-            }
-
-            my $result = eval { from_json($output) };
-            if ($@ || !$result->{accessToken}) {
-                $log->error("TokenManager: JSON parse error on --get-token for $accountId ($flavor): $@");
-                $cb->(undef);
-                return;
-            }
-
-            # T-04.3-06: Log only accountId, flavor, and TTL — never the token value
-            $class->_cacheToken($accountId, $flavor, $result->{accessToken}, $result->{expiresIn});
-            $cb->($result->{accessToken});
-        };
-        $pollCb->();
+        # T-04.3-06: Log only accountId, flavor, and TTL — never the token value
+        $class->_cacheToken($accountId, $flavor, $result->{accessToken}, $result->{expiresIn});
+        $cb->($result->{accessToken});
     });
 }
 
