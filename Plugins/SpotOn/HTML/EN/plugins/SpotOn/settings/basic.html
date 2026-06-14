@@ -10,7 +10,7 @@
 		<p><strong>[% 'PLUGIN_SPOTON_ZEROCONF_STEP1' | string %]</strong></p>
 		<p>[% 'PLUGIN_SPOTON_ZEROCONF_INSTRUCTIONS' | string %]</p>
 		[% IF discoveryRunning %]
-			<div id="discovery-status" style="color:#888">
+			<div id="discovery-status" style="opacity:0.6">
 				[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
 			</div>
 			<script type="text/javascript">
@@ -47,7 +47,7 @@
 	[% END %]
 
 	[% IF NOT accounts.keys.size %]
-	<div style="background:#f8f8f8; border:1px solid #ddd; padding:16px; margin-bottom:20px; border-radius:4px">
+	<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-bottom:20px; border-radius:4px">
 		<h3 style="margin-top:0">[% 'PLUGIN_SPOTON_SETUP_GUIDE_TITLE' | string %]</h3>
 		<ol style="margin:0; padding-left:20px">
 			<li style="margin-bottom:8px">[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP1' | string %]
@@ -57,6 +57,7 @@
 			<li style="margin-bottom:8px">[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP2' | string %]</li>
 			<li>[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP3' | string %]</li>
 		</ol>
+		<p style="opacity:0.6; margin:12px 0 0 0; font-size:0.9em">[% 'PLUGIN_SPOTON_SETUP_GUIDE_HINT' | string %]</p>
 	</div>
 	[% END %]
 
@@ -112,10 +113,10 @@
 	[% END %]
 
 	[% ELSE %]
-	<p style="color:#888; margin:8px 0 16px 10px">[% 'PLUGIN_SPOTON_SETTINGS_PLAYER_HINT' | string %]</p>
+	<p style="opacity:0.6; margin:8px 0 16px 10px">[% 'PLUGIN_SPOTON_SETTINGS_PLAYER_HINT' | string %]</p>
 	[% END %]
 
-	<hr style="margin:16px 0; border:0; border-top:1px solid #ccc"/>
+	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
 	<h2>[% 'PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION' | string %]</h2>
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_BINARY_STATUS" desc="" %]
@@ -190,7 +191,7 @@
 			</table>
 
 			[% IF discoveryRunning %]
-			<div style="background:#f8f8f8; border:1px solid #ddd; padding:16px; margin-top:12px; border-radius:4px">
+			<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-top:12px; border-radius:4px">
 				[% INCLUDE discovery_widget start_label = 'PLUGIN_SPOTON_ADD_ANOTHER' %]
 			</div>
 			[% ELSE %]
@@ -205,7 +206,7 @@
 		[% END %]
 	[% END %]
 
-	<p style="color:#888; font-size:0.85em; margin-top:24px; text-align:center">
+	<p style="opacity:0.6; font-size:0.85em; margin-top:24px; text-align:center">
 		[% 'PLUGIN_SPOTON_CREDITS' | string %]
 	</p>
 
