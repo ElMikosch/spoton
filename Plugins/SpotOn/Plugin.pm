@@ -1037,8 +1037,9 @@ sub _savedShowsFeed {
 }
 
 # _showItem($client, $show)
-# Builds an OPML link item for a podcast show.
-# Per D-01: line2 = publisher. Per D-02: type='link'. Per D-04: largest image.
+# Builds an OPML item for a podcast show.
+# Per D-01: line2 = publisher. Per D-04: largest image.
+# type='playlist' (not 'link') so LMS Default skin renders line2.
 # Passthrough carries showImages for episode artwork fallback (D-08).
 sub _showItem {
     my ($client, $show) = @_;
@@ -1049,7 +1050,7 @@ sub _showItem {
         image         => _largestImage($show->{images}),
         line2         => $show->{publisher} // '',
         favorites_url => $show->{uri},
-        type          => 'link',
+        type          => 'playlist',
     };
 }
 
