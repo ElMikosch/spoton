@@ -1382,7 +1382,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'track' }],
                 type        => 'link',
-                line2       => "$tracksTotal results",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $tracksTotal),
             };
         }
         if ($albumsTotal > 0) {
@@ -1391,7 +1391,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'album' }],
                 type        => 'link',
-                line2       => "$albumsTotal results",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $albumsTotal),
             };
         }
         if ($artistsTotal > 0) {
@@ -1400,7 +1400,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'artist' }],
                 type        => 'link',
-                line2       => "$artistsTotal results",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $artistsTotal),
             };
         }
         if ($playlistsTotal > 0) {
@@ -1409,7 +1409,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'playlist' }],
                 type        => 'link',
-                line2       => "$playlistsTotal results",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $playlistsTotal),
             };
         }
 
