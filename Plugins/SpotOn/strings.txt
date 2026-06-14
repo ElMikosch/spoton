@@ -1311,3 +1311,16 @@ PLUGIN_SPOTON_GATEKEEPER_HINT
 	PL	Plik binarny SpotOn jest blokowany przez macOS. Uruchom w Terminalu: xattr -d com.apple.quarantine /ścieżka/do/spoton
 	SV	SpotOn-binärfilen blockeras av macOS. Kör i Terminal: xattr -d com.apple.quarantine /sökväg/till/spoton
 
+PLUGIN_SPOTON_N_RESULTS
+	CS	%s výsledků
+	DA	%s resultater
+	DE	%s Ergebnisse
+	EN	%s results
+	ES	%s resultados
+	FR	%s résultats
+	IT	%s risultati
+	NL	%s resultaten
+	NO	%s resultater
+	PL	%s wyników
+	SV	%s resultat
+

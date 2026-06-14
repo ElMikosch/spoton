@@ -1249,7 +1249,7 @@ sub _podcastSearchFeed {
                 url         => \&_podcastSearchTypeFeed,
                 passthrough => [{ query => $query, type => 'show' }],
                 type        => 'link',
-                line2       => "$showsTotal Ergebnisse",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $showsTotal),
             };
         }
         if ($episodesTotal > 0) {
@@ -1258,7 +1258,7 @@ sub _podcastSearchFeed {
                 url         => \&_podcastSearchTypeFeed,
                 passthrough => [{ query => $query, type => 'episode' }],
                 type        => 'link',
-                line2       => "$episodesTotal Ergebnisse",
+                line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $episodesTotal),
             };
         }
 
