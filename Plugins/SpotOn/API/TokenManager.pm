@@ -423,10 +423,12 @@ sub _fetchKeymasterToken {
                 return;
             }
 
+            # Save $? before close() clobbers it (child already reaped by waitpid)
+            my $childStatus = $?;
             local $/;
             my $output = <$pipe>;
             close($pipe);
-            my $exit = $? >> 8;
+            my $exit = $childStatus >> 8;
 
             if ($exit != 0 || !$output) {
                 $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
