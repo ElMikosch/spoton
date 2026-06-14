@@ -1145,6 +1145,8 @@ sub _episodeItem {
 # Per D-05: duration + date separated by middle dot U+00B7.
 # Per D-06: German duration units ("Min", "Std").
 # Per D-07: relative date via _formatRelativeDate.
+# NOTE: Duration/date strings are intentionally German-only until Phase 21
+# (UX Polish + i18n) refactors these helpers to accept $client and use cstring().
 sub _formatEpisodeLine2 {
     my ($duration_sec, $release_date) = @_;
 
