@@ -30,7 +30,7 @@ use constant SPOTON_DEFAULT_CLIENT_ID => do {
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 3);
+my $cache = Slim::Utils::Cache->new('spoton', 4);
 
 # Package-level discovery process reference
 my $discoveryProc;

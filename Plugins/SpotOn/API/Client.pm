@@ -32,7 +32,7 @@ use constant SPOTON_DEFAULT_CLIENT_ID => 'd420a117a32841c2b3474932e49fb54b';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 3);
+my $cache = Slim::Utils::Cache->new('spoton', 4);
 
 # Module-level concurrency counter.
 # Must be reset to 0 in Plugin.pm::initPlugin via Client->reset()
@@ -201,6 +201,18 @@ sub getFollowedArtists {
     $class->_request('get', 'me/following', \%reqParams, $cb);
 }
 
+# getSavedShows($class, $accountId, $params, $cb)
+# Fetches user's saved shows (/me/shows). Offset-paginated; max limit 50.
+# Scope: user-library-read. Token-routing: me/* hard guard -> own.
+sub getSavedShows {
+    my ($class, $accountId, $params, $cb) = @_;
+    $class->_request('get', 'me/shows', {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
 # saveTracks($class, $accountId, $uris, $cb)
 # Saves tracks to the user's library (PUT /me/library?uris=...).
 # D-12: Uses unified library endpoint with full Spotify URIs (e.g. spotify:track:ID).
@@ -315,6 +327,41 @@ sub getAlbumTracks {
         offset     => $params->{offset} // 0,
         limit      => $params->{limit}  // 50,
     }, $cb);
+}
+
+# getShow($class, $accountId, $showId, $cb)
+# Fetches show metadata (/shows/{id}). Scope: user-read-playback-position.
+# Token-routing: own-first, bundled-fallback.
+sub getShow {
+    my ($class, $accountId, $showId, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $showId && $showId =~ /^[A-Za-z0-9]{1,40}$/;
+    $class->_request('get', "shows/$showId", { _accountId => $accountId }, $cb);
+}
+
+# getShowEpisodes($class, $accountId, $showId, $params, $cb)
+# Fetches paginated episode list for a show (/shows/{id}/episodes).
+# Offset-paginated; max limit 50. Cache TTL: 60s (D-01).
+# Token-routing: own-first, bundled-fallback.
+sub getShowEpisodes {
+    my ($class, $accountId, $showId, $params, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $showId && $showId =~ /^[A-Za-z0-9]{1,40}$/;
+    $class->_request('get', "shows/$showId/episodes", {
+        _accountId => $accountId,
+        offset     => $params->{offset} // 0,
+        limit      => $params->{limit}  // 50,
+    }, $cb);
+}
+
+# getEpisode($class, $accountId, $episodeId, $cb)
+# Fetches a single episode by ID (/episodes/{id}). Scope: user-read-playback-position.
+# Token-routing: own-first, bundled-fallback.
+sub getEpisode {
+    my ($class, $accountId, $episodeId, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $episodeId && $episodeId =~ /^[A-Za-z0-9]{1,40}$/;
+    $class->_request('get', "episodes/$episodeId", { _accountId => $accountId }, $cb);
 }
 
 # getPlaylistItems($class, $accountId, $playlistId, $params, $cb)
@@ -690,11 +737,17 @@ sub _cacheTTL {
     # User profile: always fresh
     return 0 if $path eq 'me';
 
-    # Library items: 60 seconds (tracks, albums, top, following, playlists)
-    return 60 if $path =~ /^me\/(?:tracks|albums|top|following|playlists)/;
+    # Episode lists: 60s (D-01 locked) -- must precede general shows/ rule
+    return 60 if $path =~ /^shows\/[^\/]+\/episodes/;
 
-    # Track/album/artist metadata: 3600 seconds (1 hour)
-    return 3600 if $path =~ /^(?:tracks|albums|artists)\//;
+    # Library items: 60 seconds (tracks, albums, top, following, playlists, shows)
+    return 60 if $path =~ /^me\/(?:tracks|albums|top|following|playlists|shows)/;
+
+    # Single episode: 300s (on-demand, fresher resume_point)
+    return 300 if $path =~ /^episodes\/[^\/]+/;
+
+    # Track/album/artist/show metadata: 3600 seconds (1 hour)
+    return 3600 if $path =~ /^(?:tracks|albums|artists|shows)\//;
 
     # Search results: 300 seconds (5 minutes, same as browse tier)
     return 300 if $path =~ /^search/;

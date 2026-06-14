@@ -19,7 +19,7 @@ use File::Spec::Functions qw(catdir);
 use Slim::Player::TranscodingHelper;
 
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
-use constant SPOTON_CACHE_VERSION  => 3;       # Bump to flush all SpotOn cache entries (D-01/D-02)
+use constant SPOTON_CACHE_VERSION  => 4;       # Bump to flush all SpotOn cache entries (D-01/D-02)
 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
