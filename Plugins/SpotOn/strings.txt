@@ -284,6 +284,71 @@ PLUGIN_SPOTON_LIBRARY
 	PL	Biblioteka
 	SV	Bibliotek
 
+PLUGIN_SPOTON_PODCASTS
+	CS	Podcasty
+	DA	Podcasts
+	DE	Podcasts
+	EN	Podcasts
+	ES	Podcasts
+	FR	Podcasts
+	IT	Podcast
+	NL	Podcasts
+	NO	Podkaster
+	PL	Podcasty
+	SV	Poddar
+
+PLUGIN_SPOTON_MY_PODCASTS
+	CS	Moje podcasty
+	DA	Mine podcasts
+	DE	Meine Podcasts
+	EN	My Podcasts
+	ES	Mis podcasts
+	FR	Mes podcasts
+	IT	I miei podcast
+	NL	Mijn podcasts
+	NO	Mine podkaster
+	PL	Moje podcasty
+	SV	Mina poddar
+
+PLUGIN_SPOTON_PODCAST_SEARCH
+	CS	Hledat podcasty
+	DA	Podcast-søgning
+	DE	Podcast-Suche
+	EN	Podcast Search
+	ES	Buscar podcasts
+	FR	Rechercher des podcasts
+	IT	Cerca podcast
+	NL	Podcasts zoeken
+	NO	Podcast-søk
+	PL	Szukaj podcastów
+	SV	Sök poddar
+
+PLUGIN_SPOTON_SHOWS
+	CS	Pořady
+	DA	Shows
+	DE	Shows
+	EN	Shows
+	ES	Programas
+	FR	Émissions
+	IT	Programmi
+	NL	Shows
+	NO	Programmer
+	PL	Programy
+	SV	Program
+
+PLUGIN_SPOTON_EPISODES
+	CS	Epizody
+	DA	Episoder
+	DE	Episoden
+	EN	Episodes
+	ES	Episodios
+	FR	Épisodes
+	IT	Episodi
+	NL	Afleveringen
+	NO	Episoder
+	PL	Odcinki
+	SV	Avsnitt
+
 PLUGIN_SPOTON_RECENTLY_PLAYED
 	CS	Nedávno přehráváno
 	DA	Senest afspillet
