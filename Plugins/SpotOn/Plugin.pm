@@ -1043,13 +1043,14 @@ sub _savedShowsFeed {
 # Passthrough carries showImages for episode artwork fallback (D-08).
 sub _showItem {
     my ($client, $show) = @_;
-    my $name = $show->{name} // '';
+    my $name      = $show->{name}      // '';
+    my $publisher = $show->{publisher} // '';
     return {
-        name          => $name,
+        name          => $name . ($publisher ? " \x{b7} $publisher" : ''),
         line1         => $name,
-        line2         => $show->{publisher} // '',
+        line2         => $publisher,
         url           => \&_showFeed,
-        passthrough   => [{ showId => $show->{id}, showImages => $show->{images} }],
+        passthrough   => [{ showId => $show->{id}, showImages => $show->{images}, showName => $name }],
         image         => _largestImage($show->{images}),
         favorites_url => $show->{uri},
         type          => 'playlist',
