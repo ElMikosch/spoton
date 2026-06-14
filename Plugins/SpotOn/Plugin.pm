@@ -1181,6 +1181,8 @@ sub _formatRelativeDate {
     return '' unless $iso_date && $iso_date =~ /^(\d{4})-(\d{2})-(\d{2})/;
 
     my ($year, $month, $day) = ($1, $2, $3);
+    $day   += 0;  # Strip leading zero for display ("03" -> 3)
+    $month += 0;
 
     # Current date via localtime
     my @now         = localtime(time);
