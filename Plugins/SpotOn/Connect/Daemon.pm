@@ -190,6 +190,7 @@ sub start {
 	$self->_stderrFh($stderr_fh) if $stderr_fh;
 
 	# Synchronous port read with 5s timeout (avoids SIGALRM in LMS event loop)
+	my $portWaitStart = Time::HiRes::time();
 	my $port_line;
 	my $sel = IO::Select->new($port_r);
 	if ($sel->can_read(5)) {
@@ -206,6 +207,7 @@ sub start {
 	}
 
 	$self->_streamPort($1 + 0);
+	$log->warn(sprintf("[DIAG] daemon_port_announce: mac=%s port=%d wait_ms=%.0f", $self->mac, $self->_streamPort, (Time::HiRes::time() - $portWaitStart) * 1000)) if $prefs->get('diagnosticMode');
 	$self->_streamMode(1);
 	main::INFOLOG && $log->is_info && $log->info(
 		"SpotOn Connect daemon started, stream port=" . $self->_streamPort
@@ -213,6 +215,7 @@ sub start {
 	main::INFOLOG && $log->is_info && $stderrFile && $log->info(
 		"SpotOn Connect daemon stderr logged to $stderrFile"
 	);
+	$log->warn("[DIAG] daemon_start: mac=" . $self->mac . " pid=" . ($self->pid || 'unknown') . " stream_port=" . $self->_streamPort . " name=" . $self->name . " binary=$helperPath discovery_disabled=" . ($disableDiscovery ? 1 : 0)) if $prefs->get('diagnosticMode');
 }
 
 sub _checkStartTimes {
@@ -239,6 +242,7 @@ sub _checkStartTimes {
 					MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY / 60,
 					DISCOVERY_COOLDOWN_SECONDS / 60
 				));
+				$log->warn(sprintf("[DIAG] crash_loop_disable: mac=%s crash_count=%d interval=%ds cooldown=%ds", $self->mac, MAX_FAILURES_BEFORE_DISABLE_DISCOVERY, time() - $self->_startTimes->[0], DISCOVERY_COOLDOWN_SECONDS)) if $prefs->get('diagnosticMode');
 
 				if ($client) {
 					# Per-player crash-loop flag (D-05: separate from user disableDiscovery checkbox)
@@ -280,6 +284,7 @@ sub _resetDiscoveryCooldown {
 	);
 
 	$prefs->client($client)->set('discoveryDisabledByCrashLoop', 0);
+	$log->warn("[DIAG] crash_loop_reset: mac=$mac discovery_re_enabled=1") if $prefs->get('diagnosticMode');
 
 	require Plugins::SpotOn::Connect::DaemonManager;
 	Plugins::SpotOn::Connect::DaemonManager->stopHelper($client);
@@ -315,6 +320,7 @@ sub stop {
 
 	if ($self->alive) {
 		main::INFOLOG && $log->is_info && $log->info("Quitting SpotOn Connect daemon for " . $self->mac);
+		$log->warn("[DIAG] daemon_stop: mac=" . $self->mac . " pid=" . ($self->pid || 'unknown') . " uptime=" . sprintf('%.1f', $self->uptime) . "s") if $prefs->get('diagnosticMode');
 		$self->_proc->die;
 		# No rmtree — SpotOn keeps credentials across restarts (unlike Spotty-NG)
 		$self->_streamPort(undef);
