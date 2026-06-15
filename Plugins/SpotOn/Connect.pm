@@ -265,6 +265,7 @@ sub _onNewSong {
                 if ($song) {
                     my $elapsed = $client->songElapsedSeconds() || 0;
                     $song->startOffset(int($progress) - $elapsed);
+                    $log->warn(sprintf("[DIAG] startOffset_adjust: mac=%s old=0 new=%d progress=%s elapsed=%.1f", $client->id, $song->startOffset(), $progress, $elapsed)) if $prefs->get('diagnosticMode');
                     main::INFOLOG && $log->is_info && $log->info(
                         "Stream mode mid-song connect: startOffset=" . $song->startOffset()
                     );
@@ -312,6 +313,7 @@ sub _onPause {
     # _connectEvent-initiated pause to prevent spirc.pause()/play() echo.
     my $lastConnectPause = $client->pluginData('connectPauseTs') || 0;
     if (Time::HiRes::time() - $lastConnectPause < 1) {
+        $log->warn("[DIAG] echo_suppressed: mac=" . $client->id . " event=onPause reason=connectPauseTs_within_1s age=" . sprintf('%.3f', Time::HiRes::time() - $lastConnectPause) . "s") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
             "Suppressing _onPause echo from _connectEvent (within 1s)"
         );
@@ -323,6 +325,7 @@ sub _onPause {
     # which generates a stop event that would leak back to the binary as /control/pause.
     my $startTime = $client->pluginData('connectStartTime') || 0;
     if (Time::HiRes::time() - $startTime < 3) {
+        $log->warn("[DIAG] echo_suppressed: mac=" . $client->id . " event=onPause reason=connect_start_grace age=" . sprintf('%.3f', Time::HiRes::time() - $startTime) . "s") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
             "Suppressing pause/stop during Connect start grace period"
         );
@@ -393,6 +396,7 @@ sub _bufferedSetVolume {
     main::INFOLOG && $log->is_info && $log->info(
         "Forwarding volume to Connect binary: $volume (D-14)"
     );
+    $log->warn("[DIAG] volume_to_binary: mac=" . $client->id . " volume=$volume debounced=" . VOLUME_DEBOUNCE . "s") if $prefs->get('diagnosticMode');
 
     _sendControlCommand($client, '/control/volume', { volume => int($volume) });
 }
@@ -425,6 +429,7 @@ sub _bufferedSeek {
     main::INFOLOG && $log->is_info && $log->info(
         "Forwarding seek to Connect binary: ${positionMs}ms (D-14)"
     );
+    $log->warn("[DIAG] seek_to_binary: mac=" . $client->id . " position_ms=$positionMs debounced=" . SEEK_DEBOUNCE . "s") if $prefs->get('diagnosticMode');
 
     _sendControlCommand($client, '/control/seek', { position_ms => $positionMs });
 }
@@ -533,6 +538,7 @@ sub _connectEvent {
         }
 
         main::INFOLOG && $log->is_info && $log->info("Binary reported volume change: $volume");
+        $log->warn("[DIAG] volume_from_binary: mac=" . $client->id . " volume=$volume uptime=" . sprintf('%.1f', Plugins::SpotOn::Connect::DaemonManager->uptime($client->id)) . "s") if $prefs->get('diagnosticMode');
 
         # Source-mark to prevent _onVolume from echoing back to binary (T-05-13)
         my $volReq = Slim::Control::Request->new($client->id, ['mixer', 'volume', $volume]);
@@ -548,6 +554,7 @@ sub _connectEvent {
         my $position = $request->getParam('_p2');
         if (defined $position && $position ne '') {
             main::INFOLOG && $log->is_info && $log->info("Binary reported seek to: $position");
+            $log->warn("[DIAG] seek_from_binary: mac=" . $client->id . " position=$position") if $prefs->get('diagnosticMode');
 
             if ($client->pluginData('pendingConnect')) {
                 # Seek arrived before playlist play — store for _onNewSong to apply
@@ -899,6 +906,7 @@ sub _fetchTrackMetadata {
     my $accountId = $prefs->client($client)->get('activeAccount')
                  || $prefs->get('activeAccount')
                  || '';
+    $log->warn("[DIAG] metadata_fetch: mac=" . $client->id . " track=$trackId account=$accountId") if $prefs->get('diagnosticMode');
 
     Plugins::SpotOn::API::Client->getTrack($accountId, $trackId, sub {
         my ($trackInfo) = @_;
@@ -912,6 +920,7 @@ sub _fetchTrackMetadata {
             main::INFOLOG && $log->is_info && $log->info(
                 "Stale API response: event=$eventUri, API=" . $trackInfo->{uri} . " — using event (T-05-14)"
             );
+            $log->warn("[DIAG] metadata_stale: mac=" . $client->id . " event_uri=$eventUri api_uri=" . ($trackInfo->{uri} || 'none')) if $prefs->get('diagnosticMode');
             $client->pluginData(newTrack => 0);
             return;
         }
@@ -989,6 +998,7 @@ sub _fetchTrackMetadata {
         main::INFOLOG && $log->is_info && $log->info(
             "Track metadata updated: $title — $artist"
         );
+        $log->warn("[DIAG] metadata_success: mac=" . $client->id . " track=$trackId title=$title duration=$duration") if $prefs->get('diagnosticMode');
     });
 }
 
