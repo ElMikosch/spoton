@@ -632,7 +632,23 @@ sub _trackItem {
 
     # D-07: Build context navigation items for artist and album drill-down.
     # Only add links when IDs are available (simplified track objects may lack album).
+    # UX-05: label-bearing text items MUST come first so XMLBrowser populates $details
+    # and enables Play/Queue/Favorites buttons in the Default skin info view.
     my @contextItems;
+    if ($artist) {
+        push @contextItems, {
+            name  => $artist,
+            type  => 'text',
+            label => 'ARTIST',
+        };
+    }
+    if ($album) {
+        push @contextItems, {
+            name  => $album,
+            type  => 'text',
+            label => 'ALBUM',
+        };
+    }
     if ($track->{artists} && @{ $track->{artists} } && $track->{artists}[0]{id}) {
         push @contextItems, {
             name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
@@ -682,16 +698,18 @@ sub _trackItem {
     }, 604800);
 
     my %item = (
-        name      => "$title \x{2014} $artist",    # em-dash fallback for older clients
-        line1     => $title,
-        line2     => $artist . ($album ? " \x{2022} $album" : ''),
-        url       => $spoton_url,
-        play      => $spoton_url,
-        on_select => 'play',
-        playall   => 1,    # Context queueing (D-09/D-10) — XMLBrowser enqueues all feed items
-        image     => $image,
-        duration  => $duration,
-        type      => 'audio',
+        name          => "$title \x{2014} $artist",    # em-dash fallback for older clients
+        line1         => $title,
+        line2         => $artist . ($album ? " \x{2022} $album" : ''),
+        url           => $spoton_url,
+        play          => $spoton_url,
+        on_select     => 'play',
+        playall       => 1,    # Context queueing (D-09/D-10) — XMLBrowser enqueues all feed items
+        image         => $image,
+        duration      => $duration,
+        type          => 'audio',
+        # UX-05: Spotify URI for Favorites star (consistent with _albumItem pattern)
+        favorites_url => $track->{uri},
     );
     $item{items} = \@contextItems if @contextItems;
 
@@ -1230,7 +1248,21 @@ sub _episodeItem {
     my $spoton_url = 'spoton://' . $ep_path;
 
     # Sub-items for XMLBrowser info view (like tracks have Artist/Album/Like)
+    # UX-05: label-bearing text items MUST come first so XMLBrowser populates $details
+    # and enables Play/Queue/Favorites buttons in the Default skin info view.
     my @contextItems;
+    push @contextItems, {
+        name  => $showName || cstring($client, 'PLUGIN_SPOTON_PODCASTS'),
+        type  => 'text',
+        label => 'ARTIST',
+    };
+    if ($showName) {
+        push @contextItems, {
+            name  => $showName,
+            type  => 'text',
+            label => 'ALBUM',
+        };
+    }
     if ($showId) {
         push @contextItems, {
             name        => $showName || 'Show',
@@ -1266,15 +1298,17 @@ sub _episodeItem {
     }, 604800);
 
     my %item = (
-        name      => $title,
-        line1     => $title,
-        line2     => $line2,
-        url       => $spoton_url,
-        play      => $spoton_url,
-        on_select => 'play',
-        image     => $image,
-        duration  => $duration,
-        type      => 'audio',
+        name          => $title,
+        line1         => $title,
+        line2         => $line2,
+        url           => $spoton_url,
+        play          => $spoton_url,
+        on_select     => 'play',
+        image         => $image,
+        duration      => $duration,
+        type          => 'audio',
+        # UX-05: Spotify URI for Favorites star (consistent with _trackItem pattern)
+        favorites_url => $episode->{uri},
     );
     $item{items} = \@contextItems;
 
