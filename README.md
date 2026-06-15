@@ -12,6 +12,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 | | SpotOn | Spotty |
 |--|--------|--------|
+| **Podcasts** | Browse, search, play, follow/unfollow shows, explicit markers, 11 languages | Not available |
 | **Like / Unlike** | One-click toggle from any track menu | Not available |
 | **Audio formats** | OGG, FLAC, PCM, MP3 — configurable per player | PCM, FLAC, MP3 — global setting |
 | **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Currently disabled |
@@ -20,6 +21,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 ## Features
 
 - **Browse** — Search tracks, albums, artists, and playlists; full artist discography with albums, singles, compilations
+- **Podcasts** — Browse saved shows, search for shows and episodes, play episodes, follow/unfollow shows. Episode info view links back to the parent show with lazy-loaded metadata. Explicit episodes are marked. Duration and dates are localized in 11 languages.
 - **Library** — Liked Songs, Albums, Artists, Playlists, Recently Played, Top Tracks
 - **Like / Unlike** — Save or remove tracks from your Liked Songs directly from any track context menu. In Material Skin, open the track's "..." menu → "More" → "Like / Unlike" — the plugin checks Spotify for the current state and shows either "Like" (to save) or "Unlike" (to remove). In Classic Skin, the same flow is available via the Track Info panel. After the action, a popup confirms "Liked!" or "Removed" and the menu navigates back automatically.
 - **Streaming** — Per-player format selection (OGG passthrough, FLAC, PCM, MP3) with 96/160/320 kbps bitrate and volume normalization
