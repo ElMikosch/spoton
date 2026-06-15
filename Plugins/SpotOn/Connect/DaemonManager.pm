@@ -236,11 +236,9 @@ sub _cleanupOrphanedLogs {
         my $mac = join(':', $macClean =~ /../g);
 
         my $client = Slim::Player::Client::getClient($mac);
-        if (!$client) {
+        if (!$client || !$client->connected) {
             unlink $f;
-            main::INFOLOG && $log->is_info && $log->info(
-                "Cleaned up orphaned Connect log: " . basename($f)
-            );
+            $log->warn("Cleaned up orphaned Connect log: " . basename($f));
         }
     }
 }
