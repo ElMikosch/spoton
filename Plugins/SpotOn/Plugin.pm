@@ -1182,10 +1182,9 @@ sub _showFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        # POD-04/POD-05: Prepend Follow/Unfollow action as first item (T-20-01: URI validated)
-        my @actionItems;
-        if ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
-            push @actionItems, {
+        # POD-04/POD-05: Follow/Unfollow action on first page only (offset guard per _albumFeed pattern)
+        if ($offset == 0 && $accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
+            unshift @items, {
                 name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
                 url         => \&SpotOnManageFollow,
                 passthrough => [{ showUri => $showUri, accountId => $accountId }],
@@ -1193,7 +1192,7 @@ sub _showFeed {
             };
         }
 
-        $callback->({ items => [@actionItems, @items], offset => $offset, total => $data->{total} // 0 });
+        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
     });
 }
 
