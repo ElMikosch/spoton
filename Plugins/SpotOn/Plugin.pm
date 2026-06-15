@@ -1235,6 +1235,7 @@ sub _episodeItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
+        showUri  => $episode->{show}{uri} // '',
     }, 604800);
 
     return {
