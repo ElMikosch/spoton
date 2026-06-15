@@ -146,61 +146,6 @@ sub handler {
             }
         }
 
-        # Per-player Connect toggle (D-10, CON-10, T-05-18)
-        # Only save per-player prefs when a player is selected ($client defined).
-        # Checkbox unchecked = absent from params = 0 (T-05-18: coerce to 0/1).
-        if ($client) {
-            my $enableConnect = $paramRef->{'pref_enableSpotifyConnect'} ? 1 : 0;
-            $prefs->client($client)->set('enableSpotifyConnect', $enableConnect);
-
-            # OGG-passthrough override (D-05, T-05-19): 'auto' | 'ogg' | 'pcm'
-            # Kept for backward compatibility — new code uses streamFormat
-            if (defined $paramRef->{'pref_connectOggOverride'}) {
-                my $override = $paramRef->{'pref_connectOggOverride'};
-                $override = 'auto' unless $override =~ /^(?:auto|ogg|pcm)$/;
-                $prefs->client($client)->set('connectOggOverride', $override);
-            }
-
-            # Per-player streaming format (D-11, D-12, T-06-04): 'auto' | 'ogg' | 'pcm' | 'flac' | 'mp3'
-            if (defined $paramRef->{'pref_streamFormat'}) {
-                my $fmt = $paramRef->{'pref_streamFormat'};
-                $fmt = 'auto' unless $fmt =~ /^(?:auto|ogg|pcm|flac|mp3)$/;
-                $prefs->client($client)->set('streamFormat', $fmt);
-            }
-
-            # Per-player bitrate override (D-01, T-06-03): '96' | '160' | '320' | '' (empty = use global)
-            if (defined $paramRef->{'pref_bitrateOverride'}) {
-                my $override = $paramRef->{'pref_bitrateOverride'} // '';
-                $override = '' unless $override =~ /^(?:96|160|320)$/;
-                $prefs->client($client)->set('bitrateOverride', $override);
-            }
-
-            my $disableDiscovery = $paramRef->{'pref_enableDiscovery'} ? 0 : 1;
-            $prefs->client($client)->set('disableDiscovery', $disableDiscovery);
-
-            # Autoplay toggle (D-08, D-09, D-11, D-12, T-10-02)
-            # Checkbox unchecked = absent from params = 0 (established coerce pattern)
-            my $enableAutoplay = $paramRef->{'pref_enableAutoplay'} ? 1 : 0;
-            $prefs->client($client)->set('enableAutoplay', $enableAutoplay);
-
-            # Bidirectional DSTM sync (D-11/D-12): sync LMS DSTM provider pref
-            if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
-                my $dstmPrefs = preferences('plugin.dontstopthemusic');
-                if ($enableAutoplay) {
-                    $dstmPrefs->client($client)->set('provider', 'PLUGIN_SPOTON_RECOMMENDATIONS');
-                } else {
-                    $dstmPrefs->client($client)->set('provider', 0);
-                }
-            }
-
-            # Daemon restart: stop live daemon first (Pitfall 1: startHelper skips alive daemons)
-            require Plugins::SpotOn::Connect::DaemonManager;
-            my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
-            $helper->stopForSync() if $helper && $helper->alive;
-
-            Plugins::SpotOn::Connect::DaemonManager->initHelpers();
-        }
-
         # Save diagnosticMode (global pref, not per-player) (#3)
         my $diagMode = $paramRef->{'pref_diagnosticMode'} ? 1 : 0;
         $prefs->set('diagnosticMode', $diagMode);
@@ -229,35 +174,6 @@ sub handler {
 
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
-
-    # Per-player Connect settings for template (D-10, D-05)
-    # Only populated when a player is selected; template guards with [% IF playerid %].
-    if ($client) {
-        $paramRef->{connectEnabled}     = $prefs->client($client)->get('enableSpotifyConnect') // 1;
-        $paramRef->{connectOggOverride} = $prefs->client($client)->get('connectOggOverride') || 'auto';
-        # Discovery toggle template vars (D-04, D-05)
-        $paramRef->{discoveryEnabled}     = $prefs->client($client)->get('disableDiscovery') ? 0 : 1;
-        $paramRef->{discoveryByCrashLoop} = $prefs->client($client)->get('discoveryDisabledByCrashLoop') || 0;
-        # Per-player format and bitrate override template vars (D-01, D-11)
-        $paramRef->{bitrateOverride} = $prefs->client($client)->get('bitrateOverride') || '';
-        # streamFormat: migration fallback — read old connectOggOverride if new key is empty
-        $paramRef->{streamFormat} = $prefs->client($client)->get('streamFormat')
-                                 || $prefs->client($client)->get('connectOggOverride')
-                                 || 'auto';
-        # Autoplay toggle template vars (D-10, D-13, D-14)
-        $paramRef->{canAutoplay}     = Plugins::SpotOn::Helper->getCapability('autoplay') ? 1 : 0;
-        my $rawAutoplay = $prefs->client($client)->get('enableAutoplay');
-        $paramRef->{autoplayEnabled} = $rawAutoplay // 1;
-        # D-13/D-14: reverse sync — read DSTM provider at page-load to derive autoplayEnabled.
-        # Only when pref was explicitly set (not undef) — otherwise the default 1 applies
-        # for existing players that never saved this pref yet.
-        if ( defined $rawAutoplay && $paramRef->{canAutoplay}
-             && Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
-            my $dstmPrefs    = preferences('plugin.dontstopthemusic');
-            my $dstmProvider = $dstmPrefs->client($client)->get('provider') // '';
-            $paramRef->{autoplayEnabled} = ($dstmProvider eq 'PLUGIN_SPOTON_RECOMMENDATIONS') ? 1 : 0;
-        }
-    }
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }

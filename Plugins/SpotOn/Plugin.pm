@@ -106,6 +106,9 @@ sub initPlugin {
         require Plugins::SpotOn::Settings;
         Plugins::SpotOn::Settings->new();
 
+        require Plugins::SpotOn::Settings::Player;
+        Plugins::SpotOn::Settings::Player->new();
+
         # D-01: Auto-start ZeroConf Discovery if no credentials exist.
         # Deferred via timer to not block initPlugin.
         Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);

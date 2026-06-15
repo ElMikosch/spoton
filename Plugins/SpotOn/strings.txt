@@ -1194,6 +1194,45 @@ PLUGIN_SPOTON_DSTM_HINT
 	PL	Wskazówka: automatyczne odtwarzanie (Don't Stop The Music) konfiguruje się w Ustawienia odtwarzacza > Don't Stop The Music. Wybierz „Rekomendacje SpotOn".
 	SV	Tips: Automatisk uppspelning (Don't Stop The Music) konfigureras under Spelarinställningar > Don't Stop The Music. Välj „SpotOn-rekommendationer".
 
+PLUGIN_SPOTON_PLAYER_SETTINGS_NAME
+	CS	SpotOn
+	DA	SpotOn
+	DE	SpotOn
+	EN	SpotOn
+	ES	SpotOn
+	FR	SpotOn
+	IT	SpotOn
+	NL	SpotOn
+	NO	SpotOn
+	PL	SpotOn
+	SV	SpotOn
+
+PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_TITLE
+	CS	Nastavení přehrávače jsou v sekci Player
+	DA	Afspillerindstillinger findes under Player
+	DE	Per-Player Einstellungen befinden sich in den Player-Einstellungen
+	EN	Per-player settings are in the Player Settings section
+	ES	Los ajustes por reproductor se encuentran en la sección de ajustes del reproductor
+	FR	Les paramètres par lecteur se trouvent dans les réglages du lecteur
+	IT	Le impostazioni per player si trovano nella sezione Impostazioni player
+	NL	Per-speler instellingen staan in de spelerinstellingen
+	NO	Spillerinnstillinger finnes i spillerinnstillingene
+	PL	Ustawienia odtwarzacza znajdują się w sekcji ustawień odtwarzacza
+	SV	Spelarinställningar finns i spelarinställningarna
+
+PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_DESC
+	CS	Spotify Connect, formát streamu, bitrate a autoplay se konfigurují pro každý přehrávač zvlášť.
+	DA	Spotify Connect, streamformat, bitrate og autoplay konfigureres per afspiller.
+	DE	Spotify Connect, Streaming-Format, Bitrate und Autoplay werden pro Player konfiguriert.
+	EN	Spotify Connect, streaming format, bitrate and autoplay are configured per player.
+	ES	Spotify Connect, formato de streaming, bitrate y reproducción automática se configuran por reproductor.
+	FR	Spotify Connect, format de streaming, bitrate et lecture automatique se configurent par lecteur.
+	IT	Spotify Connect, formato streaming, bitrate e autoplay sono configurati per player.
+	NL	Spotify Connect, streamformaat, bitrate en autoplay worden per speler geconfigureerd.
+	NO	Spotify Connect, strømmeformat, bitrate og autoplay konfigureres per spiller.
+	PL	Spotify Connect, format strumieniowania, bitrate i autoodtwarzanie konfiguruje się dla każdego odtwarzacza osobno.
+	SV	Spotify Connect, strömningsformat, bitrate och autoplay konfigureras per spelare.
+
 PLUGIN_SPOTON_SETTINGS_DIAG_SECTION
 	CS	Diagnostika
 	DA	Diagnostik
