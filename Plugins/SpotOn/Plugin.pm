@@ -1279,7 +1279,8 @@ sub _episodeItem {
         duration  => $duration,
         type      => 'audio',
     );
-    $item{items} = \@contextItems if @contextItems;
+    push @contextItems, { name => $line2, type => 'textarea' } unless @contextItems;
+    $item{items} = \@contextItems;
 
     return \%item;
 }
