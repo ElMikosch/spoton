@@ -73,12 +73,14 @@ sub formatOverride {
         require Plugins::SpotOn::Connect::DaemonManager;
         my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
         if ($helper && $helper->_streamMode) {
+            $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc (connect_stream_mode)") if $prefs->get('diagnosticMode');
             return 'soc';  # Connect: always 'soc', independent of streamFormat
         }
     }
 
     # Browse mode: always 'son' — pipeline selection via updateTranscodingTable deletion.
     # OGG passthrough uses son-ogg-*-* (not ogg-*-*-* which doesn't exist).
+    $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url fmt=$fmt result=son") if $prefs->get('diagnosticMode');
     return 'son';
 }
 
@@ -128,6 +130,7 @@ sub canDirectStream {
     }
 
     if ($client->isSynced()) {
+        $log->warn("[DIAG] canDirectStream: mac=" . $client->id . " result=0 reason=synced") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
             "canDirectStream: 0 (player is synced)"
         );
@@ -139,6 +142,7 @@ sub canDirectStream {
     main::INFOLOG && $log->is_info && $log->info(
         "canDirectStream: $ds_url"
     );
+    $log->warn("[DIAG] canDirectStream: mac=" . $client->id . " url=$ds_url single_player=1") if $prefs->get('diagnosticMode');
     return $ds_url;
 }
 
@@ -183,6 +187,7 @@ sub canEnhanceHTTP {
     my ($self, $client, $url) = @_;
 
     if ($url && $url =~ m{:\d+/stream\b}) {
+        $log->warn("[DIAG] canEnhanceHTTP: url=$url result=0 reason=connect_proxy_infinite_stream") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
             "canEnhanceHTTP: Connect proxy — returning 0 for $url"
         );
@@ -231,6 +236,7 @@ sub new {
             if ($helper && $helper->_streamMode && $helper->_streamPort) {
                 my $host    = Slim::Utils::Network::serverAddr();
                 my $httpUrl = 'http://' . $host . ':' . $helper->_streamPort . '/stream';
+                $log->warn("[DIAG] connect_sync_proxy: mac=" . $client->id . " http_url=$httpUrl port=" . $helper->_streamPort) if $prefs->get('diagnosticMode');
                 main::INFOLOG && $log->is_info && $log->info(
                     "Connect sync proxy: substituting HTTP URL $httpUrl for " . $client->id
                 );
