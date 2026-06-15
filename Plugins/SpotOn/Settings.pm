@@ -53,7 +53,7 @@ sub page {
 sub prefs {
     # clientId is saved manually with sanitization in handler() — not listed here
     # to prevent Slim::Web::Settings::handler from overwriting with raw form input.
-    return ($prefs, 'bitrate', 'binary', 'normalization');
+    return ($prefs, 'bitrate', 'binary', 'normalization', 'diagnosticMode');
 }
 
 sub handler {
@@ -200,6 +200,10 @@ sub handler {
 
             Plugins::SpotOn::Connect::DaemonManager->initHelpers();
         }
+
+        # Save diagnosticMode (global pref, not per-player) (#3)
+        my $diagMode = $paramRef->{'pref_diagnosticMode'} ? 1 : 0;
+        $prefs->set('diagnosticMode', $diagMode);
     }
 
     # Auto-setup: if __DISCOVER__/credentials.json exists, create account now.
@@ -222,6 +226,9 @@ sub handler {
     # Client-ID and degraded-mode status for template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
+
+    # Diagnostic mode status for template (#3)
+    $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
 
     # Per-player Connect settings for template (D-10, D-05)
     # Only populated when a player is selected; template guards with [% IF playerid %].

@@ -206,6 +206,32 @@
 		[% END %]
 	[% END %]
 
+	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
+	<h2>[% 'PLUGIN_SPOTON_SETTINGS_DIAG_SECTION' | string %]</h2>
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_DIAG_MODE" desc="PLUGIN_SPOTON_DIAG_MODE_DESC" %]
+		<input type="checkbox" class="stdedit" name="pref_diagnosticMode"
+		       id="pref_diagnosticMode"
+		       value="1" [% IF diagnosticEnabled %]checked[% END %]/>
+		<label for="pref_diagnosticMode">[% 'PLUGIN_SPOTON_DIAG_MODE_LABEL' | string %]</label>
+		<div style="margin-top:6px; font-size:0.9em">
+			[% IF diagnosticEnabled %]
+			<span style="color: green">&#9679; [% 'PLUGIN_SPOTON_DIAG_STATUS_ACTIVE' | string %]</span>
+			[% ELSE %]
+			<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_DIAG_STATUS_INACTIVE' | string %]</span>
+			[% END %]
+		</div>
+	[% END %]
+
+	[% IF diagnosticEnabled %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_DIAG_DOWNLOAD" desc="PLUGIN_SPOTON_DIAG_DOWNLOAD_DESC" %]
+		<a href="/plugins/SpotOn/settings/diagnosticBundle" class="submit"
+		   style="text-decoration:none; display:inline-block">
+			[% 'PLUGIN_SPOTON_DIAG_DOWNLOAD_BUTTON' | string %]
+		</a>
+	[% END %]
+	[% END %]
+
 	<p style="opacity:0.6; font-size:0.85em; margin-top:24px; text-align:center">
 		[% 'PLUGIN_SPOTON_CREDITS' | string %]
 	</p>
