@@ -583,12 +583,9 @@ sub _doShowLibraryAction {
         $client->showBriefly({
             jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
         }) if $client;
-        # Return opposite action directly — showBriefly confirms what happened
         $cb->({ items => [{
-            name        => cstring($client, $newState ? 'PLUGIN_SPOTON_UNFOLLOW_SHOW' : 'PLUGIN_SPOTON_FOLLOW_SHOW'),
-            url         => $newState ? \&SpotOnUnfollowShow : \&SpotOnFollowShow,
-            passthrough => [{ showUri => $showUri, accountId => $accountId, cacheKey => $cacheKey }],
-            nextWindow  => 'grandparent',
+            name => cstring($client, $successKey),
+            type => 'textarea',
         }] });
     });
 }
