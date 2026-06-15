@@ -29,6 +29,12 @@ sub new {
         \&_discoveryStatusHandler
     );
 
+    # Register diagnostic bundle download endpoint (#3)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/diagnosticBundle',
+        \&_diagnosticBundleHandler
+    );
+
     return $self;
 }
 
@@ -37,7 +43,7 @@ sub name {
 }
 
 sub needsClient {
-    return 1;
+    return 0;
 }
 
 sub page {
@@ -47,7 +53,7 @@ sub page {
 sub prefs {
     # clientId is saved manually with sanitization in handler() — not listed here
     # to prevent Slim::Web::Settings::handler from overwriting with raw form input.
-    return ($prefs, 'bitrate', 'binary', 'normalization');
+    return ($prefs, 'bitrate', 'binary', 'normalization', 'diagnosticMode');
 }
 
 sub handler {
@@ -194,6 +200,10 @@ sub handler {
 
             Plugins::SpotOn::Connect::DaemonManager->initHelpers();
         }
+
+        # Save diagnosticMode (global pref, not per-player) (#3)
+        my $diagMode = $paramRef->{'pref_diagnosticMode'} ? 1 : 0;
+        $prefs->set('diagnosticMode', $diagMode);
     }
 
     # Auto-setup: if __DISCOVER__/credentials.json exists, create account now.
@@ -216,6 +226,9 @@ sub handler {
     # Client-ID and degraded-mode status for template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
+
+    # Diagnostic mode status for template (#3)
+    $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
 
     # Per-player Connect settings for template (D-10, D-05)
     # Only populated when a player is selected; template guards with [% IF playerid %].
@@ -333,6 +346,104 @@ sub _discoveryStatusHandler {
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
     # Source: Spotty/Settings/Auth.pm line 88
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# Diagnostic bundle endpoint (#3): /plugins/SpotOn/settings/diagnosticBundle
+# Returns a downloadable text file with system info + daemon logs.
+# Only works when diagnosticMode pref is enabled (403 otherwise).
+# ============================================================
+sub _diagnosticBundleHandler {
+    my ($httpClient, $response) = @_;
+
+    unless ($prefs->get('diagnosticMode')) {
+        my $content = to_json({ error => 'Diagnostic mode not enabled' });
+        $response->header('Content-Length' => length($content));
+        $response->code(403);
+        $response->header('Connection' => 'close');
+        $response->content_type('application/json');
+        Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+        return;
+    }
+
+    my $serverPrefs = preferences('server');
+    my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    # Collect daemon logs (*-connect.log files)
+    my @logFiles = glob(catfile($spotonDir, '*-connect.log'));
+
+    # Build header with system info
+    my $activeId = $prefs->get('activeAccount') || '';
+    my $redactedId = $activeId ? substr($activeId, 0, 4) . '****' : 'none';
+    my $clientId = $prefs->get('clientId') || '';
+    my $redactedClientId = $clientId ? substr($clientId, 0, 4) . '****' : 'none';
+
+    my @playerList;
+    for my $c (Slim::Player::Client::clients()) {
+        push @playerList, sprintf('  %s | %s | %s', $c->name, $c->id, $c->model);
+    }
+
+    require POSIX;
+    my $timestamp = POSIX::strftime('%Y%m%d-%H%M%S', localtime);
+
+    my $header = join("\n",
+        '=== SpotOn Diagnostic Bundle ===',
+        "Generated: $timestamp",
+        '',
+        '--- System Info ---',
+        "LMS version: $::VERSION",
+        "OS: $^O",
+        "Perl: $]",
+        "SpotOn version: " . (Plugins::SpotOn::Plugin->_pluginDataFor('version') || 'unknown'),
+        "Active account: $redactedId",
+        "Bitrate: " . ($prefs->get('bitrate') || 320),
+        "Normalization: " . ($prefs->get('normalization') ? 'on' : 'off'),
+        "Client-ID: $redactedClientId",
+        "diagnosticMode: 1",
+        '',
+        '--- Players ---',
+        (@playerList ? join("\n", @playerList) : '  (none)'),
+        '',
+        '=' x 50,
+        '',
+    );
+
+    # Append each log file (cap at 500KB per file)
+    my $maxBytes = 500 * 1024;
+    my $logs = '';
+    for my $logFile (@logFiles) {
+        my $basename = (split /\//, $logFile)[-1];
+        $logs .= "--- Log: $basename ---\n";
+
+        if (open my $fh, '<', $logFile) {
+            my $size = -s $logFile;
+            if ($size > $maxBytes) {
+                seek($fh, -$maxBytes, 2);
+                <$fh>;  # discard partial line
+                $logs .= "[...truncated to last 500KB...]\n";
+            }
+            local $/;
+            $logs .= <$fh> // '';
+            close $fh;
+        } else {
+            $logs .= "(could not read: $!)\n";
+        }
+        $logs .= "\n";
+    }
+
+    if (!@logFiles) {
+        $logs = "--- No daemon log files found ---\n";
+    }
+
+    my $content = $header . $logs;
+    my $filename = "spoton-diag-$timestamp.txt";
+
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('text/plain; charset=utf-8');
+    $response->header('Content-Disposition' => "attachment; filename=\"$filename\"");
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
 }
 

@@ -489,6 +489,10 @@ sub _connectEvent {
         'Got spottyconnect event for %s: %s', $client->id, $cmd
     ));
 
+    # Diagnostic timing (#3): capture entry timestamp when diagnosticMode is active
+    my $diagMode = $prefs->get('diagnosticMode');
+    my $diagTs = $diagMode ? sprintf('%.3f', Time::HiRes::time()) : '';
+
     # Claim active Connect ownership on 'start' (must be synchronous, before async ops)
     if ($cmd eq 'start') {
         $client->pluginData(pendingConnect => 1);
@@ -600,6 +604,14 @@ sub _connectEvent {
                 main::INFOLOG && $log->is_info && $log->info(
                     "Dropping spurious resume for dead history URL — Browse pipeline handles playback"
                 );
+
+                $log->warn("[DIAG] [$diagTs] resume: player=" . $client->id
+                    . " track=" . ($trackId || 'none')
+                    . " position=" . ($position || 'none')
+                    . " actuallyInConnect=0 deadHistory=1"
+                    . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+                ) if $diagMode;
+
                 return;
             }
 
@@ -637,6 +649,13 @@ sub _connectEvent {
                 _fetchTrackMetadata($client, $trackId);
             }
 
+            $log->warn("[DIAG] [$diagTs] resume: player=" . $client->id
+                . " track=" . ($trackId || 'none')
+                . " position=" . ($position || 'none')
+                . " actuallyInConnect=0 reEntering=1"
+                . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+            ) if $diagMode;
+
             return;
         }
 
@@ -664,6 +683,13 @@ sub _connectEvent {
                 );
             }
         }
+
+        $log->warn("[DIAG] [$diagTs] resume: player=" . $client->id
+            . " track=" . ($trackId || 'none')
+            . " position=" . ($position || 'none')
+            . " actuallyInConnect=1"
+            . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+        ) if $diagMode;
 
         return;
     }
@@ -730,6 +756,11 @@ sub _connectEvent {
             _fetchTrackMetadata($client, $trackId);
         }
 
+        $log->warn("[DIAG] [$diagTs] start: player=" . $client->id
+            . " track=" . ($trackId || 'none')
+            . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+        ) if $diagMode;
+
         return;
     }
 
@@ -772,6 +803,12 @@ sub _connectEvent {
             _fetchTrackMetadata($client, $newTrackId);
         }
 
+        $log->warn("[DIAG] [$diagTs] change: player=" . $client->id
+            . " prev=" . ($prevTrackId || 'none')
+            . " new=" . ($newTrackId || 'none')
+            . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+        ) if $diagMode;
+
         return;
     }
 
@@ -788,6 +825,13 @@ sub _connectEvent {
             main::INFOLOG && $log->is_info && $log->info(
                 "Ignoring spurious stop during Connect session setup grace period"
             );
+
+            $log->warn("[DIAG] [$diagTs] stop: player=" . $client->id
+                . " isPlaying=" . ($client->isPlaying ? 1 : 0)
+                . " gracePeriod=1"
+                . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+            ) if $diagMode;
+
             return;
         }
 
@@ -801,6 +845,12 @@ sub _connectEvent {
             $pauseReq->source(__PACKAGE__);
             $pauseReq->execute();
         }
+
+        $log->warn("[DIAG] [$diagTs] stop: player=" . $client->id
+            . " isPlaying=" . ($client->isPlaying ? 1 : 0)
+            . " gracePeriod=0"
+            . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
+        ) if $diagMode;
 
         return;
     }

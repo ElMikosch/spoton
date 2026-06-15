@@ -1194,6 +1194,123 @@ PLUGIN_SPOTON_DSTM_HINT
 	PL	Wskazówka: automatyczne odtwarzanie (Don't Stop The Music) konfiguruje się w Ustawienia odtwarzacza > Don't Stop The Music. Wybierz „Rekomendacje SpotOn".
 	SV	Tips: Automatisk uppspelning (Don't Stop The Music) konfigureras under Spelarinställningar > Don't Stop The Music. Välj „SpotOn-rekommendationer".
 
+PLUGIN_SPOTON_SETTINGS_DIAG_SECTION
+	CS	Diagnostika
+	DA	Diagnostik
+	DE	Diagnose
+	EN	Diagnostics
+	ES	Diagnósticos
+	FR	Diagnostics
+	IT	Diagnostica
+	NL	Diagnostiek
+	NO	Diagnostikk
+	PL	Diagnostyka
+	SV	Diagnostik
+
+PLUGIN_SPOTON_DIAG_MODE
+	CS	Diagnostický režim
+	DA	Diagnostisk tilstand
+	DE	Diagnosemodus
+	EN	Diagnostic Mode
+	ES	Modo diagnóstico
+	FR	Mode diagnostic
+	IT	Modalità diagnostica
+	NL	Diagnostische modus
+	NO	Diagnostisk modus
+	PL	Tryb diagnostyczny
+	SV	Diagnostikläge
+
+PLUGIN_SPOTON_DIAG_MODE_DESC
+	CS	Povolí podrobné protokolování načasování pro události Connect. Diagnostické záznamy se zapisují s prefixem [DIAG] pro snadné filtrování.
+	DA	Aktiverer detaljeret tidslogning for Connect-hændelser. Diagnostiske logfiler skrives med [DIAG]-præfiks for nem filtrering.
+	DE	Aktiviert detailliertes Timing-Logging für Connect-Ereignisse. Diagnoseeinträge werden mit [DIAG]-Präfix geschrieben und sind leicht filterbar.
+	EN	Enables detailed timing logs for Connect events. Diagnostic entries are written with a [DIAG] prefix for easy filtering.
+	ES	Activa registros de tiempos detallados para eventos Connect. Las entradas de diagnóstico se escriben con el prefijo [DIAG] para facilitar el filtrado.
+	FR	Active les journaux de temporisation détaillés pour les événements Connect. Les entrées de diagnostic sont écrites avec le préfixe [DIAG] pour un filtrage facile.
+	IT	Attiva la registrazione dettagliata dei tempi per gli eventi Connect. Le voci diagnostiche vengono scritte con il prefisso [DIAG] per un filtraggio semplice.
+	NL	Schakelt gedetailleerde tijdregistratie in voor Connect-gebeurtenissen. Diagnostische vermeldingen worden geschreven met een [DIAG]-prefix voor eenvoudig filteren.
+	NO	Aktiverer detaljert tidslogging for Connect-hendelser. Diagnostiske oppføringer skrives med [DIAG]-prefiks for enkel filtrering.
+	PL	Włącza szczegółowe dzienniki czasowe dla zdarzeń Connect. Wpisy diagnostyczne są zapisywane z prefiksem [DIAG] w celu łatwego filtrowania.
+	SV	Aktiverar detaljerad tidsloggning för Connect-händelser. Diagnostikposter skrivs med [DIAG]-prefix för enkel filtrering.
+
+PLUGIN_SPOTON_DIAG_MODE_LABEL
+	CS	Povolit diagnostické protokolování
+	DA	Aktiver diagnostisk logning
+	DE	Diagnose-Logging aktivieren
+	EN	Enable diagnostic logging
+	ES	Activar registro de diagnóstico
+	FR	Activer la journalisation de diagnostic
+	IT	Attiva registrazione diagnostica
+	NL	Diagnostische logging inschakelen
+	NO	Aktiver diagnostisk logging
+	PL	Włącz rejestrowanie diagnostyczne
+	SV	Aktivera diagnostikloggning
+
+PLUGIN_SPOTON_DIAG_STATUS_ACTIVE
+	CS	Aktivní
+	DA	Aktiv
+	DE	Aktiv
+	EN	Active
+	ES	Activo
+	FR	Actif
+	IT	Attivo
+	NL	Actief
+	NO	Aktiv
+	PL	Aktywny
+	SV	Aktiv
+
+PLUGIN_SPOTON_DIAG_STATUS_INACTIVE
+	CS	Neaktivní
+	DA	Inaktiv
+	DE	Inaktiv
+	EN	Inactive
+	ES	Inactivo
+	FR	Inactif
+	IT	Inattivo
+	NL	Inactief
+	NO	Inaktiv
+	PL	Nieaktywny
+	SV	Inaktiv
+
+PLUGIN_SPOTON_DIAG_DOWNLOAD
+	CS	Diagnostický balíček
+	DA	Diagnostisk pakke
+	DE	Diagnosepaket
+	EN	Diagnostic Bundle
+	ES	Paquete de diagnóstico
+	FR	Paquet de diagnostic
+	IT	Pacchetto diagnostico
+	NL	Diagnostisch pakket
+	NO	Diagnostikkpakke
+	PL	Pakiet diagnostyczny
+	SV	Diagnostikpaket
+
+PLUGIN_SPOTON_DIAG_DOWNLOAD_DESC
+	CS	Stáhne soubor se systémovými informacemi a protokoly démonů pro vzdálené ladění.
+	DA	Downloader en fil med systemoplysninger og dæmonlogfiler til fjernfejlfinding.
+	DE	Lädt eine Datei mit Systeminformationen und Daemon-Logs für Remote-Debugging herunter.
+	EN	Downloads a file with system information and daemon logs for remote debugging.
+	ES	Descarga un archivo con información del sistema y registros del demonio para depuración remota.
+	FR	Télécharge un fichier avec les informations système et les journaux du démon pour le débogage à distance.
+	IT	Scarica un file con informazioni di sistema e log del daemon per il debug remoto.
+	NL	Downloadt een bestand met systeeminformatie en daemon-logbestanden voor foutopsporing op afstand.
+	NO	Laster ned en fil med systeminformasjon og daemon-logger for fjernfeilsøking.
+	PL	Pobiera plik z informacjami o systemie i dziennikami demona do zdalnego debugowania.
+	SV	Laddar ner en fil med systeminformation och daemon-loggar för fjärrfelsökning.
+
+PLUGIN_SPOTON_DIAG_DOWNLOAD_BUTTON
+	CS	Stáhnout diagnostickou zprávu
+	DA	Download diagnostisk rapport
+	DE	Diagnosebericht herunterladen
+	EN	Download Diagnostic Report
+	ES	Descargar informe de diagnóstico
+	FR	Télécharger le rapport de diagnostic
+	IT	Scarica rapporto diagnostico
+	NL	Diagnostisch rapport downloaden
+	NO	Last ned diagnostikkrapport
+	PL	Pobierz raport diagnostyczny
+	SV	Ladda ner diagnostikrapport
+
 PLUGIN_SPOTON_CREDITS
 	CS	SpotOn používá librespot. Inspirováno pluginem Spotty od Hergera.
 	DA	SpotOn bruger librespot. Inspireret af Hergers Spotty-plugin.
