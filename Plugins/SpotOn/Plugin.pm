@@ -1245,7 +1245,7 @@ sub _episodeItem {
              || _largestImage($showContext->{images})
              || _largestImage($episode->{show}{images});
 
-    my $line2 = _formatEpisodeLine2($duration, $date);
+    my $line2 = _formatEpisodeLine2($client, $duration, $date);
 
     my ($ep_path) = ($episode->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
     $ep_path //= ($episode->{uri} // '');
@@ -1412,30 +1412,28 @@ sub _episodeInfoFeed {
     });
 }
 
-# _formatEpisodeLine2($duration_sec, $release_date)
-# Builds the line2 string for episode items: "45 Min · 12. Jun"
+# _formatEpisodeLine2($client, $duration_sec, $release_date)
+# Builds the line2 string for episode items: "45 min · 12. Jun"
 # Per D-05: duration + date separated by middle dot U+00B7.
-# Per D-06: German duration units ("Min", "Std").
+# Per D-06: duration units via cstring (I18N-01).
 # Per D-07: relative date via _formatRelativeDate.
-# NOTE: Duration/date strings are intentionally German-only until Phase 21
-# (UX Polish + i18n) refactors these helpers to accept $client and use cstring().
 sub _formatEpisodeLine2 {
-    my ($duration_sec, $release_date) = @_;
+    my ($client, $duration_sec, $release_date) = @_;
 
-    # D-06: Human-readable duration in German units
+    # D-06: Human-readable duration via localized strings (I18N-01)
     my $dur_str = '';
     if ($duration_sec > 0) {
         my $hours = int($duration_sec / 3600);
         my $mins  = int(($duration_sec % 3600) / 60);
         if ($hours > 0) {
-            $dur_str = "$hours Std $mins Min";
+            $dur_str = sprintf(cstring($client, 'PLUGIN_SPOTON_DURATION_HM'), $hours, $mins);
         } else {
-            $dur_str = "$mins Min";
+            $dur_str = sprintf(cstring($client, 'PLUGIN_SPOTON_DURATION_M'), $mins);
         }
     }
 
     # D-07: Relative or absolute date
-    my $date_str = _formatRelativeDate($release_date);
+    my $date_str = _formatRelativeDate($client, $release_date);
 
     # Combine with middle dot separator
     if ($dur_str && $date_str) {
@@ -1444,12 +1442,13 @@ sub _formatEpisodeLine2 {
     return $dur_str || $date_str || '';
 }
 
-# _formatRelativeDate($iso_date)
-# Converts an ISO date string (YYYY-MM-DD) to a relative or absolute German date.
-# Per D-07: "Heute", "Gestern", "Vor N Tagen", then "14. Jun", "14. Jun 2025".
+# _formatRelativeDate($client, $iso_date)
+# Converts an ISO date string (YYYY-MM-DD) to a relative or absolute localized date.
+# Per D-07: "Today", "Yesterday", "N days ago", then "14. Jun", "14. Jun 2025".
 # Per Pitfall 5: timelocal wrapped in eval; regex guard against partial dates.
+# I18N-01: all user-visible strings via cstring().
 sub _formatRelativeDate {
-    my ($iso_date) = @_;
+    my ($client, $iso_date) = @_;
     return '' unless $iso_date && $iso_date =~ /^(\d{4})-(\d{2})-(\d{2})/;
 
     my ($year, $month, $day) = ($1, $2, $3);
@@ -1469,13 +1468,12 @@ sub _formatRelativeDate {
         ? int(($today_time - $ep_time) / 86400)
         : -1;
 
-    if ($delta_days == 0) { return 'Heute' }
-    if ($delta_days == 1) { return 'Gestern' }
-    if ($delta_days >= 2 && $delta_days <= 6) { return "Vor $delta_days Tagen" }
+    if ($delta_days == 0) { return cstring($client, 'PLUGIN_SPOTON_DATE_TODAY') }
+    if ($delta_days == 1) { return cstring($client, 'PLUGIN_SPOTON_DATE_YESTERDAY') }
+    if ($delta_days >= 2 && $delta_days <= 6) { return sprintf(cstring($client, 'PLUGIN_SPOTON_DATE_N_DAYS_AGO'), $delta_days) }
 
-    # Absolute date with German month abbreviations (D-06: no locale dependency)
-    my @months_de = qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez);
-    my $mon_str = $months_de[$month - 1] // '';
+    # Absolute date with localized month abbreviations (I18N-01: via cstring)
+    my $mon_str = cstring($client, "PLUGIN_SPOTON_MONTH_$month");
 
     if ($year == $today_year) {
         return "$day. $mon_str";

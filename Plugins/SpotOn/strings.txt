@@ -1584,3 +1584,289 @@ PLUGIN_SPOTON_N_RESULTS
 	PL	%s wyników
 	SV	%s resultat
 
+PLUGIN_SPOTON_SHOW_VIEW
+	CS	Zobrazit pořad
+	DA	Vis show
+	DE	Show anzeigen
+	EN	View show
+	ES	Ver programa
+	FR	Voir l'émission
+	IT	Vedi programma
+	NL	Toon show
+	NO	Vis show
+	PL	Pokaż program
+	SV	Visa show
+
+PLUGIN_SPOTON_DURATION_HM
+	CS	%s hod %s min
+	DA	%s t %s min
+	DE	%s Std %s Min
+	EN	%s hr %s min
+	ES	%s h %s min
+	FR	%s h %s min
+	IT	%s ore %s min
+	NL	%s uur %s min
+	NO	%s t %s min
+	PL	%s godz %s min
+	SV	%s tim %s min
+
+PLUGIN_SPOTON_DURATION_M
+	CS	%s min
+	DA	%s min
+	DE	%s Min
+	EN	%s min
+	ES	%s min
+	FR	%s min
+	IT	%s min
+	NL	%s min
+	NO	%s min
+	PL	%s min
+	SV	%s min
+
+PLUGIN_SPOTON_DATE_TODAY
+	CS	Dnes
+	DA	I dag
+	DE	Heute
+	EN	Today
+	ES	Hoy
+	FR	Aujourd'hui
+	IT	Oggi
+	NL	Vandaag
+	NO	I dag
+	PL	Dziś
+	SV	I dag
+
+PLUGIN_SPOTON_DATE_YESTERDAY
+	CS	Včera
+	DA	I går
+	DE	Gestern
+	EN	Yesterday
+	ES	Ayer
+	FR	Hier
+	IT	Ieri
+	NL	Gisteren
+	NO	I går
+	PL	Wczoraj
+	SV	I går
+
+PLUGIN_SPOTON_DATE_N_DAYS_AGO
+	CS	Před %s dny
+	DA	For %s dage siden
+	DE	Vor %s Tagen
+	EN	%s days ago
+	ES	Hace %s días
+	FR	Il y a %s jours
+	IT	%s giorni fa
+	NL	%s dagen geleden
+	NO	For %s dager siden
+	PL	%s dni temu
+	SV	För %s dagar sedan
+
+PLUGIN_SPOTON_MONTH_1
+	CS	Led
+	DA	Jan
+	DE	Jan
+	EN	Jan
+	ES	Ene
+	FR	Jan
+	IT	Gen
+	NL	Jan
+	NO	Jan
+	PL	Sty
+	SV	Jan
+
+PLUGIN_SPOTON_MONTH_2
+	CS	Úno
+	DA	Feb
+	DE	Feb
+	EN	Feb
+	ES	Feb
+	FR	Fév
+	IT	Feb
+	NL	Feb
+	NO	Feb
+	PL	Lut
+	SV	Feb
+
+PLUGIN_SPOTON_MONTH_3
+	CS	Bře
+	DA	Mar
+	DE	Mär
+	EN	Mar
+	ES	Mar
+	FR	Mar
+	IT	Mar
+	NL	Mrt
+	NO	Mar
+	PL	Mar
+	SV	Mar
+
+PLUGIN_SPOTON_MONTH_4
+	CS	Dub
+	DA	Apr
+	DE	Apr
+	EN	Apr
+	ES	Abr
+	FR	Avr
+	IT	Apr
+	NL	Apr
+	NO	Apr
+	PL	Kwi
+	SV	Apr
+
+PLUGIN_SPOTON_MONTH_5
+	CS	Kvě
+	DA	Maj
+	DE	Mai
+	EN	May
+	ES	May
+	FR	Mai
+	IT	Mag
+	NL	Mei
+	NO	Mai
+	PL	Maj
+	SV	Maj
+
+PLUGIN_SPOTON_MONTH_6
+	CS	Čvn
+	DA	Jun
+	DE	Jun
+	EN	Jun
+	ES	Jun
+	FR	Jun
+	IT	Giu
+	NL	Jun
+	NO	Jun
+	PL	Cze
+	SV	Jun
+
+PLUGIN_SPOTON_MONTH_7
+	CS	Čvc
+	DA	Jul
+	DE	Jul
+	EN	Jul
+	ES	Jul
+	FR	Jul
+	IT	Lug
+	NL	Jul
+	NO	Jul
+	PL	Lip
+	SV	Jul
+
+PLUGIN_SPOTON_MONTH_8
+	CS	Srp
+	DA	Aug
+	DE	Aug
+	EN	Aug
+	ES	Ago
+	FR	Aoû
+	IT	Ago
+	NL	Aug
+	NO	Aug
+	PL	Sie
+	SV	Aug
+
+PLUGIN_SPOTON_MONTH_9
+	CS	Zář
+	DA	Sep
+	DE	Sep
+	EN	Sep
+	ES	Sep
+	FR	Sep
+	IT	Set
+	NL	Sep
+	NO	Sep
+	PL	Wrz
+	SV	Sep
+
+PLUGIN_SPOTON_MONTH_10
+	CS	Říj
+	DA	Okt
+	DE	Okt
+	EN	Oct
+	ES	Oct
+	FR	Oct
+	IT	Ott
+	NL	Okt
+	NO	Okt
+	PL	Paź
+	SV	Okt
+
+PLUGIN_SPOTON_MONTH_11
+	CS	Lis
+	DA	Nov
+	DE	Nov
+	EN	Nov
+	ES	Nov
+	FR	Nov
+	IT	Nov
+	NL	Nov
+	NO	Nov
+	PL	Lis
+	SV	Nov
+
+PLUGIN_SPOTON_MONTH_12
+	CS	Pro
+	DA	Dec
+	DE	Dez
+	EN	Dec
+	ES	Dic
+	FR	Déc
+	IT	Dic
+	NL	Dec
+	NO	Des
+	PL	Gru
+	SV	Dec
+
+PLUGIN_SPOTON_EXPLICIT
+	CS	Explicit
+	DA	Eksplicit
+	DE	Explizit
+	EN	E
+	ES	Explícito
+	FR	Explicite
+	IT	Esplicito
+	NL	Expliciet
+	NO	Eksplisitt
+	PL	Eksplic.
+	SV	Explicit
+
+PLUGIN_SPOTON_RESUME_UNPLAYED
+	CS	Nepřehráno
+	DA	Ikke afspillet
+	DE	Ungehört
+	EN	Unplayed
+	ES	Sin reproducir
+	FR	Non écouté
+	IT	Non riprodotto
+	NL	Niet afgespeeld
+	NO	Ikke avspilt
+	PL	Nieodtworzone
+	SV	Ej spelad
+
+PLUGIN_SPOTON_RESUME_IN_PROGRESS
+	CS	Zbývá %s min
+	DA	%s min tilbage
+	DE	%s Min verbleibend
+	EN	%s min remaining
+	ES	Quedan %s min
+	FR	%s min restantes
+	IT	%s min rimanenti
+	NL	Nog %s min
+	NO	%s min igjen
+	PL	Pozostało %s min
+	SV	%s min kvar
+
+PLUGIN_SPOTON_RESUME_FINISHED
+	CS	Dokončeno
+	DA	Afsluttet
+	DE	Abgeschlossen
+	EN	Finished
+	ES	Finalizado
+	FR	Terminé
+	IT	Terminato
+	NL	Afgerond
+	NO	Ferdig
+	PL	Ukończone
+	SV	Klar
+
