@@ -629,6 +629,100 @@ SKIP: {
         "LIB-05: Client.pm cache namespace version is 4");
 }
 
+# LIB-06: saveShows sends PUT to /me/library with uris query param
+SKIP: {
+    skip "Client.pm not yet created", 5
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '';  # Empty body — 200 OK
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->saveShows('testacct', ['spotify:show:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-06: saveShows dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'PUT', 'LIB-06: saveShows uses PUT method');
+    like($reqs[0]->{url}, qr{/me/library}, 'LIB-06: saveShows URL contains /me/library');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-06: saveShows URL contains uris= query param');
+    is($got_err, undef, 'LIB-06: Empty-body guard — saveShows callback receives no error on 200 empty response');
+}
+
+# LIB-07: removeShows sends DELETE to /me/library with uris query param
+SKIP: {
+    skip "Client.pm not yet created", 5
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '';  # Empty body — 200 OK
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->removeShows('testacct', ['spotify:show:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-07: removeShows dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'DELETE', 'LIB-07: removeShows uses DELETE method');
+    like($reqs[0]->{url}, qr{/me/library}, 'LIB-07: removeShows URL contains /me/library');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-07: removeShows URL contains uris= query param');
+    is($got_err, undef, 'LIB-07: Empty-body guard — removeShows callback receives no error on 200 empty response');
+}
+
+# LIB-08: checkShows sends GET to /me/library/contains, returns [true]/[false]
+SKIP: {
+    skip "Client.pm not yet created", 6
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '[true]';
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->checkShows('testacct', ['spotify:show:ABC123'], sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'LIB-08: checkShows dispatches exactly one HTTP request');
+    is($reqs[0]->{method}, 'GET', 'LIB-08: checkShows uses GET method');
+    like($reqs[0]->{url}, qr{/me/library/contains}, 'LIB-08: checkShows URL contains /me/library/contains');
+    like($reqs[0]->{url}, qr{uris=}, 'LIB-08: checkShows URL contains uris= query param');
+    ok($got_result && ref($got_result) eq 'ARRAY' && $got_result->[0], 'LIB-08: checkShows returns [true] array');
+    is($got_err, undef, 'LIB-08: checkShows callback receives no error');
+}
+
+# LIB-09: checkShows with _noCache => 1 always dispatches an HTTP request
+# (Client.pm does NOT cache — caching responsibility lies in Plugin.pm per D-07)
+SKIP: {
+    skip "Client.pm not yet created", 2
+        unless -f $client_module;
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+    Slim::Utils::Cache->new()->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode    = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '[false]';
+
+    # First call
+    Plugins::SpotOn::API::Client->checkShows('testacct', ['spotify:show:XYZ999'], sub { });
+    my $first_count = scalar(@Slim::Networking::SimpleAsyncHTTP::requests);
+    is($first_count, 1, 'LIB-09: First checkShows call issues one HTTP request');
+
+    # Second call with same args — Client.pm must issue another request (_noCache => 1)
+    Plugins::SpotOn::API::Client->checkShows('testacct', ['spotify:show:XYZ999'], sub { });
+    my $second_count = scalar(@Slim::Networking::SimpleAsyncHTTP::requests);
+    is($second_count, 2,
+        'LIB-09: checkShows with _noCache => 1 always dispatches HTTP (Client.pm does not cache)');
+}
+
 # API-06: No LWP or SimpleSyncHTTP in API/ modules — grep test (runs immediately)
 {
     my @api_files = glob("$project_dir/Plugins/SpotOn/API/*.pm");

@@ -1480,6 +1480,84 @@ PLUGIN_SPOTON_MANAGE_LIKE
 	PL	Lubię / Usuń
 	SV	Gilla / Ogilla
 
+PLUGIN_SPOTON_MANAGE_FOLLOW
+	CS	Odebrat / Sledovat
+	DA	Folg / Fjern
+	DE	Folgen / Entfolgen
+	EN	Follow / Unfollow
+	ES	Seguir / Dejar
+	FR	Suivre / Ne plus suivre
+	IT	Segui / Non seguire
+	NL	Volgen / Ontvolgen
+	NO	Folg / Slutt a folge
+	PL	Obserwuj / Przestań
+	SV	Följa / Sluta följa
+
+PLUGIN_SPOTON_FOLLOW_SHOW
+	CS	Sledovat
+	DA	Folg
+	DE	Folgen
+	EN	Follow
+	ES	Seguir
+	FR	Suivre
+	IT	Segui
+	NL	Volgen
+	NO	Folg
+	PL	Obserwuj
+	SV	Följa
+
+PLUGIN_SPOTON_UNFOLLOW_SHOW
+	CS	Přestat sledovat
+	DA	Stop med at følge
+	DE	Entfolgen
+	EN	Unfollow
+	ES	Dejar de seguir
+	FR	Ne plus suivre
+	IT	Non seguire più
+	NL	Ontvolgen
+	NO	Slutt å følge
+	PL	Przestań obserwować
+	SV	Sluta följa
+
+PLUGIN_SPOTON_SHOW_FOLLOWED
+	CS	Sledujete!
+	DA	Følger!
+	DE	Gefolgt!
+	EN	Followed!
+	ES	Siguiendo!
+	FR	Suivi !
+	IT	Seguito!
+	NL	Gevolgd!
+	NO	Følger!
+	PL	Obserwujesz!
+	SV	Följer!
+
+PLUGIN_SPOTON_SHOW_UNFOLLOWED
+	CS	Odebráno
+	DA	Fjernet
+	DE	Entfernt
+	EN	Unfollowed
+	ES	Eliminado
+	FR	Retiré
+	IT	Rimosso
+	NL	Verwijderd
+	NO	Fjernet
+	PL	Usunięto
+	SV	Borttagen
+
+PLUGIN_SPOTON_SHOW_ACTION_ERROR
+	CS	Nelze uložit podcast
+	DA	Kunne ikke gemme podcast
+	DE	Podcast konnte nicht gespeichert werden
+	EN	Could not save podcast
+	ES	No se pudo guardar el podcast
+	FR	Impossible d'enregistrer le podcast
+	IT	Impossibile salvare il podcast
+	NL	Kan podcast niet opslaan
+	NO	Kunne ikke lagre podcasten
+	PL	Nie można zapisać podcastu
+	SV	Kunde inte spara podcasten
+
 PLUGIN_SPOTON_GATEKEEPER_HINT
 	CS	SpotOn binary je blokován systémem macOS. Spusťte v Terminálu: xattr -d com.apple.quarantine /cesta/k/spoton
 	DA	SpotOn binærfilen blokeres af macOS. Kør i Terminal: xattr -d com.apple.quarantine /sti/til/spoton

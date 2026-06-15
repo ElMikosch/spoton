@@ -255,6 +255,48 @@ sub checkTracks {
     }, $cb);
 }
 
+# saveShows($class, $accountId, $uris, $cb)
+# Saves shows to the user's library (PUT /me/library?uris=...).
+# POD-04/POD-05: Uses unified library endpoint with full Spotify URIs (e.g. spotify:show:ID).
+# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Scope: user-library-modify
+sub saveShows {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('put', 'me/library', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
+# removeShows($class, $accountId, $uris, $cb)
+# Removes shows from the user's library (DELETE /me/library?uris=...).
+# POD-04/POD-05: Uses unified library endpoint with full Spotify URIs.
+# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Scope: user-library-modify
+sub removeShows {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('delete', 'me/library', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
+# checkShows($class, $accountId, $uris, $cb)
+# Checks if shows are saved in the user's library (GET /me/library/contains?uris=...).
+# POD-04/POD-05: Response is an array of booleans, e.g. [true] or [false].
+# _noCache => 1: caching is managed manually in Plugin.pm with 60s TTL (D-07, Pitfall 2).
+# Scope: user-library-read
+sub checkShows {
+    my ($class, $accountId, $uris, $cb) = @_;
+    $class->_request('get', 'me/library/contains', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
 # getUserPlaylists($class, $accountId, $params, $cb)
 # Fetches user's playlists (/me/playlists).
 # Offset-paginated; max limit 50.
