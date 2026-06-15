@@ -1177,7 +1177,8 @@ sub _showFeed {
             $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
             return;
         }
-        my @items = map { _episodeItem($client, $_, $showImages) } @{ $data->{items} || [] };
+        my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
+        my @items = map { _episodeItem($client, $_, $showCtx) } @{ $data->{items} || [] };
         if (!@items) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
@@ -1197,38 +1198,65 @@ sub _showFeed {
     });
 }
 
-# _episodeItem($client, $episode, $showImages)
+# _episodeItem($client, $episode, $showContext)
 # Builds an OPML audio item for a podcast episode.
-# Per POD-03: uses spoton://episode:ID URI for playback.
-# Per D-08: episode images first, show images as fallback.
-# Per D-05: line2 = duration + date via _formatEpisodeLine2.
-# No playall (D-09: episodes not queued like music albums).
+# $showContext: { images, id, uri, name } — from _showFeed passthrough or $episode->{show}.
+# Dev Mode strips $episode->{show} from API responses, so callers pass show data explicitly.
 sub _episodeItem {
-    my ($client, $episode, $showImages) = @_;
+    my ($client, $episode, $showContext) = @_;
+
+    # Normalize showContext: accept old-style $showImages arrayref or new hashref
+    if ($showContext && ref $showContext eq 'ARRAY') {
+        $showContext = { images => $showContext };
+    }
+    $showContext //= {};
 
     my $title    = $episode->{name}         // '';
     my $duration = ($episode->{duration_ms} || 0) / 1000;
     my $date     = $episode->{release_date} // '';
 
-    # D-08: Episode artwork preferred; show artwork fallback; search result fallback via show.images
+    my $showName = $showContext->{name}   // $episode->{show}{name} // '';
+    my $showId   = $showContext->{id}     // $episode->{show}{id}   // '';
+    my $showUri  = $showContext->{uri}    // $episode->{show}{uri}  // '';
+
     my $image = _largestImage($episode->{images})
-             || _largestImage($showImages)
+             || _largestImage($showContext->{images})
              || _largestImage($episode->{show}{images});
 
-    # D-05/D-06/D-07: line2 = "45 Min · 12. Jun"
     my $line2 = _formatEpisodeLine2($duration, $date);
 
-    # T-04.1-01: Extract path from Spotify URI to prevent double-prefix.
-    # spotify:episode:ID -> episode:ID; fallback preserves original URI if no match.
     my ($ep_path) = ($episode->{uri} // '') =~ /^spotify:((?:track|episode):.+)/;
     $ep_path //= ($episode->{uri} // '');
     my $spoton_url = 'spoton://' . $ep_path;
 
-    # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
-    # D-02: 7-day TTL (604800s)
+    # Sub-items for XMLBrowser info view (like tracks have Artist/Album/Like)
+    my @contextItems;
+    if ($showId) {
+        push @contextItems, {
+            name        => $showName || 'Show',
+            url         => \&_showFeed,
+            passthrough => [{ showId => $showId, showUri => $showUri, showImages => $showContext->{images}, showName => $showName }],
+            type        => 'link',
+        };
+    }
+    if ($showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
+        my $accountId = _getAccountId($client);
+        if ($accountId) {
+            push @contextItems, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                type        => 'link',
+                icon        => '/html/images/playlistadd.png',
+            };
+        }
+    }
+    # Fallback: always provide at least one sub-item so XMLBrowser doesn't show raw streaminfo
+    push @contextItems, { name => $line2, type => 'textarea' } unless @contextItems;
+
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
-        artist   => $episode->{show}{name} // '',    # Show name as "Artist"
+        artist   => $showName,
         album    => '',
         duration => $duration,
         cover    => $image,
@@ -1237,7 +1265,7 @@ sub _episodeItem {
         type     => __PACKAGE__->_typeString($client, 'Browse'),
     }, 604800);
 
-    return {
+    my %item = (
         name      => $title,
         line1     => $title,
         line2     => $line2,
@@ -1247,7 +1275,10 @@ sub _episodeItem {
         image     => $image,
         duration  => $duration,
         type      => 'audio',
-    };
+    );
+    $item{items} = \@contextItems;
+
+    return \%item;
 }
 
 # _formatEpisodeLine2($duration_sec, $release_date)
