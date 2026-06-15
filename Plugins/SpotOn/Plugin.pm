@@ -1296,8 +1296,8 @@ sub _episodeItem {
             type        => 'link',
         };
     }
-    # Fallback: always provide at least one sub-item so XMLBrowser doesn't show raw streaminfo
-    push @contextItems, { name => $line2, type => 'textarea' } unless @contextItems;
+    # Duration/date as visible sub-item — songinfo hides the parent item's line2
+    push @contextItems, { name => $line2, type => 'textarea' } if $line2;
 
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
