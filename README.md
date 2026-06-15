@@ -45,6 +45,10 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 3. Click **Apply**, then find **SpotOn** in the plugin list and install it
 4. Restart LMS when prompted
 
+## Troubleshooting
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues and solutions, including Docker setup, Connect audio problems, and how to collect diagnostic data.
+
 ## License
 
 MIT — see [LICENSE](LICENSE)

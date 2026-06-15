@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Troubleshooting Guide
+    url: https://github.com/stiefenm/spoton/blob/main/TROUBLESHOOTING.md
+    about: Check common issues and solutions before opening a new issue
   - name: Lyrion Community Forum
     url: https://forums.slimdevices.com/
     about: General LMS questions and community support

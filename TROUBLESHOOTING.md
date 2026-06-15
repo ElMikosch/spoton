@@ -1,0 +1,59 @@
+# Troubleshooting
+
+Common issues and how to resolve them. Before opening an issue, please check if your problem is covered here.
+
+## Collecting Diagnostic Data
+
+SpotOn v1.5.1+ has a built-in diagnostic system that collects system info and daemon logs into a single downloadable file.
+
+1. Go to **SpotOn Settings** (Server Settings > SpotOn)
+2. Scroll to **Diagnostics** and enable the checkbox
+3. Click **Save**
+4. Reproduce the issue
+5. Return to SpotOn Settings and click **Download Diagnostic Report**
+6. Attach the `.txt` file to your GitHub issue
+
+The bundle includes: LMS version, OS, Perl version, SpotOn version, player list, active settings, and all Connect daemon logs.
+
+## Known Issues
+
+### Daemon doesn't start (Docker)
+
+**Symptoms:** Log shows `SpotOn daemon did not announce HTTP stream port (timeout) - aborting` repeatedly, followed by `crashed 3 times within less than 5 minutes - disabling discovery for 30 min`.
+
+**Cause:** Docker networking can prevent the daemon from reaching LMS or announcing itself via mDNS.
+
+**Solutions:**
+- Update to SpotOn v1.5.1+ (fixes hardcoded `127.0.0.1` and mDNS routing for containers)
+- Use `--network host` in your Docker run command, or ensure the container can reach the LMS host IP
+- Verify the SpotOn binary runs: exec into the container and run `/path/to/spoton --check` — you should see `ok spoton v1.1.1`
+
+If the issue persists, collect a diagnostic bundle and include your Docker setup (docker-compose.yml or run command) in the issue.
+
+### No audio after Connect reconnect
+
+**Symptoms:** You disconnect from Spotify Connect and reconnect — the Spotify app shows the player, but no sound comes from LMS. Skipping to the next track brings audio back but tracks are out of sync.
+
+**Cause:** Fixed in v1.5.1. The Connect daemon did not properly reset its track state on disconnect, so reconnecting with the same track produced no event to LMS.
+
+**Solution:** Update to SpotOn v1.5.1+.
+
+### Slow track change on hardware players (Squeezebox Radio/Touch)
+
+**Symptoms:** When changing tracks via Spotify Connect, the new track title appears in the UI but the old audio continues playing for 10-20 seconds.
+
+**Likely cause:** The hardware player has a large audio buffer. When Connect changes tracks, new audio starts flowing immediately but the player continues draining its buffer.
+
+**Things to try:**
+- Check your streaming format: **SpotOn Player Settings > Streaming Format**. Hardware players cannot decode OGG natively — if set to "Auto" or "OGG", LMS transcodes on the fly which adds latency. Try **"PCM"** or **"FLAC"**.
+- Compare with a squeezelite or piCorePlayer — software players typically don't have this buffer delay.
+- Collect a diagnostic bundle during the slow track change and open an issue — the timing data helps us investigate.
+
+### Where are the settings?
+
+SpotOn has two settings pages:
+
+- **Server Settings > SpotOn** — Global settings: bitrate, normalization, Spotify Developer App ID, account management, diagnostics
+- **Player Settings > SpotOn Player** — Per-player settings: Spotify Connect toggle, streaming format, bitrate override, mDNS discovery, autoplay
+
+In Material Skin, both appear in their respective dropdown menus. The server settings page includes a direct link to the player settings.

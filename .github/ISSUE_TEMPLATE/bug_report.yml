@@ -2,11 +2,16 @@ name: Bug Report
 description: Report a problem with SpotOn
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before filing:** Please check the [Troubleshooting Guide](https://github.com/stiefenm/spoton/blob/main/TROUBLESHOOTING.md) — your issue may already be covered.
+
   - type: input
     id: spoton-version
     attributes:
       label: SpotOn Version
-      placeholder: "e.g. 1.2.9"
+      placeholder: "e.g. 1.5.1"
     validations:
       required: true
 
@@ -24,7 +29,9 @@ body:
       label: Operating System
       options:
         - Linux x86_64
+        - Linux x86_64 - Docker
         - Linux ARM - Raspberry Pi
+        - Linux ARM - Other
         - macOS
         - Windows
         - Other
@@ -43,7 +50,9 @@ body:
     id: logs
     attributes:
       label: Log Excerpt
-      description: "Relevant lines from LMS server.log"
+      description: >
+        Relevant lines from LMS server.log. If you have a diagnostic bundle
+        (.txt file from SpotOn Settings > Diagnostics), attach it below instead.
     validations:
       required: false
 
@@ -53,8 +62,26 @@ body:
       label: Player Type
       options:
         - squeezelite
-        - UPnPBridge-BridgeSDK
+        - Squeezebox Radio
+        - Squeezebox Touch
+        - Squeezebox Classic/Transporter
         - piCorePlayer
+        - UPnPBridge
         - Other
+    validations:
+      required: false
+
+  - type: dropdown
+    id: stream-format
+    attributes:
+      label: Streaming Format
+      description: "SpotOn Player Settings > Streaming Format"
+      options:
+        - Auto (default)
+        - OGG
+        - PCM
+        - FLAC
+        - MP3
+        - Don't know
     validations:
       required: false
