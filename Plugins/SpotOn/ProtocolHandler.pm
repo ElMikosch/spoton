@@ -405,49 +405,29 @@ sub getMetadataFor {
 sub trackInfoURL {
     my ($class, $client, $url) = @_;
 
+    my ($trackId) = ($url // '') =~ m{spoton:(?://)?track:([A-Za-z0-9]+)};
+    return unless $trackId;
+
     my $meta = $class->getMetadataFor($client, $url) || {};
+
     require Plugins::SpotOn::Plugin;
     my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
 
-    # Track info: Like/Unlike action
-    if (my ($trackId) = ($url // '') =~ m{spoton:(?://)?track:([A-Za-z0-9]+)}) {
-        my @items;
-        if ($accountId) {
-            push @items, {
-                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
-                url         => \&Plugins::SpotOn::Plugin::SpotOnManageLike,
-                passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
-                type        => 'link',
-            };
-        }
-        return {
-            name  => $meta->{title} || $url,
-            type  => 'opml',
-            items => \@items,
+    my @items;
+    if ($accountId) {
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+            url         => \&Plugins::SpotOn::Plugin::SpotOnManageLike,
+            passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
+            type        => 'link',
         };
     }
 
-    # Episode info: Follow/Unfollow action for the parent show
-    if (($url // '') =~ m{spoton:(?://)?episode:([A-Za-z0-9]+)}) {
-        my @items;
-        my $showUri = $meta->{showUri} // '';
-        if ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
-            push @items, {
-                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
-                url         => \&Plugins::SpotOn::Plugin::SpotOnManageFollow,
-                passthrough => [{ showUri => $showUri, accountId => $accountId }],
-                type        => 'link',
-                icon        => '/html/images/playlistadd.png',
-            };
-        }
-        return {
-            name  => $meta->{title} || $url,
-            type  => 'opml',
-            items => \@items,
-        };
-    }
-
-    return;
+    return {
+        name  => $meta->{title} || $url,
+        type  => 'opml',
+        items => \@items,
+    };
 }
 
 # _placeholderMeta($url)

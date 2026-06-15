@@ -1224,37 +1224,8 @@ sub _episodeItem {
     $ep_path //= ($episode->{uri} // '');
     my $spoton_url = 'spoton://' . $ep_path;
 
-    # Context items for episode info view (mirrors _trackItem pattern).
-    # XMLBrowser shows raw "streaminfo" for audio items without sub-items —
-    # always provide at least the show link so episodes get a proper info view.
-    my @contextItems;
-    my $showId  = $episode->{show}{id}   // '';
-    my $showUri = $episode->{show}{uri}  // '';
-    my $showName = $episode->{show}{name} // '';
-    if ($showId) {
-        push @contextItems, {
-            name        => $showName || 'Show',
-            url         => \&_showFeed,
-            passthrough => [{ showId => $showId, showUri => $showUri, showImages => $episode->{show}{images}, showName => $showName }],
-            type        => 'link',
-        };
-    }
-    if ($showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
-        my $accountId = _getAccountId($client);
-        if ($accountId) {
-            push @contextItems, {
-                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
-                url         => \&SpotOnManageFollow,
-                passthrough => [{ showUri => $showUri, accountId => $accountId }],
-                type        => 'link',
-                icon        => '/html/images/playlistadd.png',
-            };
-        }
-    }
-
     # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
     # D-02: 7-day TTL (604800s)
-
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
         artist   => $episode->{show}{name} // '',    # Show name as "Artist"
@@ -1264,25 +1235,19 @@ sub _episodeItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
-        showUri  => $showUri,
     }, 604800);
 
-    my %item = (
+    return {
         name      => $title,
         line1     => $title,
         line2     => $line2,
         url       => $spoton_url,
         play      => $spoton_url,
         on_select => 'play',
-        playall   => 1,
         image     => $image,
         duration  => $duration,
         type      => 'audio',
-    );
-    push @contextItems, { name => $line2, type => 'textarea' } unless @contextItems;
-    $item{items} = \@contextItems;
-
-    return \%item;
+    };
 }
 
 # _formatEpisodeLine2($duration_sec, $release_date)
