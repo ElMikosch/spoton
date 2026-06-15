@@ -1233,6 +1233,10 @@ sub _episodeItem {
     my $duration = ($episode->{duration_ms} || 0) / 1000;
     my $date     = $episode->{release_date} // '';
 
+    my $explicit_tag = ($episode->{explicit})
+        ? ' [' . cstring($client, 'PLUGIN_SPOTON_EXPLICIT') . ']'
+        : '';
+
     my $showName = $showContext->{name}   // $episode->{show}{name} // '';
     my $showId   = $showContext->{id}     // $episode->{show}{id}   // '';
     my $showUri  = $showContext->{uri}    // $episode->{show}{uri}  // '';
@@ -1307,8 +1311,8 @@ sub _episodeItem {
     }, 604800);
 
     my %item = (
-        name          => $title,
-        line1         => $title,
+        name          => $title . $explicit_tag,
+        line1         => $title . $explicit_tag,
         line2         => $line2,
         url           => $spoton_url,
         play          => $spoton_url,
