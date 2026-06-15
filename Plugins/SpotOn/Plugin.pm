@@ -502,6 +502,95 @@ sub _doLibraryAction {
 }
 
 
+# ============================================================
+# Follow / Unfollow Show (Phase 20)
+# ============================================================
+
+# SpotOnManageFollow($client, $cb, $params, $args)
+# Resolves follow state (cache-first, then API) and builds a dynamic Follow/Unfollow menu item.
+# T-20-01: showUri validated against spotify:show:[A-Za-z0-9]+ before any API call.
+# D-07: 60s TTL cache — cache hit avoids API call.
+sub SpotOnManageFollow {
+    my ($client, $cb, $params, $args) = @_;
+
+    my $showUri   = $args->{showUri} // '';
+    return unless $showUri =~ /^spotify:show:[A-Za-z0-9]+$/;
+    my $accountId = $args->{accountId};
+
+    my $cacheKey = _followCacheKey($accountId, $showUri);
+
+    my $buildMenu = sub {
+        my ($isFollowed) = @_;
+        $cb->({ items => [{
+            name        => cstring($client, $isFollowed ? 'PLUGIN_SPOTON_UNFOLLOW_SHOW' : 'PLUGIN_SPOTON_FOLLOW_SHOW'),
+            url         => $isFollowed ? \&SpotOnUnfollowShow : \&SpotOnFollowShow,
+            passthrough => [{ showUri => $showUri, accountId => $accountId, cacheKey => $cacheKey }],
+            nextWindow  => 'grandparent',
+        }] });
+    };
+
+    # D-07: Cache hit = zero delay (60s TTL)
+    my $cached = $cache->get($cacheKey);
+    if (defined $cached) {
+        $buildMenu->($cached);
+        return;
+    }
+
+    # On-demand API call only on cache miss
+    Plugins::SpotOn::API::Client->checkShows($accountId, [$showUri], sub {
+        my ($result, $err) = @_;
+        my $isFollowed = ($result && ref $result eq 'ARRAY' && $result->[0]) ? 1 : 0;
+        $cache->set($cacheKey, $isFollowed, 60) unless $err;
+        $buildMenu->($isFollowed);
+    });
+}
+
+sub SpotOnFollowShow {
+    my ($client, $cb, $params, $args) = @_;
+    _doShowLibraryAction($client, $cb, $args, 'saveShows', 'PLUGIN_SPOTON_SHOW_FOLLOWED');
+}
+
+sub SpotOnUnfollowShow {
+    my ($client, $cb, $params, $args) = @_;
+    _doShowLibraryAction($client, $cb, $args, 'removeShows', 'PLUGIN_SPOTON_SHOW_UNFOLLOWED');
+}
+
+sub _followCacheKey {
+    my ($accountId, $showUri) = @_;
+    my ($showId) = $showUri =~ /^spotify:show:(.+)$/;
+    return "spoton_followed_${accountId}_${showId}";
+}
+
+sub _doShowLibraryAction {
+    my ($client, $cb, $args, $apiMethod, $successKey) = @_;
+    my $showUri   = $args->{showUri};
+    my $accountId = $args->{accountId};
+    my $cacheKey  = $args->{cacheKey};
+
+    Plugins::SpotOn::API::Client->$apiMethod($accountId, [$showUri], sub {
+        my ($result, $err) = @_;
+        if ($err) {
+            my $msg = (ref $err eq 'HASH' && $err->{code} && $err->{code} == 403)
+                ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
+                : cstring($client, 'PLUGIN_SPOTON_SHOW_ACTION_ERROR');
+            $cb->({ items => [{ name => $msg }] });
+            return;
+        }
+        my $newState = ($apiMethod eq 'saveShows') ? 1 : 0;
+        $cache->set($cacheKey, $newState, 60);
+        # Invalidate saved shows list so "Meine Podcasts" reflects change immediately
+        $cache->remove('spoton_resp_me/shows');
+        $client->showBriefly({
+            jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
+        }) if $client;
+        $cb->({ items => [{
+            name        => cstring($client, $successKey),
+            nextWindow  => 'grandparent',
+        }] });
+    });
+}
+
+
 # _largestImage($images_arrayref)
 # Returns the URL of the largest image (by width) from a Spotify images array.
 # Returns '' if the array is empty or undef.
@@ -1054,7 +1143,7 @@ sub _showItem {
         line1         => $name,
         line2         => $publisher,
         url           => \&_showFeed,
-        passthrough   => [{ showId => $show->{id}, showImages => $show->{images}, showName => $name }],
+        passthrough   => [{ showId => $show->{id}, showUri => $show->{uri}, showImages => $show->{images}, showName => $name }],
         image         => _largestImage($show->{images}),
         favorites_url => $show->{uri},
         type          => 'playlist',
@@ -1070,6 +1159,7 @@ sub _showFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $showId     = $passthrough->{showId}     // '';
+    my $showUri    = $passthrough->{showUri}     // "spotify:show:$showId";
     my $showImages = $passthrough->{showImages};
 
     my $offset = $args->{index}    || 0;
@@ -1091,7 +1181,19 @@ sub _showFeed {
         if (!@items) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+
+        # POD-04/POD-05: Prepend Follow/Unfollow action as first item (T-20-01: URI validated)
+        my @actionItems;
+        if ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
+            push @actionItems, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                type        => 'link',
+            };
+        }
+
+        $callback->({ items => [@actionItems, @items], offset => $offset, total => $data->{total} // 0 });
     });
 }
 
