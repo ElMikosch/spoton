@@ -213,6 +213,11 @@ impl LMS {
                 log::debug!("[spoton] Stopped: current_track={:?}", current_track.as_deref());
                 if current_track.is_some() {
                     self.notify("stop", "", "").await;
+                    // Reset cursor so that the next SessionConnected + TrackChanged(same_id)
+                    // takes the None→Some branch and emits "start" to LMS.
+                    // Without this, reconnect with the same track silently hits the
+                    // Some(prev)==new_id branch and never notifies LMS (reconnect-no-audio bug).
+                    *current_track = None;
                 }
             }
 
