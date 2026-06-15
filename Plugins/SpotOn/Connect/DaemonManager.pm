@@ -2,6 +2,7 @@ package Plugins::SpotOn::Connect::DaemonManager;
 
 use strict;
 
+use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 
 use Slim::Utils::Log;
@@ -19,8 +20,9 @@ use constant DAEMON_WATCHDOG_INTERVAL => 60;
 # Fast poll interval for streaming daemons — keeps crash-silence window <=5s
 use constant STREAM_WATCHDOG_INTERVAL => 5;
 
-my $prefs = preferences('plugin.spoton');
-my $log   = logger('plugin.spoton');
+my $prefs       = preferences('plugin.spoton');
+my $serverPrefs = preferences('server');
+my $log         = logger('plugin.spoton');
 
 my %helperInstances;
 
@@ -215,6 +217,23 @@ sub startHelper {
     my ($class, $clientId) = @_;
 
     $clientId = $clientId->id if $clientId && blessed $clientId;
+
+    # Credential pre-check: skip daemon start if no cached credentials exist.
+    # Mirrors Daemon.pm start() cache dir construction (CON-01 account-level scope).
+    # Without this, librespot starts, finds no credentials, and exits immediately —
+    # triggering crash-loop detection → 30min disable → retry, filling logs with noise.
+    my $activeAccountId = $prefs->get('activeAccount') || '';
+    my $cacheDir = $activeAccountId
+        ? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
+        : catdir($serverPrefs->get('cachedir'), 'spoton');
+    my $credFile = catfile($cacheDir, 'credentials.json');
+
+    if (! -f $credFile) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Skipping Connect daemon for $clientId - no cached credentials (expected: $credFile)"
+        );
+        return;
+    }
 
     # No need to restart if already present and alive
     my $helper = $helperInstances{$clientId};
