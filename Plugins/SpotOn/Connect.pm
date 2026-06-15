@@ -184,13 +184,16 @@ sub _sendControlCommand {
     main::INFOLOG && $log->is_info && $log->info(
         "_sendControlCommand: POST $url ($jsonBody)"
     );
+    $log->warn("[DIAG] control_cmd_sent: mac=" . $client->id . " endpoint=$endpoint body=$jsonBody") if $prefs->get('diagnosticMode');
 
     my $http = Slim::Networking::SimpleAsyncHTTP->new(
         sub {
             main::DEBUGLOG && $log->is_debug && $log->debug("_sendControlCommand: $endpoint OK");
+            $log->warn("[DIAG] control_cmd_ok: mac=" . $client->id . " endpoint=$endpoint") if $prefs->get('diagnosticMode');
         },
         sub {
             my ($http, $error) = @_;
+            $log->warn("[DIAG] control_cmd_fail: mac=" . $client->id . " endpoint=$endpoint error=$error fallback=web_api") if $prefs->get('diagnosticMode');
             main::INFOLOG && $log->is_info && $log->info(
                 "_sendControlCommand: $endpoint failed ($error) — trying Web API fallback (D-15)"
             );
@@ -211,6 +214,7 @@ sub _sendControlFallback {
     my $accountId = $prefs->client($client)->get('activeAccount')
                  || $prefs->get('activeAccount')
                  || '';
+    $log->warn("[DIAG] web_api_fallback: mac=" . $client->id . " endpoint=$endpoint account=" . substr($accountId, 0, 4) . "****") if $prefs->get('diagnosticMode');
 
     if ($endpoint eq '/control/pause') {
         Plugins::SpotOn::API::Client->playerPause($accountId, sub {
