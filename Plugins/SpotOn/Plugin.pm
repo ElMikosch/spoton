@@ -1226,6 +1226,22 @@ sub _episodeItem {
 
     # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
     # D-02: 7-day TTL (604800s)
+    # Context items for episode info view (mirrors _trackItem pattern)
+    my @contextItems;
+    my $showUri = $episode->{show}{uri} // '';
+    if ($showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
+        my $accountId = _getAccountId($client);
+        if ($accountId) {
+            push @contextItems, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                type        => 'link',
+                icon        => '/html/images/playlistadd.png',
+            };
+        }
+    }
+
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
         artist   => $episode->{show}{name} // '',    # Show name as "Artist"
@@ -1235,10 +1251,10 @@ sub _episodeItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
-        showUri  => $episode->{show}{uri} // '',
+        showUri  => $showUri,
     }, 604800);
 
-    return {
+    my %item = (
         name      => $title,
         line1     => $title,
         line2     => $line2,
@@ -1249,7 +1265,10 @@ sub _episodeItem {
         image     => $image,
         duration  => $duration,
         type      => 'audio',
-    };
+    );
+    $item{items} = \@contextItems if @contextItems;
+
+    return \%item;
 }
 
 # _formatEpisodeLine2($duration_sec, $release_date)
