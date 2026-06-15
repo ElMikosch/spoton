@@ -1195,17 +1195,17 @@ PLUGIN_SPOTON_DSTM_HINT
 	SV	Tips: Automatisk uppspelning (Don't Stop The Music) konfigureras under Spelarinställningar > Don't Stop The Music. Välj „SpotOn-rekommendationer".
 
 PLUGIN_SPOTON_PLAYER_SETTINGS_NAME
-	CS	SpotOn
-	DA	SpotOn
-	DE	SpotOn
-	EN	SpotOn
-	ES	SpotOn
-	FR	SpotOn
-	IT	SpotOn
-	NL	SpotOn
-	NO	SpotOn
-	PL	SpotOn
-	SV	SpotOn
+	CS	SpotOn Player
+	DA	SpotOn Player
+	DE	SpotOn Player
+	EN	SpotOn Player
+	ES	SpotOn Player
+	FR	SpotOn Player
+	IT	SpotOn Player
+	NL	SpotOn Player
+	NO	SpotOn Player
+	PL	SpotOn Player
+	SV	SpotOn Player
 
 PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_TITLE
 	CS	Nastavení přehrávače jsou v sekci Player
