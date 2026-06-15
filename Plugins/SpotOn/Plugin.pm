@@ -1224,11 +1224,21 @@ sub _episodeItem {
     $ep_path //= ($episode->{uri} // '');
     my $spoton_url = 'spoton://' . $ep_path;
 
-    # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
-    # D-02: 7-day TTL (604800s)
-    # Context items for episode info view (mirrors _trackItem pattern)
+    # Context items for episode info view (mirrors _trackItem pattern).
+    # XMLBrowser shows raw "streaminfo" for audio items without sub-items —
+    # always provide at least the show link so episodes get a proper info view.
     my @contextItems;
-    my $showUri = $episode->{show}{uri} // '';
+    my $showId  = $episode->{show}{id}   // '';
+    my $showUri = $episode->{show}{uri}  // '';
+    my $showName = $episode->{show}{name} // '';
+    if ($showId) {
+        push @contextItems, {
+            name        => $showName || 'Show',
+            url         => \&_showFeed,
+            passthrough => [{ showId => $showId, showUri => $showUri, showImages => $episode->{show}{images}, showName => $showName }],
+            type        => 'link',
+        };
+    }
     if ($showUri =~ /^spotify:show:[A-Za-z0-9]+$/) {
         my $accountId = _getAccountId($client);
         if ($accountId) {
@@ -1241,6 +1251,9 @@ sub _episodeItem {
             };
         }
     }
+
+    # Cache metadata for getMetadataFor (NowPlaying artwork + title display)
+    # D-02: 7-day TTL (604800s)
 
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
