@@ -2,6 +2,7 @@ package Plugins::SpotOn::Connect::DaemonManager;
 
 use strict;
 
+use File::Basename qw(basename);
 use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 
@@ -19,6 +20,10 @@ use constant DAEMON_WATCHDOG_INTERVAL => 60;
 
 # Fast poll interval for streaming daemons — keeps crash-silence window <=5s
 use constant STREAM_WATCHDOG_INTERVAL => 5;
+
+# Delay before cleaning up orphaned log files (seconds after init)
+# Gives players time to reconnect after LMS restart before their logs are deleted.
+use constant ORPHAN_LOG_CLEANUP_DELAY => 30;
 
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
@@ -80,6 +85,10 @@ sub init {
 
     # Immediate initial check — player may already be connected before listeners registered
     Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.5, \&initHelpers);
+
+    # Delayed cleanup of orphaned connect log files from players no longer connected.
+    # 30s delay ensures players have had time to reconnect after LMS restart.
+    Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + ORPHAN_LOG_CLEANUP_DELAY, \&_cleanupOrphanedLogs);
 }
 
 sub initHelpers {
@@ -211,6 +220,29 @@ sub _streamAlivePoll {
         Time::HiRes::time() + STREAM_WATCHDOG_INTERVAL,
         \&_streamAlivePoll
     );
+}
+
+sub _cleanupOrphanedLogs {
+    my $baseDir = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    return unless -d $baseDir;
+
+    my @logFiles = glob(catfile($baseDir, '*-connect.log'));
+    return unless @logFiles;
+
+    for my $f (@logFiles) {
+        next unless basename($f) =~ /^([0-9a-f]{12})-connect\.log$/i;
+        my $macClean = $1;
+        my $mac = join(':', $macClean =~ /../g);
+
+        my $client = Slim::Player::Client::getClient($mac);
+        if (!$client) {
+            unlink $f;
+            main::INFOLOG && $log->is_info && $log->info(
+                "Cleaned up orphaned Connect log: " . basename($f)
+            );
+        }
+    }
 }
 
 sub startHelper {
