@@ -65,9 +65,15 @@
 		<strong>[% 'PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_TITLE' | string %]</strong>
 		<p style="margin:6px 0 0 0; opacity:0.8">
 			[% 'PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_DESC' | string %]
+			[% IF playerid %]
+			<a href="/settings/plugins/SpotOn/settings/player.html?playerid=[% playerid | uri %]" style="margin-left:4px">
+				[% 'PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_GO' | string %] &rarr;
+			</a>
+			[% ELSE %]
 			<a href="/settings/player/basic.html" style="margin-left:4px">
 				[% 'PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_GO' | string %] &rarr;
 			</a>
+			[% END %]
 		</p>
 	</div>
 
