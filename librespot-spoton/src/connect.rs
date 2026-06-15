@@ -1020,14 +1020,23 @@ pub async fn run_connect(
         // device_id_shared was computed above and is shared with SessionConfig.
         // Do NOT recompute locally here — that was the original split-brain bug.
         const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+        let route_target = lms_host_port.unwrap_or("1.1.1.1:80");
+        let route_addr = if route_target.contains(':') {
+            route_target.to_string()
+        } else {
+            format!("{}:80", route_target)
+        };
         let zeroconf_ip = match std::net::UdpSocket::bind("0.0.0.0:0")
-            .and_then(|s| { s.connect("1.1.1.1:80")?; s.local_addr() })
+            .and_then(|s| { s.connect(&route_addr)?; s.local_addr() })
         {
             Ok(addr) => {
-                log::info!("[spoton] mDNS will announce: {}", addr.ip());
+                log::info!("[spoton] mDNS will announce: {} (route via {})", addr.ip(), route_addr);
                 vec![addr.ip()]
             }
-            Err(_) => vec![],
+            Err(e) => {
+                log::warn!("[spoton] mDNS IP detection failed (route target {}): {} — announcing on all interfaces", route_addr, e);
+                vec![]
+            }
         };
         match librespot_discovery::Discovery::builder(device_id_shared.clone(), KEYMASTER_CLIENT_ID.to_string())
             .name(device_name.to_string())

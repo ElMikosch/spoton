@@ -104,7 +104,7 @@ sub start {
 		'-n', $self->name,
 		'--disable-audio-cache',
 		'--player-mac', $self->mac,
-		'--lms', '127.0.0.1:' . $serverPrefs->get('httpport'),
+		'--lms', Slim::Utils::Network::serverAddr() . ':' . $serverPrefs->get('httpport'),
 		'--connect',    # SpotOn flag (Spotty-NG used '--connect-stream')
 	);
 
