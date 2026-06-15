@@ -1233,6 +1233,19 @@ PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_DESC
 	PL	Spotify Connect, format strumieniowania, bitrate i autoodtwarzanie konfiguruje się dla każdego odtwarzacza osobno.
 	SV	Spotify Connect, strömningsformat, bitrate och autoplay konfigureras per spelare.
 
+PLUGIN_SPOTON_PLAYER_SETTINGS_LINK_GO
+	CS	Otevřít nastavení přehrávače
+	DA	Åbn afspillerindstillinger
+	DE	Zu den Player-Einstellungen
+	EN	Open Player Settings
+	ES	Abrir ajustes del reproductor
+	FR	Ouvrir les paramètres du lecteur
+	IT	Apri impostazioni player
+	NL	Open spelerinstellingen
+	NO	Åpne spillerinnstillinger
+	PL	Otwórz ustawienia odtwarzacza
+	SV	Öppna spelarinställningar
+
 PLUGIN_SPOTON_SETTINGS_DIAG_SECTION
 	CS	Diagnostika
 	DA	Diagnostik
