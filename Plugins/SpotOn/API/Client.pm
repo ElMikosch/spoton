@@ -578,10 +578,15 @@ sub _doFlavouredRequest {
         # T-02-10: Never log Authorization header value — only URL path, flavor, and method
         main::INFOLOG && $log->info("Client: $method $cleanPath [flavor=$flavor]");
 
+        my $reqStartTime = Time::HiRes::time();
         my $http = Slim::Networking::SimpleAsyncHTTP->new(
             sub {
                 # Success callback — parse JSON, cache, then check for bundled hint write
                 my $http = shift;
+                my $reqDuration = Time::HiRes::time() - $reqStartTime;
+                if ($reqDuration > 2 && $prefs->get('diagnosticMode')) {
+                    $log->warn(sprintf("[DIAG] api_slow: endpoint=%s flavor=%s duration=%.1fs", $cleanPath, $flavor, $reqDuration));
+                }
                 my $content = $http->content // '';
 
                 # Pitfall 6: PUT/DELETE /me/library returns 200 OK with empty body.
@@ -642,6 +647,7 @@ sub _doFlavouredRequest {
                         : 'spoton_rate_limit_own';
                     $cache->set($rlKey, 1, $retryAfter);
                     $log->warn("Client: 429 rate limited [flavor=$flavor] for ${retryAfter}s on $cleanPath");
+                    $log->warn("[DIAG] api_429: endpoint=$cleanPath flavor=$flavor retry_after=${retryAfter}s") if $prefs->get('diagnosticMode');
                     $userCb->(undef, { error => 'rate_limited', code => 429 });
                     return;
                 }
@@ -650,6 +656,7 @@ sub _doFlavouredRequest {
                 if ($code == 401) {
                     $cache->remove("spoton_token_${accountId}_${flavor}") if $accountId;
                     $log->warn("Client: 401 unauthorized [flavor=$flavor] for $cleanPath (token invalidated)");
+                    $log->warn("[DIAG] api_401: endpoint=$cleanPath flavor=$flavor account=" . substr($accountId || '', 0, 4) . "****") if $prefs->get('diagnosticMode');
                     $userCb->(undef, { error => 'unauthorized', code => 401 });
                     return;
                 }
@@ -661,6 +668,7 @@ sub _doFlavouredRequest {
                 if (!$isRetry && $flavor eq 'own' && !$isMeFamily
                         && ($code == 403 || $code == 410
                             || ($code == 404 && $class->_is404Deprecated($cleanPath)))) {
+                    $log->warn("[DIAG] api_bundled_fallback: endpoint=$cleanPath trigger_code=$code") if $prefs->get('diagnosticMode');
                     main::INFOLOG && $log->info(
                         "Client: $code on own-token for $cleanPath — retrying with bundled token");
                     $class->_doFlavouredRequest(
@@ -670,6 +678,7 @@ sub _doFlavouredRequest {
 
                 # T-02-10: Log only status code and path, never token value
                 $log->error("Client: HTTP $code error [flavor=$flavor] for $cleanPath: $error");
+                $log->warn("[DIAG] api_error: endpoint=$cleanPath flavor=$flavor code=$code error=$error") if $prefs->get('diagnosticMode');
                 $userCb->(undef, { error => $error, code => $code });
             },
             { timeout => REQUEST_TIMEOUT, cache => 0 }

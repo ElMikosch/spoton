@@ -207,6 +207,7 @@ sub startDiscovery {
 
     main::INFOLOG && $log->info(
         "TokenManager: discovery process started (PID " . $discoveryProc->pid() . ")");
+    $log->warn("[DIAG] discovery_start: pid=" . $discoveryProc->pid() . " device_name=$deviceName cache=$discoverDir") if $prefs->get('diagnosticMode');
 
     # T-04.3-09: Watchdog timer — kill discovery after DISCOVERY_TIMEOUT
     Slim::Utils::Timers::killTimers($class, \&stopDiscovery);
@@ -308,6 +309,7 @@ sub _setupAccountFromCredentials {
     my $spotifyUserId = $creds->{username};
     # accountId pattern: MD5 of spotify user_id (stable across username changes)
     my $accountId = substr(md5_hex($spotifyUserId), 0, 8);
+    $log->warn("[DIAG] discovery_credential: account=" . substr($accountId, 0, 4) . "**** spotify_user=" . substr($spotifyUserId, 0, 4) . "****") if $prefs->get('diagnosticMode');
 
     # Dir-rename: __DISCOVER__ -> {accountId}
     my $finalDir = catdir($baseDir, $accountId);
@@ -399,6 +401,7 @@ sub _fetchKeymasterToken {
 
         if ($exit != 0 || !$output) {
             $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
+            $log->warn("[DIAG] token_refresh_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor exit=$exit") if $prefs->get('diagnosticMode');
             $cb->(undef);
             return;
         }
@@ -406,12 +409,14 @@ sub _fetchKeymasterToken {
         my $result = eval { from_json($output) };
         if ($@ || !$result->{accessToken}) {
             $log->error("TokenManager: JSON parse error on --get-token for $accountId ($flavor): $@");
+            $log->warn("[DIAG] token_parse_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor") if $prefs->get('diagnosticMode');
             $cb->(undef);
             return;
         }
 
         # T-04.3-06: Log only accountId, flavor, and TTL — never the token value
         $class->_cacheToken($accountId, $flavor, $result->{accessToken}, $result->{expiresIn});
+        $log->warn("[DIAG] token_refresh_ok: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor ttl=" . ($result->{expiresIn} || 'unknown') . "s") if $prefs->get('diagnosticMode');
         $cb->($result->{accessToken});
     });
 }
@@ -480,6 +485,7 @@ sub _storeAccountPrefs {
 
     main::INFOLOG && $log->info(
         "TokenManager: account $accountId stored (displayName=$displayName)");
+    $log->warn("[DIAG] account_stored: account=" . substr($accountId, 0, 4) . "**** display_name=$displayName is_active=" . (($prefs->get('activeAccount') || '') eq $accountId ? 1 : 0)) if $prefs->get('diagnosticMode');
     $cb->($accountId);
 }
 
