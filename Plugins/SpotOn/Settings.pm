@@ -29,6 +29,12 @@ sub new {
         \&_discoveryStatusHandler
     );
 
+    # Register diagnostic bundle download endpoint (#3)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/diagnosticBundle',
+        \&_diagnosticBundleHandler
+    );
+
     return $self;
 }
 
@@ -37,7 +43,7 @@ sub name {
 }
 
 sub needsClient {
-    return 1;
+    return 0;
 }
 
 sub page {
@@ -333,6 +339,104 @@ sub _discoveryStatusHandler {
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
     # Source: Spotty/Settings/Auth.pm line 88
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# Diagnostic bundle endpoint (#3): /plugins/SpotOn/settings/diagnosticBundle
+# Returns a downloadable text file with system info + daemon logs.
+# Only works when diagnosticMode pref is enabled (403 otherwise).
+# ============================================================
+sub _diagnosticBundleHandler {
+    my ($httpClient, $response) = @_;
+
+    unless ($prefs->get('diagnosticMode')) {
+        my $content = to_json({ error => 'Diagnostic mode not enabled' });
+        $response->header('Content-Length' => length($content));
+        $response->code(403);
+        $response->header('Connection' => 'close');
+        $response->content_type('application/json');
+        Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+        return;
+    }
+
+    my $serverPrefs = preferences('server');
+    my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
+
+    # Collect daemon logs (*-connect.log files)
+    my @logFiles = glob(catfile($spotonDir, '*-connect.log'));
+
+    # Build header with system info
+    my $activeId = $prefs->get('activeAccount') || '';
+    my $redactedId = $activeId ? substr($activeId, 0, 4) . '****' : 'none';
+    my $clientId = $prefs->get('clientId') || '';
+    my $redactedClientId = $clientId ? substr($clientId, 0, 4) . '****' : 'none';
+
+    my @playerList;
+    for my $c (Slim::Player::Client::clients()) {
+        push @playerList, sprintf('  %s | %s | %s', $c->name, $c->id, $c->model);
+    }
+
+    require POSIX;
+    my $timestamp = POSIX::strftime('%Y%m%d-%H%M%S', localtime);
+
+    my $header = join("\n",
+        '=== SpotOn Diagnostic Bundle ===',
+        "Generated: $timestamp",
+        '',
+        '--- System Info ---',
+        "LMS version: $::VERSION",
+        "OS: $^O",
+        "Perl: $]",
+        "SpotOn version: " . (Plugins::SpotOn::Plugin->_pluginDataFor('version') || 'unknown'),
+        "Active account: $redactedId",
+        "Bitrate: " . ($prefs->get('bitrate') || 320),
+        "Normalization: " . ($prefs->get('normalization') ? 'on' : 'off'),
+        "Client-ID: $redactedClientId",
+        "diagnosticMode: 1",
+        '',
+        '--- Players ---',
+        (@playerList ? join("\n", @playerList) : '  (none)'),
+        '',
+        '=' x 50,
+        '',
+    );
+
+    # Append each log file (cap at 500KB per file)
+    my $maxBytes = 500 * 1024;
+    my $logs = '';
+    for my $logFile (@logFiles) {
+        my $basename = (split /\//, $logFile)[-1];
+        $logs .= "--- Log: $basename ---\n";
+
+        if (open my $fh, '<', $logFile) {
+            my $size = -s $logFile;
+            if ($size > $maxBytes) {
+                seek($fh, -$maxBytes, 2);
+                <$fh>;  # discard partial line
+                $logs .= "[...truncated to last 500KB...]\n";
+            }
+            local $/;
+            $logs .= <$fh> // '';
+            close $fh;
+        } else {
+            $logs .= "(could not read: $!)\n";
+        }
+        $logs .= "\n";
+    }
+
+    if (!@logFiles) {
+        $logs = "--- No daemon log files found ---\n";
+    }
+
+    my $content = $header . $logs;
+    my $filename = "spoton-diag-$timestamp.txt";
+
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('text/plain; charset=utf-8');
+    $response->header('Content-Disposition' => "attachment; filename=\"$filename\"");
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
 }
 
