@@ -1020,11 +1020,18 @@ pub async fn run_connect(
         // device_id_shared was computed above and is shared with SessionConfig.
         // Do NOT recompute locally here — that was the original split-brain bug.
         const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
-        let route_target = lms_host_port.unwrap_or("1.1.1.1:80");
-        let route_addr = if route_target.contains(':') {
-            route_target.to_string()
-        } else {
-            format!("{}:80", route_target)
+        let route_addr = match lms_host_port {
+            Some(hp) => {
+                let host = hp.rsplit_once(':').map(|(h, _)| h).unwrap_or(hp);
+                if host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" || host == "localhost" {
+                    "1.1.1.1:80".to_string()
+                } else if hp.contains(':') {
+                    hp.to_string()
+                } else {
+                    format!("{}:80", hp)
+                }
+            }
+            None => "1.1.1.1:80".to_string(),
         };
         let zeroconf_ip = match std::net::UdpSocket::bind("0.0.0.0:0")
             .and_then(|s| { s.connect(&route_addr)?; s.local_addr() })

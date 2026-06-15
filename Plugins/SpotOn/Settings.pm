@@ -5,6 +5,7 @@ use warnings;
 use base qw(Slim::Web::Settings);
 
 use Digest::MD5 qw(md5_hex);
+use File::Basename qw(basename);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
 
@@ -329,7 +330,7 @@ sub _diagnosticBundleHandler {
     my $maxBytes = 500 * 1024;
     my $logs = '';
     for my $logFile (@logFiles) {
-        my $basename = (split /\//, $logFile)[-1];
+        my $basename = basename($logFile);
         $logs .= "--- Log: $basename ---\n";
 
         if (open my $fh, '<', $logFile) {
