@@ -1244,6 +1244,7 @@ sub _episodeItem {
         url       => $spoton_url,
         play      => $spoton_url,
         on_select => 'play',
+        playall   => 1,
         image     => $image,
         duration  => $duration,
         type      => 'audio',
