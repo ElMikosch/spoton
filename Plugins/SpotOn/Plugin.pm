@@ -1283,6 +1283,15 @@ sub _episodeItem {
             };
         }
     }
+    # UX-04: Search result episodes lack showContext — add lazy-load sub-item to fetch show data
+    if (!$showId && $episode->{id}) {
+        push @contextItems, {
+            name        => cstring($client, 'PLUGIN_SPOTON_SHOW_VIEW'),
+            url         => \&_episodeInfoFeed,
+            passthrough => [{ episodeId => $episode->{id}, episodeUri => $episode->{uri}, line2 => $line2, durationMs => $episode->{duration_ms} || 0 }],
+            type        => 'link',
+        };
+    }
     # Fallback: always provide at least one sub-item so XMLBrowser doesn't show raw streaminfo
     push @contextItems, { name => $line2, type => 'textarea' } unless @contextItems;
 
@@ -1313,6 +1322,90 @@ sub _episodeItem {
     $item{items} = \@contextItems;
 
     return \%item;
+}
+
+# _episodeInfoFeed($client, $callback, $args, $passthrough)
+# UX-04: Lazy-load show data for search result episodes that lack showContext.
+# Fetches full episode via getEpisode, extracts show info, builds navigable sub-items.
+# Also surfaces resume_point data when available (UX-02).
+# T-21-01: episodeId validated against ^[A-Za-z0-9]{1,40}$ before API call.
+sub _episodeInfoFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+
+    my $episodeId  = $passthrough->{episodeId}  // '';
+    my $episodeUri = $passthrough->{episodeUri} // '';
+    my $line2      = $passthrough->{line2}      // '';
+    my $durationMs = $passthrough->{durationMs} // 0;
+    my $accountId  = _getAccountId($client);
+
+    # T-21-01: Validate episodeId before forwarding to API
+    unless ($episodeId =~ /^[A-Za-z0-9]{1,40}$/) {
+        $callback->({ items => [{ name => $line2, type => 'textarea' }] });
+        return;
+    }
+
+    # Helper closure: build sub-items from show context and optional resume point
+    my $buildItems = sub {
+        my ($showCtx, $resumePoint) = @_;
+        my @items;
+
+        if ($showCtx && $showCtx->{id}) {
+            push @items, {
+                name        => $showCtx->{name} || 'Show',
+                url         => \&_showFeed,
+                passthrough => [{ showId => $showCtx->{id}, showUri => $showCtx->{uri}, showImages => $showCtx->{images}, showName => $showCtx->{name} }],
+                type        => 'link',
+            };
+        }
+
+        if ($showCtx && ($showCtx->{uri} // '') =~ /^spotify:show:[A-Za-z0-9]+$/ && $accountId) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => $showCtx->{uri}, accountId => $accountId }],
+                type        => 'link',
+                icon        => '/html/images/playlistadd.png',
+            };
+        }
+
+        # UX-02: Surface resume point status when available
+        if ($resumePoint && $resumePoint->{fully_played}) {
+            push @items, { name => cstring($client, 'PLUGIN_SPOTON_RESUME_FINISHED'), type => 'textarea' };
+        } elsif ($resumePoint && ($resumePoint->{resume_position_ms} // 0) > 0) {
+            my $remaining = int(($durationMs - $resumePoint->{resume_position_ms}) / 60000);
+            push @items, { name => sprintf(cstring($client, 'PLUGIN_SPOTON_RESUME_IN_PROGRESS'), $remaining), type => 'textarea' };
+        }
+
+        # Fallback: always have at least one sub-item
+        push @items, { name => $line2, type => 'textarea' } unless @items;
+
+        $callback->({ items => \@items });
+    };
+
+    # Cache check: avoid repeat API calls for the same episode
+    my $cacheKey = "spoton_ep_show_$episodeId";
+    if (my $cached = $cache->get($cacheKey)) {
+        $buildItems->($cached, undef);
+        return;
+    }
+
+    # Cache miss: fetch full episode to extract show context
+    Plugins::SpotOn::API::Client->getEpisode($accountId, $episodeId, sub {
+        my ($ep, $err) = @_;
+        if ($ep && $ep->{show} && $ep->{show}{id}) {
+            my $ctx = {
+                id     => $ep->{show}{id},
+                uri    => $ep->{show}{uri},
+                name   => $ep->{show}{name},
+                images => $ep->{show}{images},
+            };
+            $cache->set($cacheKey, $ctx, 300);
+            my $resumePoint = $ep->{resume_point};
+            $buildItems->($ctx, $resumePoint);
+        } else {
+            $buildItems->({}, undef);
+        }
+    });
 }
 
 # _formatEpisodeLine2($duration_sec, $release_date)
