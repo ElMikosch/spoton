@@ -163,6 +163,8 @@ sub start {
 	my $had_stderr_tie = defined tied(*STDERR);
 	untie *STDERR if $had_stderr_tie;
 
+	$ENV{RUST_LOG} = 'spoton=debug,librespot=info';
+
 	eval {
 		$self->_proc( Proc::Background->new(
 			{ 'die_upon_destroy' => 1, stdout => $port_w,
@@ -171,6 +173,8 @@ sub start {
 			@helperArgs,
 		) );
 	};
+
+	delete $ENV{RUST_LOG};
 
 	# Re-tie STDERR to LMS log trapper immediately after spawn
 	tie *STDERR, 'Slim::Utils::Log::Trapper' if $had_stderr_tie;
