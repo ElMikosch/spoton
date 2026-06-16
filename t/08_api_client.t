@@ -629,7 +629,7 @@ SKIP: {
         "LIB-05: Client.pm cache namespace version is 4");
 }
 
-# LIB-06: saveShows sends PUT to /me/library with uris query param
+# LIB-06: saveShows sends PUT to /me/shows with ids query param
 SKIP: {
     skip "Client.pm not yet created", 5
         unless -f $client_module;
@@ -647,12 +647,12 @@ SKIP: {
     my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
     is(scalar(@reqs), 1, 'LIB-06: saveShows dispatches exactly one HTTP request');
     is($reqs[0]->{method}, 'PUT', 'LIB-06: saveShows uses PUT method');
-    like($reqs[0]->{url}, qr{/me/library}, 'LIB-06: saveShows URL contains /me/library');
-    like($reqs[0]->{url}, qr{uris=}, 'LIB-06: saveShows URL contains uris= query param');
+    like($reqs[0]->{url}, qr{/me/shows\b}, 'LIB-06: saveShows URL contains /me/shows');
+    like($reqs[0]->{url}, qr{ids=ABC123}, 'LIB-06: saveShows URL contains ids= with extracted show ID');
     is($got_err, undef, 'LIB-06: Empty-body guard — saveShows callback receives no error on 200 empty response');
 }
 
-# LIB-07: removeShows sends DELETE to /me/library with uris query param
+# LIB-07: removeShows sends DELETE to /me/shows with ids query param
 SKIP: {
     skip "Client.pm not yet created", 5
         unless -f $client_module;
@@ -670,12 +670,12 @@ SKIP: {
     my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
     is(scalar(@reqs), 1, 'LIB-07: removeShows dispatches exactly one HTTP request');
     is($reqs[0]->{method}, 'DELETE', 'LIB-07: removeShows uses DELETE method');
-    like($reqs[0]->{url}, qr{/me/library}, 'LIB-07: removeShows URL contains /me/library');
-    like($reqs[0]->{url}, qr{uris=}, 'LIB-07: removeShows URL contains uris= query param');
+    like($reqs[0]->{url}, qr{/me/shows\b}, 'LIB-07: removeShows URL contains /me/shows');
+    like($reqs[0]->{url}, qr{ids=ABC123}, 'LIB-07: removeShows URL contains ids= with extracted show ID');
     is($got_err, undef, 'LIB-07: Empty-body guard — removeShows callback receives no error on 200 empty response');
 }
 
-# LIB-08: checkShows sends GET to /me/library/contains, returns [true]/[false]
+# LIB-08: checkShows sends GET to /me/shows/contains, returns [true]/[false]
 SKIP: {
     skip "Client.pm not yet created", 6
         unless -f $client_module;
@@ -693,8 +693,8 @@ SKIP: {
     my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
     is(scalar(@reqs), 1, 'LIB-08: checkShows dispatches exactly one HTTP request');
     is($reqs[0]->{method}, 'GET', 'LIB-08: checkShows uses GET method');
-    like($reqs[0]->{url}, qr{/me/library/contains}, 'LIB-08: checkShows URL contains /me/library/contains');
-    like($reqs[0]->{url}, qr{uris=}, 'LIB-08: checkShows URL contains uris= query param');
+    like($reqs[0]->{url}, qr{/me/shows/contains}, 'LIB-08: checkShows URL contains /me/shows/contains');
+    like($reqs[0]->{url}, qr{ids=ABC123}, 'LIB-08: checkShows URL contains ids= with extracted show ID');
     ok($got_result && ref($got_result) eq 'ARRAY' && $got_result->[0], 'LIB-08: checkShows returns [true] array');
     is($got_err, undef, 'LIB-08: checkShows callback receives no error');
 }

@@ -210,6 +210,7 @@ sub getSavedShows {
         _accountId => $accountId,
         offset     => $params->{offset} // 0,
         limit      => $params->{limit}  // 50,
+        ($params->{_noCache} ? (_noCache => 1) : ()),
     }, $cb);
 }
 
@@ -256,44 +257,46 @@ sub checkTracks {
 }
 
 # saveShows($class, $accountId, $uris, $cb)
-# Saves shows to the user's library (PUT /me/library?uris=...).
-# POD-04/POD-05: Uses unified library endpoint with full Spotify URIs (e.g. spotify:show:ID).
+# Saves shows to the user's library (PUT /me/shows?ids=...).
+# Uses old-style endpoint consistent with GET /me/shows listing.
+# The unified PUT /me/library saves to a different store that GET /me/shows does not read.
 # Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
 # Scope: user-library-modify
 sub saveShows {
     my ($class, $accountId, $uris, $cb) = @_;
-    $class->_request('put', 'me/library', {
+    $class->_request('put', 'me/shows', {
         _accountId => $accountId,
         _noCache   => 1,
-        uris       => join(',', @{$uris || []}),
+        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
     }, $cb);
 }
 
 # removeShows($class, $accountId, $uris, $cb)
-# Removes shows from the user's library (DELETE /me/library?uris=...).
-# POD-04/POD-05: Uses unified library endpoint with full Spotify URIs.
+# Removes shows from the user's library (DELETE /me/shows?ids=...).
+# Uses old-style endpoint consistent with GET /me/shows listing.
 # Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
 # Scope: user-library-modify
 sub removeShows {
     my ($class, $accountId, $uris, $cb) = @_;
-    $class->_request('delete', 'me/library', {
+    $class->_request('delete', 'me/shows', {
         _accountId => $accountId,
         _noCache   => 1,
-        uris       => join(',', @{$uris || []}),
+        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
     }, $cb);
 }
 
 # checkShows($class, $accountId, $uris, $cb)
-# Checks if shows are saved in the user's library (GET /me/library/contains?uris=...).
-# POD-04/POD-05: Response is an array of booleans, e.g. [true] or [false].
+# Checks if shows are saved in the user's library (GET /me/shows/contains?ids=...).
+# Uses old-style endpoint consistent with GET /me/shows listing.
+# Response is an array of booleans, e.g. [true] or [false].
 # _noCache => 1: caching is managed manually in Plugin.pm with 60s TTL (D-07, Pitfall 2).
 # Scope: user-library-read
 sub checkShows {
     my ($class, $accountId, $uris, $cb) = @_;
-    $class->_request('get', 'me/library/contains', {
+    $class->_request('get', 'me/shows/contains', {
         _accountId => $accountId,
         _noCache   => 1,
-        uris       => join(',', @{$uris || []}),
+        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
     }, $cb);
 }
 
@@ -610,7 +613,6 @@ sub _doFlavouredRequest {
             $cacheKey .= "_locale=$params->{_locale}" if $params->{_locale};
             $params->{_cacheKey} = $cacheKey;
             if (my $cached = $cache->get($cacheKey)) {
-                # Cache hit — $userCb decrements $inflightCount
                 main::INFOLOG && $log->info("Client: cache hit for $cleanPath [flavor=$flavor]");
                 $userCb->($cached);
                 return;

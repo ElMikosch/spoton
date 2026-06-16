@@ -578,8 +578,6 @@ sub _doShowLibraryAction {
         }
         my $newState = ($apiMethod eq 'saveShows') ? 1 : 0;
         $cache->set($cacheKey, $newState, 60);
-        # Invalidate saved shows list so "Meine Podcasts" reflects change immediately
-        $cache->remove('spoton_resp_me/shows');
         $client->showBriefly({
             jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
         }) if $client;
@@ -1130,8 +1128,9 @@ sub _savedShowsFeed {
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getSavedShows($accountId, {
-        offset => $offset,
-        limit  => $limit,
+        offset   => $offset,
+        limit    => $limit,
+        _noCache => 1,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -1554,17 +1553,16 @@ sub _podcastSearchTypeFeed {
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'show';
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 10;
-    my $limit  = $qty > 10 ? 10 : $qty;    # D-12: Dev Mode limit
-
     my $accountId = _getAccountId($client);
 
+    # Dev Mode: max 10 results per type. Always fetch the full page (offset=0, limit=10)
+    # and let LMS handle item selection. Using $args->{index} as API offset causes
+    # wrong-item-on-click when Material Skin re-requests with index=N, quantity=1.
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => $limit,
-        offset => $offset,
+        limit  => 10,
+        offset => 0,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -1576,14 +1574,11 @@ sub _podcastSearchTypeFeed {
         my $key      = $typeToKey{$type} // "${type}s";
         my $typeData = $data->{$key} || {};
         my $results  = $typeData->{items} || [];
-        my $total    = $typeData->{total}  // 0;
 
         my @items;
         if ($type eq 'show') {
             @items = map { _showItem($client, $_) } @{$results};
         } elsif ($type eq 'episode') {
-            # Search result episodes: no $showImages context; _episodeItem falls back to
-            # $episode->{show}{images} internally (D-08/Pitfall 4)
             @items = map { _episodeItem($client, $_, undef) } @{$results};
         }
 
@@ -1591,7 +1586,7 @@ sub _podcastSearchTypeFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items, offset => $offset, total => $total });
+        $callback->({ items => \@items });
     });
 }
 
@@ -1700,17 +1695,15 @@ sub _searchTypeFeed {
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'track';
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 10;
-    my $limit  = $qty > 10 ? 10 : $qty;
-
     my $accountId = _getAccountId($client);
 
+    # Dev Mode: max 10 results per type. Always fetch full page (offset=0, limit=10).
+    # Same fix as _podcastSearchTypeFeed: prevents wrong-item-on-click.
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => $limit,
-        offset => $offset,
+        limit  => 10,
+        offset => 0,
     }, sub {
         my $data = shift;
         unless ($data) {
@@ -1718,7 +1711,6 @@ sub _searchTypeFeed {
             return;
         }
 
-        # Map singular type name to plural response key (Spotify API convention).
         my %typeToKey = (
             track    => 'tracks',
             album    => 'albums',
@@ -1728,7 +1720,6 @@ sub _searchTypeFeed {
         my $key       = $typeToKey{$type} // "${type}s";
         my $typeData  = $data->{$key} || {};
         my $resultItems = $typeData->{items} || [];
-        my $total     = $typeData->{total}   // 0;
 
         my @items;
         if ($type eq 'track') {
@@ -1745,7 +1736,7 @@ sub _searchTypeFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items, offset => $offset, total => $total });
+        $callback->({ items => \@items });
     });
 }
 
