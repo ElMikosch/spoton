@@ -1184,9 +1184,13 @@ sub _showFeed {
     my $limit  = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
+    my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
+
+    # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
+    my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
 
     Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
-        offset => $offset,
+        offset => $apiOffset,
         limit  => $limit,
     }, sub {
         my $data = shift;
@@ -1196,11 +1200,22 @@ sub _showFeed {
         }
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
         my @items = map { _episodeItem($client, $_, $showCtx) } @{ $data->{items} || [] };
-        if (!@items) {
+        if (!@items && !$hasFollowItem) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+        if ($hasFollowItem && $offset == 0) {
+            unshift @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                type        => 'link',
+                icon        => '/html/images/playlistadd.png',
+            };
+        }
+
+        my $total = ($data->{total} // 0) + ($hasFollowItem ? 1 : 0);
+        $callback->({ items => \@items, offset => $offset, total => $total });
     });
 }
 
