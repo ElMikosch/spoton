@@ -12,7 +12,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 | | SpotOn | Spotty |
 |--|--------|--------|
-| **Podcasts** | Browse, search, play, follow/unfollow shows, explicit markers, 11 languages | Not available |
+| **Podcasts** | Browse, search, play, follow/unfollow shows, explicit markers, 11 languages | Browse and play shows/episodes |
 | **Like / Unlike** | One-click toggle from any track menu | Not available |
 | **Audio formats** | OGG, FLAC, PCM, MP3 — configurable per player | PCM, FLAC, MP3 — global setting |
 | **Spotify Connect** | Bidirectional sync (play, pause, seek, volume, skip) | Currently disabled |
