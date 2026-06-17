@@ -1,0 +1,15 @@
+{
+  "name": "spoton-forum-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Forum monitor for SpotOn — scrapes Lyrion forum, generates draft replies via Claude API",
+  "scripts": {
+    "monitor": "node index.js",
+    "test": "node --test __tests__/scraper.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "playwright": "^1.52.0"
+  }
+}
