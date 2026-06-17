@@ -277,6 +277,13 @@ sub getNextTrack {
             );
             $song->streamUrl($browseUrl);
             $_translatedConnectUrls{$url} = 1;
+
+            # Set duration from cached metadata for the translated Browse URL
+            my $browseMeta = $cache->get('spoton_meta_' . md5_hex($browseUrl));
+            if ($browseMeta && $browseMeta->{duration} && $browseMeta->{duration} > 0) {
+                $song->duration($browseMeta->{duration});
+            }
+
             $successCb->();
             return;
         }
@@ -295,7 +302,28 @@ sub getNextTrack {
         return;
     }
 
+    # Set duration from cached metadata for Browse URLs before transcoding starts.
+    # This gives LMS the earliest possible duration information for the seek bar.
+    my $browseMeta = $cache->get('spoton_meta_' . md5_hex($url));
+    if ($browseMeta && $browseMeta->{duration} && $browseMeta->{duration} > 0) {
+        $song->duration($browseMeta->{duration});
+    }
+
     $successCb->();
+}
+
+sub parseDirectHeaders {
+    my ($class, $client, $url, @headers) = @_;
+
+    my $song = $client->streamingSong();
+    if ($song) {
+        my $meta = $class->getMetadataFor($client, $url);
+        if ($meta && $meta->{duration}) {
+            $song->duration($meta->{duration});
+        }
+    }
+
+    return $class->SUPER::parseDirectHeaders($client, $url, @headers);
 }
 
 sub isRepeatingStream {
@@ -338,7 +366,13 @@ sub getSeekData {
 # Cache key: 'spoton_meta_' + md5_hex(url). TTL: 3600s.
 # Per STR-03: LMS calls this to populate the NowPlaying display.
 sub getMetadataFor {
-    my ($class, $client, $url) = @_;
+    my ($class, $client, $url, undef, $song) = @_;
+
+    # Spotty pattern: fall back to currentSongForUrl when $song is not passed.
+    # Must happen BEFORE any early returns so $song->duration can be set below.
+    if ($client && !$song && $client->can('currentSongForUrl')) {
+        $song = $client->currentSongForUrl($url);
+    }
 
     # For Connect streams: try pluginData info first (set by Connect.pm _fetchTrackMetadata)
     if ($url && $url =~ m{spoton://connect-} && $client) {
@@ -391,6 +425,13 @@ sub getMetadataFor {
         return _placeholderMeta($url);
     }
 
+    # Spotty pattern: propagate duration to $song object so LMS seek bar works.
+    # Guard: only set when not already set to >0 (prevents overwrite on repeated calls).
+    if ($song && $meta && $meta->{duration}
+        && !($song->duration && $song->duration > 0)) {
+        $song->duration($meta->{duration});
+    }
+
     if ($client) {
         require Plugins::SpotOn::Plugin;
         return { %$meta,
@@ -435,7 +476,7 @@ sub trackInfoURL {
 # D-03: cache miss returns placeholder, not empty hashref.
 sub _placeholderMeta {
     my ($url) = @_;
-    my $title = ($url && $url =~ m{spoton://track:}) ? 'Loading...' : '';
+    my $title = ($url && $url =~ m{spoton://(?:track|episode):}) ? 'Loading...' : '';
     return {
         cover => '/html/images/cover.png',
         icon  => '/html/images/cover.png',
@@ -456,10 +497,12 @@ sub _asyncRefetch {
     return unless $url;
     return if $_pendingRefetch{$url};
 
-    # Extract track ID from Browse URL or from cached connect entry's spotifyUri
-    my $trackId;
+    # Extract track/episode ID from Browse URL or from cached connect entry's spotifyUri
+    my ($trackId, $episodeId);
     if ($canonical && $canonical =~ m{spoton://track:([A-Za-z0-9]+)}) {
         $trackId = $1;
+    } elsif ($canonical && $canonical =~ m{spoton://episode:([A-Za-z0-9]+)}) {
+        $episodeId = $1;
     } elsif ($url && $url =~ m{spoton://connect-}) {
         my $connect_meta = $cache->get('spoton_meta_' . md5_hex($url));
         if ($connect_meta && $connect_meta->{spotifyUri}
@@ -467,9 +510,9 @@ sub _asyncRefetch {
             $trackId = $1;
         }
     }
-    return unless $trackId;
+    return unless $trackId || $episodeId;
 
-    # Resolve accountId — T-11-03: only alphanumeric track IDs reach here
+    # Resolve accountId — T-11-03: only alphanumeric IDs reach here
     my $accountId;
     if ($client) {
         $accountId = $prefs->client($client)->get('activeAccount')
@@ -484,20 +527,30 @@ sub _asyncRefetch {
 
     require Plugins::SpotOn::API::Client;
 
-    Plugins::SpotOn::API::Client->getTrack($accountId, $trackId, sub {
-        my ($trackInfo) = @_;
+    my $fetchCb = sub {
+        my ($info) = @_;
 
         # Pitfall 4: ALWAYS clear debounce first — even on error
         delete $_pendingRefetch{$url};
 
-        return unless $trackInfo && $trackInfo->{name};
+        return unless $info && $info->{name};
 
-        my $title    = $trackInfo->{name};
-        my $artist   = join(', ', map { $_->{name} } @{ $trackInfo->{artists} || [] });
-        my $album    = ($trackInfo->{album} || {})->{name} || '';
-        my $duration = ($trackInfo->{duration_ms} || 0) / 1000;
-        my $cover    = _largestImage(($trackInfo->{album} || {})->{images})
-                    || '/html/images/cover.png';
+        my $title    = $info->{name};
+        my $duration = ($info->{duration_ms} || 0) / 1000;
+        my ($artist, $album, $cover);
+
+        if ($episodeId) {
+            $artist = ($info->{show} || {})->{name} || '';
+            $album  = '';
+            $cover  = _largestImage($info->{images})
+                   || _largestImage(($info->{show} || {})->{images})
+                   || '/html/images/cover.png';
+        } else {
+            $artist = join(', ', map { $_->{name} } @{ $info->{artists} || [] });
+            $album  = ($info->{album} || {})->{name} || '';
+            $cover  = _largestImage(($info->{album} || {})->{images})
+                   || '/html/images/cover.png';
+        }
 
         my %new_meta = (
             title    => $title,
@@ -520,7 +573,13 @@ sub _asyncRefetch {
             require Slim::Control::Request;
             Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
         }
-    });
+    };
+
+    if ($episodeId) {
+        Plugins::SpotOn::API::Client->getEpisode($accountId, $episodeId, $fetchCb);
+    } else {
+        Plugins::SpotOn::API::Client->getTrack($accountId, $trackId, $fetchCb);
+    }
 }
 
 # _largestImage($images_arrayref)
