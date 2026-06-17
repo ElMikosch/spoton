@@ -24,20 +24,42 @@ const POST_EXTRACTION = `
 
 async function launchBrowser() {
   return chromium.launch({
-    args: ['--disable-blink-features=AutomationControlled'],
+    headless: false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+    ],
   });
 }
 
 async function newPage(browser) {
-  const ctx = await browser.newContext({ userAgent: USER_AGENT });
+  const ctx = await browser.newContext({
+    userAgent: USER_AGENT,
+    viewport: { width: 1280, height: 720 },
+    locale: 'en-US',
+  });
   return ctx.newPage();
+}
+
+async function waitForCloudflare(page) {
+  const title = await page.title();
+  if (title.includes('Just a moment')) {
+    console.log('[scraper] Cloudflare challenge detected, waiting...');
+    await page.waitForFunction(
+      () => !document.title.includes('Just a moment'),
+      { timeout: 45000 }
+    );
+    console.log('[scraper] Cloudflare challenge passed');
+    await page.waitForTimeout(2000);
+  }
 }
 
 export async function scrapePosts(url = THREAD_URL) {
   const browser = await launchBrowser();
   try {
     const page = await newPage(browser);
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await waitForCloudflare(page);
     await page.waitForSelector('.js-post', { timeout: 30000 });
     return await page.evaluate(POST_EXTRACTION);
   } finally {
@@ -46,9 +68,10 @@ export async function scrapePosts(url = THREAD_URL) {
 }
 
 export async function scrapeFromFile(filePath) {
-  const browser = await launchBrowser();
+  const browser = await chromium.launch();
   try {
-    const page = await newPage(browser);
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
     await page.goto(`file://${filePath}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.js-post', { timeout: 10000 });
     return await page.evaluate(POST_EXTRACTION);

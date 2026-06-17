@@ -2,12 +2,12 @@ name: Forum Monitor
 
 on:
   schedule:
-    - cron: '17,47 * * * *'   # Every 30 minutes (offset to avoid :00/:30 congestion)
-  workflow_dispatch:            # Manual trigger for testing
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
 
 permissions:
   issues: write
-  actions: write               # For artifact upload/download
+  actions: write
 
 jobs:
   monitor:
@@ -32,7 +32,7 @@ jobs:
         with:
           name: forum-monitor-state
           path: .github/scripts/forum-monitor
-        continue-on-error: true  # First run has no artifact
+        continue-on-error: true
 
       - name: Run forum monitor
         working-directory: .github/scripts/forum-monitor
@@ -40,9 +40,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           STATE_PATH: forum-state.json
-        run: node index.js
+          DISPLAY: ':99'
+        run: xvfb-run --auto-servernum node index.js
 
       - name: Upload state artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: forum-monitor-state
