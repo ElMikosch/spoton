@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-17
+### Fixed
+- Seek bar showed 0:00 duration — seeking was impossible (duration propagation via `$song->duration()`)
+- LMS Favorites unplayable — items used `spotify:` URIs instead of `spoton://` URLs
+- Queue showed "Loading..." for all tracks after playing album/playlist from Favorites
+
+### Added
+- `explodePlaylist`: resolves album, playlist, and show containers from Favorites into playable tracks
+- Metadata pre-caching during container resolution — queue shows titles and artwork immediately
+- Episode support in async metadata refetch (`_asyncRefetch`)
+- `parseDirectHeaders` for Connect DirectStream duration propagation
+
 ## [1.6.3] - 2026-06-16
 ### Fixed
 - Follow/Unfollow button restored in show feed with correct offset correction
