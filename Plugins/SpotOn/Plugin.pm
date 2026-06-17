@@ -706,8 +706,8 @@ sub _trackItem {
         image         => $image,
         duration      => $duration,
         type          => 'audio',
-        # UX-05: Spotify URI for Favorites star (consistent with _albumItem pattern)
-        favorites_url => $track->{uri},
+        # spoton:// URL for LMS Favorites playback
+        favorites_url => $spoton_url,
     );
     $item{items} = \@contextItems if @contextItems;
 
@@ -725,13 +725,16 @@ sub _albumItem {
     my $releaseDate = $album->{release_date} // '';
     my $line2 = $firstArtist . ($releaseDate ? " ($releaseDate)" : '');
 
+    # spoton:// URL for LMS Favorites playback (explodePlaylist resolves to tracks)
+    my $album_spoton = 'spoton://album:' . ($album->{id} // '');
+
     return {
         name          => $album->{name} // '',
         url           => \&_albumFeed,
         passthrough   => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name} }],
         image         => _largestImage($album->{images}),
         line2         => $line2,
-        favorites_url => $album->{uri},
+        favorites_url => $album_spoton,
         type          => 'playlist',
     };
 }
@@ -755,13 +758,16 @@ sub _artistItem {
 # url => \&_playlistFeed is defined in Plan 03-03 (resolved at runtime by Perl).
 sub _playlistItem {
     my ($client, $playlist) = @_;
+    # spoton:// URL for LMS Favorites playback (explodePlaylist resolves to tracks)
+    my $pl_spoton = 'spoton://playlist:' . ($playlist->{id} // '');
+
     return {
         name          => $playlist->{name} // '',
         url           => \&_playlistFeed,
         passthrough   => [{ playlistId => $playlist->{id} }],
         image         => _largestImage($playlist->{images}),
         line2         => $playlist->{owner}{display_name} // '',
-        favorites_url => $playlist->{uri},
+        favorites_url => $pl_spoton,
         type          => 'playlist',
     };
 }
@@ -1155,6 +1161,9 @@ sub _showItem {
     my ($client, $show) = @_;
     my $name      = $show->{name}      // '';
     my $publisher = $show->{publisher} // '';
+    # spoton:// URL for LMS Favorites playback (explodePlaylist resolves to episodes)
+    my $show_spoton = 'spoton://show:' . ($show->{id} // '');
+
     return {
         name          => $name . ($publisher ? " \x{b7} $publisher" : ''),
         line1         => $name,
@@ -1162,7 +1171,7 @@ sub _showItem {
         url           => \&_showFeed,
         passthrough   => [{ showId => $show->{id}, showUri => $show->{uri}, showImages => $show->{images}, showName => $name }],
         image         => _largestImage($show->{images}),
-        favorites_url => $show->{uri},
+        favorites_url => $show_spoton,
         type          => 'playlist',
     };
 }
@@ -1323,8 +1332,8 @@ sub _episodeItem {
         image         => $image,
         duration      => $duration,
         type          => 'audio',
-        # UX-05: Spotify URI for Favorites star (consistent with _trackItem pattern)
-        favorites_url => $episode->{uri},
+        # spoton:// URL for LMS Favorites playback
+        favorites_url => $spoton_url,
     );
     $item{items} = \@contextItems;
 

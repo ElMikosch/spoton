@@ -312,6 +312,147 @@ sub getNextTrack {
     $successCb->();
 }
 
+# explodePlaylist($class, $client, $uri, $cb)
+# Resolves spoton:// container URIs (album, playlist, show) into lists of individual
+# playable track/episode URLs. Called by LMS when playing from Favorites.
+# Single tracks/episodes pass through unchanged.
+# T-22-01: regex-validated ID extraction — only [A-Za-z0-9]+ IDs reach API calls.
+# T-22-02: pagination bounded by API total; max 50/100 per page.
+sub explodePlaylist {
+    my ($class, $client, $uri, $cb) = @_;
+
+    main::INFOLOG && $log->is_info && $log->info("explodePlaylist: $uri");
+
+    # Single track — pass through unchanged
+    if ($uri =~ m{^spoton://track:[A-Za-z0-9]+$}) {
+        $cb->([$uri]);
+        return;
+    }
+
+    # Single episode — pass through unchanged
+    if ($uri =~ m{^spoton://episode:[A-Za-z0-9]+$}) {
+        $cb->([$uri]);
+        return;
+    }
+
+    # Album — fetch all tracks via recursive page fetch
+    if ($uri =~ m{^spoton://album:([A-Za-z0-9]+)$}) {
+        my $albumId = $1;
+        require Plugins::SpotOn::Plugin;
+        my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
+        require Plugins::SpotOn::API::Client;
+
+        my $allTracks = [];
+        my $fetchPage;
+        $fetchPage = sub {
+            my ($offset) = @_;
+            Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
+                offset => $offset,
+                limit  => 50,
+            }, sub {
+                my ($data, $err) = @_;
+                unless ($data && $data->{items}) {
+                    # Return whatever we've collected so far
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: album $albumId => " . scalar(@$allTracks) . " tracks"
+                    );
+                    $cb->($allTracks);
+                    return;
+                }
+                for my $track (@{ $data->{items} }) {
+                    next unless $track && $track->{id};
+                    push @$allTracks, 'spoton://track:' . $track->{id};
+                }
+                my $total = $data->{total} || 0;
+                if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
+                    $fetchPage->($offset + scalar(@{ $data->{items} }));
+                } else {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: album $albumId => " . scalar(@$allTracks) . " tracks"
+                    );
+                    $cb->($allTracks);
+                }
+            });
+        };
+        $fetchPage->(0);
+        return;
+    }
+
+    # Playlist — fetch all tracks via recursive page fetch
+    if ($uri =~ m{^spoton://playlist:([A-Za-z0-9]+)$}) {
+        my $playlistId = $1;
+        require Plugins::SpotOn::Plugin;
+        my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
+        require Plugins::SpotOn::API::Client;
+
+        my $allTracks = [];
+        my $fetchPage;
+        $fetchPage = sub {
+            my ($offset) = @_;
+            Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
+                offset => $offset,
+                limit  => 100,
+            }, sub {
+                my ($data, $err) = @_;
+                unless ($data && $data->{items}) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
+                    );
+                    $cb->($allTracks);
+                    return;
+                }
+                for my $item (@{ $data->{items} }) {
+                    # Playlist items are wrapped: { track: { id, ... } }
+                    # Skip null track entries (local files)
+                    next unless $item && $item->{track} && $item->{track}{id};
+                    push @$allTracks, 'spoton://track:' . $item->{track}{id};
+                }
+                my $total = $data->{total} || 0;
+                if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
+                    $fetchPage->($offset + scalar(@{ $data->{items} }));
+                } else {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
+                    );
+                    $cb->($allTracks);
+                }
+            });
+        };
+        $fetchPage->(0);
+        return;
+    }
+
+    # Show — fetch first page of episodes (no full pagination needed for shows)
+    if ($uri =~ m{^spoton://show:([A-Za-z0-9]+)$}) {
+        my $showId = $1;
+        require Plugins::SpotOn::Plugin;
+        my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
+        require Plugins::SpotOn::API::Client;
+
+        Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
+            offset => 0,
+            limit  => 50,
+        }, sub {
+            my ($data, $err) = @_;
+            my @episodes;
+            if ($data && $data->{items}) {
+                for my $ep (@{ $data->{items} }) {
+                    next unless $ep && $ep->{id};
+                    push @episodes, 'spoton://episode:' . $ep->{id};
+                }
+            }
+            main::INFOLOG && $log->is_info && $log->info(
+                "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
+            );
+            $cb->(\@episodes);
+        });
+        return;
+    }
+
+    # Default: pass through unchanged
+    $cb->([$uri]);
+}
+
 sub parseDirectHeaders {
     my ($class, $client, $url, @headers) = @_;
 
