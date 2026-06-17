@@ -551,8 +551,8 @@ sub getMetadataFor {
     # For Connect streams: try pluginData info first (set by Connect.pm _fetchTrackMetadata)
     if ($url && $url =~ m{spoton://connect-} && $client) {
         $client = $client->master if $client->can('master');
-        my $song = $client->playingSong();
-        if ($song && (my $info = $song->pluginData('info'))) {
+        my $connectSong = $client->playingSong();
+        if ($connectSong && (my $info = $connectSong->pluginData('info'))) {
             return $info;
         }
     }
