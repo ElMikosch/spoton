@@ -24,11 +24,7 @@ const POST_EXTRACTION = `
 
 async function launchBrowser() {
   return chromium.launch({
-    headless: false,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--no-sandbox',
-    ],
+    args: ['--disable-blink-features=AutomationControlled'],
   });
 }
 
@@ -58,7 +54,7 @@ export async function scrapePosts(url = THREAD_URL) {
   const browser = await launchBrowser();
   try {
     const page = await newPage(browser);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
     await waitForCloudflare(page);
     await page.waitForSelector('.js-post', { timeout: 30000 });
     return await page.evaluate(POST_EXTRACTION);
