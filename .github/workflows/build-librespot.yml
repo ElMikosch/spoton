@@ -242,7 +242,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PREV_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --json tagName --jq '.[].tagName' | grep '^v' | head -1)
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --json tagName --jq '.[].tagName' | grep '^v' | grep -v "^${CURRENT_TAG}$" | head -1)
           echo "Downloading binaries from $PREV_TAG"
           echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
 
