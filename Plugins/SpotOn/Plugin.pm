@@ -139,6 +139,16 @@ sub initPlugin {
     ) );
 }
 
+sub shutdownPlugin {
+    my $class = shift;
+
+    require Plugins::SpotOn::Connect;
+    Plugins::SpotOn::Connect->shutdown();
+
+    Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
+    Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
+}
+
 # Material Skin resolves app icons via /material/svg/{tag} from its own
 # images dir, with a fallback to {prefs_dir}/material-skin/images/.
 # Deploy our SVG there so the icon renders in the Material Skin grid.

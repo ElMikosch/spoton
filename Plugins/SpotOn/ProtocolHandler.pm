@@ -497,7 +497,7 @@ sub parseDirectHeaders {
         }
     }
 
-    return $class->SUPER::parseDirectHeaders($client, $url, @headers);
+    return Slim::Player::Protocols::HTTP->parseDirectHeaders($client, $url, @headers);
 }
 
 sub isRepeatingStream {
@@ -541,6 +541,8 @@ sub getSeekData {
 # Per STR-03: LMS calls this to populate the NowPlaying display.
 sub getMetadataFor {
     my ($class, $client, $url, undef, $song) = @_;
+
+    $url = "$url" if ref $url;
 
     # Spotty pattern: fall back to currentSongForUrl when $song is not passed.
     # Must happen BEFORE any early returns so $song->duration can be set below.

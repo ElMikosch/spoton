@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-06-17
+### Fixed
+- Streaming crash on Squeezebox hardware: `parseDirectHeaders` called non-existent SUPER method on `RemoteStream` — now delegates to `Slim::Player::Protocols::HTTP` explicitly
+- Perl warning `md5_hex called with reference argument` when LMS passes object instead of URL string to `getMetadataFor`
+- Zombie daemons after plugin disable/uninstall: added `shutdownPlugin()` to stop all Connect daemons and cancel timers on plugin shutdown
+
 ## [1.7.0] - 2026-06-17
 ### Fixed
 - Seek bar showed 0:00 duration — seeking was impossible (duration propagation via `$song->duration()`)
