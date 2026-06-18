@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-06-18
+### Changed
+- `getMetadataFor` ref guard now logs a backtrace (`logBacktrace`) to trace the caller when LMS passes an object instead of a URL string
+
+### Added
+- Troubleshooting entry: ZeroConf auth shows "Connecting" forever in Spotify app (expected behavior, credentials are received successfully)
+
 ## [1.7.1] - 2026-06-17
 ### Fixed
 - Streaming crash on Squeezebox hardware: `parseDirectHeaders` called non-existent SUPER method on `RemoteStream` — now delegates to `Slim::Player::Protocols::HTTP` explicitly
