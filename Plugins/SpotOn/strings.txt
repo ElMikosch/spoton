@@ -1116,70 +1116,122 @@ PLUGIN_SPOTON_SETUP_GUIDE_TITLE
 	PL	Pierwsze kroki z SpotOn
 	SV	Kom igång med SpotOn
 
-PLUGIN_SPOTON_SETUP_GUIDE_STEP1
-	CS	Vytvořte Spotify Developer App na
-	DA	Opret en Spotify Developer App på
-	DE	Erstelle eine Spotify Developer App auf
-	EN	Create a Spotify Developer App at
-	ES	Crea una Spotify Developer App en
-	FR	Créez une application Spotify Developer sur
-	IT	Crea una Spotify Developer App su
-	NL	Maak een Spotify Developer App aan op
-	NO	Opprett en Spotify Developer App på
-	PL	Utwórz aplikację Spotify Developer App na
-	SV	Skapa en Spotify Developer App på
+PLUGIN_SPOTON_SETUP_CONNECT_TITLE
+	CS	Propojit účet
+	DA	Tilknyt konto
+	DE	Konto verbinden
+	EN	Connect account
+	ES	Conectar cuenta
+	FR	Connecter le compte
+	IT	Collega account
+	NL	Account koppelen
+	NO	Koble til konto
+	PL	Połącz konto
+	SV	Anslut konto
 
-PLUGIN_SPOTON_SETUP_GUIDE_STEP1B
-	CS	Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DA	Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DE	Trage als Redirect URI ein: http://127.0.0.1:9000/plugins/SpotOn/callback
-	EN	Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
-	ES	Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
-	FR	Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
-	IT	Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NL	Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NO	Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
-	PL	Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
-	SV	Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
+PLUGIN_SPOTON_SETUP_CONNECT_DESC
+	CS	Klikněte níže na „Spustit rozpoznávání", pak otevřete aplikaci Spotify v telefonu, klepněte na ikonu zařízení (vpravo dole) a vyberte svůj LMS server ze seznamu.
+	DA	Klik på „Start registrering" nedenfor, åbn derefter Spotify-appen på din telefon, tryk på enhedsikonet (nederst til højre) og vælg din LMS-server fra listen.
+	DE	Klicke unten auf „Erkennung starten", öffne dann die Spotify App auf deinem Handy, tippe auf das Geräte-Symbol (unten rechts) und wähle deinen LMS-Server aus der Liste.
+	EN	Click "Start discovery" below, then open the Spotify app on your phone, tap the device icon (bottom right) and select your LMS server from the list.
+	ES	Haz clic en „Iniciar descubrimiento" abajo, luego abre la app de Spotify en tu teléfono, toca el icono de dispositivo (abajo a la derecha) y selecciona tu servidor LMS de la lista.
+	FR	Cliquez sur « Lancer la découverte » ci-dessous, puis ouvrez l'application Spotify sur votre téléphone, appuyez sur l'icône d'appareil (en bas à droite) et sélectionnez votre serveur LMS dans la liste.
+	IT	Fai clic su „Avvia rilevamento" qui sotto, poi apri l'app Spotify sul telefono, tocca l'icona del dispositivo (in basso a destra) e seleziona il tuo server LMS dalla lista.
+	NL	Klik hieronder op „Detectie starten", open vervolgens de Spotify-app op uw telefoon, tik op het apparaatpictogram (rechtsonder) en selecteer uw LMS-server uit de lijst.
+	NO	Klikk på «Start oppdagelse» nedenfor, åpne deretter Spotify-appen på telefonen, trykk på enhetsikonet (nederst til høyre) og velg LMS-serveren din fra listen.
+	PL	Kliknij „Rozpocznij wykrywanie" poniżej, następnie otwórz aplikację Spotify na telefonie, dotknij ikony urządzenia (prawy dolny róg) i wybierz swój serwer LMS z listy.
+	SV	Klicka på „Starta upptäckt" nedan, öppna sedan Spotify-appen på din telefon, tryck på enhetsikonen (nere till höger) och välj din LMS-server från listan.
 
-PLUGIN_SPOTON_SETUP_GUIDE_STEP2
-	CS	Zadejte Client-ID do pole níže
-	DA	Indtast din Client-ID i feltet nedenfor
-	DE	Trage deine Client-ID im Feld unten ein
-	EN	Enter your Client-ID in the field below
-	ES	Introduce tu Client-ID en el campo de abajo
-	FR	Saisissez votre Client-ID dans le champ ci-dessous
-	IT	Inserisci il tuo Client-ID nel campo qui sotto
-	NL	Voer uw Client-ID in het onderstaande veld in
-	NO	Skriv inn Client-ID i feltet nedenfor
-	PL	Wpisz swój Client-ID w polu poniżej
-	SV	Ange din Client-ID i fältet nedan
+PLUGIN_SPOTON_SETUP_CONNECT_NOTE
+	CS	Poznámka: Animace připojení v aplikaci Spotify se nikdy nezobrazí jako „dokončená" — to je normální. Jakmile je připojení úspěšné, váš účet se automaticky zobrazí na této stránce.
+	DA	Bemærk: Forbindelsesanimationen i Spotify-appen vil aldrig vise sig som „fuldført" — det er normalt. Når forbindelsen er oprettet, vises din konto automatisk på denne side.
+	DE	Hinweis: Die Verbindung in der Spotify App wird nicht als „erfolgreich" angezeigt — das ist normal. Sobald die Verbindung hergestellt wurde, erscheint dein Konto automatisch auf dieser Seite.
+	EN	Note: The connection in the Spotify app will not show as "successful" — this is normal. Once connected, your account will appear automatically on this page.
+	ES	Nota: La conexión en la app de Spotify no se mostrará como „exitosa" — esto es normal. Una vez conectado, tu cuenta aparecerá automáticamente en esta página.
+	FR	Remarque : La connexion dans l'application Spotify ne s'affichera pas comme « réussie » — c'est normal. Une fois connecté, votre compte apparaîtra automatiquement sur cette page.
+	IT	Nota: La connessione nell'app Spotify non verrà mostrata come „riuscita" — è normale. Una volta connesso, il tuo account apparirà automaticamente su questa pagina.
+	NL	Opmerking: De verbinding in de Spotify-app wordt niet als „geslaagd" weergegeven — dat is normaal. Zodra de verbinding is gemaakt, verschijnt uw account automatisch op deze pagina.
+	NO	Merk: Tilkoblingen i Spotify-appen vises aldri som «fullført» — det er normalt. Når tilkoblingen er opprettet, vises kontoen din automatisk på denne siden.
+	PL	Uwaga: Połączenie w aplikacji Spotify nie zostanie pokazane jako „udane" — to normalne. Po nawiązaniu połączenia Twoje konto pojawi się automatycznie na tej stronie.
+	SV	Observera: Anslutningen i Spotify-appen visas aldrig som „lyckad" — det är normalt. När anslutningen är klar visas ditt konto automatiskt på denna sida.
 
-PLUGIN_SPOTON_SETUP_GUIDE_STEP3
-	CS	Otevřete Spotify App a připojte se ke svému přehrávači
-	DA	Åbn Spotify-appen og opret forbindelse til din afspiller
-	DE	Öffne die Spotify-App und verbinde dich mit deinem Player
-	EN	Open the Spotify app and connect to your player
-	ES	Abre la App de Spotify y conéctate a tu reproductor
-	FR	Ouvrez l'application Spotify et connectez-vous à votre lecteur
-	IT	Apri l'app Spotify e connettiti al tuo player
-	NL	Open de Spotify-app en verbind met uw speler
-	NO	Åpne Spotify-appen og koble til spilleren din
-	PL	Otwórz aplikację Spotify i połącz się ze swoim odtwarzaczem
-	SV	Öppna Spotify-appen och anslut till din spelare
+PLUGIN_SPOTON_SETUP_BROWSE_TITLE
+	CS	Hotovo — Spotify Browse je připraven
+	DA	Færdig — Spotify Browse er klar
+	DE	Fertig — Spotify Browse ist bereit
+	EN	Done — Spotify Browse is ready
+	ES	Listo — Spotify Browse está listo
+	FR	Terminé — Spotify Browse est prêt
+	IT	Fatto — Spotify Browse è pronto
+	NL	Klaar — Spotify Browse is gereed
+	NO	Ferdig — Spotify Browse er klar
+	PL	Gotowe — Spotify Browse jest gotowy
+	SV	Klart — Spotify Browse är redo
 
-PLUGIN_SPOTON_SETUP_GUIDE_HINT
-	CS	Poznámka: Po první aktivaci SpotOn může být nutný restart LMS, aby funkce rozpoznávání detekovala váš účet Spotify.
-	DA	Bemærk: Efter første aktivering af SpotOn kan en genstart af LMS være nødvendig, før opdagelsen kan finde din Spotify-konto.
-	DE	Hinweis: Nach der erstmaligen Aktivierung von SpotOn kann ein LMS-Neustart nötig sein, damit die Erkennung dein Spotify-Konto findet.
-	EN	Note: After enabling SpotOn for the first time, an LMS restart may be required for discovery to detect your Spotify account.
-	ES	Nota: Después de habilitar SpotOn por primera vez, puede ser necesario reiniciar LMS para que el descubrimiento detecte tu cuenta de Spotify.
-	FR	Remarque : Après avoir activé SpotOn pour la première fois, un redémarrage de LMS peut être nécessaire pour que la découverte détecte votre compte Spotify.
-	IT	Nota: Dopo aver attivato SpotOn per la prima volta, potrebbe essere necessario riavviare LMS affinché il rilevamento rilevi il tuo account Spotify.
-	NL	Opmerking: Na de eerste activering van SpotOn kan een herstart van LMS nodig zijn zodat de detectie uw Spotify-account kan vinden.
-	NO	Merk: Etter første gangs aktivering av SpotOn kan en omstart av LMS være nødvendig for at oppdagelsen skal finne Spotify-kontoen din.
-	PL	Uwaga: Po pierwszym włączeniu SpotOn może być konieczny restart LMS, aby wykrywanie wykryło Twoje konto Spotify.
-	SV	Observera: Efter första aktiveringen av SpotOn kan en omstart av LMS behövas för att identifieringen ska hitta ditt Spotify-konto.
+PLUGIN_SPOTON_SETUP_BROWSE_DESC
+	CS	Po propojení účtu můžete Spotify používat přímo v LMS: vyhledávání, knihovna, playlisty a další.
+	DA	Efter kontotilknytningen kan du bruge Spotify direkte i LMS: søgning, bibliotek, playlister og mere.
+	DE	Nach der Kontoeinrichtung kannst du Spotify direkt in LMS nutzen: Suche, Bibliothek, Playlists und mehr.
+	EN	After connecting your account you can use Spotify directly in LMS: search, library, playlists and more.
+	ES	Después de conectar tu cuenta puedes usar Spotify directamente en LMS: búsqueda, biblioteca, playlists y más.
+	FR	Après la connexion de votre compte, vous pouvez utiliser Spotify directement dans LMS : recherche, bibliothèque, playlists et plus.
+	IT	Dopo aver collegato il tuo account puoi usare Spotify direttamente in LMS: ricerca, libreria, playlist e altro.
+	NL	Na het koppelen van uw account kunt u Spotify direct in LMS gebruiken: zoeken, bibliotheek, playlists en meer.
+	NO	Etter kontotilkoblingen kan du bruke Spotify direkte i LMS: søk, bibliotek, spillelister og mer.
+	PL	Po połączeniu konta możesz korzystać ze Spotify bezpośrednio w LMS: wyszukiwanie, biblioteka, playlisty i więcej.
+	SV	Efter kontoanslutningen kan du använda Spotify direkt i LMS: sök, bibliotek, spellistor och mer.
+
+PLUGIN_SPOTON_SETUP_PLAYBACK_TITLE
+	CS	Spotify Connect (volitelné)
+	DA	Spotify Connect (valgfrit)
+	DE	Spotify Connect (optional)
+	EN	Spotify Connect (optional)
+	ES	Spotify Connect (opcional)
+	FR	Spotify Connect (optionnel)
+	IT	Spotify Connect (opzionale)
+	NL	Spotify Connect (optioneel)
+	NO	Spotify Connect (valgfritt)
+	PL	Spotify Connect (opcjonalnie)
+	SV	Spotify Connect (valfritt)
+
+PLUGIN_SPOTON_SETUP_PLAYBACK_DESC
+	CS	Pro streamování hudby z aplikace Spotify na přehrávač se připojte k příslušnému přehrávači (ne serveru). Connect se nastavuje zvlášť pro každý přehrávač — viz Nastavení přehrávače.
+	DA	For at streame musik fra Spotify-appen til en afspiller skal du oprette forbindelse til den pågældende afspiller (ikke serveren). Connect opsættes separat per afspiller — se Afspillerindstillinger.
+	DE	Um Musik von der Spotify App an einen Player zu streamen, verbinde dich mit dem jeweiligen Player (nicht dem Server). Connect wird pro Player separat eingerichtet — siehe Player-Einstellungen.
+	EN	To stream music from the Spotify app to a player, connect to the specific player (not the server). Connect is set up separately per player — see Player Settings.
+	ES	Para transmitir música desde la app de Spotify a un reproductor, conéctate al reproductor específico (no al servidor). Connect se configura por separado para cada reproductor — consulta Ajustes del reproductor.
+	FR	Pour diffuser de la musique depuis l'application Spotify vers un lecteur, connectez-vous au lecteur concerné (pas au serveur). Connect est configuré séparément par lecteur — voir Paramètres du lecteur.
+	IT	Per trasmettere musica dall'app Spotify a un player, connettiti al player specifico (non al server). Connect viene configurato separatamente per ogni player — vedi Impostazioni player.
+	NL	Om muziek van de Spotify-app naar een speler te streamen, verbind met de betreffende speler (niet de server). Connect wordt per speler apart ingesteld — zie Spelerinstellingen.
+	NO	For å strømme musikk fra Spotify-appen til en spiller, koble til den aktuelle spilleren (ikke serveren). Connect settes opp separat per spiller — se Spillerinnstillinger.
+	PL	Aby przesyłać muzykę z aplikacji Spotify do odtwarzacza, połącz się z konkretnym odtwarzaczem (nie serwerem). Connect jest konfigurowany osobno dla każdego odtwarzacza — zobacz Ustawienia odtwarzacza.
+	SV	För att strömma musik från Spotify-appen till en spelare, anslut till den specifika spelaren (inte servern). Connect konfigureras separat per spelare — se Spelarinställningar.
+
+PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
+	CS	Vlastní Developer App-ID (volitelné, pro pokročilé)
+	DA	Eget Developer App-ID (valgfrit, for avancerede)
+	DE	Eigene Developer App-ID (optional, für Fortgeschrittene)
+	EN	Custom Developer App ID (optional, advanced)
+	ES	ID de Developer App personalizada (opcional, avanzado)
+	FR	ID d'application Developer personnalisée (optionnel, avancé)
+	IT	ID Developer App personalizzato (opzionale, avanzato)
+	NL	Aangepast Developer App-ID (optioneel, geavanceerd)
+	NO	Egendefinert Developer App-ID (valgfritt, avansert)
+	PL	Własne Developer App ID (opcjonalnie, zaawansowane)
+	SV	Anpassat Developer App-ID (valfritt, avancerat)
+
+PLUGIN_SPOTON_SETUP_DEVAPP_DESC
+	CS	Ve výchozím nastavení SpotOn používá vestavěné Client-ID. Pro vyšší API limity můžete volitelně vytvořit vlastní Spotify Developer App a zadat Client-ID níže.
+	DA	Som standard bruger SpotOn et indbygget Client-ID. For højere API-grænser kan du valgfrit oprette en egen Spotify Developer App og indtaste Client-ID nedenfor.
+	DE	Standardmäßig nutzt SpotOn eine integrierte Client-ID. Für höhere API-Rate-Limits kannst du optional eine eigene Spotify Developer App erstellen und die Client-ID unten eintragen.
+	EN	By default SpotOn uses a built-in Client ID. For higher API rate limits you can optionally create your own Spotify Developer App and enter the Client ID below.
+	ES	Por defecto SpotOn usa un Client-ID integrado. Para límites de API más altos puedes crear opcionalmente tu propia Spotify Developer App e introducir el Client-ID abajo.
+	FR	Par défaut, SpotOn utilise un Client-ID intégré. Pour des limites d'API plus élevées, vous pouvez optionnellement créer votre propre Spotify Developer App et saisir le Client-ID ci-dessous.
+	IT	Per impostazione predefinita SpotOn utilizza un Client-ID integrato. Per limiti API più elevati puoi opzionalmente creare la tua Spotify Developer App e inserire il Client-ID qui sotto.
+	NL	Standaard gebruikt SpotOn een ingebouwd Client-ID. Voor hogere API-limieten kunt u optioneel een eigen Spotify Developer App aanmaken en het Client-ID hieronder invoeren.
+	NO	Som standard bruker SpotOn en innebygd Client-ID. For høyere API-grenser kan du valgfritt opprette en egen Spotify Developer App og skrive inn Client-ID nedenfor.
+	PL	Domyślnie SpotOn używa wbudowanego Client-ID. Dla wyższych limitów API możesz opcjonalnie utworzyć własną Spotify Developer App i wpisać Client-ID poniżej.
+	SV	Som standard använder SpotOn ett inbyggt Client-ID. För högre API-gränser kan du valfritt skapa en egen Spotify Developer App och ange Client-ID nedan.
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".

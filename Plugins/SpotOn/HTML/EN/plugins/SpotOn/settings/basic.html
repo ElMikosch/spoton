@@ -49,15 +49,21 @@
 	[% IF NOT accounts.keys.size %]
 	<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-bottom:20px; border-radius:4px">
 		<h3 style="margin-top:0">[% 'PLUGIN_SPOTON_SETUP_GUIDE_TITLE' | string %]</h3>
-		<ol style="margin:0; padding-left:20px">
-			<li style="margin-bottom:8px">[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP1' | string %]
-				<a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com/dashboard</a>
-			</li>
-			<li style="margin-bottom:8px">[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP1B' | string %]</li>
-			<li style="margin-bottom:8px">[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP2' | string %]</li>
-			<li>[% 'PLUGIN_SPOTON_SETUP_GUIDE_STEP3' | string %]</li>
-		</ol>
-		<p style="opacity:0.6; margin:12px 0 0 0; font-size:0.9em">[% 'PLUGIN_SPOTON_SETUP_GUIDE_HINT' | string %]</p>
+
+		<p style="margin:0 0 4px 0"><strong>1. [% 'PLUGIN_SPOTON_SETUP_CONNECT_TITLE' | string %]</strong></p>
+		<p style="margin:0 0 8px 0">[% 'PLUGIN_SPOTON_SETUP_CONNECT_DESC' | string %]</p>
+		<p style="background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.3); padding:8px 12px; border-radius:4px; margin:0 0 12px 0; font-size:0.9em">
+			[% 'PLUGIN_SPOTON_SETUP_CONNECT_NOTE' | string %]
+		</p>
+
+		<p style="margin:0 0 4px 0"><strong>2. [% 'PLUGIN_SPOTON_SETUP_BROWSE_TITLE' | string %]</strong></p>
+		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_BROWSE_DESC' | string %]</p>
+
+		<p style="margin:0 0 4px 0"><strong>3. [% 'PLUGIN_SPOTON_SETUP_PLAYBACK_TITLE' | string %]</strong></p>
+		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_PLAYBACK_DESC' | string %]</p>
+
+		<p style="opacity:0.5; margin:0 0 4px 0"><strong>4. [% 'PLUGIN_SPOTON_SETUP_DEVAPP_TITLE' | string %]</strong></p>
+		<p style="opacity:0.5; margin:0; font-size:0.9em">[% 'PLUGIN_SPOTON_SETUP_DEVAPP_DESC' | string %]</p>
 	</div>
 	[% END %]
 
