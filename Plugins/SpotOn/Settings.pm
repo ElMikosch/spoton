@@ -96,9 +96,21 @@ sub handler {
             $prefs->set('clientId', $id);
         }
 
+        # Auto-setup: process credentials BEFORE discovery start/stop to prevent
+        # race condition where startDiscovery deletes __DISCOVER__ dir.
+        my $serverPrefs = preferences('server');
+        my $earlyCredsFile = catfile(
+            $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
+
+        if (-f $earlyCredsFile) {
+            require Plugins::SpotOn::API::TokenManager;
+            Plugins::SpotOn::API::TokenManager->stopDiscovery();
+            _autoSetupAccount($earlyCredsFile, $serverPrefs);
+        }
+
         # Start ZeroConf Discovery (D-01)
         # Use 'defined' — submit button value may be empty string when strings aren't loaded
-        if (defined $paramRef->{startDiscovery}) {
+        elsif (defined $paramRef->{startDiscovery}) {
             require Plugins::SpotOn::API::TokenManager;
             Plugins::SpotOn::API::TokenManager->startDiscovery();
         }
@@ -158,15 +170,15 @@ sub handler {
         $prefs->set('diagnosticMode', $diagMode);
     }
 
-    # Auto-setup: if __DISCOVER__/credentials.json exists, create account now.
-    # This bridges discovery completion → account creation. The AJAX poll reloads
-    # the page when credentials arrive, and this block picks them up.
+    # Auto-setup fallback for GET requests (manual reload, first visit).
+    # The primary check runs earlier (before startDiscovery) for POST requests.
     my $serverPrefs = preferences('server');
     my $discoverCredsFile = catfile(
         $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
 
     if (-f $discoverCredsFile) {
         require Plugins::SpotOn::API::TokenManager;
+        Plugins::SpotOn::API::TokenManager->stopDiscovery();
         _autoSetupAccount($discoverCredsFile, $serverPrefs);
     }
 

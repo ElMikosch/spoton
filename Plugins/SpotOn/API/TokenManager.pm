@@ -161,6 +161,16 @@ sub refreshAllTokens {
 sub startDiscovery {
     my ($class) = @_;
 
+    # Guard: don't restart if credentials already arrived
+    my $serverPrefs = preferences('server');
+    my $credsFile = catfile(
+        $serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR, 'credentials.json');
+    if (-f $credsFile) {
+        main::INFOLOG && $log->info(
+            "TokenManager: skipping discovery start — credentials.json already exists");
+        return;
+    }
+
     # Stop existing discovery if running
     if ($discoveryProc && $discoveryProc->alive()) {
         $discoveryProc->die();

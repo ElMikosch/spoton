@@ -24,7 +24,7 @@
 							catch(e) { return; }
 							if (data.status === 'connected') {
 								clearInterval(timer);
-								location.reload();
+								window.location.href = window.location.pathname;
 							}
 						}
 					};
