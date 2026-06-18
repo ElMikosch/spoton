@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-06-18
+### Changed
+- Connect daemon log is now truncated on each daemon start instead of appending indefinitely
+- Diagnostic report download is now a proper button (was a styled link)
+
+### Added
+- "Clear Daemon Logs" button in Settings (always visible, deletes all `*-connect.log` files)
+
 ## [1.7.2] - 2026-06-18
 ### Changed
 - `getMetadataFor` ref guard now logs a backtrace (`logBacktrace`) to trace the caller when LMS passes an object instead of a URL string
