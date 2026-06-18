@@ -150,10 +150,10 @@ sub start {
 	pipe(my $port_r, my $port_w)
 		or do { $log->error("pipe() failed for port capture: $!"); return; };
 
-	# D-02: Open stderr log file before spawning — binary eprintln! output captured here
+	# D-02: Truncate stderr log on daemon start — each restart begins fresh
 	my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
 	my $stderr_fh;
-	open($stderr_fh, '>>', $stderrFile)
+	open($stderr_fh, '>', $stderrFile)
 		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderrFile; undef $stderr_fh; };
 
 	# Temporarily untie STDERR before fork so Proc::Background can dup2 it in the child.

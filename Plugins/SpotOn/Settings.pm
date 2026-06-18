@@ -36,6 +36,12 @@ sub new {
         \&_diagnosticBundleHandler
     );
 
+    # Register clear logs endpoint (GT-07)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/clearLogs',
+        \&_clearLogsHandler
+    );
+
     return $self;
 }
 
@@ -361,6 +367,47 @@ sub _diagnosticBundleHandler {
     $response->header('Connection' => 'close');
     $response->content_type('text/plain; charset=utf-8');
     $response->header('Content-Disposition' => "attachment; filename=\"$filename\"");
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# Clear logs endpoint (GT-07): /plugins/SpotOn/settings/clearLogs
+# Deletes all *-connect.log files in the spoton cache directory.
+# Only works when diagnosticMode pref is enabled (403 otherwise).
+# ============================================================
+sub _clearLogsHandler {
+    my ($httpClient, $response) = @_;
+
+    unless ($prefs->get('diagnosticMode')) {
+        my $content = to_json({ error => 'Diagnostic mode not enabled' });
+        $response->header('Content-Length' => length($content));
+        $response->code(403);
+        $response->header('Connection' => 'close');
+        $response->content_type('application/json');
+        Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+        return;
+    }
+
+    my $serverPrefs = preferences('server');
+    my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
+    my @logFiles    = glob(catfile($spotonDir, '*-connect.log'));
+
+    my $deleted = 0;
+    for my $logFile (@logFiles) {
+        if (unlink $logFile) {
+            $deleted++;
+        } else {
+            $log->warn("clearLogs: failed to delete $logFile: $!");
+        }
+    }
+
+    main::INFOLOG && $log->is_info && $log->info("clearLogs: deleted $deleted of " . scalar(@logFiles) . " log files");
+
+    my $content = to_json({ status => 'ok', deleted => $deleted });
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('application/json');
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
 }
 
