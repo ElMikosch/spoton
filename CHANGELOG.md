@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-06-18
+### Fixed
+- ZeroConf discovery auth race condition: credentials were deleted before account creation because `location.reload()` replayed the POST form data, re-triggering `startDiscovery()`
+- Discovery start/stop buttons no longer trigger "Änderungen gespeichert" banner (moved from form POST to AJAX endpoints)
+- IPv6 discovery fallback: systems with `ipv6.disable=1` can now use ZeroConf discovery (dual-stack bind falls back to IPv4)
+
+### Changed
+- Setup guide rewritten: account connection is now step 1, Developer App moved to optional section at the bottom
+- Setup guide now explains that Spotify app won't show a success animation (expected behavior)
+- Connect-hint image removed from setup guide (replaced by detailed text instructions)
+- Binary updated to v1.2.0 with vendored librespot-discovery patch
+
 ## [1.7.3] - 2026-06-18
 ### Changed
 - Connect daemon log is now truncated on each daemon start instead of appending indefinitely
