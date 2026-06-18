@@ -1363,6 +1363,58 @@ PLUGIN_SPOTON_DIAG_DOWNLOAD_BUTTON
 	PL	Pobierz raport diagnostyczny
 	SV	Ladda ner diagnostikrapport
 
+PLUGIN_SPOTON_DIAG_CLEAR_LOGS
+	CS	Vymazat logy
+	DA	Ryd logfiler
+	DE	Logs löschen
+	EN	Clear Logs
+	ES	Borrar registros
+	FR	Effacer les journaux
+	IT	Cancella log
+	NL	Logbestanden wissen
+	NO	Slett logger
+	PL	Wyczyść logi
+	SV	Rensa loggar
+
+PLUGIN_SPOTON_DIAG_CLEAR_LOGS_DESC
+	CS	Smazat všechny soubory protokolů Connect daemonu (soubory *-connect.log).
+	DA	Slet alle Connect daemon logfiler (*-connect.log filer).
+	DE	Alle Connect-Daemon-Logdateien löschen (*-connect.log Dateien).
+	EN	Delete all Connect daemon log files (*-connect.log files).
+	ES	Eliminar todos los archivos de registro del daemon Connect (archivos *-connect.log).
+	FR	Supprimer tous les fichiers journaux du daemon Connect (fichiers *-connect.log).
+	IT	Elimina tutti i file di log del daemon Connect (file *-connect.log).
+	NL	Alle Connect daemon logbestanden verwijderen (*-connect.log bestanden).
+	NO	Slett alle Connect daemon loggfiler (*-connect.log filer).
+	PL	Usuń wszystkie pliki dziennika demona Connect (pliki *-connect.log).
+	SV	Ta bort alla Connect daemon loggfiler (*-connect.log filer).
+
+PLUGIN_SPOTON_DIAG_CLEAR_LOGS_BUTTON
+	CS	Vymazat logy daemonu
+	DA	Ryd daemon logfiler
+	DE	Daemon-Logs löschen
+	EN	Clear Daemon Logs
+	ES	Borrar registros del daemon
+	FR	Effacer les journaux du daemon
+	IT	Cancella log daemon
+	NL	Daemon-logs wissen
+	NO	Slett daemon-logger
+	PL	Wyczyść logi demona
+	SV	Rensa daemon-loggar
+
+PLUGIN_SPOTON_DIAG_CLEAR_LOGS_DONE
+	CS	Smazáno %s souborů
+	DA	%s filer slettet
+	DE	%s Dateien gelöscht
+	EN	%s files deleted
+	ES	%s archivos eliminados
+	FR	%s fichiers supprimés
+	IT	%s file eliminati
+	NL	%s bestanden verwijderd
+	NO	%s filer slettet
+	PL	Usunięto %s plików
+	SV	%s filer borttagna
+
 PLUGIN_SPOTON_CREDITS
 	CS	SpotOn používá librespot. Inspirováno pluginem Spotty od Hergera.
 	DA	SpotOn bruger librespot. Inspireret af Hergers Spotty-plugin.

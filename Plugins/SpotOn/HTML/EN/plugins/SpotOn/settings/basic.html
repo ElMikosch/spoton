@@ -191,6 +191,43 @@
 			[% 'PLUGIN_SPOTON_DIAG_DOWNLOAD_BUTTON' | string %]
 		</a>
 	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_DIAG_CLEAR_LOGS" desc="PLUGIN_SPOTON_DIAG_CLEAR_LOGS_DESC" %]
+		<button type="button" id="clearLogsBtn" class="submit" onclick="spotonClearLogs()">
+			[% 'PLUGIN_SPOTON_DIAG_CLEAR_LOGS_BUTTON' | string %]
+		</button>
+		<span id="clearLogsResult" style="margin-left:10px; display:none"></span>
+	[% END %]
+
+	<script type="text/javascript">
+	function spotonClearLogs() {
+		var btn = document.getElementById('clearLogsBtn');
+		var result = document.getElementById('clearLogsResult');
+		btn.disabled = true;
+		result.style.display = 'none';
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', '/plugins/SpotOn/settings/clearLogs', true);
+		xhr.onload = function() {
+			if (xhr.status === 200) {
+				try { var data = JSON.parse(xhr.responseText); } catch(e) { return; }
+				result.textContent = data.deleted + ' files deleted';
+				result.style.color = 'green';
+			} else {
+				result.textContent = 'Error';
+				result.style.color = 'red';
+			}
+			result.style.display = 'inline';
+			btn.disabled = false;
+		};
+		xhr.onerror = function() {
+			result.textContent = 'Error';
+			result.style.color = 'red';
+			result.style.display = 'inline';
+			btn.disabled = false;
+		};
+		xhr.send();
+	}
+	</script>
 	[% END %]
 
 	<p style="opacity:0.6; font-size:0.85em; margin-top:24px; text-align:center">
