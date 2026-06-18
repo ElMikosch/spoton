@@ -373,20 +373,9 @@ sub _diagnosticBundleHandler {
 # ============================================================
 # Clear logs endpoint (GT-07): /plugins/SpotOn/settings/clearLogs
 # Deletes all *-connect.log files in the spoton cache directory.
-# Only works when diagnosticMode pref is enabled (403 otherwise).
 # ============================================================
 sub _clearLogsHandler {
     my ($httpClient, $response) = @_;
-
-    unless ($prefs->get('diagnosticMode')) {
-        my $content = to_json({ error => 'Diagnostic mode not enabled' });
-        $response->header('Content-Length' => length($content));
-        $response->code(403);
-        $response->header('Connection' => 'close');
-        $response->content_type('application/json');
-        Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
-        return;
-    }
 
     my $serverPrefs = preferences('server');
     my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');

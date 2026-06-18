@@ -186,10 +186,10 @@
 
 	[% IF diagnosticEnabled %]
 	[% WRAPPER setting title="PLUGIN_SPOTON_DIAG_DOWNLOAD" desc="PLUGIN_SPOTON_DIAG_DOWNLOAD_DESC" %]
-		<a href="/plugins/SpotOn/settings/diagnosticBundle" class="submit"
-		   style="text-decoration:none; display:inline-block">
+		<button type="button" class="submit" onclick="window.location.href='/plugins/SpotOn/settings/diagnosticBundle'">
 			[% 'PLUGIN_SPOTON_DIAG_DOWNLOAD_BUTTON' | string %]
-		</a>
+		</button>
+	[% END %]
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_DIAG_CLEAR_LOGS" desc="PLUGIN_SPOTON_DIAG_CLEAR_LOGS_DESC" %]
@@ -228,7 +228,6 @@
 		xhr.send();
 	}
 	</script>
-	[% END %]
 
 	<p style="opacity:0.6; font-size:0.85em; margin-top:24px; text-align:center">
 		[% 'PLUGIN_SPOTON_CREDITS' | string %]
