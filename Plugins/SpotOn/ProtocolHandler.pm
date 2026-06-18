@@ -542,7 +542,10 @@ sub getSeekData {
 sub getMetadataFor {
     my ($class, $client, $url, undef, $song) = @_;
 
-    $url = "$url" if ref $url;
+    if (ref $url) {
+        Slim::Utils::Log::logBacktrace("getMetadataFor: url is " . ref($url));
+        $url = "$url";
+    }
 
     # Spotty pattern: fall back to currentSongForUrl when $song is not passed.
     # Must happen BEFORE any early returns so $song->duration can be set below.

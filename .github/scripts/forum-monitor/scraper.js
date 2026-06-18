@@ -22,45 +22,68 @@ const POST_EXTRACTION = `
   })
 `;
 
-async function launchBrowser() {
-  return chromium.launch({
+async function scrapeOnePage(url) {
+  const browser = await chromium.launch({
     args: ['--disable-blink-features=AutomationControlled'],
   });
-}
+  try {
+    const ctx = await browser.newContext({
+      userAgent: USER_AGENT,
+      viewport: { width: 1280, height: 720 },
+      locale: 'en-US',
+    });
+    const page = await ctx.newPage();
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
-async function newPage(browser) {
-  const ctx = await browser.newContext({
-    userAgent: USER_AGENT,
-    viewport: { width: 1280, height: 720 },
-    locale: 'en-US',
-  });
-  return ctx.newPage();
-}
+    const title = await page.title();
+    if (title.includes('Just a moment')) {
+      console.log('[scraper] Cloudflare challenge detected, waiting...');
+      await page.waitForFunction(
+        () => !document.title.includes('Just a moment'),
+        { timeout: 45000 }
+      );
+      console.log('[scraper] Cloudflare challenge passed');
+      await page.waitForTimeout(2000);
+    }
 
-async function waitForCloudflare(page) {
-  const title = await page.title();
-  if (title.includes('Just a moment')) {
-    console.log('[scraper] Cloudflare challenge detected, waiting...');
-    await page.waitForFunction(
-      () => !document.title.includes('Just a moment'),
-      { timeout: 45000 }
-    );
-    console.log('[scraper] Cloudflare challenge passed');
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('.js-post', { timeout: 30000 });
+
+    const result = await page.evaluate(POST_EXTRACTION);
+
+    const lastPage = await page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a.js-pagenav-button, a.arrow'));
+      let max = 1;
+      for (const link of links) {
+        const m = link.href && link.href.match(/\/page(\d+)/);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      }
+      return max;
+    });
+
+    return { posts: result, lastPage };
+  } finally {
+    await browser.close();
   }
 }
 
 export async function scrapePosts(url = THREAD_URL) {
-  const browser = await launchBrowser();
-  try {
-    const page = await newPage(browser);
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
-    await waitForCloudflare(page);
-    await page.waitForSelector('.js-post', { timeout: 30000 });
-    return await page.evaluate(POST_EXTRACTION);
-  } finally {
-    await browser.close();
+  const baseUrl = url.replace(/\/page\d+$/, '');
+  const { posts: firstPagePosts, lastPage } = await scrapeOnePage(baseUrl);
+  console.log(`[scraper] Page 1: ${firstPagePosts.length} posts, ${lastPage} page(s) total`);
+
+  let allPosts = firstPagePosts;
+
+  // Cloudflare blocks cross-page navigation within the same browser session,
+  // so each page needs its own browser instance.
+  for (let p = 2; p <= lastPage; p++) {
+    const pageUrl = baseUrl + '/page' + p;
+    console.log(`[scraper] Scraping page ${p}: ${pageUrl}`);
+    const { posts: pagePosts } = await scrapeOnePage(pageUrl);
+    console.log(`[scraper] Page ${p}: ${pagePosts.length} posts`);
+    allPosts = allPosts.concat(pagePosts);
   }
+
+  return allPosts;
 }
 
 export async function scrapeFromFile(filePath) {

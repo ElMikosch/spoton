@@ -67,6 +67,20 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 
 **Solution:** Update to SpotOn v1.7.1+. To kill leftover processes manually: `pkill -f spoton` or restart LMS.
 
+### Spotify app shows "Connecting" forever during ZeroConf auth
+
+**Symptoms:** When you tap your LMS player name in the Spotify app to authorize SpotOn, the app shows a blinking speaker icon and "Connecting..." that never resolves. It looks like the connection failed, but the authorization actually succeeded.
+
+**Cause:** This is expected behavior with ZeroConf authentication. The Spotify app expects a Spotify Connect playback session, but SpotOn only uses the ZeroConf handshake to receive credentials — it doesn't start a playback session at that point. The app never gets a "connected" confirmation and eventually times out.
+
+**What to do:**
+1. After tapping your player in the Spotify app, wait a few seconds
+2. Open **SpotOn Settings** (Server Settings > SpotOn) in your browser
+3. Refresh the page — your Spotify username should appear under **Account Settings**
+4. If the username is there, authentication was successful. You can now browse Spotify and use Connect normally.
+
+**Note:** This is a known UX issue and a fix is planned to properly signal a successful connection to the Spotify app.
+
 ### Where are the settings?
 
 SpotOn has two settings pages:
