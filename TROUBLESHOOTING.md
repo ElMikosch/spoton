@@ -30,6 +30,22 @@ The bundle includes: LMS version, OS, Perl version, SpotOn version, player list,
 
 If the issue persists, collect a diagnostic bundle and include your Docker setup (docker-compose.yml or run command) in the issue.
 
+### Player not visible in Spotify app (IPv6 disabled)
+
+**Symptoms:** LMS player does not appear in the Spotify app's device list at all. The `spoton/__DISCOVER__` folder exists but is empty. Daemon log may show `Discovery failed: Unknown error { Address family not supported by protocol (os error 97) }`.
+
+**Cause:** IPv6 is disabled on the system (common on piCorePlayer and some Raspberry Pi setups via `ipv6.disable=1` in `/boot/firmware/cmdline.txt`). SpotOn's mDNS library (libmdns) requires IPv6 sockets — when the IPv6 address family is unavailable, discovery fails silently.
+
+**Solution:**
+1. SSH into your Pi
+2. Edit `/boot/firmware/cmdline.txt` (or `/boot/cmdline.txt` on older setups)
+3. Change `ipv6.disable=1` to `ipv6.disable=0`
+4. Reboot
+
+Your player should appear in the Spotify app immediately after reboot.
+
+**Credit:** Discovered by Rasputin_GY on the Lyrion forum.
+
 ### Slow track change on hardware players (Squeezebox Radio/Touch)
 
 **Symptoms:** When changing tracks via Spotify Connect, the new track title appears in the UI but the old audio continues playing for 10-20 seconds.
