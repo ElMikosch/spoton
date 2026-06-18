@@ -42,6 +42,16 @@ sub new {
         \&_clearLogsHandler
     );
 
+    # Register AJAX discovery start/stop endpoints (ZC-01)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/discovery/start',
+        \&_discoveryStartHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/discovery/stop',
+        \&_discoveryStopHandler
+    );
+
     return $self;
 }
 
@@ -96,30 +106,8 @@ sub handler {
             $prefs->set('clientId', $id);
         }
 
-        # Auto-setup: process credentials BEFORE discovery start/stop to prevent
-        # race condition where startDiscovery deletes __DISCOVER__ dir.
-        my $serverPrefs = preferences('server');
-        my $earlyCredsFile = catfile(
-            $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
-
-        if (-f $earlyCredsFile) {
-            require Plugins::SpotOn::API::TokenManager;
-            Plugins::SpotOn::API::TokenManager->stopDiscovery();
-            _autoSetupAccount($earlyCredsFile, $serverPrefs);
-        }
-
-        # Start ZeroConf Discovery (D-01)
-        # Use 'defined' — submit button value may be empty string when strings aren't loaded
-        elsif (defined $paramRef->{startDiscovery}) {
-            require Plugins::SpotOn::API::TokenManager;
-            Plugins::SpotOn::API::TokenManager->startDiscovery();
-        }
-
-        # Stop ZeroConf Discovery
-        if (defined $paramRef->{stopDiscovery}) {
-            require Plugins::SpotOn::API::TokenManager;
-            Plugins::SpotOn::API::TokenManager->stopDiscovery();
-        }
+        # Discovery start/stop moved to AJAX endpoints (_discoveryStartHandler,
+        # _discoveryStopHandler) to avoid "Änderungen gespeichert" on form POST.
 
         # Account remove (CR-03, WR-03).
         # WR-03: validate that removeId is an 8-char hex string that actually
@@ -281,6 +269,42 @@ sub _discoveryStatusHandler {
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
     # Source: Spotty/Settings/Auth.pm line 88
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# AJAX endpoint: /plugins/SpotOn/settings/discovery/start
+# Starts ZeroConf discovery without form POST (no "Änderungen gespeichert").
+# ============================================================
+sub _discoveryStartHandler {
+    my ($httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::TokenManager;
+    Plugins::SpotOn::API::TokenManager->startDiscovery();
+
+    my $content = to_json({ status => 'ok' });
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('application/json');
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+}
+
+# ============================================================
+# AJAX endpoint: /plugins/SpotOn/settings/discovery/stop
+# Stops ZeroConf discovery without form POST.
+# ============================================================
+sub _discoveryStopHandler {
+    my ($httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::TokenManager;
+    Plugins::SpotOn::API::TokenManager->stopDiscovery();
+
+    my $content = to_json({ status => 'ok' });
+    $response->header('Content-Length' => length($content));
+    $response->code(200);
+    $response->header('Connection' => 'close');
+    $response->content_type('application/json');
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
 }
 

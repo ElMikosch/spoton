@@ -1221,17 +1221,17 @@ PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
 	SV	Anpassat Developer App-ID (valfritt, avancerat)
 
 PLUGIN_SPOTON_SETUP_DEVAPP_DESC
-	CS	Ve výchozím nastavení SpotOn používá vestavěné Client-ID. Pro vyšší API limity můžete volitelně vytvořit vlastní Spotify Developer App a zadat Client-ID níže.
-	DA	Som standard bruger SpotOn et indbygget Client-ID. For højere API-grænser kan du valgfrit oprette en egen Spotify Developer App og indtaste Client-ID nedenfor.
-	DE	Standardmäßig nutzt SpotOn eine integrierte Client-ID. Für höhere API-Rate-Limits kannst du optional eine eigene Spotify Developer App erstellen und die Client-ID unten eintragen.
-	EN	By default SpotOn uses a built-in Client ID. For higher API rate limits you can optionally create your own Spotify Developer App and enter the Client ID below.
-	ES	Por defecto SpotOn usa un Client-ID integrado. Para límites de API más altos puedes crear opcionalmente tu propia Spotify Developer App e introducir el Client-ID abajo.
-	FR	Par défaut, SpotOn utilise un Client-ID intégré. Pour des limites d'API plus élevées, vous pouvez optionnellement créer votre propre Spotify Developer App et saisir le Client-ID ci-dessous.
-	IT	Per impostazione predefinita SpotOn utilizza un Client-ID integrato. Per limiti API più elevati puoi opzionalmente creare la tua Spotify Developer App e inserire il Client-ID qui sotto.
-	NL	Standaard gebruikt SpotOn een ingebouwd Client-ID. Voor hogere API-limieten kunt u optioneel een eigen Spotify Developer App aanmaken en het Client-ID hieronder invoeren.
-	NO	Som standard bruker SpotOn en innebygd Client-ID. For høyere API-grenser kan du valgfritt opprette en egen Spotify Developer App og skrive inn Client-ID nedenfor.
-	PL	Domyślnie SpotOn używa wbudowanego Client-ID. Dla wyższych limitów API możesz opcjonalnie utworzyć własną Spotify Developer App i wpisać Client-ID poniżej.
-	SV	Som standard använder SpotOn ett inbyggt Client-ID. För högre API-gränser kan du valfritt skapa en egen Spotify Developer App och ange Client-ID nedan.
+	CS	Ve výchozím nastavení SpotOn používá vestavěné Client-ID. Pro vyšší API limity můžete volitelně vytvořit vlastní Spotify Developer App na developer.spotify.com/dashboard a zadat Client-ID níže. Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DA	Som standard bruger SpotOn et indbygget Client-ID. For højere API-grænser kan du valgfrit oprette en egen Spotify Developer App på developer.spotify.com/dashboard og indtaste Client-ID nedenfor. Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DE	Standardmäßig nutzt SpotOn eine integrierte Client-ID. Für höhere API-Rate-Limits kannst du optional eine eigene Spotify Developer App auf developer.spotify.com/dashboard erstellen und die Client-ID unten eintragen. Als Redirect URI verwende: http://127.0.0.1:9000/plugins/SpotOn/callback
+	EN	By default SpotOn uses a built-in Client ID. For higher API rate limits you can optionally create your own Spotify Developer App at developer.spotify.com/dashboard and enter the Client ID below. Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
+	ES	Por defecto SpotOn usa un Client-ID integrado. Para límites de API más altos puedes crear opcionalmente tu propia Spotify Developer App en developer.spotify.com/dashboard e introducir el Client-ID abajo. Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
+	FR	Par défaut, SpotOn utilise un Client-ID intégré. Pour des limites d'API plus élevées, vous pouvez optionnellement créer votre propre Spotify Developer App sur developer.spotify.com/dashboard et saisir le Client-ID ci-dessous. Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
+	IT	Per impostazione predefinita SpotOn utilizza un Client-ID integrato. Per limiti API più elevati puoi opzionalmente creare la tua Spotify Developer App su developer.spotify.com/dashboard e inserire il Client-ID qui sotto. Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NL	Standaard gebruikt SpotOn een ingebouwd Client-ID. Voor hogere API-limieten kunt u optioneel een eigen Spotify Developer App aanmaken op developer.spotify.com/dashboard en het Client-ID hieronder invoeren. Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NO	Som standard bruker SpotOn en innebygd Client-ID. For høyere API-grenser kan du valgfritt opprette en egen Spotify Developer App på developer.spotify.com/dashboard og skrive inn Client-ID nedenfor. Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
+	PL	Domyślnie SpotOn używa wbudowanego Client-ID. Dla wyższych limitów API możesz opcjonalnie utworzyć własną Spotify Developer App na developer.spotify.com/dashboard i wpisać Client-ID poniżej. Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
+	SV	Som standard använder SpotOn ett inbyggt Client-ID. För högre API-gränser kan du valfritt skapa en egen Spotify Developer App på developer.spotify.com/dashboard och ange Client-ID nedan. Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".
