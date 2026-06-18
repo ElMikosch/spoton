@@ -1301,8 +1301,6 @@ dependencies = [
 [[package]]
 name = "librespot-discovery"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19be30e529532de833cad024d27ad9462f3acb02a3cf1953fbc314527691e0f5"
 dependencies = [
  "aes",
  "base64",
@@ -2519,7 +2517,7 @@ dependencies = [
 
 [[package]]
 name = "spoton"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "bytes",
  "env_logger",
