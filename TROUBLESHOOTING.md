@@ -65,8 +65,8 @@ Your player should appear in the Spotify app immediately after reboot.
 
 **What to do:**
 1. After tapping your player in the Spotify app, wait a few seconds
-2. Open **SpotOn Settings** (Server Settings > SpotOn) in your browser
-3. Refresh the page — your Spotify username should appear under **Account Settings**
+2. If you have the SpotOn Settings page open in your browser, it will detect the successful authentication automatically and reload — your Spotify username should appear under **Account Settings**
+3. If it doesn't update, refresh the page manually
 4. If the username is there, authentication was successful. You can now browse Spotify and use Connect normally.
 
-**Note:** This is a known UX issue and a fix is planned to properly signal a successful connection to the Spotify app.
+**Known limitation:** This cannot be fixed without architectural changes. Discovery runs under the LMS server name (one instance for all players), while Connect daemons run under individual player names. Starting a Connect session during discovery would require matching these identities, which is not feasible with the current design. The Spotify app will always show "Connecting..." during ZeroConf auth — but the credentials are received successfully in the background.
