@@ -161,14 +161,14 @@ sub refreshAllTokens {
 sub startDiscovery {
     my ($class) = @_;
 
-    # Guard: don't restart if credentials already arrived
     my $serverPrefs = preferences('server');
-    my $credsFile = catfile(
-        $serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR, 'credentials.json');
+    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
+    my $credsFile = catfile($discoverDir, 'credentials.json');
     if (-f $credsFile) {
-        main::INFOLOG && $log->info(
-            "TokenManager: skipping discovery start — credentials.json already exists");
-        return;
+        # Stale credentials from a failed auto-setup — clean up so discovery can proceed
+        $log->warn("TokenManager: removing stale credentials.json from __DISCOVER__");
+        require File::Path;
+        File::Path::remove_tree($discoverDir);
     }
 
     # Stop existing discovery if running
@@ -183,9 +183,6 @@ sub startDiscovery {
         $log->error("TokenManager: cannot start discovery — binary not found");
         return;
     }
-
-    my $serverPrefs = preferences('server');
-    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
 
     # T-04.3-08: Clean up stale __DISCOVER__ dir (RESEARCH Pitfall 2)
     if (-d $discoverDir) {

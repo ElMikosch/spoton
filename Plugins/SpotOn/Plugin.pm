@@ -1207,10 +1207,11 @@ sub _showFeed {
 
     # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
     my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
+    my $apiLimit  = ($hasFollowItem && $offset == 0 && $limit > 1) ? $limit - 1 : $limit;
 
     Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
         offset => $apiOffset,
-        limit  => $limit,
+        limit  => $apiLimit,
     }, sub {
         my $data = shift;
         unless ($data) {
