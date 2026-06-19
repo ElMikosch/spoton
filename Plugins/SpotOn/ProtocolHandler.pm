@@ -788,15 +788,6 @@ sub _asyncRefetch {
     }
 }
 
-# _largestImage($images_arrayref)
-# Returns the URL of the largest image (by width) from a Spotify images array.
-# Returns '' if the array is empty or undef.
-# Local copy — avoids importing from Connect.pm (Pitfall 1).
-sub _largestImage {
-    my ($images) = @_;
-    return '' unless ref $images eq 'ARRAY' && @{$images};
-    my ($largest) = sort { ($b->{width} || 0) <=> ($a->{width} || 0) } @{$images};
-    return $largest->{url} || '';
-}
+sub _largestImage { Plugins::SpotOn::Plugin::_largestImage(@_) }
 
 1;

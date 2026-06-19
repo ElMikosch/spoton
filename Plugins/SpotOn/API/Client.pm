@@ -256,6 +256,10 @@ sub checkTracks {
     }, $cb);
 }
 
+sub _extractShowIds {
+    return join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$_[0] || []});
+}
+
 # saveShows($class, $accountId, $uris, $cb)
 # Saves shows to the user's library (PUT /me/shows?ids=...).
 # Uses old-style endpoint consistent with GET /me/shows listing.
@@ -267,7 +271,7 @@ sub saveShows {
     $class->_request('put', 'me/shows', {
         _accountId => $accountId,
         _noCache   => 1,
-        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
+        ids        => _extractShowIds($uris),
     }, $cb);
 }
 
@@ -281,7 +285,7 @@ sub removeShows {
     $class->_request('delete', 'me/shows', {
         _accountId => $accountId,
         _noCache   => 1,
-        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
+        ids        => _extractShowIds($uris),
     }, $cb);
 }
 
@@ -296,7 +300,7 @@ sub checkShows {
     $class->_request('get', 'me/shows/contains', {
         _accountId => $accountId,
         _noCache   => 1,
-        ids        => join(',', map { /^spotify:show:(.+)$/ ? $1 : $_ } @{$uris || []}),
+        ids        => _extractShowIds($uris),
     }, $cb);
 }
 

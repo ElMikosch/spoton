@@ -307,8 +307,8 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG (Spotify Browse)',
-        'META-02: streamFormat=ogg, mode=Browse => "OGG (Spotify Browse)"');
+    is($result, 'OGG, SpotOn Browse',
+        'META-02: streamFormat=ogg, mode=Browse => "OGG, SpotOn Browse"');
 }
 
 # ============================================================
@@ -321,8 +321,8 @@ sub setup_prefs {
         streamFormat => 'flac',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
-    is($result, 'FLAC (Spotify Connect)',
-        'META-02: streamFormat=flac, mode=Connect => "FLAC (Spotify Connect)"');
+    is($result, 'FLAC, SpotOn Connect',
+        'META-02: streamFormat=flac, mode=Connect => "FLAC, SpotOn Connect"');
 }
 
 # ============================================================
@@ -335,8 +335,8 @@ sub setup_prefs {
         streamFormat => 'mp3',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'MP3 (Spotify Browse)',
-        'META-02: streamFormat=mp3 => "MP3 (Spotify Browse)"');
+    is($result, 'MP3, SpotOn Browse',
+        'META-02: streamFormat=mp3 => "MP3, SpotOn Browse"');
 }
 
 # ============================================================
@@ -349,8 +349,8 @@ sub setup_prefs {
         streamFormat => 'pcm',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'PCM (Spotify Browse)',
-        'META-02: streamFormat=pcm => "PCM (Spotify Browse)"');
+    is($result, 'PCM, SpotOn Browse',
+        'META-02: streamFormat=pcm => "PCM, SpotOn Browse"');
 }
 
 # ============================================================
@@ -365,8 +365,8 @@ sub setup_prefs {
         passthrough  => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG (Spotify Browse)',
-        'D-05: streamFormat=auto + passthrough=1 => "OGG (Spotify Browse)"');
+    is($result, 'OGG, SpotOn Browse',
+        'D-05: streamFormat=auto + passthrough=1 => "OGG, SpotOn Browse"');
 }
 
 # ============================================================
@@ -381,8 +381,8 @@ sub setup_prefs {
         passthrough  => 0,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'PCM (Spotify Browse)',
-        'D-05: streamFormat=auto + passthrough=0 => "PCM (Spotify Browse)"');
+    is($result, 'PCM, SpotOn Browse',
+        'D-05: streamFormat=auto + passthrough=0 => "PCM, SpotOn Browse"');
 }
 
 # ============================================================
@@ -393,8 +393,8 @@ sub setup_prefs {
         passthrough => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString(undef, 'Browse');
-    is($result, 'OGG (Spotify Browse)',
-        'META-03: undef client, auto+passthrough=1 => "OGG (Spotify Browse)"');
+    is($result, 'OGG, SpotOn Browse',
+        'META-03: undef client, auto+passthrough=1 => "OGG, SpotOn Browse"');
 }
 
 # ============================================================
@@ -451,8 +451,8 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    like($result, qr/\(Spotify Browse\)$/,
-        'D-02: mode label "(Spotify Browse)" always present at end');
+    like($result, qr/SpotOn Browse$/,
+        'D-02: mode label "SpotOn Browse" always present at end');
 }
 
 # ============================================================
@@ -466,8 +466,8 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
-    like($result, qr/\(Spotify Connect\)$/,
-        'D-02: mode label "(Spotify Connect)" always present at end');
+    like($result, qr/SpotOn Connect$/,
+        'D-02: mode label "SpotOn Connect" always present at end');
 }
 
 # ============================================================

@@ -6,6 +6,7 @@ use base qw(Slim::Web::Settings);
 
 use Digest::MD5 qw(md5_hex);
 use File::Basename qw(basename);
+use File::Glob qw(bsd_glob);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
 
@@ -263,13 +264,7 @@ sub _discoveryStatusHandler {
         $result = { status => 'idle' };
     }
 
-    my $content = to_json($result);
-    $response->header('Content-Length' => length($content));
-    $response->code(200);
-    $response->header('Connection' => 'close');
-    $response->content_type('application/json');
-    # Source: Spotty/Settings/Auth.pm line 88
-    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+    _jsonResponse($httpClient, $response, $result);
 }
 
 # ============================================================
@@ -282,12 +277,7 @@ sub _discoveryStartHandler {
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->startDiscovery();
 
-    my $content = to_json({ status => 'ok' });
-    $response->header('Content-Length' => length($content));
-    $response->code(200);
-    $response->header('Connection' => 'close');
-    $response->content_type('application/json');
-    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+    _jsonResponse($httpClient, $response, { status => 'ok' });
 }
 
 # ============================================================
@@ -300,12 +290,7 @@ sub _discoveryStopHandler {
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->stopDiscovery();
 
-    my $content = to_json({ status => 'ok' });
-    $response->header('Content-Length' => length($content));
-    $response->code(200);
-    $response->header('Connection' => 'close');
-    $response->content_type('application/json');
-    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+    _jsonResponse($httpClient, $response, { status => 'ok' });
 }
 
 # ============================================================
@@ -317,12 +302,7 @@ sub _diagnosticBundleHandler {
     my ($httpClient, $response) = @_;
 
     unless ($prefs->get('diagnosticMode')) {
-        my $content = to_json({ error => 'Diagnostic mode not enabled' });
-        $response->header('Content-Length' => length($content));
-        $response->code(403);
-        $response->header('Connection' => 'close');
-        $response->content_type('application/json');
-        Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+        _jsonResponse($httpClient, $response, { error => 'Diagnostic mode not enabled' }, 403);
         return;
     }
 
@@ -330,7 +310,7 @@ sub _diagnosticBundleHandler {
     my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
 
     # Collect daemon logs (*-connect.log files)
-    my @logFiles = glob(catfile($spotonDir, '*-connect.log'));
+    my @logFiles = bsd_glob(catfile($spotonDir, '*-connect.log'));
 
     # Build header with system info
     my $activeId = $prefs->get('activeAccount') || '';
@@ -428,9 +408,15 @@ sub _clearLogsHandler {
 
     main::INFOLOG && $log->is_info && $log->info("clearLogs: deleted $deleted of " . scalar(@logFiles) . " log files");
 
-    my $content = to_json({ status => 'ok', deleted => $deleted });
+    _jsonResponse($httpClient, $response, { status => 'ok', deleted => $deleted });
+}
+
+sub _jsonResponse {
+    my ($httpClient, $response, $data, $code) = @_;
+    $code //= 200;
+    my $content = to_json($data);
     $response->header('Content-Length' => length($content));
-    $response->code(200);
+    $response->code($code);
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);

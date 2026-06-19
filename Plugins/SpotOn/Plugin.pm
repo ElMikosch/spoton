@@ -485,28 +485,31 @@ sub _likedCacheKey {
 }
 
 sub _doLibraryAction {
-    my ($client, $cb, $args, $apiMethod, $successKey) = @_;
-    my $trackUri  = $args->{trackUri};
+    my ($client, $cb, $args, $apiMethod, $successKey, $opts) = @_;
+    $opts //= {};
+    my $uri       = $args->{trackUri} // $args->{showUri};
     my $accountId = $args->{accountId};
     my $cacheKey  = $args->{cacheKey};
+    my $errorKey  = $opts->{errorKey} // 'PLUGIN_SPOTON_LIKE_ERROR';
+    my $saveMethod = $opts->{saveMethod} // 'saveTracks';
 
-    Plugins::SpotOn::API::Client->$apiMethod($accountId, [$trackUri], sub {
+    Plugins::SpotOn::API::Client->$apiMethod($accountId, [$uri], sub {
         my ($result, $err) = @_;
         if ($err) {
             my $msg = (ref $err eq 'HASH' && $err->{code} && $err->{code} == 403)
                 ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
-                : cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR');
+                : cstring($client, $errorKey);
             $cb->({ items => [{ name => $msg }] });
             return;
         }
-        my $newState = ($apiMethod eq 'saveTracks') ? 1 : 0;
+        my $newState = ($apiMethod eq $saveMethod) ? 1 : 0;
         $cache->set($cacheKey, $newState, 60);
         $client->showBriefly({
             jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
         }) if $client;
         $cb->({ items => [{
             name        => cstring($client, $successKey),
-            nextWindow  => 'grandparent',
+            $opts->{textarea} ? (type => 'textarea') : (nextWindow => 'grandparent'),
         }] });
     });
 }
@@ -555,47 +558,26 @@ sub SpotOnManageFollow {
     });
 }
 
+my %SHOW_LIBRARY_OPTS = (
+    errorKey   => 'PLUGIN_SPOTON_SHOW_ACTION_ERROR',
+    saveMethod => 'saveShows',
+    textarea   => 1,
+);
+
 sub SpotOnFollowShow {
     my ($client, $cb, $params, $args) = @_;
-    _doShowLibraryAction($client, $cb, $args, 'saveShows', 'PLUGIN_SPOTON_SHOW_FOLLOWED');
+    _doLibraryAction($client, $cb, $args, 'saveShows', 'PLUGIN_SPOTON_SHOW_FOLLOWED', \%SHOW_LIBRARY_OPTS);
 }
 
 sub SpotOnUnfollowShow {
     my ($client, $cb, $params, $args) = @_;
-    _doShowLibraryAction($client, $cb, $args, 'removeShows', 'PLUGIN_SPOTON_SHOW_UNFOLLOWED');
+    _doLibraryAction($client, $cb, $args, 'removeShows', 'PLUGIN_SPOTON_SHOW_UNFOLLOWED', \%SHOW_LIBRARY_OPTS);
 }
 
 sub _followCacheKey {
     my ($accountId, $showUri) = @_;
     my ($showId) = $showUri =~ /^spotify:show:(.+)$/;
     return "spoton_followed_${accountId}_${showId}";
-}
-
-sub _doShowLibraryAction {
-    my ($client, $cb, $args, $apiMethod, $successKey) = @_;
-    my $showUri   = $args->{showUri};
-    my $accountId = $args->{accountId};
-    my $cacheKey  = $args->{cacheKey};
-
-    Plugins::SpotOn::API::Client->$apiMethod($accountId, [$showUri], sub {
-        my ($result, $err) = @_;
-        if ($err) {
-            my $msg = (ref $err eq 'HASH' && $err->{code} && $err->{code} == 403)
-                ? cstring($client, 'PLUGIN_SPOTON_LIKE_ERROR_SCOPE')
-                : cstring($client, 'PLUGIN_SPOTON_SHOW_ACTION_ERROR');
-            $cb->({ items => [{ name => $msg }] });
-            return;
-        }
-        my $newState = ($apiMethod eq 'saveShows') ? 1 : 0;
-        $cache->set($cacheKey, $newState, 60);
-        $client->showBriefly({
-            jive => { type => 'popupplay', text => [ cstring($client, $successKey) ] },
-        }) if $client;
-        $cb->({ items => [{
-            name => cstring($client, $successKey),
-            type => 'textarea',
-        }] });
-    });
 }
 
 
