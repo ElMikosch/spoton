@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-06-19
+### Fixed
+- Stale credentials from failed auto-setup permanently blocked ZeroConf re-authentication
+- Duplicate variable declarations in `startDiscovery` caused Perl warnings on every call
+- Off-by-one in podcast show feed when Follow button was present on first page
+- Developer App ID setup guide now correctly marked as "optional, recommended" (was "optional, advanced")
+
 ## [1.7.4] - 2026-06-18
 ### Fixed
 - ZeroConf discovery auth race condition: credentials were deleted before account creation because `location.reload()` replayed the POST form data, re-triggering `startDiscovery()`
