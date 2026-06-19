@@ -8,7 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.7.4] - 2026-06-18
 ### Fixed
 - ZeroConf discovery auth race condition: credentials were deleted before account creation because `location.reload()` replayed the POST form data, re-triggering `startDiscovery()`
-- Discovery start/stop buttons no longer trigger "Änderungen gespeichert" banner (moved from form POST to AJAX endpoints)
+- Discovery start/stop buttons no longer trigger spurious "changes saved" banner (moved from form POST to AJAX endpoints)
 - IPv6 discovery fallback: systems with `ipv6.disable=1` can now use ZeroConf discovery (dual-stack bind falls back to IPv4)
 
 ### Changed
