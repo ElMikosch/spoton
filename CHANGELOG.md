@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-06-19
+### Fixed
+- Material Skin now shows "OGG, SpotOn Connect" instead of just "OGG" (parenthesized part was stripped)
+- `glob()` replaced with `bsd_glob()` to handle spaces in LMS cache directory paths
+
+### Changed
+- Deduplicated `_largestImage` across Plugin, ProtocolHandler, and Connect modules
+- Extracted `_jsonResponse` helper in Settings (eliminates 5x JSON response boilerplate)
+- Extracted `_extractShowIds` in API Client (eliminates 3x URI-to-ID regex)
+- Merged `_doShowLibraryAction` into `_doLibraryAction` with options parameter
+- Forum monitor draft generation now retries 3x with backoff on transient API errors
+
 ## [1.7.5] - 2026-06-19
 ### Fixed
 - Stale credentials from failed auto-setup permanently blocked ZeroConf re-authentication
