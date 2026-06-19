@@ -107,7 +107,7 @@ sub handler {
         }
 
         # Discovery start/stop moved to AJAX endpoints (_discoveryStartHandler,
-        # _discoveryStopHandler) to avoid "Änderungen gespeichert" on form POST.
+        # _discoveryStopHandler) to avoid "changes saved" banner on form POST.
 
         # Account remove (CR-03, WR-03).
         # WR-03: validate that removeId is an 8-char hex string that actually
@@ -274,7 +274,7 @@ sub _discoveryStatusHandler {
 
 # ============================================================
 # AJAX endpoint: /plugins/SpotOn/settings/discovery/start
-# Starts ZeroConf discovery without form POST (no "Änderungen gespeichert").
+# Starts ZeroConf discovery without form POST (no "changes saved" banner).
 # ============================================================
 sub _discoveryStartHandler {
     my ($httpClient, $response) = @_;
