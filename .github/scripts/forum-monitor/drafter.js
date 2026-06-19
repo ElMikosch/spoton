@@ -17,6 +17,9 @@ Guidelines:
 - Never make up features or fixes that don't exist
 - If unsure, say so and ask for more details`;
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5000;
+
 export async function generateDraft(post, threadPosts, projectContext) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
@@ -47,12 +50,23 @@ ${post.contentText}
 ---
 Write the reply in vBulletin BBCode format. Reply ONLY with the forum post text — no meta-commentary.`;
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  return response.content[0]?.text || '';
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      });
+      return response.content[0]?.text || '';
+    } catch (err) {
+      lastError = err;
+      console.warn(`[forum-monitor] Draft attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}`);
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+  throw lastError;
 }

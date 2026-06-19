@@ -2183,7 +2183,7 @@ sub _typeString {
     my %LABEL = (ogg => 'OGG', flac => 'FLAC', mp3 => 'MP3', pcm => 'PCM');
     my $fmtLabel = $LABEL{$fmt} || uc($fmt);
 
-    return "${fmtLabel} (Spotify ${mode})";
+    return "${fmtLabel}, SpotOn ${mode}";
 }
 
 1;
