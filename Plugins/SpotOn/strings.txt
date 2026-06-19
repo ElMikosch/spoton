@@ -1208,30 +1208,30 @@ PLUGIN_SPOTON_SETUP_PLAYBACK_DESC
 	SV	För att strömma musik från Spotify-appen till en spelare, anslut till den specifika spelaren (inte servern). Connect konfigureras separat per spelare — se Spelarinställningar.
 
 PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
-	CS	Vlastní Developer App-ID (volitelné, pro pokročilé)
-	DA	Eget Developer App-ID (valgfrit, for avancerede)
-	DE	Eigene Developer App-ID (optional, für Fortgeschrittene)
-	EN	Custom Developer App ID (optional, advanced)
-	ES	ID de Developer App personalizada (opcional, avanzado)
-	FR	ID d'application Developer personnalisée (optionnel, avancé)
-	IT	ID Developer App personalizzato (opzionale, avanzato)
-	NL	Aangepast Developer App-ID (optioneel, geavanceerd)
-	NO	Egendefinert Developer App-ID (valgfritt, avansert)
-	PL	Własne Developer App ID (opcjonalnie, zaawansowane)
-	SV	Anpassat Developer App-ID (valfritt, avancerat)
+	CS	Vlastní Developer App-ID (volitelné, doporučeno)
+	DA	Eget Developer App-ID (valgfrit, anbefalet)
+	DE	Eigene Developer App-ID (optional, empfohlen)
+	EN	Custom Developer App ID (optional, recommended)
+	ES	ID de Developer App personalizada (opcional, recomendado)
+	FR	ID d'application Developer personnalisée (optionnel, recommandé)
+	IT	ID Developer App personalizzato (opzionale, consigliato)
+	NL	Aangepast Developer App-ID (optioneel, aanbevolen)
+	NO	Egendefinert Developer App-ID (valgfritt, anbefalt)
+	PL	Własne Developer App ID (opcjonalnie, zalecane)
+	SV	Anpassat Developer App-ID (valfritt, rekommenderat)
 
 PLUGIN_SPOTON_SETUP_DEVAPP_DESC
-	CS	Ve výchozím nastavení SpotOn používá vestavěné Client-ID. Pro vyšší API limity můžete volitelně vytvořit vlastní Spotify Developer App na developer.spotify.com/dashboard a zadat Client-ID níže. Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DA	Som standard bruger SpotOn et indbygget Client-ID. For højere API-grænser kan du valgfrit oprette en egen Spotify Developer App på developer.spotify.com/dashboard og indtaste Client-ID nedenfor. Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DE	Standardmäßig nutzt SpotOn eine integrierte Client-ID. Für höhere API-Rate-Limits kannst du optional eine eigene Spotify Developer App auf developer.spotify.com/dashboard erstellen und die Client-ID unten eintragen. Als Redirect URI verwende: http://127.0.0.1:9000/plugins/SpotOn/callback
-	EN	By default SpotOn uses a built-in Client ID. For higher API rate limits you can optionally create your own Spotify Developer App at developer.spotify.com/dashboard and enter the Client ID below. Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
-	ES	Por defecto SpotOn usa un Client-ID integrado. Para límites de API más altos puedes crear opcionalmente tu propia Spotify Developer App en developer.spotify.com/dashboard e introducir el Client-ID abajo. Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
-	FR	Par défaut, SpotOn utilise un Client-ID intégré. Pour des limites d'API plus élevées, vous pouvez optionnellement créer votre propre Spotify Developer App sur developer.spotify.com/dashboard et saisir le Client-ID ci-dessous. Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
-	IT	Per impostazione predefinita SpotOn utilizza un Client-ID integrato. Per limiti API più elevati puoi opzionalmente creare la tua Spotify Developer App su developer.spotify.com/dashboard e inserire il Client-ID qui sotto. Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NL	Standaard gebruikt SpotOn een ingebouwd Client-ID. Voor hogere API-limieten kunt u optioneel een eigen Spotify Developer App aanmaken op developer.spotify.com/dashboard en het Client-ID hieronder invoeren. Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NO	Som standard bruker SpotOn en innebygd Client-ID. For høyere API-grenser kan du valgfritt opprette en egen Spotify Developer App på developer.spotify.com/dashboard og skrive inn Client-ID nedenfor. Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
-	PL	Domyślnie SpotOn używa wbudowanego Client-ID. Dla wyższych limitów API możesz opcjonalnie utworzyć własną Spotify Developer App na developer.spotify.com/dashboard i wpisać Client-ID poniżej. Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
-	SV	Som standard använder SpotOn ett inbyggt Client-ID. För högre API-gränser kan du valfritt skapa en egen Spotify Developer App på developer.spotify.com/dashboard och ange Client-ID nedan. Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
+	CS	SpotOn používá sdílené Client-ID s omezenými API limity. Pro spolehlivější provoz důrazně doporučujeme vytvořit vlastní Spotify Developer App na developer.spotify.com/dashboard a zadat Client-ID níže. Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DA	SpotOn bruger et delt Client-ID med begrænsede API-grænser. For mere pålidelig drift anbefales det kraftigt at oprette din egen Spotify Developer App på developer.spotify.com/dashboard og indtaste Client-ID nedenfor. Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
+	DE	SpotOn nutzt eine gemeinsame Client-ID mit begrenzten API-Limits. Für zuverlässigeren Betrieb wird dringend empfohlen, eine eigene Spotify Developer App auf developer.spotify.com/dashboard zu erstellen und die Client-ID unten einzutragen. Als Redirect URI verwende: http://127.0.0.1:9000/plugins/SpotOn/callback
+	EN	SpotOn uses a shared Client ID with limited API rate limits. For more reliable operation it is strongly recommended to create your own Spotify Developer App at developer.spotify.com/dashboard and enter the Client ID below. Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
+	ES	SpotOn usa un Client-ID compartido con límites de API limitados. Para un funcionamiento más fiable se recomienda encarecidamente crear tu propia Spotify Developer App en developer.spotify.com/dashboard e introducir el Client-ID abajo. Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
+	FR	SpotOn utilise un Client-ID partagé avec des limites d'API restreintes. Pour un fonctionnement plus fiable, il est fortement recommandé de créer votre propre Spotify Developer App sur developer.spotify.com/dashboard et de saisir le Client-ID ci-dessous. Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
+	IT	SpotOn utilizza un Client-ID condiviso con limiti API limitati. Per un funzionamento più affidabile si consiglia vivamente di creare la propria Spotify Developer App su developer.spotify.com/dashboard e inserire il Client-ID qui sotto. Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NL	SpotOn gebruikt een gedeeld Client-ID met beperkte API-limieten. Voor betrouwbaarder gebruik wordt sterk aanbevolen een eigen Spotify Developer App aan te maken op developer.spotify.com/dashboard en het Client-ID hieronder in te voeren. Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
+	NO	SpotOn bruker en delt Client-ID med begrensede API-grenser. For mer pålitelig drift anbefales det sterkt å opprette din egen Spotify Developer App på developer.spotify.com/dashboard og skrive inn Client-ID nedenfor. Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
+	PL	SpotOn używa współdzielonego Client-ID z ograniczonymi limitami API. Dla bardziej niezawodnego działania zdecydowanie zaleca się utworzenie własnej Spotify Developer App na developer.spotify.com/dashboard i wpisanie Client-ID poniżej. Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
+	SV	SpotOn använder ett delat Client-ID med begränsade API-gränser. För mer tillförlitlig drift rekommenderas det starkt att skapa din egen Spotify Developer App på developer.spotify.com/dashboard och ange Client-ID nedan. Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".
