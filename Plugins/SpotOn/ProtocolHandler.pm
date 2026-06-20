@@ -453,32 +453,49 @@ sub explodePlaylist {
         return;
     }
 
-    # Show — fetch first page of episodes (no full pagination needed for shows)
+    # Show — fetch all episodes via recursive page fetch
     if ($uri =~ m{^spoton://show:([A-Za-z0-9]+)$}) {
         my $showId = $1;
         require Plugins::SpotOn::Plugin;
         my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
         require Plugins::SpotOn::API::Client;
 
-        Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
-            offset => 0,
-            limit  => 50,
-        }, sub {
-            my ($data, $err) = @_;
-            my @episodes;
-            if ($data && $data->{items}) {
-                for my $ep (@{ $data->{items} }) {
+        my @episodes;
+        my $total = 0;
+        my $fetchPage;
+        $fetchPage = sub {
+            my ($offset) = @_;
+            Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
+                offset => $offset,
+                limit  => 50,
+            }, sub {
+                my ($data, $err) = @_;
+                unless ($data && $data->{items}) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
+                    );
+                    $cb->(\@episodes);
+                    return;
+                }
+                $total = $data->{total} || 0;
+                my $pageItems = $data->{items};
+                for my $ep (@{$pageItems}) {
                     next unless $ep && $ep->{id};
                     my $epUrl = 'spoton://episode:' . $ep->{id};
                     push @episodes, $epUrl;
                     _cacheExplodedEpisode($epUrl, $ep);
                 }
-            }
-            main::INFOLOG && $log->is_info && $log->info(
-                "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
-            );
-            $cb->(\@episodes);
-        });
+                if (scalar(@episodes) < $total && @{$pageItems} > 0) {
+                    $fetchPage->($offset + scalar(@{$pageItems}));
+                } else {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
+                    );
+                    $cb->(\@episodes);
+                }
+            });
+        };
+        $fetchPage->(0);
         return;
     }
 
