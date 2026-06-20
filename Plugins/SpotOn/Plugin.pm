@@ -965,6 +965,7 @@ sub _libraryFeed {
 # Per NAV-08: unconditional access (no gating).
 # Per NAV-09: API default sort is added_at desc (recently added first).
 # Per D-12: LMS index/quantity mapped to Spotify offset/limit.
+# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
 sub _savedTracksFeed {
     my ($client, $callback, $args) = @_;
 
@@ -974,18 +975,39 @@ sub _savedTracksFeed {
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
-        offset => $offset,
-        limit  => $limit,
-    }, sub {
-        my $data = shift;
-        unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
-            return;
-        }
-        my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
-    });
+    if ($qty > 50 && $offset == 0) {
+        # Play-all mode: fetch all liked tracks via full pagination
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getSavedTracks($acct, $params, $cb);
+            },
+            pageLimit    => 50,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems) = @_;
+                my @items = map { _trackItem($client, $_->{track}) } @{$allItems};
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+                $callback->({ items => \@items });
+            },
+        });
+    } else {
+        Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
+            offset => $offset,
+            limit  => $limit,
+        }, sub {
+            my $data = shift;
+            unless ($data) {
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
+            my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        });
+    }
 }
 
 # _savedAlbumsFeed($client, $callback, $args)
@@ -1054,6 +1076,62 @@ sub _fetchAllFollowedArtists {
             $done->($accumulated);
         }
     });
+}
+
+# ============================================================
+# Reusable Async Paginator (Play-All Full Pagination)
+# ============================================================
+
+# _fetchAllPages($args)
+# Reusable async paginator for offset-based Spotify API endpoints.
+# Fetches all pages recursively and calls $args->{done} with the full accumulated items.
+#
+# $args keys:
+#   accountId    - Spotify account ID
+#   apiFn        - coderef: $apiFn->($accountId, $params, $cb)
+#                  $params contains offset and limit; $cb receives ($data)
+#   pageLimit    - max items per API page (50 for tracks/albums/episodes, 100 for playlist items)
+#   extractItems - coderef: $extractItems->($data) returns arrayref of raw items
+#                  Default: sub { $_[0]->{items} || [] }
+#   done         - callback: $done->(\@accumulated) called when all pages fetched
+#
+# T-25-01: Guards against infinite recursion — stops when current page returns 0 items,
+# regardless of what the total field says. Prevents infinite loop on API inconsistencies.
+sub _fetchAllPages {
+    my ($args) = @_;
+
+    my $accountId    = $args->{accountId};
+    my $apiFn        = $args->{apiFn};
+    my $pageLimit    = $args->{pageLimit}    || 50;
+    my $extractItems = $args->{extractItems} || sub { $_[0]->{items} || [] };
+    my $done         = $args->{done};
+
+    my @accumulated;
+
+    my $fetchPage;
+    $fetchPage = sub {
+        my ($offset) = @_;
+        $apiFn->($accountId, { offset => $offset, limit => $pageLimit }, sub {
+            my $data = shift;
+            unless ($data) {
+                # API error or undef — return whatever was accumulated so far (graceful degradation)
+                $done->(\@accumulated);
+                return;
+            }
+            my $items = $extractItems->($data);
+            push @accumulated, @{$items};
+
+            my $total = $data->{total} // 0;
+            # T-25-01: stop if current page returned no items (prevents infinite loop)
+            if (scalar(@accumulated) < $total && @{$items} > 0) {
+                $fetchPage->(scalar(@accumulated));
+            } else {
+                $done->(\@accumulated);
+            }
+        });
+    };
+
+    $fetchPage->(0);
 }
 
 # _userPlaylistsFeed($client, $callback, $args)
@@ -1173,6 +1251,8 @@ sub _showItem {
 # Per POD-02: always uses getShowEpisodes (no embedded-episodes shortcut).
 # Per Pitfall 2: response is { items, total } directly, not nested.
 # Per D-09: API default order is newest first.
+# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL episodes via _fetchAllPages.
+# In play-all mode, the Follow button is excluded (not a playable item).
 sub _showFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
@@ -1187,38 +1267,60 @@ sub _showFeed {
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
 
-    # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
-    my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
-    my $apiLimit  = ($hasFollowItem && $offset == 0 && $limit > 1) ? $limit - 1 : $limit;
-
-    Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
-        offset => $apiOffset,
-        limit  => $apiLimit,
-    }, sub {
-        my $data = shift;
-        unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
-            return;
-        }
+    if ($qty > 50 && $offset == 0) {
+        # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
-        my @items = map { _episodeItem($client, $_, $showCtx) } @{ $data->{items} || [] };
-        if (!@items && !$hasFollowItem) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getShowEpisodes($acct, $showId, $params, $cb);
+            },
+            pageLimit    => 50,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems) = @_;
+                my @items = map { _episodeItem($client, $_, $showCtx) } @{$allItems};
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+                $callback->({ items => \@items });
+            },
+        });
+    } else {
+        # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
+        my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
+        my $apiLimit  = ($hasFollowItem && $offset == 0 && $limit > 1) ? $limit - 1 : $limit;
 
-        if ($hasFollowItem && $offset == 0) {
-            unshift @items, {
-                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
-                url         => \&SpotOnManageFollow,
-                passthrough => [{ showUri => $showUri, accountId => $accountId }],
-                type        => 'link',
-                icon        => '/html/images/playlistadd.png',
-            };
-        }
+        Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
+            offset => $apiOffset,
+            limit  => $apiLimit,
+        }, sub {
+            my $data = shift;
+            unless ($data) {
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
+            my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
+            my @items = map { _episodeItem($client, $_, $showCtx) } @{ $data->{items} || [] };
+            if (!@items && !$hasFollowItem) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
 
-        my $total = ($data->{total} // 0) + ($hasFollowItem ? 1 : 0);
-        $callback->({ items => \@items, offset => $offset, total => $total });
-    });
+            if ($hasFollowItem && $offset == 0) {
+                unshift @items, {
+                    name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                    url         => \&SpotOnManageFollow,
+                    passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                    type        => 'link',
+                    icon        => '/html/images/playlistadd.png',
+                };
+            }
+
+            my $total = ($data->{total} // 0) + ($hasFollowItem ? 1 : 0);
+            $callback->({ items => \@items, offset => $offset, total => $total });
+        });
+    }
 }
 
 # _episodeItem($client, $episode, $showContext)
@@ -1829,8 +1931,10 @@ sub _artistAlbumsFeed {
 # _albumFeed($client, $callback, $args, $passthrough)
 # Shows numbered tracklist for an album.
 # Per NAV-06: line1 = "$track_number. $title", line2 = featuring artists (if differ from album artist).
-# For index=0: uses tracks embedded in getAlbum response.
-# For index>0: fetches separate getAlbumTracks page.
+# For index=0 (browse): uses tracks embedded in getAlbum response.
+# For index>0 (browse): fetches separate getAlbumTracks page.
+# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL tracks via _fetchAllPages,
+# seeding the accumulator with the first-page tracks already in the getAlbum response.
 # Album artwork and artist are passed via passthrough for subsequent pages.
 sub _albumFeed {
     my ($client, $callback, $args, $passthrough) = @_;
@@ -1846,8 +1950,70 @@ sub _albumFeed {
 
     my $accountId = _getAccountId($client);
 
-    if ($offset == 0) {
-        # Initial load: fetch full album (includes first page of tracks in tracks.items).
+    if ($qty > 50 && $offset == 0) {
+        # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
+        Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
+            my $album = shift;
+            unless ($album) {
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
+
+            my $images      = $album->{images}           || [];
+            my $artist0     = ($album->{artists} && @{$album->{artists}}) ? $album->{artists}[0]{name} : '';
+            my $total       = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
+            my $seedTracks  = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
+            my $albumNm     = $album->{name} // '';
+
+            if ($total <= scalar(@{$seedTracks})) {
+                # All tracks already in getAlbum response — no further API calls needed
+                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @{$seedTracks};
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+                $callback->({ items => \@items });
+                return;
+            }
+
+            # Seed accumulator with first-page tracks from getAlbum, then fetch remaining pages
+            my @accumulated = @{$seedTracks};
+            my $startOffset = scalar(@accumulated);
+
+            my $fetchPage;
+            $fetchPage = sub {
+                my ($pageOffset) = @_;
+                Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
+                    offset => $pageOffset,
+                    limit  => 50,
+                }, sub {
+                    my $data = shift;
+                    unless ($data) {
+                        # Error: return what we have so far
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
+                        if (!@items) {
+                            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                        }
+                        $callback->({ items => \@items });
+                        return;
+                    }
+                    my $pageItems = $data->{items} || [];
+                    push @accumulated, @{$pageItems};
+                    # T-25-01: stop if current page returned no items
+                    if (scalar(@accumulated) < $total && @{$pageItems} > 0) {
+                        $fetchPage->(scalar(@accumulated));
+                    } else {
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
+                        if (!@items) {
+                            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                        }
+                        $callback->({ items => \@items });
+                    }
+                });
+            };
+            $fetchPage->($startOffset);
+        });
+    } elsif ($offset == 0) {
+        # Initial browse load: fetch full album (includes first page of tracks in tracks.items).
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
             my $album = shift;
             unless ($album) {
@@ -1869,7 +2035,7 @@ sub _albumFeed {
             $callback->({ items => \@items, offset => 0, total => $total });
         });
     } else {
-        # Subsequent pages: use getAlbumTracks with correct offset.
+        # Subsequent browse pages: use getAlbumTracks with correct offset.
         Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
             offset => $offset,
             limit  => $limit,
@@ -1967,6 +2133,7 @@ sub _albumTrackItem {
 # Per NAV-07: maps LMS index/quantity to Spotify offset/limit (cap 100).
 # Null track entries (local files) are skipped per T-03-10.
 # Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
+# Play-all detection: if $qty > 100 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
 sub _playlistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
@@ -1978,28 +2145,52 @@ sub _playlistFeed {
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
-        offset => $offset,
-        limit  => $limit,
-    }, sub {
-        my $data = shift;
-        unless ($data) {
-            # Made-For-You 403 or other error — graceful fallback per RESEARCH Open Question 2.
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
-            return;
-        }
+    if ($qty > 100 && $offset == 0) {
+        # Play-all mode: fetch all playlist tracks via full pagination
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getPlaylistItems($acct, $playlistId, $params, $cb);
+            },
+            pageLimit    => 100,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems) = @_;
+                # T-03-10: Skip null track entries (local files in playlists return null track objects).
+                my @items = map  { _trackItem($client, $_->{track}) }
+                            grep { defined $_->{track} }
+                            @{$allItems};
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+                $callback->({ items => \@items });
+            },
+        });
+    } else {
+        Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
+            offset => $offset,
+            limit  => $limit,
+        }, sub {
+            my $data = shift;
+            unless ($data) {
+                # Made-For-You 403 or other error — graceful fallback per RESEARCH Open Question 2.
+                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
 
-        # T-03-10: Skip null track entries (local files in playlists return null track objects).
-        my @items = map  { _trackItem($client, $_->{track}) }
-                    grep { defined $_->{track} }
-                    @{ $data->{items} || [] };
+            # T-03-10: Skip null track entries (local files in playlists return null track objects).
+            my @items = map  { _trackItem($client, $_->{track}) }
+                        grep { defined $_->{track} }
+                        @{ $data->{items} || [] };
 
-        if (!@items) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
+            if (!@items) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
 
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
-    });
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+        });
+    }
 }
 
 
