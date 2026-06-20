@@ -965,7 +965,7 @@ sub _libraryFeed {
 # Per NAV-08: unconditional access (no gating).
 # Per NAV-09: API default sort is added_at desc (recently added first).
 # Per D-12: LMS index/quantity mapped to Spotify offset/limit.
-# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
 sub _savedTracksFeed {
     my ($client, $callback, $args) = @_;
 
@@ -975,7 +975,7 @@ sub _savedTracksFeed {
 
     my $accountId = _getAccountId($client);
 
-    if ($qty > 50 && $offset == 0) {
+    if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
@@ -987,7 +987,9 @@ sub _savedTracksFeed {
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
                 my ($allItems) = @_;
-                my @items = map { _trackItem($client, $_->{track}) } @{$allItems};
+                my @items = map  { _trackItem($client, $_->{track}) }
+                            grep { defined $_->{track} }
+                            @{$allItems};
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
@@ -1114,7 +1116,7 @@ sub _fetchAllPages {
         $apiFn->($accountId, { offset => $offset, limit => $pageLimit }, sub {
             my $data = shift;
             unless ($data) {
-                # API error or undef — return whatever was accumulated so far (graceful degradation)
+                undef $fetchPage;
                 $done->(\@accumulated);
                 return;
             }
@@ -1126,6 +1128,7 @@ sub _fetchAllPages {
             if (scalar(@accumulated) < $total && @{$items} > 0) {
                 $fetchPage->(scalar(@accumulated));
             } else {
+                undef $fetchPage;
                 $done->(\@accumulated);
             }
         });
@@ -1251,7 +1254,7 @@ sub _showItem {
 # Per POD-02: always uses getShowEpisodes (no embedded-episodes shortcut).
 # Per Pitfall 2: response is { items, total } directly, not nested.
 # Per D-09: API default order is newest first.
-# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL episodes via _fetchAllPages.
+# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL episodes via _fetchAllPages.
 # In play-all mode, the Follow button is excluded (not a playable item).
 sub _showFeed {
     my ($client, $callback, $args, $passthrough) = @_;
@@ -1267,7 +1270,7 @@ sub _showFeed {
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
 
-    if ($qty > 50 && $offset == 0) {
+    if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
         _fetchAllPages({
@@ -1933,7 +1936,7 @@ sub _artistAlbumsFeed {
 # Per NAV-06: line1 = "$track_number. $title", line2 = featuring artists (if differ from album artist).
 # For index=0 (browse): uses tracks embedded in getAlbum response.
 # For index>0 (browse): fetches separate getAlbumTracks page.
-# Play-all detection: if $qty > 50 AND $offset == 0, fetches ALL tracks via _fetchAllPages,
+# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages,
 # seeding the accumulator with the first-page tracks already in the getAlbum response.
 # Album artwork and artist are passed via passthrough for subsequent pages.
 sub _albumFeed {
@@ -1950,7 +1953,7 @@ sub _albumFeed {
 
     my $accountId = _getAccountId($client);
 
-    if ($qty > 50 && $offset == 0) {
+    if ($qty >= 500 && $offset == 0) {
         # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
             my $album = shift;
@@ -1988,7 +1991,7 @@ sub _albumFeed {
                 }, sub {
                     my $data = shift;
                     unless ($data) {
-                        # Error: return what we have so far
+                        undef $fetchPage;
                         my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -2002,6 +2005,7 @@ sub _albumFeed {
                     if (scalar(@accumulated) < $total && @{$pageItems} > 0) {
                         $fetchPage->(scalar(@accumulated));
                     } else {
+                        undef $fetchPage;
                         my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -2133,7 +2137,7 @@ sub _albumTrackItem {
 # Per NAV-07: maps LMS index/quantity to Spotify offset/limit (cap 100).
 # Null track entries (local files) are skipped per T-03-10.
 # Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
-# Play-all detection: if $qty > 100 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
 sub _playlistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
@@ -2145,7 +2149,7 @@ sub _playlistFeed {
 
     my $accountId = _getAccountId($client);
 
-    if ($qty > 100 && $offset == 0) {
+    if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,

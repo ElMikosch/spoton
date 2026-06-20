@@ -471,6 +471,7 @@ sub explodePlaylist {
             }, sub {
                 my ($data, $err) = @_;
                 unless ($data && $data->{items}) {
+                    undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
                         "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
                     );
@@ -488,6 +489,7 @@ sub explodePlaylist {
                 if (scalar(@episodes) < $total && @{$pageItems} > 0) {
                     $fetchPage->($offset + scalar(@{$pageItems}));
                 } else {
+                    undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
                         "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
                     );
