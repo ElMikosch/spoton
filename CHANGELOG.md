@@ -5,6 +5,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.7] - 2026-06-20
+### Added
+- Play-all on playlists, liked songs, albums, and podcast shows now fetches ALL tracks/episodes via full API pagination (fixes [#16](https://github.com/stiefenhofer/spoton/issues/16))
+- Reusable `_fetchAllPages` async paginator helper for all feed functions
+- Recursive pagination in ProtocolHandler show-explode path (matching existing album/playlist patterns)
+
+### Fixed
+- Play-all detection threshold raised to `qty >= 500` to avoid triggering full pagination during normal browsing on non-Material-Skin clients
+- Circular reference memory leak in recursive `$fetchPage` closures (broken with `undef` at exit points)
+- Missing null-track guard in `_savedTracksFeed` play-all branch (consistent with `_playlistFeed`)
+
 ## [1.7.6] - 2026-06-19
 ### Fixed
 - Material Skin now shows "OGG, SpotOn Connect" instead of just "OGG" (parenthesized part was stripped)
