@@ -446,7 +446,7 @@ sub _clearLogsHandler {
         }
     }
 
-    main::INFOLOG && $log->is_info && $log->info("clearLogs: deleted $deleted of " . scalar(@logFiles) . " log files");
+    main::INFOLOG && $log->is_info && $log->info("clearLogs: deleted $deleted log file(s)");
 
     _jsonResponse($httpClient, $response, { status => 'ok', deleted => $deleted });
 }
