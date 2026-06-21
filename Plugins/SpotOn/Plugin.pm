@@ -118,6 +118,13 @@ sub initPlugin {
         # 3s delay allows player list to populate after LMS start.
         Slim::Utils::Timers::killTimers($class, \&_startConnectDaemons);
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3, \&_startConnectDaemons);
+
+        # Restart all Connect daemons when diagnosticMode changes so RUST_LOG and
+        # stderr routing take effect immediately.
+        $prefs->setChange( sub {
+            Plugins::SpotOn::Connect::DaemonManager->shutdown();
+            Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 1, \&_startConnectDaemons);
+        }, 'diagnosticMode');
     }
 
     _deployMaterialSkinIcon();

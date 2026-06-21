@@ -4,6 +4,7 @@ use strict;
 
 use base qw(Slim::Utils::Accessor);
 
+use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
 use IO::Select;
 use MIME::Base64 qw(encode_base64);
@@ -150,11 +151,17 @@ sub start {
 	pipe(my $port_r, my $port_w)
 		or do { $log->error("pipe() failed for port capture: $!"); return; };
 
-	# D-02: Truncate stderr log on daemon start — each restart begins fresh
-	my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
+	# D-02: stderr log only when diagnosticMode is on; /dev/null otherwise
+	my $diagMode = $prefs->get('diagnosticMode');
 	my $stderr_fh;
-	open($stderr_fh, '>', $stderrFile)
-		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderrFile; undef $stderr_fh; };
+	if ($diagMode) {
+		my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
+		open($stderr_fh, '>', $stderrFile)
+			or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; };
+	} else {
+		open($stderr_fh, '>', File::Spec->devnull)
+			or do { $log->warn("Cannot open /dev/null for stderr: $!"); undef $stderr_fh; };
+	}
 
 	# Temporarily untie STDERR before fork so Proc::Background can dup2 it in the child.
 	# LMS ties STDERR to Slim::Utils::Log::Trapper (no OPEN method) — the child would die on
@@ -163,7 +170,7 @@ sub start {
 	my $had_stderr_tie = defined tied(*STDERR);
 	untie *STDERR if $had_stderr_tie;
 
-	$ENV{RUST_LOG} = 'spoton=debug,librespot=info';
+	$ENV{RUST_LOG} = $diagMode ? 'spoton=debug,librespot=info' : 'spoton=info,librespot=warn';
 
 	eval {
 		$self->_proc( Proc::Background->new(

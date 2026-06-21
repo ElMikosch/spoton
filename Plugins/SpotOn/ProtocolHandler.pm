@@ -562,7 +562,7 @@ sub getMetadataFor {
     my ($class, $client, $url, undef, $song) = @_;
 
     if (ref $url) {
-        Slim::Utils::Log::logBacktrace("getMetadataFor: url is " . ref($url));
+        main::DEBUGLOG && $log->is_debug && $log->debug("getMetadataFor: url is " . ref($url) . ", stringifying");
         $url = "$url";
     }
 
