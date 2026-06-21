@@ -153,11 +153,12 @@ sub start {
 
 	# D-02: stderr log only when diagnosticMode is on; /dev/null otherwise
 	my $diagMode = $prefs->get('diagnosticMode');
+	my $stderrFile;
 	my $stderr_fh;
 	if ($diagMode) {
-		my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
+		$stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-connect.log');
 		open($stderr_fh, '>', $stderrFile)
-			or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; };
+			or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; undef $stderrFile; };
 	} else {
 		open($stderr_fh, '>', File::Spec->devnull)
 			or do { $log->warn("Cannot open /dev/null for stderr: $!"); undef $stderr_fh; };
