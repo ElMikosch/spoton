@@ -12,7 +12,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Connect daemon `RUST_LOG` now tied to diagnosticMode setting — `spoton=info,librespot=warn` when off (default), `spoton=debug,librespot=info` when on
 - Connect daemon stderr routed to `/dev/null` when diagnosticMode is off — no more `*-connect.log` files in normal operation
-- Toggling diagnosticMode now restarts all Connect daemons so log settings take effect immediately
+- Toggling diagnosticMode restarts all Connect daemons so log settings take effect immediately
+- Connect log total size shown next to "Clear Logs" button in settings
 
 ## [1.7.7] - 2026-06-20
 ### Added
