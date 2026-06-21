@@ -124,7 +124,11 @@ sub initPlugin {
         $prefs->setChange( sub {
             require Plugins::SpotOn::Connect::DaemonManager;
             Plugins::SpotOn::Connect::DaemonManager->shutdown();
-            Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 1, \&_startConnectDaemons);
+            Slim::Utils::Timers::setTimer(
+                'Plugins::SpotOn::Connect::DaemonManager',
+                Time::HiRes::time() + 1,
+                \&Plugins::SpotOn::Connect::DaemonManager::initHelpers,
+            );
         }, 'diagnosticMode');
     }
 
