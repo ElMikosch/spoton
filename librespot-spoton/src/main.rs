@@ -44,7 +44,10 @@
 //            --bitrate 320 [--passthrough] --disable-discovery --disable-audio-cache
 //            [--start-position <secs>]
 //   stdout: raw PCM (S16LE) or raw OGG Vorbis (when --passthrough)
-//   exit 0 on success, non-zero on failure
+//   exit 0 on success (EndOfTrack or Stopped)
+//   exit 1 on failure: unavailable track (region-locked, removed, CDN error),
+//                      playback timeout (30s safety net), or session/auth error
+//   stderr: descriptive error message on exit 1 (track ID, reason)
 
 mod connect;
 
@@ -64,7 +67,7 @@ use tokio::time::{timeout, Duration};
 use librespot_playback::audio_backend;
 use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig};
 use librespot_playback::mixer::NoOpVolume;
-use librespot_playback::player::Player;
+use librespot_playback::player::{Player, PlayerEvent};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -696,8 +699,52 @@ async fn run_single_track(
     };
     player.load(track_id, true, start_position_ms);
 
-    // Wait for EndOfTrack or Stopped; await_end_of_track handles event loop internally
-    player.await_end_of_track().await;
+    // Listen for player events to detect unavailable tracks and normal completion.
+    //
+    // We use get_player_event_channel() instead of await_end_of_track() because
+    // await_end_of_track() only returns on EndOfTrack/Stopped — it never returns on
+    // Unavailable, causing the process to hang forever when a track is region-locked,
+    // removed from catalog, or has no audio file for the current CDN region.
+    //
+    // A 30-second timeout wraps the entire loop as a safety net against any other
+    // hang scenario (T-26-01: Denial of Service via indefinite hang).
+    let mut event_channel = player.get_player_event_channel();
 
-    Ok(())
+    let result = timeout(Duration::from_secs(30), async {
+        loop {
+            match event_channel.recv().await {
+                Some(PlayerEvent::EndOfTrack { .. }) => {
+                    // Normal completion — track played to the end
+                    break Ok(());
+                }
+                Some(PlayerEvent::Stopped { .. }) => {
+                    // Player stopped (e.g., by external signal) — treat as success
+                    break Ok(());
+                }
+                Some(PlayerEvent::Unavailable { track_id, .. }) => {
+                    // Track unavailable: region-locked, removed from catalog, or CDN error.
+                    // librespot has already printed the reason to stderr.
+                    // Returning Err causes main() to eprintln + exit(1), closing the pipe
+                    // so LMS advances to the next track automatically.
+                    eprintln!("Track unavailable: {}", track_id);
+                    break Err(format!("Track unavailable: {}", track_id));
+                }
+                Some(_) => {
+                    // Ignore other events (Loading, Playing, VolumeChanged, etc.)
+                    continue;
+                }
+                None => {
+                    // Channel closed unexpectedly (player dropped)
+                    break Err("Player event channel closed unexpectedly".to_string());
+                }
+            }
+        }
+    })
+    .await;
+
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e.into()),
+        Err(_elapsed) => Err("Single-track playback timed out after 30s".into()),
+    }
 }
