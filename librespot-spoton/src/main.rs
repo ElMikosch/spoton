@@ -48,6 +48,8 @@
 //   exit 1 on failure: unavailable track (region-locked, removed, CDN error),
 //                      playback timeout (30s safety net), or session/auth error
 //   stderr: descriptive error message on exit 1 (track ID, reason)
+//   marker: on "Track unavailable" errors, writes the track URI to
+//           <cache>/spoton/unavailable-track so LMS can skip on retry (Phase 27)
 
 mod connect;
 
@@ -434,6 +436,12 @@ async fn main() {
                 Ok(_) => process::exit(0),
                 Err(e) => {
                     eprintln!("Single-track playback failed: {}", e);
+                    if e.to_string().starts_with("Track unavailable:") {
+                        let marker = std::path::Path::new(&cache_dir)
+                            .join("spoton")
+                            .join("unavailable-track");
+                        let _ = std::fs::write(&marker, &track_uri);
+                    }
                     process::exit(1);
                 }
             }
