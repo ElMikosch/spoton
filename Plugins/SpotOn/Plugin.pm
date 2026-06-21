@@ -122,6 +122,7 @@ sub initPlugin {
         # Restart all Connect daemons when diagnosticMode changes so RUST_LOG and
         # stderr routing take effect immediately.
         $prefs->setChange( sub {
+            require Plugins::SpotOn::Connect::DaemonManager;
             Plugins::SpotOn::Connect::DaemonManager->shutdown();
             Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 1, \&_startConnectDaemons);
         }, 'diagnosticMode');
