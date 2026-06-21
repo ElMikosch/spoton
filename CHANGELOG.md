@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.8] - 2026-06-21
+### Fixed
+- `getMetadataFor` no longer logs Error-level backtrace when LMS passes `Slim::Schema::RemoteTrack` instead of URL string — downgraded to debug (fixes [#14](https://github.com/stiefenm/spoton/issues/14))
+
+### Changed
+- Connect daemon `RUST_LOG` now tied to diagnosticMode setting — `spoton=info,librespot=warn` when off (default), `spoton=debug,librespot=info` when on
+- Connect daemon stderr routed to `/dev/null` when diagnosticMode is off — no more `*-connect.log` files in normal operation
+- Toggling diagnosticMode now restarts all Connect daemons so log settings take effect immediately
+
 ## [1.7.7] - 2026-06-20
 ### Added
 - Play-all on playlists, liked songs, albums, and podcast shows now fetches ALL tracks/episodes via full API pagination (fixes [#16](https://github.com/stiefenhofer/spoton/issues/16))
