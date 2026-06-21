@@ -16,7 +16,8 @@ use Digest::MD5 qw(md5_hex);
 use Time::HiRes;
 use Time::Local qw(timelocal);
 use File::Basename;
-use File::Spec::Functions qw(catdir);
+use File::Spec;
+use File::Spec::Functions qw(catdir catfile);
 use Slim::Player::TranscodingHelper;
 
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
@@ -2252,6 +2253,12 @@ sub updateTranscodingTable {
     my ($helper) = Plugins::SpotOn::Helper->get();
     my $helperName = $helper ? basename($helper) : 'spoton';
 
+    # Stderr log path for Browse-mode single-track processes (D-03, T-26-05)
+    # diagnosticMode on: capture to browse-errors.log; off: discard to /dev/null
+    my $stderrLog = $prefs->get('diagnosticMode')
+        ? catfile($serverPrefs->get('cachedir'), 'spoton', 'browse-errors.log')
+        : File::Spec->devnull;
+
     my $commandTable = Slim::Player::TranscodingHelper::Conversions();
 
     # Restore base son-* pipelines deleted by a previous call (shared mutable state).
@@ -2293,6 +2300,14 @@ sub updateTranscodingTable {
 
         # NOTE: --disable-audio-cache is NOT touched here (STR-11, D-07)
         # It is hardcoded in custom-convert.conf and the regex patterns above do not match it
+
+        # Stderr log injection (D-03, T-26-05): STDERRLOG placeholder replaced with
+        # actual path based on diagnosticMode. browse-errors.log when on, /dev/null when off.
+        # Two-pass substitution: first call replaces $STDERRLOG$ placeholder; subsequent
+        # calls replace the previously injected path (idempotent across repeated calls).
+        unless ($commandTable->{$key} =~ s/\$STDERRLOG\$/$stderrLog/g) {
+            $commandTable->{$key} =~ s{2>>"[^"]*"}{2>>"$stderrLog"}g;
+        }
 
         main::INFOLOG && $log->is_info && $log->info("updateTranscodingTable: $key => $commandTable->{$key}");
     }
