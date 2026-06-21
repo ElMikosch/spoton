@@ -183,6 +183,14 @@ sub handler {
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
 
+    my $logTotal = 0;
+    for my $f (bsd_glob(catfile($serverPrefs->get('cachedir'), 'spoton', '*-connect.log'))) {
+        $logTotal += -s $f || 0;
+    }
+    $paramRef->{connectLogSize} = $logTotal >= 1048576 ? sprintf('%.1f MB', $logTotal / 1048576)
+                                : $logTotal >= 1024    ? sprintf('%.1f KB', $logTotal / 1024)
+                                :                        "$logTotal B";
+
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
 
