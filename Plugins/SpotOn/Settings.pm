@@ -383,6 +383,28 @@ sub _diagnosticBundleHandler {
         $logs = "--- No daemon log files found ---\n";
     }
 
+    # Append browse-mode error log (Browse-mode stderr from single-track processes)
+    $logs .= "--- Browse Errors ---\n";
+    my $browseErrLog = catfile($spotonDir, 'browse-errors.log');
+    if (-f $browseErrLog && -s $browseErrLog) {
+        if (open my $fh, '<', $browseErrLog) {
+            my $size = -s $browseErrLog;
+            if ($size > $maxBytes) {
+                seek($fh, -$maxBytes, 2);
+                <$fh>;  # discard partial line
+                $logs .= "[...truncated to last 500KB...]\n";
+            }
+            local $/;
+            $logs .= <$fh> // '';
+            close $fh;
+        } else {
+            $logs .= "(could not read browse-errors.log: $!)\n";
+        }
+    } else {
+        $logs .= "(no browse error log found)\n";
+    }
+    $logs .= "\n";
+
     my $content = $header . $logs;
     my $filename = "spoton-diag-$timestamp.txt";
 
@@ -411,6 +433,16 @@ sub _clearLogsHandler {
             $deleted++;
         } else {
             $log->warn("clearLogs: failed to delete $logFile: $!");
+        }
+    }
+
+    # Also delete browse-errors.log if present
+    my $browseErrLog = catfile($spotonDir, 'browse-errors.log');
+    if (-f $browseErrLog) {
+        if (unlink $browseErrLog) {
+            $deleted++;
+        } else {
+            $log->warn("clearLogs: failed to delete browse-errors.log: $!");
         }
     }
 
