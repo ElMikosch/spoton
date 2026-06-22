@@ -739,14 +739,18 @@ pub async fn run_unified(
     };
     log::info!("[spoton/unified] Device ID: {device_id_shared}");
 
-    // 3. Session — connect immediately (D-03).
+    // 3. Session — connect when Browse-only; Spirc::new() connects when Connect enabled.
+    //    Spirc::new() calls session.connect() internally; calling it here too causes
+    //    "Session is not connected" because the second connect invalidates the first.
     let mut session_config = SessionConfig::default();
     session_config.device_id = device_id_shared.clone();
     if let Some(ap) = autoplay {
         session_config.autoplay = Some(ap);
     }
     let session = Session::new(session_config.clone(), Some(cache.clone()));
-    session.connect(credentials.clone(), false).await?;
+    if !enable_connect {
+        session.connect(credentials.clone(), false).await?;
+    }
 
     // Wrap session in Arc<Mutex> so Browse requests and the reconnect loop can swap it.
     let session_shared = Arc::new(tokio::sync::Mutex::new(session));
