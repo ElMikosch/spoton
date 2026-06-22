@@ -2414,11 +2414,12 @@ sub _onNewSongWatchdog {
 
     $log->warn("[DIAG] Watchdog: newsong url=$url duration=${duration}s") if $prefs->get('diagnosticMode');
 
-    return unless $duration > 0;
+    return unless $duration > 10;
 
+    # Start polling 10 seconds before expected end
     Slim::Utils::Timers::setTimer(
         $client,
-        Time::HiRes::time() + $duration + 5,
+        Time::HiRes::time() + $duration - 10,
         \&_prefetchWatchdog,
     );
 }
@@ -2437,11 +2438,20 @@ sub _prefetchWatchdog {
 
     my $elapsed = $client->songElapsedSeconds() || 0;
     my $duration = $song->duration || 0;
-    return unless $duration > 0 && $elapsed >= $duration - 1;
+    return unless $duration > 0;
 
-    $log->warn("Prefetch watchdog: player stuck at end of track (elapsed=${elapsed}s, duration=${duration}s) — forcing skip");
+    if ($elapsed >= $duration - 1) {
+        $log->warn("Prefetch watchdog: player stuck at end of track (elapsed=${elapsed}s, duration=${duration}s) — forcing skip");
+        $client->execute(['playlist', 'jump', '+1']);
+        return;
+    }
 
-    $client->execute(['playlist', 'jump', '+1']);
+    # Not stuck yet — check again in 2 seconds
+    Slim::Utils::Timers::setTimer(
+        $client,
+        Time::HiRes::time() + 2,
+        \&_prefetchWatchdog,
+    );
 }
 
 1;
