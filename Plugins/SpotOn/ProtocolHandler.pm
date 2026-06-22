@@ -36,7 +36,7 @@ sub getFormatForURL {
     my ($class, $url) = @_;
     return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
-    return 'pcm' if $url && $url =~ m{:\d+/track/};  # Phase 28: Browse daemon HTTP URLs
+    return 'soc' if $url && $url =~ m{:\d+/track/};  # Phase 28: Browse daemon HTTP URLs
     return 'son';
 }
 
@@ -89,8 +89,8 @@ sub formatOverride {
             require Plugins::SpotOn::Browse::DaemonManager;
             my $helper = Plugins::SpotOn::Browse::DaemonManager->helperForClient($client);
             if ($helper && $helper->alive && $helper->_browsePort) {
-                $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=pcm (browse_http)") if $prefs->get('diagnosticMode');
-                return 'pcm';   # Routes to 'soc pcm * *' — direct HTTP stream, no transcoding
+                $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc (browse_http)") if $prefs->get('diagnosticMode');
+                return 'soc';   # Routes to 'soc pcm * *' — direct HTTP stream, no transcoding
             }
         }
     }
@@ -99,6 +99,26 @@ sub formatOverride {
     # OGG passthrough uses son-ogg-*-* (not ogg-*-*-* which doesn't exist).
     $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url fmt=$fmt result=son") if $prefs->get('diagnosticMode');
     return 'son';
+}
+
+# canDirectStreamSong($class, $client, $song)
+# Override base class to append seek offset for Browse daemon HTTP URLs.
+# Base class (HTTP.pm) returns $direct without seek awareness; we append
+# ?start_position=N so the Browse daemon starts decoding at the right offset.
+sub canDirectStreamSong {
+    my ($class, $client, $song) = @_;
+
+    my $url = $song->currentTrack->url || '';
+    my $directUrl = $class->canDirectStream($client, $url);
+    return 0 unless $directUrl;
+
+    if ($directUrl =~ m{/track/} && $song->seekdata && $song->seekdata->{'timeOffset'}) {
+        my $offset = $song->seekdata->{'timeOffset'};
+        $directUrl .= '?start_position=' . $offset;
+        $song->startOffset($offset);
+    }
+
+    return $directUrl;
 }
 
 # canDirectStream($class, $client, $url)
@@ -223,6 +243,23 @@ sub requestString {
     return $self->SUPER::requestString($client, $url, $post, $seekdata);
 }
 
+# handleDirectError($class, $client, $url, $response, $status_line)
+# Called by Squeezebox2::directHeaders when the direct stream returns a non-2xx/3xx status.
+# For Browse daemon 404: skip to next track immediately instead of LMS retry loop.
+sub handleDirectError {
+    my ($class, $client, $url, $response, $status_line) = @_;
+
+    if ($response == 404 && $url && $url =~ m{:\d+/track/}) {
+        $log->warn("Browse daemon 404 for $url — skipping to next track");
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.1, sub {
+            $_[0]->execute(['playlist', 'index', '+1']);
+        });
+        return;
+    }
+
+    $client->failedDirectStream($status_line);
+}
+
 # canEnhanceHTTP($self, $client, $url)
 # Override to return 0 for Connect proxy stream URLs.
 # The base class returns $prefs->get('useEnhancedHTTP') which may be non-zero.
@@ -289,6 +326,12 @@ sub new {
                 if ($helper && $helper->_browsePort) {
                     my $host    = Slim::Utils::Network::serverAddr();
                     my $httpUrl = "http://$host:" . $helper->_browsePort . "/track/$trackId";
+                    my $song = $args->{song};
+                    if ($song && $song->seekdata && $song->seekdata->{'timeOffset'}) {
+                        my $offset = $song->seekdata->{'timeOffset'};
+                        $httpUrl .= '?start_position=' . $offset;
+                        $song->startOffset($offset);
+                    }
                     $log->warn("[DIAG] browse_sync_proxy: mac=" . $client->id . " http_url=$httpUrl") if $prefs->get('diagnosticMode');
                     main::INFOLOG && $log->is_info && $log->info(
                         "Browse sync proxy: substituting HTTP URL $httpUrl for " . $client->id
@@ -587,6 +630,12 @@ sub parseDirectHeaders {
         if ($meta && $meta->{duration}) {
             $song->duration($meta->{duration});
         }
+
+        # Finding 2: Set startOffset from ?start_position=N so LMS progress bar
+        # reflects the actual playback position after seeking via Browse HTTP.
+        if ($url && $url =~ /start_position=([\d.]+)/) {
+            $song->startOffset($1 + 0);
+        }
     }
 
     return Slim::Player::Protocols::HTTP->parseDirectHeaders($client, $url, @headers);
@@ -616,6 +665,12 @@ sub canTranscodeSeek {
         my $url = $song ? ($song->track->url || '') : '';
         return 0 if $url =~ m{spoton://connect-};
     }
+    # Browse HTTP: seek is handled via ?start_position=N in canDirectStreamSong,
+    # not via $START$ in the transcoding command. Returning 0 keeps canDoSeek at 1
+    # so streamMode 'I' stays in the profile search and soc-pcm-*-* matches.
+    my $browseMode = $prefs->get('browseMode') // 'http';
+    return 0 if $browseMode eq 'http';
+
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
 
