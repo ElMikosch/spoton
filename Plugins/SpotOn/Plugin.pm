@@ -133,6 +133,11 @@ sub initPlugin {
         }, 'diagnosticMode');
     }
 
+    # Phase 27: Prefetch hang watchdog — detects when a Browse-mode track stalls
+    # at the end because the next track's pipeline failed (unavailable, audio key
+    # error, timeout). Forces skip after duration + 5s if player is still stuck.
+    Slim::Control::Request::subscribe(\&_onNewSongWatchdog, [['playlist'], ['newsong']]);
+
     _deployMaterialSkinIcon();
 
     $class->SUPER::initPlugin(
@@ -2388,6 +2393,54 @@ sub _typeString {
     my $fmtLabel = $LABEL{$fmt} || uc($fmt);
 
     return "${fmtLabel}, SpotOn ${mode}";
+}
+
+# ============================================================
+# Prefetch Hang Watchdog (Phase 27)
+# ============================================================
+
+sub _onNewSongWatchdog {
+    my $request = shift;
+    my $client = $request->client() || return;
+
+    Slim::Utils::Timers::killTimers($client, \&_prefetchWatchdog);
+
+    my $song = $client->playingSong() || return;
+    my $url = $song->track->url || '';
+
+    return unless $url =~ m{^spoton://(?!connect-)};
+
+    my $duration = $song->duration || 0;
+    return unless $duration > 0;
+
+    Slim::Utils::Timers::setTimer(
+        $client,
+        Time::HiRes::time() + $duration + 5,
+        \&_prefetchWatchdog,
+    );
+}
+
+sub _prefetchWatchdog {
+    my $client = shift;
+    return unless $client;
+
+    my $song = $client->playingSong();
+    return unless $song;
+
+    my $url = $song->track->url || '';
+    return unless $url =~ m{^spoton://(?!connect-)};
+
+    return unless Slim::Player::Source::playmode($client) eq 'play';
+
+    my $elapsed = $client->songElapsedSeconds() || 0;
+    my $duration = $song->duration || 0;
+    return unless $duration > 0 && $elapsed >= $duration - 1;
+
+    main::INFOLOG && $log->is_info && $log->info(
+        "Prefetch watchdog: player stuck at end of track (elapsed=${elapsed}s, duration=${duration}s) — forcing skip"
+    );
+
+    $client->execute(['playlist', 'jump', '+1']);
 }
 
 1;
