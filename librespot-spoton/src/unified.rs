@@ -1052,9 +1052,7 @@ pub async fn run_unified(
                 },
 
                 // Reconnect with new credentials (Pitfall 6: session update for Browse too).
-                // Defer reconnect while Browse is active — Spirc was shut down
-                // intentionally and reconnecting would disrupt the Browse session.
-                _ = async {}, if connecting && last_credentials.is_some() && !matches!(*mode_state.lock().await, ActiveMode::Browse(_)) => {
+                _ = async {}, if connecting && last_credentials.is_some() => {
                     let session_cur = {
                         let s = session_shared.lock().await;
                         s.clone()
@@ -1099,8 +1097,13 @@ pub async fn run_unified(
                                 connecting = false;
                                 // Send "ready" to LMS so Connect.pm re-issues playlist play
                                 // after a ZeroConf credential rotation + Spirc reconnect.
-                                if let Some(ref lms) = lms_for_reconnect {
-                                    lms.notify("ready", "", "").await;
+                                // Skip while Browse is active — the reconnect is just restoring
+                                // Spirc visibility in the Spotify app, not taking over playback.
+                                let is_browsing = matches!(*mode_state.lock().await, ActiveMode::Browse(_));
+                                if !is_browsing {
+                                    if let Some(ref lms) = lms_for_reconnect {
+                                        lms.notify("ready", "", "").await;
+                                    }
                                 }
                                 log::debug!("[spoton/unified] Spirc reconnected");
                             }
