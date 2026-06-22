@@ -50,6 +50,7 @@
 //   stderr: descriptive error message on exit 1 (track ID, reason)
 
 mod connect;
+mod browse;   // Phase 28: persistent Browse daemon (GET /track/{id} HTTP server)
 
 use std::env;
 use std::process;
@@ -80,6 +81,7 @@ enum Mode {
     SingleTrack,
     TokenLogin,    // Phase 04.2: credential provisioning from OAuth access token
     DiscoverOnce,  // Phase 04.3: ZeroConf mDNS credential acquisition
+    Browse,        // Phase 28: persistent Browse daemon (GET /track/{id} HTTP server)
 }
 
 #[tokio::main]
@@ -142,6 +144,9 @@ async fn main() {
             }
             "--discover-once" => {
                 mode = Mode::DiscoverOnce;
+            }
+            "--browse" => {
+                mode = Mode::Browse;
             }
             "--token" => {
                 if i + 1 < args.len() {
@@ -275,6 +280,7 @@ async fn main() {
             let json = serde_json::json!({
                 "version": VERSION,
                 "autoplay": true,
+                "browse": true,           // Phase 28: persistent Browse daemon capability
                 "discover-once": true,
                 "lms-auth": false,
                 "ogg-direct": has_passthrough,
@@ -434,6 +440,27 @@ async fn main() {
                 Ok(_) => process::exit(0),
                 Err(e) => {
                     eprintln!("Single-track playback failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        Mode::Browse => {
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --browse");
+                eprintln!("Usage: spoton -n 'DeviceName' -c <dir> --browse --player-mac <mac>");
+                process::exit(1);
+            }
+
+            match browse::run_browse(
+                &cache_dir,
+                if player_mac.is_empty() { None } else { Some(&player_mac) },
+            )
+            .await
+            {
+                Ok(_) => process::exit(0),
+                Err(e) => {
+                    eprintln!("Browse mode error: {}", e);
                     process::exit(1);
                 }
             }
