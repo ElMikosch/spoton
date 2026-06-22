@@ -309,7 +309,10 @@ sub getNextTrack {
     if ($url =~ m{^spoton://track:([A-Za-z0-9]+)$}) {
         my $trackId = $1;
         my $serverPrefs = preferences('server');
-        my $markerFile = catfile($serverPrefs->get('cachedir'), 'spoton', 'unavailable-track');
+        my $accountId = $prefs->get('activeAccount') || '';
+        my $markerFile = $accountId
+            ? catfile($serverPrefs->get('cachedir'), 'spoton', $accountId, 'unavailable-track')
+            : catfile($serverPrefs->get('cachedir'), 'spoton', 'unavailable-track');
         if (-f $markerFile) {
             my $markerContent = eval { local $/; open my $fh, '<', $markerFile or die; my $c = <$fh>; close $fh; $c } // '';
             if ($markerContent eq "spotify:track:$trackId") {

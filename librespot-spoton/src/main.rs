@@ -438,7 +438,6 @@ async fn main() {
                     eprintln!("Single-track playback failed: {}", e);
                     if e.to_string().starts_with("Track unavailable:") {
                         let marker = std::path::Path::new(&cache_dir)
-                            .join("spoton")
                             .join("unavailable-track");
                         let _ = std::fs::write(&marker, &track_uri);
                     }
