@@ -36,6 +36,7 @@ sub getFormatForURL {
     my ($class, $url) = @_;
     return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
+    return 'pcm' if $url && $url =~ m{:\d+/track/};  # Phase 28: Browse daemon HTTP URLs
     return 'son';
 }
 
@@ -78,6 +79,22 @@ sub formatOverride {
         }
     }
 
+    # Phase 28: Browse-HTTP mode — check if Browse daemon is alive for this player.
+    # Guard: browseMode=http AND not a Connect URL (Connect already handled above).
+    # Returns 'pcm' → routes to 'soc pcm * *' pipeline (direct stream, no transcoding).
+    # Both formatOverride AND canDirectStream must return consistently (Pitfall 8).
+    if ($url !~ m{spoton://connect-} && $url =~ m{^spoton://(?:track|episode):}) {
+        my $browseMode = $prefs->get('browseMode') // 'http';
+        if ($browseMode eq 'http') {
+            require Plugins::SpotOn::Browse::DaemonManager;
+            my $helper = Plugins::SpotOn::Browse::DaemonManager->helperForClient($client);
+            if ($helper && $helper->alive && $helper->_browsePort) {
+                $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=pcm (browse_http)") if $prefs->get('diagnosticMode');
+                return 'pcm';   # Routes to 'soc pcm * *' — direct HTTP stream, no transcoding
+            }
+        }
+    }
+
     # Browse mode: always 'son' — pipeline selection via updateTranscodingTable deletion.
     # OGG passthrough uses son-ogg-*-* (not ogg-*-*-* which doesn't exist).
     $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url fmt=$fmt result=son") if $prefs->get('diagnosticMode');
@@ -93,6 +110,35 @@ sub canDirectStream {
     my ($class, $client, $url) = @_;
 
     return 0 unless $client;
+
+    # Phase 28: Browse-HTTP direct stream for non-synced players.
+    # Must be checked BEFORE the Connect-only early return below (Pitfall 8: consistency with formatOverride).
+    # T-28-08: trackId extracted via [A-Za-z0-9]+ regex from already-validated spoton:// URL.
+    if ($url && $url =~ m{^spoton://(?:track|episode):([A-Za-z0-9]+)$}) {
+        my $trackId    = $1;
+        my $browseMode = $prefs->get('browseMode') // 'http';
+        if ($browseMode eq 'http') {
+            my $browseClient = $client->can('master') ? $client->master : $client;
+            require Plugins::SpotOn::Browse::DaemonManager;
+            my $helper = Plugins::SpotOn::Browse::DaemonManager->helperForClient($browseClient);
+            if ($helper && $helper->alive && $helper->_browsePort) {
+                if ($browseClient->isSynced()) {
+                    $log->warn("[DIAG] canDirectStream: browse url=$url result=0 reason=synced") if $prefs->get('diagnosticMode');
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "canDirectStream: 0 (Browse — player is synced, new() proxy handles)"
+                    );
+                    return 0;   # Synced: new() Browse proxy handles URL substitution
+                }
+                my $host   = Slim::Utils::Network::serverAddr();
+                my $ds_url = "http://$host:" . $helper->_browsePort . "/track/$trackId";
+                $log->warn("[DIAG] canDirectStream: browse url=$ds_url") if $prefs->get('diagnosticMode');
+                main::INFOLOG && $log->is_info && $log->info(
+                    "canDirectStream: Browse daemon HTTP $ds_url"
+                );
+                return $ds_url;
+            }
+        }
+    }
 
     # DirectStream is only valid for Connect streams — Browse tracks use son-* pipelines
     return 0 unless $url && $url =~ m{spoton://connect-};
@@ -157,11 +203,12 @@ sub canDirectStream {
 sub requestString {
     my ($self, $client, $url, $post, $seekdata) = @_;
 
-    if ($url && $url =~ m{:\d+/stream\b}) {
+    if ($url && $url =~ m{:\d+/(?:stream\b|track/)}) {
+        # Phase 28: also suppress Range for Browse daemon /track/ URLs (same reason as /stream).
         my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
         my $host = ($port == 80) ? $server : "$server:$port";
         main::INFOLOG && $log->is_info && $log->info(
-            "requestString: Connect proxy — plain GET (no Range) for $url"
+            "requestString: daemon proxy — plain GET (no Range) for $url"
         );
         return join($CRLF,
             "GET $path HTTP/1.0",
@@ -186,10 +233,11 @@ sub requestString {
 sub canEnhanceHTTP {
     my ($self, $client, $url) = @_;
 
-    if ($url && $url =~ m{:\d+/stream\b}) {
-        $log->warn("[DIAG] canEnhanceHTTP: url=$url result=0 reason=connect_proxy_infinite_stream") if $prefs->get('diagnosticMode');
+    if ($url && $url =~ m{:\d+/(?:stream\b|track/)}) {
+        # Phase 28: also return 0 for Browse daemon /track/ URLs (same reason as /stream).
+        $log->warn("[DIAG] canEnhanceHTTP: url=$url result=0 reason=daemon_proxy_infinite_stream") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
-            "canEnhanceHTTP: Connect proxy — returning 0 for $url"
+            "canEnhanceHTTP: daemon proxy — returning 0 for $url"
         );
         return 0;
     }
@@ -222,6 +270,31 @@ sub new {
                     "D-08: Browse URL — stopping active Connect daemon for " . $client->id
                 );
                 Plugins::SpotOn::Connect->_stopConnectDaemon($client);
+            }
+        }
+    }
+
+    # (b2) Phase 28: Browse-HTTP sync-group proxy — substitute Browse daemon HTTP URL for synced players.
+    # Pattern from Connect sync proxy below. Applies only when browseMode=http and daemon alive.
+    # T-28-08: trackId extracted via [A-Za-z0-9]+ regex from already-validated spoton:// URL.
+    if ($url =~ m{^spoton://(?:track|episode):([A-Za-z0-9]+)$} && $url !~ m{spoton://connect-}) {
+        my $trackId = $1;
+        my $client  = $args->{client};
+        if ($client) {
+            $client = $client->master if $client->can('master');
+            my $browseMode = $prefs->get('browseMode') // 'http';
+            if ($browseMode eq 'http') {
+                require Plugins::SpotOn::Browse::DaemonManager;
+                my $helper = Plugins::SpotOn::Browse::DaemonManager->helperForClient($client);
+                if ($helper && $helper->_browsePort) {
+                    my $host    = Slim::Utils::Network::serverAddr();
+                    my $httpUrl = "http://$host:" . $helper->_browsePort . "/track/$trackId";
+                    $log->warn("[DIAG] browse_sync_proxy: mac=" . $client->id . " http_url=$httpUrl") if $prefs->get('diagnosticMode');
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Browse sync proxy: substituting HTTP URL $httpUrl for " . $client->id
+                    );
+                    $args = { %$args, url => $httpUrl };
+                }
             }
         }
     }
