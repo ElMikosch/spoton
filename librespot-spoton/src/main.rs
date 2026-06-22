@@ -46,7 +46,7 @@
 //   stdout: raw PCM (S16LE) or raw OGG Vorbis (when --passthrough)
 //   exit 0 on success (EndOfTrack or Stopped)
 //   exit 1 on failure: unavailable track (region-locked, removed, CDN error),
-//                      playback timeout (30s safety net), or session/auth error
+//                      playback timeout (5s safety net), or session/auth error
 //   stderr: descriptive error message on exit 1 (track ID, reason)
 
 mod connect;
@@ -710,7 +710,7 @@ async fn run_single_track(
     // hang scenario (T-26-01: Denial of Service via indefinite hang).
     let mut event_channel = player.get_player_event_channel();
 
-    let result = timeout(Duration::from_secs(30), async {
+    let result = timeout(Duration::from_secs(5), async {
         loop {
             match event_channel.recv().await {
                 Some(PlayerEvent::EndOfTrack { .. }) => {
@@ -745,6 +745,6 @@ async fn run_single_track(
     match result {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(e.into()),
-        Err(_elapsed) => Err("Single-track playback timed out after 30s".into()),
+        Err(_elapsed) => Err("Single-track playback timed out after 5s".into()),
     }
 }
