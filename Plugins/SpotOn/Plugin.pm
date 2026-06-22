@@ -53,8 +53,6 @@ sub initPlugin {
         enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (controls Connect autoplay + DSTM)
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
-        browseMode           => 'http', # Phase 28: D-06/D-07 — 'http' (Browse daemon) or 'pipe' (legacy single-track). D-08: hidden, no Settings UI.
-        daemonMode           => 'unified', # Phase 29: 'unified' or 'legacy', default 'unified'
     });
 
     # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
@@ -117,59 +115,21 @@ sub initPlugin {
         Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);
         Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 2, \&_autoStartDiscovery);
 
-        # Phase 29: Gate legacy vs. unified daemon startup on daemonMode pref.
-        # daemonMode=legacy: start old Browse::DM + Connect::DM (unchanged behavior).
-        # daemonMode=unified: start Unified::DaemonManager only (one daemon per player).
-        if (($prefs->get('daemonMode') || 'unified') eq 'legacy') {
-            # D-07: Start Connect daemon manager for all players.
-            # 3s delay allows player list to populate after LMS start.
-            Slim::Utils::Timers::killTimers($class, \&_startConnectDaemons);
-            Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3, \&_startConnectDaemons);
+        # Start Unified daemon manager for all players.
+        # 4s delay: allows player list to populate after LMS start.
+        Slim::Utils::Timers::killTimers($class, \&_startUnifiedDaemons);
+        Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 4, \&_startUnifiedDaemons);
 
-            # Phase 28: Start Browse daemon manager for all players.
-            # 3.5s delay: after Connect daemons (3s) to not race for credentials.json reads.
-            Slim::Utils::Timers::killTimers($class, \&_startBrowseDaemons);
-            Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3.5, \&_startBrowseDaemons);
-        }
-
-        # Phase 29: Start Unified daemon manager when daemonMode=unified.
-        # 4s delay: after Connect (3s) and Browse (3.5s) to ensure player list populated.
-        if (($prefs->get('daemonMode') || 'unified') eq 'unified') {
-            Slim::Utils::Timers::killTimers($class, \&_startUnifiedDaemons);
-            Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 4, \&_startUnifiedDaemons);
-        }
-
-        # Restart active daemons when diagnosticMode changes so RUST_LOG and
-        # stderr routing take effect immediately. Only restart the DaemonManager
-        # that is actually loaded — prevents spawning legacy daemons in unified mode.
+        # Restart Unified daemons when diagnosticMode changes so RUST_LOG and
+        # stderr routing take effect immediately.
         $prefs->setChange( sub {
-            if ($INC{'Plugins/SpotOn/Connect/DaemonManager.pm'}) {
-                require Plugins::SpotOn::Connect::DaemonManager;
-                Plugins::SpotOn::Connect::DaemonManager->shutdown();
-                Slim::Utils::Timers::killTimers('Plugins::SpotOn::Connect::DaemonManager', \&Plugins::SpotOn::Connect::DaemonManager::initHelpers);
-                Slim::Utils::Timers::setTimer(
-                    'Plugins::SpotOn::Connect::DaemonManager',
-                    Time::HiRes::time() + 1,
-                    \&Plugins::SpotOn::Connect::DaemonManager::initHelpers,
-                );
-            }
-            if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
-                require Plugins::SpotOn::Browse::DaemonManager;
-                Plugins::SpotOn::Browse::DaemonManager->shutdown();
-                Slim::Utils::Timers::killTimers('Plugins::SpotOn::Browse::DaemonManager', \&Plugins::SpotOn::Browse::DaemonManager::initHelpers);
-                Slim::Utils::Timers::setTimer(
-                    'Plugins::SpotOn::Browse::DaemonManager',
-                    Time::HiRes::time() + 1.5,
-                    \&Plugins::SpotOn::Browse::DaemonManager::initHelpers,
-                );
-            }
             if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
                 require Plugins::SpotOn::Unified::DaemonManager;
                 Plugins::SpotOn::Unified::DaemonManager->shutdown();
                 Slim::Utils::Timers::killTimers('Plugins::SpotOn::Unified::DaemonManager', \&Plugins::SpotOn::Unified::DaemonManager::initHelpers);
                 Slim::Utils::Timers::setTimer(
                     'Plugins::SpotOn::Unified::DaemonManager',
-                    Time::HiRes::time() + 2,
+                    Time::HiRes::time() + 1,
                     \&Plugins::SpotOn::Unified::DaemonManager::initHelpers,
                 );
             }
@@ -206,13 +166,6 @@ sub shutdownPlugin {
     require Plugins::SpotOn::Connect;
     Plugins::SpotOn::Connect->shutdown();
 
-    # Phase 28: shut down Browse daemons on plugin shutdown ($INC guard — may not be loaded yet).
-    if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
-        require Plugins::SpotOn::Browse::DaemonManager;
-        Plugins::SpotOn::Browse::DaemonManager->shutdown();
-    }
-
-    # Phase 29: shut down Unified daemons on plugin shutdown.
     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->shutdown();
@@ -255,24 +208,6 @@ sub _refreshAllTokens {
 sub _autoStartDiscovery {
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->autoStartDiscoveryIfNeeded();
-}
-
-# _startConnectDaemons()
-# D-07: Timer callback — starts Connect daemon manager at LMS boot.
-# Guarded by main::WEBUI (called only from the WEBUI block in initPlugin).
-# 3s delay allows player list to populate before daemon lifecycle starts.
-sub _startConnectDaemons {
-    require Plugins::SpotOn::Connect;
-    Plugins::SpotOn::Connect->init();
-}
-
-# _startBrowseDaemons()
-# Phase 28: Timer callback — starts Browse daemon manager at LMS boot.
-# Guarded by main::WEBUI (called only from the WEBUI block in initPlugin).
-# 3.5s delay: after Connect daemons (3s) to not race for credentials.json reads.
-sub _startBrowseDaemons {
-    require Plugins::SpotOn::Browse::DaemonManager;
-    Plugins::SpotOn::Browse::DaemonManager->init();
 }
 
 # _startUnifiedDaemons()
@@ -327,21 +262,7 @@ sub _killOrphanedProcesses {
                 } else {
                     # CR-01: Use PID-based kill to avoid killing active transcoding processes.
                     # Find all matching PIDs, exclude active ones, kill only orphans.
-                    # CON-09: Exclude Connect daemon PIDs from orphan cleanup (Pitfall 6).
-                    my %connectPids;
-                    if ($INC{'Plugins/SpotOn/Connect/DaemonManager.pm'}) {
-                        %connectPids = map { $_ => 1 }
-                            Plugins::SpotOn::Connect::DaemonManager->helperPids();
-                    }
-
-                    # Phase 28: CON-09 pattern — exclude Browse daemon PIDs (T-28-09).
-                    my %browsePids;
-                    if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
-                        %browsePids = map { $_ => 1 }
-                            Plugins::SpotOn::Browse::DaemonManager->helperPids();
-                    }
-
-                    # Phase 29: CON-09 pattern — exclude Unified daemon PIDs (Pitfall 7).
+                    # CON-09: Exclude Unified daemon PIDs from orphan cleanup.
                     my %unifiedPids;
                     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
                         %unifiedPids = map { $_ => 1 }
@@ -352,9 +273,7 @@ sub _killOrphanedProcesses {
                     my @pids = map { /^\s*(\d+)/ ? $1 : () } `pgrep -f '$safeHelper'`;
                     for my $pid (@pids) {
                         next if $activePids{$pid};
-                        next if $connectPids{$pid};    # CON-09: protect Connect daemon PIDs
-                        next if $browsePids{$pid};     # Phase 28: protect Browse daemon PIDs
-                        next if $unifiedPids{$pid};    # Phase 29: protect Unified daemon PIDs
+                        next if $unifiedPids{$pid};    # CON-09: protect Unified daemon PIDs
                         kill 'TERM', $pid;
                         main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
                     }
