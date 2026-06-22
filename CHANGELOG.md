@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-06-22
+### Fixed
+- Prefetch hang watchdog redesigned: URL-based "same song after 10s?" check replaces fragile elapsed-arithmetic approach — more robust, seek-safe, max 13s worst-case hang
+
 ## [1.9.0] - 2026-06-22
 ### Added
 - **Browse Error Recovery**: Unavailable tracks (region-locked, removed, CDN error) are now detected via `PlayerEvent::Unavailable` — binary exits with code 1 within seconds instead of hanging forever
