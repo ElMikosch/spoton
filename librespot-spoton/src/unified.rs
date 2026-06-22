@@ -28,7 +28,7 @@
 //   Pitfall 5: Rate-limiting is FORBIDDEN in BrowseHttpSink. Only HttpStreamSink is rate-limited.
 
 use std::io::Write as IoWrite;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -223,6 +223,10 @@ async fn unified_http_server(
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     // browse_preempting: signals the /stream relay to exit cleanly on D-10 takeover
     browse_preempting: Arc<AtomicBool>,
+    // browse_abort_gen: monotonic counter incremented on each /track/ request to detect
+    // rapid-skip supersession (T-30-05). Pre-spawn check drops pcm_tx if a newer request
+    // arrived while waiting for Player::load() to complete.
+    browse_abort_gen: Arc<AtomicU64>,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -247,6 +251,7 @@ async fn unified_http_server(
                 let relay_active = Arc::clone(&relay_active);
                 let last_data_time = Arc::clone(&last_data_time);
                 let browse_preempting = Arc::clone(&browse_preempting);
+                let browse_abort_gen = Arc::clone(&browse_abort_gen);
                 let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -259,6 +264,7 @@ async fn unified_http_server(
                     let relay_active = Arc::clone(&relay_active);
                     let last_data_time = Arc::clone(&last_data_time);
                     let browse_preempting = Arc::clone(&browse_preempting);
+                    let browse_abort_gen = Arc::clone(&browse_abort_gen);
                     let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -461,6 +467,12 @@ async fn unified_http_server(
                             let track_id = track_id_raw.to_owned();
                             log::debug!("[spoton/unified] GET /track/{} start_position_ms={}", track_id, start_position_ms);
 
+                            // T-30-05 (mitigate): increment browse_abort_gen to signal any
+                            // in-flight /track/ task that it has been superseded by this request.
+                            // fetch_add returns the OLD value; after our increment the counter is
+                            // my_gen + 1. A subsequent request will push it to my_gen + 2 or higher.
+                            let my_gen = browse_abort_gen.fetch_add(1, Ordering::SeqCst);
+
                             // D-10: Browse has priority. If Connect is active, pause Spirc first.
                             // Pitfall 3: Check ActiveMode mutex before proceeding.
                             // Pitfall 2: Set browse_preempting BEFORE pausing Spirc so the relay
@@ -510,8 +522,37 @@ async fn unified_http_server(
                             let mode_state_for_task = Arc::clone(&mode_state);
                             let spirc_handle_for_resume = Arc::clone(&spirc_handle);
                             let cancel_abort_for_task = cancel_abort.clone();
+                            let browse_abort_gen_task = Arc::clone(&browse_abort_gen);
                             tokio::spawn(async move {
+                                // T-30-05 (mitigate): pre-spawn supersession check.
+                                // If another /track/ request arrived while we were setting up
+                                // (e.g. acquiring the session lock), abort before Player::load().
+                                // Our increment set the counter to my_gen + 1; if it's already
+                                // higher, a newer request has arrived and superseded us.
+                                let current_gen = browse_abort_gen_task.load(Ordering::SeqCst);
+                                if current_gen > my_gen + 1 {
+                                    log::info!(
+                                        "[spoton/unified] /track/{}: superseded by newer request (gen {} > {}+1) — aborting before Player::load",
+                                        track_id_for_task, current_gen, my_gen
+                                    );
+                                    drop(pcm_tx);
+                                    let _ = status_tx.send(StatusCode::NOT_FOUND);
+                                    return;
+                                }
+
                                 let status = serve_track_request(&track_id_for_task, session_snap, pcm_tx, start_position_ms).await;
+
+                                // T-30-05 (informational): post-load gen check.
+                                // serve_track_request drops pcm_tx when it returns, causing
+                                // ReceiverStream EOF on the response side automatically.
+                                // Log if we were superseded mid-stream for diagnostics.
+                                let post_gen = browse_abort_gen_task.load(Ordering::SeqCst);
+                                if post_gen > my_gen + 1 {
+                                    log::debug!(
+                                        "[spoton/unified] /track/{}: superseded during streaming (gen {} > {}+1)",
+                                        track_id_for_task, post_gen, my_gen
+                                    );
+                                }
                                 // Abort the cancel listener so its cloned pcm_tx_for_cancel is
                                 // dropped — otherwise the mpsc channel stays open (all senders
                                 // must drop for ReceiverStream EOF) and LMS loops the last buffer.
@@ -767,6 +808,9 @@ pub async fn run_unified(
     let browse_cancel = Arc::new(tokio::sync::Notify::new());
     // browse_preempting: signals /stream relay to exit cleanly on D-10 Browse takeover (Pitfall 2).
     let browse_preempting = Arc::new(AtomicBool::new(false));
+    // browse_abort_gen: monotonic counter for rapid-skip debounce (T-30-05).
+    // Incremented on each /track/ request; in-flight tasks check if gen advanced.
+    let browse_abort_gen = Arc::new(AtomicU64::new(0));
 
     // 6. Conditional Connect infrastructure (D-01).
     let volume_ctrl_enum = match volume_ctrl_str {
@@ -959,6 +1003,7 @@ pub async fn run_unified(
             flush_rx_arc,
             http_shutdown_rx,
             Arc::clone(&browse_preempting),
+            Arc::clone(&browse_abort_gen),
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1138,6 +1183,7 @@ pub async fn run_unified(
             None,  // flush_rx
             http_shutdown_rx,
             Arc::clone(&browse_preempting),
+            Arc::clone(&browse_abort_gen),
         ));
 
         // Pure Browse: wait for Ctrl+C.
