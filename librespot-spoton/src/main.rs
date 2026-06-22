@@ -706,7 +706,7 @@ async fn run_single_track(
     // Unavailable, causing the process to hang forever when a track is region-locked,
     // removed from catalog, or has no audio file for the current CDN region.
     //
-    // A 30-second timeout wraps the entire loop as a safety net against any other
+    // A 5-second timeout wraps the entire loop as a safety net against any other
     // hang scenario (T-26-01: Denial of Service via indefinite hang).
     let mut event_channel = player.get_player_event_channel();
 

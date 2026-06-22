@@ -362,20 +362,7 @@ sub _diagnosticBundleHandler {
     for my $logFile (@logFiles) {
         my $basename = basename($logFile);
         $logs .= "--- Log: $basename ---\n";
-
-        if (open my $fh, '<', $logFile) {
-            my $size = -s $logFile;
-            if ($size > $maxBytes) {
-                seek($fh, -$maxBytes, 2);
-                <$fh>;  # discard partial line
-                $logs .= "[...truncated to last 500KB...]\n";
-            }
-            local $/;
-            $logs .= <$fh> // '';
-            close $fh;
-        } else {
-            $logs .= "(could not read: $!)\n";
-        }
+        $logs .= _readLogTail($logFile, $maxBytes);
         $logs .= "\n";
     }
 
@@ -383,23 +370,10 @@ sub _diagnosticBundleHandler {
         $logs = "--- No daemon log files found ---\n";
     }
 
-    # Append browse-mode error log (Browse-mode stderr from single-track processes)
     $logs .= "--- Browse Errors ---\n";
     my $browseErrLog = catfile($spotonDir, 'browse-errors.log');
     if (-f $browseErrLog && -s $browseErrLog) {
-        if (open my $fh, '<', $browseErrLog) {
-            my $size = -s $browseErrLog;
-            if ($size > $maxBytes) {
-                seek($fh, -$maxBytes, 2);
-                <$fh>;  # discard partial line
-                $logs .= "[...truncated to last 500KB...]\n";
-            }
-            local $/;
-            $logs .= <$fh> // '';
-            close $fh;
-        } else {
-            $logs .= "(could not read browse-errors.log: $!)\n";
-        }
+        $logs .= _readLogTail($browseErrLog, $maxBytes);
     } else {
         $logs .= "(no browse error log found)\n";
     }
@@ -477,6 +451,24 @@ sub _isDegradedMode {
 # Helper: check if ZeroConf discovery process is alive
 # Delegates to TokenManager which owns the $discoveryProc package var
 # ============================================================
+sub _readLogTail {
+    my ($path, $maxBytes) = @_;
+    if (open my $fh, '<', $path) {
+        my $size = -s $path;
+        my $content = '';
+        if ($size > $maxBytes) {
+            seek($fh, -$maxBytes, 2);
+            <$fh>;
+            $content .= "[...truncated to last 500KB...]\n";
+        }
+        local $/;
+        $content .= <$fh> // '';
+        close $fh;
+        return $content;
+    }
+    return "(could not read " . basename($path) . ": $!)\n";
+}
+
 sub _isDiscoveryRunning {
     # Lazy-load TokenManager to avoid circular dependency issues at startup
     # If TokenManager is not loaded yet, discovery is not running
