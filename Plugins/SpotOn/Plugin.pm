@@ -166,6 +166,10 @@ sub shutdownPlugin {
     require Plugins::SpotOn::Connect;
     Plugins::SpotOn::Connect->shutdown();
 
+    # Unsubscribe watchdog registered in initPlugin — prevents duplicate handler
+    # accumulation across plugin reloads (each reload calls shutdown then init).
+    Slim::Control::Request::unsubscribe(\&_onNewSongWatchdog);
+
     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->shutdown();
