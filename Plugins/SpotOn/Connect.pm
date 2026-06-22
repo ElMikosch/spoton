@@ -50,39 +50,31 @@ my $_activeConnectPlayer;
 # Public API
 # ---------------------------------------------------------------------------
 
-sub init {
+sub initConnectHandlers {
     my ($class) = @_;
 
     return if $initialized;
 
-    #                                                                |requires Client
-    #                                                                |  |is a Query
-    #                                                                |  |  |has Tags
-    #                                                                |  |  |  |Function to call
-    #                                                                C  Q  T  F
     Slim::Control::Request::addDispatch(['spottyconnect', '_cmd'],
                                                             [1, 0, 1, \&_connectEvent]
     );
 
-    # Listen to playlist change events so we know when Spotify Connect mode ends
     Slim::Control::Request::subscribe(\&_onNewSong, [['playlist'], ['newsong']]);
-
-    # Forward local pause/stop to the Spotify controller for bidirectional state sync
     Slim::Control::Request::subscribe(\&_onPause, [['playlist'], ['pause', 'stop']]);
-
-    # Forward local volume changes to Spotify for bidirectional state sync
     Slim::Control::Request::subscribe(\&_onVolume, [['mixer'], ['volume']]);
-
-    # Forward local seeks to Spotify so the app stays in sync
     Slim::Control::Request::subscribe(\&_onSeek, [['time']]);
-
-    # Forward local skip next/prev to Spotify instead of letting LMS handle it
     Slim::Control::Request::subscribe(\&_onPlaylistJump, [['playlist'], ['jump', 'index']]);
+
+    $initialized = 1;
+}
+
+sub init {
+    my ($class) = @_;
+
+    $class->initConnectHandlers();
 
     require Plugins::SpotOn::Connect::DaemonManager;
     Plugins::SpotOn::Connect::DaemonManager->init();
-
-    $initialized = 1;
 }
 
 # isSpotifyConnect($class, $client)

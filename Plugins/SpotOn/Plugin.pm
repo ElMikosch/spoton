@@ -278,6 +278,8 @@ sub _startBrowseDaemons {
 # Phase 29: Timer callback — starts Unified daemon manager at LMS boot.
 # 4s delay: after Connect and Browse timers to ensure player list populated.
 sub _startUnifiedDaemons {
+    require Plugins::SpotOn::Connect;
+    Plugins::SpotOn::Connect->initConnectHandlers();
     require Plugins::SpotOn::Unified::DaemonManager;
     Plugins::SpotOn::Unified::DaemonManager->init();
 }
