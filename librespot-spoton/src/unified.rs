@@ -492,11 +492,12 @@ async fn unified_http_server(
                             // we need to drop pcm_tx to send EOF to LMS.
                             let cancel = Arc::clone(&browse_cancel);
                             let pcm_tx_for_cancel = pcm_tx.clone();
-                            let cancel_handle = tokio::spawn(async move {
+                            let cancel_task = tokio::spawn(async move {
                                 cancel.notified().await;
                                 drop(pcm_tx_for_cancel);
                                 log::debug!("[spoton/unified] /track: browse_cancel notified — dropping pcm_tx");
                             });
+                            let cancel_abort = cancel_task.abort_handle();
 
                             // Status channel: serve_track_request signals 404 (Unavailable) early.
                             let (status_tx, mut status_rx) = tokio::sync::oneshot::channel::<StatusCode>();
@@ -508,24 +509,18 @@ async fn unified_http_server(
                             let track_id_for_task = track_id.clone();
                             let mode_state_for_task = Arc::clone(&mode_state);
                             let spirc_handle_for_resume = Arc::clone(&spirc_handle);
+                            let cancel_abort_for_task = cancel_abort.clone();
                             tokio::spawn(async move {
                                 let status = serve_track_request(&track_id_for_task, session_snap, pcm_tx, start_position_ms).await;
-                                // After Browse completes, set mode back to Idle (or try to resume Connect).
-                                // D-10 follow-up: after Browse finishes, call spirc.play() to let
-                                // Spotify app know it can resume (Open Question 2 from RESEARCH.md).
+                                // Abort the cancel listener so its cloned pcm_tx_for_cancel is
+                                // dropped — otherwise the mpsc channel stays open (all senders
+                                // must drop for ReceiverStream EOF) and LMS loops the last buffer.
+                                cancel_abort_for_task.abort();
                                 {
                                     let mut mode = mode_state_for_task.lock().await;
                                     if matches!(*mode, ActiveMode::Browse(_)) {
                                         *mode = ActiveMode::Idle;
                                         log::debug!("[spoton/unified] Browse track completed — mode set to Idle");
-                                    }
-                                }
-                                // Attempt to resume Spirc so Spotify app sees device as available.
-                                // Failure is non-fatal (Spirc may not be configured).
-                                if let Ok(guard) = spirc_handle_for_resume.lock() {
-                                    if let Some(spirc) = guard.as_ref() {
-                                        let _ = spirc.play();
-                                        log::debug!("[spoton/unified] Browse done — signalled Spirc play() for Connect resume");
                                     }
                                 }
                                 let _ = status_tx.send(status);
@@ -539,7 +534,7 @@ async fn unified_http_server(
 
                             if let Ok(Ok(StatusCode::NOT_FOUND)) = early_status {
                                 log::info!("[spoton/unified] track unavailable — returning 404");
-                                cancel_handle.abort();
+                                cancel_abort.abort();
                                 // Reset mode to Idle since the track failed.
                                 {
                                     let mut mode = mode_state.lock().await;
