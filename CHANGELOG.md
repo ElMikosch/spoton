@@ -5,6 +5,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-22
+### Added
+- **Browse Error Recovery**: Unavailable tracks (region-locked, removed, CDN error) are now detected via `PlayerEvent::Unavailable` — binary exits with code 1 within seconds instead of hanging forever
+- **Browse Error Diagnostics**: Single-track stderr captured to `browse-errors.log` when diagnosticMode is on; included in diagnostic bundle under "Browse Errors" section; Clear Logs removes it
+- **Prefetch Hang Watchdog**: Detects when player stalls at end of track because the next track's pipeline failed (unavailable, audio key error) and forces skip automatically
+
+### Changed
+- Single-track safety-net timeout reduced from 30s to 5s (Unavailable events fire within 1-2s)
+- Binary version bumped to 1.3.0 (new PlayerEvent channel loop replaces `await_end_of_track`)
+
+### Fixed
+- diagnosticMode rapid-toggle race condition: `killTimers` before `setTimer` prevents duplicate Connect daemon instances
+- STDERRLOG injection unified from two-pass substitution to single regex (eliminates implicit ordering dependency)
+- 500KB log tail-read pattern extracted to `_readLogTail` helper (was duplicated in diagnostic bundle)
+- clearLogs message no longer reports misleading "deleted N of M" count
+
+### Known Limitations
+- Rapid skipping through many tracks can trigger Spotify audio-key throttling (`error audio key 0 2`) causing temporary skip of available tracks — this is a Spotify-side session-burst rate limit, identical to Spotty behavior. A persistent Browse daemon (Backlog #8) would eliminate this.
+- Prefetch of unavailable tracks causes ~10-30s of audio stalling at the end of the preceding song before the watchdog forces a skip — LMS buffer management limitation, also addressed by Backlog #8.
+
 ## [1.7.8] - 2026-06-21
 ### Fixed
 - `getMetadataFor` no longer logs Error-level backtrace when LMS passes `Slim::Schema::RemoteTrack` instead of URL string — downgraded to debug (fixes [#14](https://github.com/stiefenm/spoton/issues/14))
