@@ -483,16 +483,18 @@ async fn unified_http_server(
                                     // Signal the /stream relay to exit (Pitfall 2).
                                     browse_preempting.store(true, Ordering::Release);
 
-                                    // Pause Spirc so the Connect Player stops producing PCM.
-                                    // The SoftMixer Player is paused at the Spirc level — this
-                                    // does not destroy the session, just halts audio output.
-                                    if let Ok(guard) = spirc_handle.lock() {
-                                        if let Some(spirc) = guard.as_ref() {
-                                            let _ = spirc.pause();
-                                            log::info!("[spoton/unified] Browse preempting Connect -- Spirc paused");
+                                    // Shut down Spirc completely so no Connect events
+                                    // leak into Browse mode (metadata, skip, control).
+                                    // ZeroConf re-creates Spirc when the user re-selects
+                                    // the device in the Spotify app.
+                                    if let Ok(mut guard) = spirc_handle.lock() {
+                                        if let Some(ref spirc) = *guard {
+                                            let _ = spirc.shutdown();
                                         }
+                                        *guard = None;
                                     }
                                     spirc_active.store(false, Ordering::SeqCst);
+                                    log::info!("[spoton/unified] Browse preempting Connect -- Spirc shut down");
                                 }
                                 *mode = ActiveMode::Browse(track_id.clone());
                             }
@@ -877,18 +879,12 @@ pub async fn run_unified(
         let lms_reconnect = lms.clone();
         lms_for_reconnect = Some(lms_reconnect);
 
-        // LMS event dispatcher — suppress Connect metadata while in Browse mode.
+        // LMS event dispatcher.
         if lms.is_configured() {
             let mut event_chan = connect_player.get_player_event_channel();
-            let mode_state_lms = Arc::clone(&mode_state);
             tokio::spawn(async move {
                 let mut current_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
-                    let mode = mode_state_lms.lock().await;
-                    if matches!(*mode, ActiveMode::Browse(_)) {
-                        continue;
-                    }
-                    drop(mode);
                     lms.handle_player_event(&event, &mut current_track).await;
                 }
             });
