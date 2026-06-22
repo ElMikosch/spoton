@@ -53,6 +53,7 @@ sub initPlugin {
         enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (controls Connect autoplay + DSTM)
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
+        browseMode           => 'http', # Phase 28: D-06/D-07 — 'http' (Browse daemon) or 'pipe' (legacy single-track). D-08: hidden, no Settings UI.
     });
 
     # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
@@ -120,6 +121,11 @@ sub initPlugin {
         Slim::Utils::Timers::killTimers($class, \&_startConnectDaemons);
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3, \&_startConnectDaemons);
 
+        # Phase 28: Start Browse daemon manager for all players.
+        # 3.5s delay: after Connect daemons (3s) to not race for credentials.json reads.
+        Slim::Utils::Timers::killTimers($class, \&_startBrowseDaemons);
+        Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 3.5, \&_startBrowseDaemons);
+
         # Restart all Connect daemons when diagnosticMode changes so RUST_LOG and
         # stderr routing take effect immediately.
         $prefs->setChange( sub {
@@ -131,6 +137,17 @@ sub initPlugin {
                 Time::HiRes::time() + 1,
                 \&Plugins::SpotOn::Connect::DaemonManager::initHelpers,
             );
+            # Phase 28: also restart Browse daemons on diagnosticMode change.
+            if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
+                require Plugins::SpotOn::Browse::DaemonManager;
+                Plugins::SpotOn::Browse::DaemonManager->shutdown();
+                Slim::Utils::Timers::killTimers('Plugins::SpotOn::Browse::DaemonManager', \&Plugins::SpotOn::Browse::DaemonManager::initHelpers);
+                Slim::Utils::Timers::setTimer(
+                    'Plugins::SpotOn::Browse::DaemonManager',
+                    Time::HiRes::time() + 1.5,
+                    \&Plugins::SpotOn::Browse::DaemonManager::initHelpers,
+                );
+            }
         }, 'diagnosticMode');
     }
 
@@ -163,6 +180,12 @@ sub shutdownPlugin {
 
     require Plugins::SpotOn::Connect;
     Plugins::SpotOn::Connect->shutdown();
+
+    # Phase 28: shut down Browse daemons on plugin shutdown ($INC guard — may not be loaded yet).
+    if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
+        require Plugins::SpotOn::Browse::DaemonManager;
+        Plugins::SpotOn::Browse::DaemonManager->shutdown();
+    }
 
     Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
     Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
@@ -209,6 +232,15 @@ sub _autoStartDiscovery {
 sub _startConnectDaemons {
     require Plugins::SpotOn::Connect;
     Plugins::SpotOn::Connect->init();
+}
+
+# _startBrowseDaemons()
+# Phase 28: Timer callback — starts Browse daemon manager at LMS boot.
+# Guarded by main::WEBUI (called only from the WEBUI block in initPlugin).
+# 3.5s delay: after Connect daemons (3s) to not race for credentials.json reads.
+sub _startBrowseDaemons {
+    require Plugins::SpotOn::Browse::DaemonManager;
+    Plugins::SpotOn::Browse::DaemonManager->init();
 }
 
 # _killOrphanedProcesses($class)
@@ -260,11 +292,19 @@ sub _killOrphanedProcesses {
                             Plugins::SpotOn::Connect::DaemonManager->helperPids();
                     }
 
+                    # Phase 28: CON-09 pattern — exclude Browse daemon PIDs (T-28-09).
+                    my %browsePids;
+                    if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
+                        %browsePids = map { $_ => 1 }
+                            Plugins::SpotOn::Browse::DaemonManager->helperPids();
+                    }
+
                     (my $safeHelper = $helper) =~ s/'/'\\''/g;
                     my @pids = map { /^\s*(\d+)/ ? $1 : () } `pgrep -f '$safeHelper'`;
                     for my $pid (@pids) {
                         next if $activePids{$pid};
                         next if $connectPids{$pid};    # CON-09: protect Connect daemon PIDs
+                        next if $browsePids{$pid};     # Phase 28: protect Browse daemon PIDs
                         kill 'TERM', $pid;
                         main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
                     }
