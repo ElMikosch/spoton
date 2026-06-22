@@ -326,7 +326,7 @@ async fn handle_request(
 }
 
 /// Build an empty response body (for error responses).
-fn empty_response(status: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> {
+pub fn empty_response(status: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> {
     let body = Full::new(Bytes::new())
         .map_err(|e: Infallible| match e {})
         .boxed();
@@ -351,7 +351,7 @@ fn empty_response(status: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> 
 /// Per-request Player instances: a new Player is created for each request.
 /// The Session is shared — audio keys cached at session level are reused across
 /// Players on the same session, preserving the audio-key caching benefit (Pitfall 2 / D-04).
-async fn serve_track_request(
+pub async fn serve_track_request(
     track_id: &str,
     session: Session,
     pcm_tx: mpsc::Sender<Bytes>,
