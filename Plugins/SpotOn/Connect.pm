@@ -557,7 +557,7 @@ sub _connectEvent {
                 my $song = $client->playingSong();
                 if ($song) {
                     my $elapsed = $client->songElapsedSeconds() || 0;
-                    $song->startOffset(int($position) - $elapsed);
+                    $song->startOffset($position - $elapsed);
                     main::INFOLOG && $log->is_info && $log->info(
                         "Stream mode seek: adjusted startOffset to " . $song->startOffset()
                     );
@@ -671,7 +671,7 @@ sub _connectEvent {
             my $song = $client->playingSong();
             if ($song) {
                 my $elapsed = $client->songElapsedSeconds() || 0;
-                $song->startOffset(int($position) - $elapsed);
+                $song->startOffset($position - $elapsed);
                 main::INFOLOG && $log->is_info && $log->info(
                     "Resume: adjusted startOffset to " . $song->startOffset()
                 );
