@@ -329,7 +329,19 @@ sub handleDirectError {
     my ($class, $client, $url, $response, $status_line) = @_;
 
     if ($response == 404 && $url && $url =~ m{:\d+/track/}) {
+        my $streaming = $client->streamingSong();
+        my $playing   = $client->playingSong();
+        if ($streaming && $playing && $streaming != $playing) {
+            my $remaining = ($client->controller()->playingSongDuration() || 0)
+                          - ($client->controller()->playingSongElapsed() || 0);
+            $remaining = 1 if $remaining < 1;
+            $log->warn("Browse daemon 404 for $url — prefetch context, scheduling skip in ${remaining}s");
+            Slim::Utils::Timers::killTimers($client, \&_skipUnavailable);
+            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $remaining, \&_skipUnavailable);
+            return;
+        }
         $log->warn("Browse daemon 404 for $url — skipping to next track");
+        Slim::Utils::Timers::killTimers($client, \&_skipUnavailable);
         Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.1, sub {
             $_[0]->execute(['playlist', 'index', '+1']);
         });
@@ -337,6 +349,11 @@ sub handleDirectError {
     }
 
     $client->failedDirectStream($status_line);
+}
+
+sub _skipUnavailable {
+    my $client = shift;
+    $client->execute(['playlist', 'index', '+1']);
 }
 
 # canEnhanceHTTP($self, $client, $url)
