@@ -2428,15 +2428,16 @@ sub _prefetchWatchdog {
     return unless $client;
 
     my $song = $client->playingSong();
-    return unless $song;
-
-    my $url = $song->track->url || '';
-    return unless $url =~ m{^spoton://(?!connect-)};
-
-    return unless Slim::Player::Source::playmode($client) eq 'play';
-
+    my $playmode = Slim::Player::Source::playmode($client) || 'unknown';
+    my $url = $song ? ($song->track->url || '') : 'no-song';
     my $elapsed = $client->songElapsedSeconds() || 0;
-    my $duration = $song->duration || 0;
+    my $duration = $song ? ($song->duration || 0) : 0;
+
+    $log->warn("[DIAG] Watchdog poll: url=$url playmode=$playmode elapsed=${elapsed}s duration=${duration}s") if $prefs->get('diagnosticMode');
+
+    return unless $song;
+    return unless $url =~ m{^spoton://(?!connect-)};
+    return unless $playmode eq 'play';
     return unless $duration > 0;
 
     if ($elapsed >= $duration - 1) {
