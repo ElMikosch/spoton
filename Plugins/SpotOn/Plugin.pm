@@ -139,18 +139,20 @@ sub initPlugin {
             Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 4, \&_startUnifiedDaemons);
         }
 
-        # Restart all Connect daemons when diagnosticMode changes so RUST_LOG and
-        # stderr routing take effect immediately.
+        # Restart active daemons when diagnosticMode changes so RUST_LOG and
+        # stderr routing take effect immediately. Only restart the DaemonManager
+        # that is actually loaded — prevents spawning legacy daemons in unified mode.
         $prefs->setChange( sub {
-            require Plugins::SpotOn::Connect::DaemonManager;
-            Plugins::SpotOn::Connect::DaemonManager->shutdown();
-            Slim::Utils::Timers::killTimers('Plugins::SpotOn::Connect::DaemonManager', \&Plugins::SpotOn::Connect::DaemonManager::initHelpers);
-            Slim::Utils::Timers::setTimer(
-                'Plugins::SpotOn::Connect::DaemonManager',
-                Time::HiRes::time() + 1,
-                \&Plugins::SpotOn::Connect::DaemonManager::initHelpers,
-            );
-            # Phase 28: also restart Browse daemons on diagnosticMode change.
+            if ($INC{'Plugins/SpotOn/Connect/DaemonManager.pm'}) {
+                require Plugins::SpotOn::Connect::DaemonManager;
+                Plugins::SpotOn::Connect::DaemonManager->shutdown();
+                Slim::Utils::Timers::killTimers('Plugins::SpotOn::Connect::DaemonManager', \&Plugins::SpotOn::Connect::DaemonManager::initHelpers);
+                Slim::Utils::Timers::setTimer(
+                    'Plugins::SpotOn::Connect::DaemonManager',
+                    Time::HiRes::time() + 1,
+                    \&Plugins::SpotOn::Connect::DaemonManager::initHelpers,
+                );
+            }
             if ($INC{'Plugins/SpotOn/Browse/DaemonManager.pm'}) {
                 require Plugins::SpotOn::Browse::DaemonManager;
                 Plugins::SpotOn::Browse::DaemonManager->shutdown();
@@ -161,7 +163,6 @@ sub initPlugin {
                     \&Plugins::SpotOn::Browse::DaemonManager::initHelpers,
                 );
             }
-            # Phase 29: also restart Unified daemons on diagnosticMode change.
             if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
                 require Plugins::SpotOn::Unified::DaemonManager;
                 Plugins::SpotOn::Unified::DaemonManager->shutdown();
