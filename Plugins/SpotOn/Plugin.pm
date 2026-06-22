@@ -2414,12 +2414,11 @@ sub _onNewSongWatchdog {
 
     $log->warn("[DIAG] Watchdog: newsong url=$url duration=${duration}s") if $prefs->get('diagnosticMode');
 
-    return unless $duration > 10;
+    return unless $duration > 0;
 
-    # Start polling 10 seconds before expected end
     Slim::Utils::Timers::setTimer(
         $client,
-        Time::HiRes::time() + $duration - 10,
+        Time::HiRes::time() + 10,
         \&_prefetchWatchdog,
     );
 }
