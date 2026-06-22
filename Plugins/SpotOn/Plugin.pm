@@ -2435,8 +2435,6 @@ sub _prefetchWatchdog {
     my $elapsed = $rawElapsed + $startOffset;
     my $duration = $song ? ($song->duration || 0) : 0;
 
-    $log->warn("[DIAG] Watchdog poll: url=$url playmode=$playmode elapsed=${elapsed}s (raw=${rawElapsed}+offset=${startOffset}) duration=${duration}s") if $prefs->get('diagnosticMode');
-
     return unless $song;
     return unless $url =~ m{^spoton://(?!connect-)};
     return unless $playmode eq 'play';
