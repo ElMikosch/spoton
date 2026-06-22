@@ -68,15 +68,6 @@ sub initConnectHandlers {
     $initialized = 1;
 }
 
-sub init {
-    my ($class) = @_;
-
-    $class->initConnectHandlers();
-
-    require Plugins::SpotOn::Connect::DaemonManager;
-    Plugins::SpotOn::Connect::DaemonManager->init();
-}
-
 # isSpotifyConnect($class, $client)
 # Returns true if the given player is currently in active Spotify Connect mode.
 # Used by ProtocolHandler to disable LMS seek in stream mode.
@@ -102,12 +93,10 @@ sub _isDeadHistoryUrl {
 }
 
 # shutdown($class)
-# Cleanly unsubscribes all event handlers and stops all Connect daemons.
+# Cleanly unsubscribes all event handlers.
+# Daemon shutdown is handled by Unified::DaemonManager via Plugin.pm shutdownPlugin().
 sub shutdown {
     if ($initialized) {
-        require Plugins::SpotOn::Connect::DaemonManager;
-        Plugins::SpotOn::Connect::DaemonManager->shutdown();
-
         Slim::Control::Request::unsubscribe(\&_onNewSong);
         Slim::Control::Request::unsubscribe(\&_onPause);
         Slim::Control::Request::unsubscribe(\&_onVolume);
@@ -124,30 +113,32 @@ sub shutdown {
 # ---------------------------------------------------------------------------
 
 # _isStreamMode($client)
-# Returns true if the Connect daemon for this client is in HTTP stream mode.
+# Returns true if the unified daemon for this client has an active stream port.
 sub _isStreamMode {
     my ($client) = @_;
     return unless $client;
     $client = $client->master if $client->can('master');
-    require Plugins::SpotOn::Connect::DaemonManager;
-    my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client->id);
-    return $helper && $helper->_streamMode;
+    require Plugins::SpotOn::Unified::DaemonManager;
+    my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($client->id);
+    return $helper && $helper->alive && $helper->_streamPort;
 }
 
 # _stopConnectDaemon($class, $client)
-# Stops the active Connect daemon for this client (D-08: Browse→Connect mutual exclusion).
-# Called when Browse starts on a player that has an active Connect session.
+# Stops the active daemon for this client (D-08: Browse→Connect mutual exclusion).
+# In unified mode the Rust ActiveMode mutex handles this internally (D-09/D-10).
+# This method is retained for compatibility but is not called in unified mode
+# (ProtocolHandler.pm new() skips it when daemonMode=unified).
 sub _stopConnectDaemon {
     my ($class, $client) = @_;
     return unless $client;
     $client = $client->master if $client->can('master');
 
     main::INFOLOG && $log->is_info && $log->info(
-        "D-08 mutual exclusion: stopping Connect daemon for Browse start on " . $client->id
+        "D-08 mutual exclusion: stopping daemon for Browse start on " . $client->id
     );
 
-    require Plugins::SpotOn::Connect::DaemonManager;
-    Plugins::SpotOn::Connect::DaemonManager->stopHelper($client->id);
+    require Plugins::SpotOn::Unified::DaemonManager;
+    Plugins::SpotOn::Unified::DaemonManager->stopHelper($client->id);
 
     if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
         $_activeConnectPlayer = undef;
@@ -161,8 +152,8 @@ sub _sendControlCommand {
     my ($client, $endpoint, $body) = @_;
     return unless $client;
 
-    require Plugins::SpotOn::Connect::DaemonManager;
-    my $port = Plugins::SpotOn::Connect::DaemonManager->streamPortForClient($client->id);
+    require Plugins::SpotOn::Unified::DaemonManager;
+    my $port = Plugins::SpotOn::Unified::DaemonManager->streamPortForClient($client->id);
     unless ($port) {
         main::INFOLOG && $log->is_info && $log->info(
             "_sendControlCommand: no stream port for " . $client->id . ", skipping $endpoint"
@@ -525,8 +516,8 @@ sub _connectEvent {
         # CON-11: VOLUME_GRACE_PERIOD — ignore volume events within the first N seconds
         # after daemon start. The binary's suppress_next_volume AtomicBool handles the very
         # first VolumeChanged; this grace period covers subsequent echoes during session setup.
-        require Plugins::SpotOn::Connect::DaemonManager;
-        if (Plugins::SpotOn::Connect::DaemonManager->uptime($client->id) < VOLUME_GRACE_PERIOD) {
+        require Plugins::SpotOn::Unified::DaemonManager;
+        if (Plugins::SpotOn::Unified::DaemonManager->uptime($client->id) < VOLUME_GRACE_PERIOD) {
             main::INFOLOG && $log->is_info && $log->info(
                 "Ignoring initial volume reset right after daemon start (CON-11 grace period)"
             );
@@ -534,7 +525,7 @@ sub _connectEvent {
         }
 
         main::INFOLOG && $log->is_info && $log->info("Binary reported volume change: $volume");
-        $log->warn("[DIAG] volume_from_binary: mac=" . $client->id . " volume=$volume uptime=" . sprintf('%.1f', Plugins::SpotOn::Connect::DaemonManager->uptime($client->id)) . "s") if $prefs->get('diagnosticMode');
+        $log->warn("[DIAG] volume_from_binary: mac=" . $client->id . " volume=$volume uptime=" . sprintf('%.1f', Plugins::SpotOn::Unified::DaemonManager->uptime($client->id)) . "s") if $prefs->get('diagnosticMode');
 
         # Source-mark to prevent _onVolume from echoing back to binary (T-05-13)
         my $volReq = Slim::Control::Request->new($client->id, ['mixer', 'volume', $volume]);
