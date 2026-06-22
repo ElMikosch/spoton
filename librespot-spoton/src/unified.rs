@@ -697,6 +697,10 @@ async fn unified_http_server(
 ///   8. Spawn unified_http_server (combined routes)
 ///   9. Main event loop (Spirc task + ZeroConf reconnect + ctrl_c)
 ///  10. Graceful shutdown
+// unused_assignments: variables declared before the if/else branch are assigned None in the
+// else branch for definite-assignment safety; those assignments are intentionally unused because
+// the else branch doesn't use those values (it only runs the HTTP server + ctrl_c wait).
+#[allow(unused_assignments)]
 pub async fn run_unified(
     cache_dir: &str,
     device_name: &str,
@@ -772,12 +776,13 @@ pub async fn run_unified(
         _ => VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE),
     };
 
-    // PCM + flush channels — only created when enable_connect.
+    // PCM + flush channels — only created when enable_connect (None in else branch).
+    // The if/else branches below handle both cases.
     let pcm_rx_arc: Option<Arc<std::sync::Mutex<mpsc::Receiver<Bytes>>>>;
     let flush_rx_arc: Option<Arc<std::sync::Mutex<watch::Receiver<u64>>>>;
 
-    // Reconnect infrastructure: mixer_fn is needed for the reconnect path.
-    let mixer_fn_opt;
+    // Reconnect infrastructure.
+    let mixer_fn_opt: Option<librespot_playback::mixer::MixerFn>;
     let lms_for_reconnect: Option<LMS>;
     // Player::new returns Arc<Player>; Player does not implement Clone, but Arc<Player> does.
     let connect_player_opt: Option<Arc<Player>>;
@@ -1115,7 +1120,6 @@ pub async fn run_unified(
     } else {
         // Pure Browse mode — no Connect infrastructure, no Spirc.
         // Session is live for Browse requests. Daemon runs until killed.
-
         pcm_rx_arc = None;
         flush_rx_arc = None;
         mixer_fn_opt = None;
