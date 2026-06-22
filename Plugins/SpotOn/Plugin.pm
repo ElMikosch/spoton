@@ -2396,11 +2396,16 @@ sub _typeString {
 # Prefetch Hang Watchdog (Phase 27)
 # ============================================================
 
+my %_watchdogTriggerUrl;
+
 sub _onNewSongWatchdog {
     my $request = shift;
     my $client = $request->client() || return;
+    my $id = $client->id;
 
     Slim::Utils::Timers::killTimers($client, \&_prefetchWatchdog);
+    Slim::Utils::Timers::killTimers($client, \&_prefetchHangCheck);
+    delete $_watchdogTriggerUrl{$id};
 
     my $song = $client->playingSong() || return;
     my $url = $song->track->url || '';
@@ -2424,31 +2429,51 @@ sub _prefetchWatchdog {
     my $client = shift;
     return unless $client;
 
-    my $song = $client->playingSong();
-    my $playmode = Slim::Player::Source::playmode($client) || 'unknown';
-    my $url = $song ? ($song->track->url || '') : 'no-song';
-    my $rawElapsed = $client->songElapsedSeconds() || 0;
-    my $startOffset = $song ? ($song->startOffset || 0) : 0;
-    my $elapsed = $rawElapsed + $startOffset;
-    my $duration = $song ? ($song->duration || 0) : 0;
-
-    return unless $song;
+    my $song = $client->playingSong() || return;
+    my $url = $song->track->url || '';
     return unless $url =~ m{^spoton://(?!connect-)};
-    return unless $playmode eq 'play';
+    return unless Slim::Player::Source::playmode($client) eq 'play';
+
+    my $duration = $song->duration || 0;
     return unless $duration > 0;
 
-    if ($elapsed >= $duration - 1) {
-        $log->warn("Prefetch watchdog: player stuck at end of track (elapsed=${elapsed}s, duration=${duration}s) — forcing skip");
-        $client->execute(['playlist', 'jump', '+1']);
+    my $rawElapsed = $client->songElapsedSeconds() || 0;
+    my $startOffset = $song->startOffset || 0;
+    my $elapsed = $rawElapsed + $startOffset;
+
+    if ($elapsed >= $duration - 3) {
+        my $id = $client->id;
+        $_watchdogTriggerUrl{$id} = $url;
+        $log->warn("[DIAG] Watchdog: near end (elapsed=${elapsed}s, duration=${duration}s) — arming 10s hang check") if $prefs->get('diagnosticMode');
+        Slim::Utils::Timers::setTimer(
+            $client,
+            Time::HiRes::time() + 10,
+            \&_prefetchHangCheck,
+        );
         return;
     }
 
-    # Not stuck yet — check again in 2 seconds
     Slim::Utils::Timers::setTimer(
         $client,
         Time::HiRes::time() + 2,
         \&_prefetchWatchdog,
     );
+}
+
+sub _prefetchHangCheck {
+    my $client = shift;
+    return unless $client;
+    my $id = $client->id;
+
+    my $triggerUrl = delete $_watchdogTriggerUrl{$id} || return;
+
+    my $song = $client->playingSong();
+    my $currentUrl = $song ? ($song->track->url || '') : '';
+
+    if ($currentUrl eq $triggerUrl && Slim::Player::Source::playmode($client) eq 'play') {
+        $log->warn("Prefetch watchdog: still on same track after 10s past end — forcing skip");
+        $client->execute(['playlist', 'jump', '+1']);
+    }
 }
 
 1;
