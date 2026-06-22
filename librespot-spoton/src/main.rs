@@ -4,6 +4,7 @@
 // Phase 04.2 implementation: --token-login subcommand for credential provisioning
 // Phase 04.3 implementation: --discover-once subcommand for ZeroConf credential acquisition
 // Phase 05.1 implementation: --connect mode (Spirc + HTTP streaming + LMS event dispatch)
+// Phase 29.1 implementation: --unified mode (Browse + Connect in one process)
 //
 // Modes:
 //   --check          : Print capability manifest (Phase 1 contract, unchanged)
@@ -13,6 +14,7 @@
 //   --token-login    : Acquire reusable credentials from OAuth access token, write credentials.json
 //   --discover-once  : ZeroConf mDNS announcement, wait for Spotify App connection, write credentials.json
 //   --connect        : Spotify Connect receiver (Spirc + HTTP streaming + LMS JSON-RPC)
+//   --unified        : Combined Browse+Connect daemon (one process, one port, optional Spirc)
 //
 // --check output format:
 //   Line 1: "ok spoton v{VERSION}"
@@ -50,6 +52,8 @@
 //   stderr: descriptive error message on exit 1 (track ID, reason)
 
 mod connect;
+mod browse;   // Phase 28: persistent Browse daemon (GET /track/{id} HTTP server)
+mod unified;  // Phase 29: unified Browse+Connect daemon (one process, one port)
 
 use std::env;
 use std::process;
@@ -80,6 +84,8 @@ enum Mode {
     SingleTrack,
     TokenLogin,    // Phase 04.2: credential provisioning from OAuth access token
     DiscoverOnce,  // Phase 04.3: ZeroConf mDNS credential acquisition
+    Browse,        // Phase 28: persistent Browse daemon (GET /track/{id} HTTP server)
+    Unified,       // Phase 29: combined Browse+Connect daemon (one process, one port)
 }
 
 #[tokio::main]
@@ -115,6 +121,9 @@ async fn main() {
     let mut initial_volume_lms: Option<u8> = None;
     let mut volume_ctrl_str = String::from("log");
 
+    // Phase 29: unified mode variable
+    let mut enable_connect = false;
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -142,6 +151,15 @@ async fn main() {
             }
             "--discover-once" => {
                 mode = Mode::DiscoverOnce;
+            }
+            "--browse" => {
+                mode = Mode::Browse;
+            }
+            "--unified" => {
+                mode = Mode::Unified;
+            }
+            "--enable-connect" => {
+                enable_connect = true;
             }
             "--token" => {
                 if i + 1 < args.len() {
@@ -275,11 +293,13 @@ async fn main() {
             let json = serde_json::json!({
                 "version": VERSION,
                 "autoplay": true,
+                "browse": true,           // Phase 28: persistent Browse daemon capability
                 "discover-once": true,
                 "lms-auth": false,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
                 "token-login": true,
+                "unified": true,          // Phase 29: unified Browse+Connect daemon capability
             });
             println!("{}", json);
             process::exit(0);
@@ -434,6 +454,58 @@ async fn main() {
                 Ok(_) => process::exit(0),
                 Err(e) => {
                     eprintln!("Single-track playback failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        Mode::Browse => {
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --browse");
+                eprintln!("Usage: spoton -n 'DeviceName' -c <dir> --browse --player-mac <mac>");
+                process::exit(1);
+            }
+
+            match browse::run_browse(
+                &cache_dir,
+                if player_mac.is_empty() { None } else { Some(&player_mac) },
+            )
+            .await
+            {
+                Ok(_) => process::exit(0),
+                Err(e) => {
+                    eprintln!("Browse mode error: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        Mode::Unified => {
+            if cache_dir.is_empty() {
+                eprintln!("Error: --cache is required for --unified");
+                eprintln!("Usage: spoton -c <dir> --unified --player-mac <mac>");
+                eprintln!("       spoton -n 'DeviceName' -c <dir> --unified --player-mac <mac> --enable-connect --lms <host:port>");
+                process::exit(1);
+            }
+
+            match unified::run_unified(
+                &cache_dir,
+                &device_name,
+                if player_mac.is_empty() { None } else { Some(&player_mac) },
+                if lms_host.is_empty() { None } else { Some(&lms_host) },
+                if lms_auth.is_empty() { None } else { Some(&lms_auth) },
+                enable_connect,
+                disable_discovery,
+                buffer_latency_ms,
+                autoplay,
+                initial_volume_u16,
+                &volume_ctrl_str,
+            )
+            .await
+            {
+                Ok(_) => process::exit(0),
+                Err(e) => {
+                    eprintln!("Unified mode error: {}", e);
                     process::exit(1);
                 }
             }
