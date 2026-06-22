@@ -1052,7 +1052,9 @@ pub async fn run_unified(
                 },
 
                 // Reconnect with new credentials (Pitfall 6: session update for Browse too).
-                _ = async {}, if connecting && last_credentials.is_some() => {
+                // Defer reconnect while Browse is active — Spirc was shut down
+                // intentionally and reconnecting would disrupt the Browse session.
+                _ = async {}, if connecting && last_credentials.is_some() && !matches!(*mode_state.lock().await, ActiveMode::Browse(_)) => {
                     let session_cur = {
                         let s = session_shared.lock().await;
                         s.clone()
