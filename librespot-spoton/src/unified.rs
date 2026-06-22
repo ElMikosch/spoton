@@ -1088,11 +1088,11 @@ pub async fn run_unified(
                                 }
                                 current_spirc_task = Some(tokio::spawn(new_task));
                                 connecting = false;
-                                // Note: LMS::notify is private; the reconnect "ready" signal is
-                                // omitted here. Spirc will fire TrackChanged/Playing which the
-                                // LMS event dispatcher handles independently (see lms event spawn above).
-                                // Phase 30: expose LMS::notify_ready() if needed.
-                                let _ = &lms_for_reconnect; // suppress unused variable warning
+                                // Send "ready" to LMS so Connect.pm re-issues playlist play
+                                // after a ZeroConf credential rotation + Spirc reconnect.
+                                if let Some(ref lms) = lms_for_reconnect {
+                                    lms.notify("ready", "", "").await;
+                                }
                                 log::debug!("[spoton/unified] Spirc reconnected");
                             }
                             Err(e) => {

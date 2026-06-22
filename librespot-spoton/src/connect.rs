@@ -277,7 +277,7 @@ impl LMS {
     /// Opens a fresh TCP connection per event (no keep-alive). Errors are
     /// swallowed with a warning — the daemon must never panic on LMS outage.
     /// If `auth` is set, adds `Authorization: Basic <creds>` header.
-    async fn notify(&self, cmd: &str, p1: &str, p2: &str) {
+    pub async fn notify(&self, cmd: &str, p1: &str, p2: &str) {
         let host_port = match self.host_port.as_deref() {
             Some(h) => h,
             None => return,
