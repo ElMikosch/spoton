@@ -12,7 +12,6 @@ use Slim::Utils::Versions;
 use Slim::Utils::Cache;
 use Slim::Utils::Network;
 use Digest::MD5 qw(md5_hex);
-use File::Spec::Functions qw(catfile);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -301,26 +300,6 @@ sub getNextTrack {
         );
         $errorCb->('PROBLEM_OPENING', 'No cached track ID for Connect history URL');
         return;
-    }
-
-    # Skip cache: if the binary flagged this track as unavailable on a previous
-    # attempt, short-circuit immediately so LMS skips instead of re-launching
-    # the pipeline (prevents prefetch/crossfade hang and rapid retry loop).
-    if ($url =~ m{^spoton://track:([A-Za-z0-9]+)$}) {
-        my $trackId = $1;
-        my $serverPrefs = preferences('server');
-        my $markerFile = catfile($serverPrefs->get('cachedir'), 'spoton', 'unavailable-track');
-        if (-f $markerFile) {
-            my $markerContent = eval { local $/; open my $fh, '<', $markerFile or die; my $c = <$fh>; close $fh; $c } // '';
-            if ($markerContent eq "spotify:track:$trackId") {
-                unlink $markerFile;
-                main::INFOLOG && $log->is_info && $log->info(
-                    "getNextTrack: skipping unavailable track $trackId (skip cache hit)"
-                );
-                $errorCb->('PROBLEM_OPENING', 'Track unavailable (cached)');
-                return;
-            }
-        }
     }
 
     # Set duration from cached metadata for Browse URLs before transcoding starts.
