@@ -879,12 +879,18 @@ pub async fn run_unified(
         let lms_reconnect = lms.clone();
         lms_for_reconnect = Some(lms_reconnect);
 
-        // LMS event dispatcher.
+        // LMS event dispatcher — suppress Spirc shutdown events in Browse mode.
         if lms.is_configured() {
             let mut event_chan = connect_player.get_player_event_channel();
+            let mode_state_lms = Arc::clone(&mode_state);
             tokio::spawn(async move {
                 let mut current_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
+                    let mode = mode_state_lms.lock().await;
+                    if matches!(*mode, ActiveMode::Browse(_)) {
+                        continue;
+                    }
+                    drop(mode);
                     lms.handle_player_event(&event, &mut current_track).await;
                 }
             });
