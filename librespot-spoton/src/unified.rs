@@ -520,7 +520,6 @@ async fn unified_http_server(
                             };
                             let track_id_for_task = track_id.clone();
                             let mode_state_for_task = Arc::clone(&mode_state);
-                            let spirc_handle_for_resume = Arc::clone(&spirc_handle);
                             let cancel_abort_for_task = cancel_abort.clone();
                             let browse_abort_gen_task = Arc::clone(&browse_abort_gen);
                             tokio::spawn(async move {
