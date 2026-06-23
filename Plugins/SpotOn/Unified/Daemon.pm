@@ -28,6 +28,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	name
 	cache
 	_accountId
+	_connectEnabled
 	_lastSeen
 	_proc
 	_startTimes
@@ -109,6 +110,7 @@ sub start {
 	# is only passed when Spotify Connect is enabled for this player.
 	my $connectEnabled = $prefs->client($client)->get('enableSpotifyConnect')
 		// $prefs->get('enableSpotifyConnect');
+	$self->_connectEnabled($connectEnabled ? 1 : 0);
 
 	if ($connectEnabled) {
 		# Spirc device name (required for Connect registration)

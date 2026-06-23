@@ -177,14 +177,13 @@ sub initHelpers {
         }
     }
 
-    # Ensure DSTM provider is set for players with autoplay enabled (default).
-    # Settings/Player.pm does this on save, but players that never opened the
-    # SpotOn settings page would have autoplay=on (default) without a DSTM provider.
+    # Ensure DSTM provider is set for players that never opened SpotOn settings.
+    # Only auto-configure when enableAutoplay was never explicitly saved (no timestamp).
+    # If the user saved settings (timestamp exists), their choice is authoritative.
     if (Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin')) {
         my $dstmPrefs = preferences('plugin.dontstopthemusic');
         for my $client (Slim::Player::Client::clients()) {
-            my $autoplay = $prefs->client($client)->get('enableAutoplay') // 1;
-            next unless $autoplay;
+            next if $prefs->client($client)->get('_ts_enableAutoplay');
             my $provider = $dstmPrefs->client($client)->get('provider') // '';
             next if $provider;
             $dstmPrefs->client($client)->set('provider', 'PLUGIN_SPOTON_RECOMMENDATIONS');
@@ -300,6 +299,17 @@ sub startHelper {
                 );
                 $class->stopHelper($clientId);
                 $helper = undef;
+            }
+
+            if ($helper && $helper->alive) {
+                my $wantConnect = _isConnectEnabled($client) ? 1 : 0;
+                if (($helper->_connectEnabled // -1) != $wantConnect) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Connect toggle changed for $clientId (was " . ($helper->_connectEnabled // '?') . ", now $wantConnect) — restarting daemon"
+                    );
+                    $class->stopHelper($clientId);
+                    $helper = undef;
+                }
             }
         }
     }

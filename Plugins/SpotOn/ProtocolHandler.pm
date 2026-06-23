@@ -37,61 +37,23 @@ sub getFormatForURL {
     return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
     return 'soc' if $url && $url =~ m{:\d+/(?:track|episode)/};  # Phase 28: Browse daemon HTTP URLs
-    return 'son';
+    return 'soc';
 }
 
 # formatOverride($class, $song)
 # Returns the content type (INPUT side of transcoding key) for the current song.
-# Checks if a Connect daemon is active; returns 'soc' if so (D-04).
-# Otherwise returns 'son' for single-track Browse mode.
+# Always returns 'soc' — all playback goes through the unified daemon (HTTP).
 #
 # LMS Song.pm constructs the transcoding profile key as:
-#   formatOverride-outputFormat-*-*  (e.g. soc-pcm-*-* for Connect PCM)
+#   formatOverride-outputFormat-*-*  (e.g. soc-pcm-*-* for unified daemon PCM)
 sub formatOverride {
     my ($class, $song) = @_;
 
     my $client = $song->master;
     my $url = $song->track->url || '';
 
-    require Plugins::SpotOn::Plugin;
-    Plugins::SpotOn::Plugin->updateTranscodingTable($client);
-
-    # Per-player streamFormat pref: determines Browse mode pipeline (D-11, D-12)
-    # Migration fallback: read new streamFormat first, fall back to old connectOggOverride
-    my $fmt = $client
-        ? ($prefs->client($client)->get('streamFormat')
-           || $prefs->client($client)->get('connectOggOverride')
-           || 'auto')
-        : 'auto';
-
-    # Connect URL: check unified daemon for stream mode
-    if ($url =~ m{spoton://connect-}) {
-        # Dead history URL: use Browse pipeline ('son'), not Connect ('soc')
-        my $meta = $cache->get('spoton_meta_' . md5_hex($url));
-        if ($meta && $meta->{spotifyUri}) {
-            return 'son';
-        }
-        require Plugins::SpotOn::Unified::DaemonManager;
-        my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($client);
-        if ($helper && $helper->alive && $helper->_streamPort) {
-            $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc (unified_connect)") if $prefs->get('diagnosticMode');
-            return 'soc';
-        }
-    }
-
-    # Browse URL: check unified daemon for track serving
-    if ($url !~ m{spoton://connect-} && $url =~ m{^spoton://(?:track|episode):}) {
-        require Plugins::SpotOn::Unified::DaemonManager;
-        my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($client);
-        if ($helper && $helper->alive && $helper->_streamPort) {
-            $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc (unified_browse)") if $prefs->get('diagnosticMode');
-            return 'soc';
-        }
-    }
-
-    # Fallback: 'son' pipeline (single-track transcoding kept for resilience).
-    $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url fmt=$fmt result=son") if $prefs->get('diagnosticMode');
-    return 'son';
+    $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc") if $prefs->get('diagnosticMode');
+    return 'soc';
 }
 
 # canDirectStreamSong($class, $client, $song)
@@ -310,7 +272,7 @@ sub new {
             $client = $client->master if $client->can('master');
             require Plugins::SpotOn::Unified::DaemonManager;
             my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($client);
-            if ($helper && $helper->_streamPort) {
+            if ($helper && $helper->alive && $helper->_streamPort) {
                 my $host    = Slim::Utils::Network::serverAddr();
                 my $httpUrl = "http://$host:" . $helper->_streamPort . "/$contentType/$trackId";
                 my $song = $args->{song};

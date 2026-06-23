@@ -27,6 +27,10 @@ my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
 
 my %_playAllItemCache;
+sub _evictPlayAllCache {
+    my $now = time();
+    delete @_playAllItemCache{ grep { $now - $_playAllItemCache{$_}{ts} > 120 } keys %_playAllItemCache };
+}
 
 my $log = Slim::Utils::Log->addLogCategory( {
     category     => 'plugin.spoton',
@@ -1148,6 +1152,8 @@ sub _fetchAllFollowedArtists {
 # regardless of what the total field says. Prevents infinite loop on API inconsistencies.
 sub _fetchAllPages {
     my ($args) = @_;
+
+    _evictPlayAllCache();
 
     my $accountId    = $args->{accountId};
     my $apiFn        = $args->{apiFn};
