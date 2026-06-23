@@ -168,25 +168,21 @@ sub _find_pm_files {
 
 # ============================================================
 # Rust binary normalization check:
-# main.rs must use replace("spoton://", ...) not replace("spotify://", ...)
+# v2.0: --single-track mode removed, no spoton:// URL rewrite in Rust anymore.
+# Verify no spotify:// references leaked into the Rust source.
 # ============================================================
 {
     my $rust_file = "$project_dir/librespot-spoton/src/main.rs";
 
     SKIP: {
-        skip "Rust main.rs not found", 2 unless -f $rust_file;
+        skip "Rust main.rs not found", 1 unless -f $rust_file;
 
         open(my $fh, '<', $rust_file) or die "Cannot open $rust_file: $!";
         my @lines = <$fh>;
         close($fh);
         chomp @_ for @lines;
 
-        my @spoton_replace  = grep { /replace\("spoton:\/\/"/ } @lines;
         my @spotify_replace = grep { /replace\("spotify:\/\/"/ } @lines;
-
-        cmp_ok(scalar @spoton_replace, '>=', 1,
-            "Rust binary: >= 1 replace(\"spoton://\") call in main.rs (found: "
-            . scalar(@spoton_replace) . ")");
 
         is(scalar @spotify_replace, 0,
             "Rust binary: zero replace(\"spotify://\") calls in main.rs (found: "
