@@ -440,9 +440,17 @@ async fn unified_http_server(
                             return Ok(resp);
                         }
 
-                        // ---- GET /track/{id} — Browse track decode ----
-                        if method == Method::GET && path.starts_with("/track/") {
-                            let track_id_raw = &path["/track/".len()..];
+                        // ---- GET /track/{id} or /episode/{id} — Browse decode ----
+                        let (content_prefix, content_id_raw) =
+                            if method == Method::GET && path.starts_with("/track/") {
+                                ("track", &path["/track/".len()..])
+                            } else if method == Method::GET && path.starts_with("/episode/") {
+                                ("episode", &path["/episode/".len()..])
+                            } else {
+                                ("", "")
+                            };
+                        if !content_prefix.is_empty() {
+                            let track_id_raw = content_id_raw;
 
                             // T-29-01 (mitigate): validate track ID as [A-Za-z0-9]+ before
                             // building SpotifyUri (same as browse.rs line 250).
@@ -465,7 +473,8 @@ async fn unified_http_server(
                                 .unwrap_or(0);
 
                             let track_id = track_id_raw.to_owned();
-                            log::debug!("[spoton/unified] GET /track/{} start_position_ms={}", track_id, start_position_ms);
+                            let content_type = content_prefix.to_owned();
+                            log::debug!("[spoton/unified] GET /{}/{} start_position_ms={}", content_type, track_id, start_position_ms);
 
                             // T-30-05 (mitigate): increment browse_abort_gen to signal any
                             // in-flight /track/ task that it has been superseded by this request.
@@ -521,6 +530,7 @@ async fn unified_http_server(
                                 s.clone()
                             };
                             let track_id_for_task = track_id.clone();
+                            let content_type_for_task = content_type.clone();
                             let mode_state_for_task = Arc::clone(&mode_state);
                             let cancel_abort_for_task = cancel_abort.clone();
                             let browse_abort_gen_task = Arc::clone(&browse_abort_gen);
@@ -541,7 +551,7 @@ async fn unified_http_server(
                                     return;
                                 }
 
-                                let status = serve_track_request(&track_id_for_task, session_snap, pcm_tx, start_position_ms).await;
+                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms).await;
 
                                 // T-30-05 (informational): post-load gen check.
                                 // serve_track_request drops pcm_tx when it returns, causing
@@ -879,32 +889,61 @@ pub async fn run_unified(
         let lms_reconnect = lms.clone();
         lms_for_reconnect = Some(lms_reconnect);
 
-        // LMS event dispatcher — suppress Spirc shutdown events in Browse mode.
+        // LMS event dispatcher + mode transition (combined to avoid race condition).
+        // Previously two separate tasks raced on the mode mutex: the LMS dispatcher
+        // could see Browse mode and drop a TrackChanged event before the mode-watcher
+        // transitioned to Connect, losing the "start" notification to LMS.
         if lms.is_configured() {
             let mut event_chan = connect_player.get_player_event_channel();
             let mode_state_lms = Arc::clone(&mode_state);
+            let sa = Arc::clone(&spirc_active);
+            let browse_cancel_lms = Arc::clone(&browse_cancel);
             tokio::spawn(async move {
                 let mut current_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
-                    let mode = mode_state_lms.lock().await;
+                    // Track spirc_active for SessionConnected/Playing/TrackChanged
+                    if matches!(event,
+                        PlayerEvent::SessionConnected { .. } |
+                        PlayerEvent::Playing { .. } |
+                        PlayerEvent::TrackChanged { .. }
+                    ) {
+                        sa.store(true, Ordering::SeqCst);
+                    }
+
+                    let mut mode = mode_state_lms.lock().await;
+
+                    // D-09: Connect takes over from Browse — transition mode first,
+                    // then forward the event to LMS in a single atomic step.
+                    if matches!(*mode, ActiveMode::Browse(_))
+                        && matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. })
+                    {
+                        browse_cancel_lms.notify_waiters();
+                        log::info!("[spoton/unified] Connect taking over -- Browse cancelled");
+                        *mode = ActiveMode::Connect;
+                    } else if *mode == ActiveMode::Idle
+                        && matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. })
+                    {
+                        *mode = ActiveMode::Connect;
+                    }
+
+                    // Suppress non-Connect events while Browse is active (e.g. Spirc
+                    // shutdown/paused events that would confuse LMS during Browse playback).
                     if matches!(*mode, ActiveMode::Browse(_)) {
                         continue;
                     }
                     drop(mode);
+
                     lms.handle_player_event(&event, &mut current_track).await;
                 }
             });
-        }
-
-        // spirc_active watcher — also implements D-09 mode transition.
-        // Pitfall 3: check ActiveMode mutex before processing TrackChanged.
-        {
-            let mut session_event_chan = connect_player.get_player_event_channel();
+        } else {
+            // No LMS configured — still need spirc_active tracking for mode transitions.
+            let mut event_chan = connect_player.get_player_event_channel();
             let sa = Arc::clone(&spirc_active);
             let mode_state_w = Arc::clone(&mode_state);
             let browse_cancel_w = Arc::clone(&browse_cancel);
             tokio::spawn(async move {
-                while let Some(event) = session_event_chan.recv().await {
+                while let Some(event) = event_chan.recv().await {
                     if matches!(event,
                         PlayerEvent::SessionConnected { .. } |
                         PlayerEvent::Playing { .. } |
@@ -912,19 +951,15 @@ pub async fn run_unified(
                     ) {
                         sa.store(true, Ordering::SeqCst);
 
-                        // D-09: Connect takes over — if Browse is active, signal cancellation.
-                        // Pitfall 3: check mode before acting on TrackChanged.
                         if matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. }) {
                             let mut mode = mode_state_w.lock().await;
                             if matches!(*mode, ActiveMode::Browse(_)) {
-                                // Signal Browse handler to drop pcm_tx -> EOF to LMS.
                                 browse_cancel_w.notify_waiters();
                                 log::info!("[spoton/unified] Connect taking over -- Browse cancelled");
                                 *mode = ActiveMode::Connect;
                             } else if *mode == ActiveMode::Idle {
                                 *mode = ActiveMode::Connect;
                             }
-                            // If already Connect: no change needed.
                         }
                     }
                 }
