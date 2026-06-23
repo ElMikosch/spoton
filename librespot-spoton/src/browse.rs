@@ -159,6 +159,7 @@ pub fn empty_response(status: StatusCode) -> Response<BoxBody<Bytes, hyper::Erro
 /// The Session is shared — audio keys cached at session level are reused across
 /// Players on the same session, preserving the audio-key caching benefit (Pitfall 2 / D-04).
 pub async fn serve_track_request(
+    content_type: &str,
     track_id: &str,
     session: Session,
     pcm_tx: mpsc::Sender<Bytes>,
@@ -175,9 +176,8 @@ pub async fn serve_track_request(
         move || BrowseHttpSink::open(None, AudioFormat::S16, pcm_tx_clone),
     );
 
-    // Build Spotify URI from validated track ID.
-    // track_id is pre-validated as [A-Za-z0-9]+ by handle_request().
-    let uri_str = format!("spotify:track:{}", track_id);
+    // Build Spotify URI from validated ID — "track" or "episode".
+    let uri_str = format!("spotify:{}:{}", content_type, track_id);
     let uri = match SpotifyUri::from_uri(&uri_str) {
         Ok(u) => u,
         Err(e) => {

@@ -36,7 +36,7 @@ sub getFormatForURL {
     my ($class, $url) = @_;
     return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
-    return 'soc' if $url && $url =~ m{:\d+/track/};  # Phase 28: Browse daemon HTTP URLs
+    return 'soc' if $url && $url =~ m{:\d+/(?:track|episode)/};  # Phase 28: Browse daemon HTTP URLs
     return 'son';
 }
 
@@ -105,7 +105,7 @@ sub canDirectStreamSong {
     my $directUrl = $class->canDirectStream($client, $url);
     return 0 unless $directUrl;
 
-    if ($directUrl =~ m{/track/} && $song->seekdata && $song->seekdata->{'timeOffset'}) {
+    if ($directUrl =~ m{/(?:track|episode)/} && $song->seekdata && $song->seekdata->{'timeOffset'}) {
         my $offset = $song->seekdata->{'timeOffset'};
         $directUrl .= '?start_position=' . $offset;
         $song->startOffset($offset);
@@ -125,8 +125,9 @@ sub canDirectStream {
     return 0 unless $client;
 
     # Browse URL: direct stream to unified daemon /track/{id}
-    if ($url && $url =~ m{^spoton://(?:track|episode):([A-Za-z0-9]+)$}) {
-        my $trackId = $1;
+    if ($url && $url =~ m{^spoton://(track|episode):([A-Za-z0-9]+)$}) {
+        my $contentType = $1;
+        my $trackId = $2;
         my $browseClient = $client->can('master') ? $client->master : $client;
         require Plugins::SpotOn::Unified::DaemonManager;
         my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($browseClient);
@@ -136,7 +137,7 @@ sub canDirectStream {
                 return 0;   # Synced: new() proxy handles
             }
             my $host   = Slim::Utils::Network::serverAddr();
-            my $ds_url = "http://$host:" . $helper->_streamPort . "/track/$trackId";
+            my $ds_url = "http://$host:" . $helper->_streamPort . "/$contentType/$trackId";
             $log->warn("[DIAG] canDirectStream: unified browse url=$ds_url") if $prefs->get('diagnosticMode');
             return $ds_url;
         }
@@ -198,7 +199,7 @@ sub canDirectStream {
 sub requestString {
     my ($self, $client, $url, $post, $seekdata) = @_;
 
-    if ($url && $url =~ m{:\d+/(?:stream\b|track/)}) {
+    if ($url && $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)}) {
         # Phase 28: also suppress Range for Browse daemon /track/ URLs (same reason as /stream).
         my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
         my $host = ($port == 80) ? $server : "$server:$port";
@@ -224,7 +225,7 @@ sub requestString {
 sub handleDirectError {
     my ($class, $client, $url, $response, $status_line) = @_;
 
-    if ($response == 404 && $url && $url =~ m{:\d+/track/}) {
+    if ($response == 404 && $url && $url =~ m{:\d+/(?:track|episode)/}) {
         my $streaming = $client->streamingSong();
         my $playing   = $client->playingSong();
         if ($streaming && $playing && $streaming != $playing) {
@@ -262,7 +263,7 @@ sub _skipUnavailable {
 sub canEnhanceHTTP {
     my ($self, $client, $url) = @_;
 
-    if ($url && $url =~ m{:\d+/(?:stream\b|track/)}) {
+    if ($url && $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)}) {
         # Phase 28: also return 0 for Browse daemon /track/ URLs (same reason as /stream).
         $log->warn("[DIAG] canEnhanceHTTP: url=$url result=0 reason=daemon_proxy_infinite_stream") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
@@ -301,8 +302,9 @@ sub new {
 
     # (b2) Browse sync-group proxy — substitute Unified daemon HTTP URL for synced players.
     # T-28-08: trackId extracted via [A-Za-z0-9]+ regex from already-validated spoton:// URL.
-    if ($url =~ m{^spoton://(?:track|episode):([A-Za-z0-9]+)$} && $url !~ m{spoton://connect-}) {
-        my $trackId = $1;
+    if ($url =~ m{^spoton://(track|episode):([A-Za-z0-9]+)$} && $url !~ m{spoton://connect-}) {
+        my $contentType = $1;
+        my $trackId = $2;
         my $client  = $args->{client};
         if ($client) {
             $client = $client->master if $client->can('master');
@@ -310,7 +312,7 @@ sub new {
             my $helper = Plugins::SpotOn::Unified::DaemonManager->helperForClient($client);
             if ($helper && $helper->_streamPort) {
                 my $host    = Slim::Utils::Network::serverAddr();
-                my $httpUrl = "http://$host:" . $helper->_streamPort . "/track/$trackId";
+                my $httpUrl = "http://$host:" . $helper->_streamPort . "/$contentType/$trackId";
                 my $song = $args->{song};
                 if ($song && $song->seekdata && $song->seekdata->{'timeOffset'}) {
                     my $offset = $song->seekdata->{'timeOffset'};
