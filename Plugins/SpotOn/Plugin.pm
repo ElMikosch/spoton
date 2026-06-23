@@ -26,6 +26,8 @@ use constant SPOTON_CACHE_VERSION  => 4;       # Bump to flush all SpotOn cache 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
 
+my %_playAllItemCache;
+
 my $log = Slim::Utils::Log->addLogCategory( {
     category     => 'plugin.spoton',
     defaultLevel => 'WARN',
@@ -1007,6 +1009,8 @@ sub _savedTracksFeed {
 
     my $accountId = _getAccountId($client);
 
+    my $cacheKey = "savedTracks:$accountId";
+
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
         _fetchAllPages({
@@ -1025,9 +1029,20 @@ sub _savedTracksFeed {
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
+                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
             },
         });
+    } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
+            return;
+        }
+        delete $_playAllItemCache{$cacheKey};
+        goto &_savedTracksFeed;
     } else {
         Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
             offset => $offset,
@@ -1302,6 +1317,8 @@ sub _showFeed {
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
 
+    my $showCacheKey = "showEpisodes:$accountId:$showId";
+
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
@@ -1319,9 +1336,20 @@ sub _showFeed {
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
+                $_playAllItemCache{$showCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
             },
         });
+    } elsif (my $cached = $_playAllItemCache{$showCacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
+            return;
+        }
+        delete $_playAllItemCache{$showCacheKey};
+        goto &_showFeed;
     } else {
         # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
         my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
@@ -1984,6 +2012,7 @@ sub _albumFeed {
     my $limit  = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
+    my $albumCacheKey = "album:$accountId:$albumId";
 
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
@@ -2006,6 +2035,7 @@ sub _albumFeed {
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
+                $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
                 return;
             }
@@ -2028,6 +2058,7 @@ sub _albumFeed {
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
+                        $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
                         return;
                     }
@@ -2042,12 +2073,23 @@ sub _albumFeed {
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
+                        $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
                     }
                 });
             };
             $fetchPage->($startOffset);
         });
+    } elsif (my $cached = $_playAllItemCache{$albumCacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
+            return;
+        }
+        delete $_playAllItemCache{$albumCacheKey};
+        goto &_albumFeed;
     } elsif ($offset == 0) {
         # Initial browse load: fetch full album (includes first page of tracks in tracks.items).
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
@@ -2181,6 +2223,8 @@ sub _playlistFeed {
 
     my $accountId = _getAccountId($client);
 
+    my $plCacheKey = "playlist:$accountId:$playlistId";
+
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
         _fetchAllPages({
@@ -2200,9 +2244,20 @@ sub _playlistFeed {
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
+                $_playAllItemCache{$plCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
             },
         });
+    } elsif (my $cached = $_playAllItemCache{$plCacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
+            return;
+        }
+        delete $_playAllItemCache{$plCacheKey};
+        goto &_playlistFeed;
     } else {
         Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
             offset => $offset,
