@@ -268,6 +268,25 @@ sub startHelper {
         $helper = undef;
     }
 
+    if ($helper && $helper->alive) {
+        my $client = Slim::Player::Client::getClient($clientId);
+        if ($client) {
+            my $expectedName = substr(
+                ($client->isSynced() && $client->model ne 'group')
+                    ? Slim::Player::Sync::syncname($client)
+                    : $client->name,
+                0, 60
+            );
+            if (($helper->name || '') ne $expectedName) {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "Name changed for $clientId (was '" . ($helper->name || '') . "', now '$expectedName') — restarting daemon"
+                );
+                $class->stopHelper($clientId);
+                $helper = undef;
+            }
+        }
+    }
+
     if (!$helper) {
         main::INFOLOG && $log->is_info && $log->info("Need to create Unified daemon for $clientId");
         $helper = $helperInstances{$clientId} = Plugins::SpotOn::Unified::Daemon->new($clientId);
