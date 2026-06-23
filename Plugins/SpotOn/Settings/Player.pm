@@ -68,11 +68,8 @@ sub handler {
             }
         }
 
-        require Plugins::SpotOn::Connect::DaemonManager;
-        my $helper = Plugins::SpotOn::Connect::DaemonManager->helperForClient($client);
-        $helper->stopForSync() if $helper && $helper->alive;
-
-        Plugins::SpotOn::Connect::DaemonManager->initHelpers();
+        require Plugins::SpotOn::Unified::DaemonManager;
+        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
     }
 
     if ($client) {

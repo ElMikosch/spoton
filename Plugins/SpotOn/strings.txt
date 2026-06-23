@@ -805,17 +805,17 @@ PLUGIN_SPOTON_AUTOPLAY_ENABLED
 	SV	Automatisk uppspelning (Autoplay)
 
 PLUGIN_SPOTON_AUTOPLAY_ENABLED_DESC
-	CS	Pokračovat v přehrávání s doporučenými skladbami, když skončí fronta
-	DA	Fortsæt afspilning med anbefalede numre, når køen er tom
-	DE	Wiedergabe mit empfohlenen Titeln fortsetzen, wenn die Warteschlange endet
-	EN	Continue playback with recommended tracks when the queue ends
-	ES	Continuar la reproducción con canciones recomendadas cuando se acabe la cola
-	FR	Continuer la lecture avec des titres recommandés quand la file d'attente se termine
-	IT	Continua la riproduzione con brani consigliati quando la coda finisce
-	NL	Doorgaan met afspelen met aanbevolen nummers als de wachtrij leeg is
-	NO	Fortsett avspilling med anbefalte spor når køen er tom
-	PL	Kontynuuj odtwarzanie z polecanymi utworami, gdy kolejka się skończy
-	SV	Fortsätt uppspelning med rekommenderade låtar när kön tar slut
+	CS	Pokračovat v přehrávání s doporučenými skladbami (Connect + Browse). Ovládá Spotify autoplay (Connect) i Don't Stop The Music (Browse) společně.
+	DA	Fortsæt afspilning med anbefalede numre (Connect + Browse). Styrer Spotify autoplay (Connect) og Don't Stop The Music (Browse) samlet.
+	DE	Wiedergabe mit empfohlenen Titeln fortsetzen (Connect + Browse). Steuert Spotify-Autoplay (Connect) und Don't Stop The Music (Browse) gemeinsam.
+	EN	Continue playback with recommended tracks (Connect + Browse). Controls Spotify autoplay (Connect) and Don't Stop The Music (Browse) together.
+	ES	Continuar reproducción con canciones recomendadas (Connect + Browse). Controla Spotify autoplay (Connect) y Don't Stop The Music (Browse) juntos.
+	FR	Continuer la lecture avec des titres recommandés (Connect + Browse). Contrôle Spotify autoplay (Connect) et Don't Stop The Music (Browse) ensemble.
+	IT	Continua la riproduzione con brani consigliati (Connect + Browse). Controlla Spotify autoplay (Connect) e Don't Stop The Music (Browse) insieme.
+	NL	Doorgaan met afspelen met aanbevolen nummers (Connect + Browse). Beheert Spotify autoplay (Connect) en Don't Stop The Music (Browse) samen.
+	NO	Fortsett avspilling med anbefalte spor (Connect + Browse). Styrer Spotify autoplay (Connect) og Don't Stop The Music (Browse) sammen.
+	PL	Kontynuuj odtwarzanie z polecanymi utworami (Connect + Browse). Steruje Spotify autoplay (Connect) i Don't Stop The Music (Browse) razem.
+	SV	Fortsätt uppspelning med rekommenderade låtar (Connect + Browse). Styr Spotify autoplay (Connect) och Don't Stop The Music (Browse) tillsammans.
 
 PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL
 	CS	Automatické přehrávání aktivovat
