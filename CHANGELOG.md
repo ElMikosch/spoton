@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-06-23
+### Fixed
+- **Play All performance**: Material Skin Play All on large lists (1600+ liked songs) no longer triggers individual API calls per track — results are served from an in-memory cache populated by the initial batch fetch (15s instead of 10+ minutes)
+- **formatOverride dead fallback**: removed `son` fallback that referenced deleted transcoding pipelines — always returns `soc` now, preventing silent playback failure when the daemon is temporarily down
+- **Browse sync-proxy missing alive check**: added `$helper->alive` guard to prevent routing to a crashed daemon's stale port
+- **Connect toggle not detected**: toggling Spotify Connect on/off in player settings now correctly restarts the daemon with the updated `--enable-connect` flag
+- **DSTM auto-config respects user choice**: auto-configuration of Don't Stop The Music provider only applies to players that never saved their SpotOn settings, avoiding silent overwrite of the user's deliberate choice
+- **Play-all cache eviction**: `_playAllItemCache` entries older than 120s are now proactively evicted to prevent unbounded memory growth on long-running LMS instances
+
 ## [2.0.0] - 2026-06-23
 ### Added
 - **Unified Browse + Connect daemon**: Browse and Spotify Connect now run in a single persistent process per player instead of separate daemons — eliminates per-track process spawning, halves memory footprint
@@ -244,7 +253,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-player settings (bitrate, format, Connect toggle, Autoplay toggle)
 - mDNS discovery for Spotify Connect visibility
 
-[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/stiefenm/spoton/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/stiefenm/spoton/compare/v1.9.1...v2.0.0
 [1.9.1]: https://github.com/stiefenm/spoton/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/stiefenm/spoton/compare/v1.7.8...v1.9.0
