@@ -86,6 +86,13 @@ sub removeAccount {
     my $active = $prefs->get('activeAccount') || '';
     if ($active eq $accountId) {
         $prefs->set('activeAccount', '');
+
+        # Stop all daemons — they're running with stale credentials
+        if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
+            require Plugins::SpotOn::Unified::DaemonManager;
+            Plugins::SpotOn::Unified::DaemonManager->shutdown();
+            Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+        }
     }
 
     main::INFOLOG && $log->info("TokenManager: account $accountId removed");
@@ -486,12 +493,19 @@ sub _storeAccountPrefs {
     $prefs->set('accounts', $accounts);
 
     # Set as active account if none currently set
+    my $needsDaemonStart = !$prefs->get('activeAccount');
     unless ($prefs->get('activeAccount')) {
         $prefs->set('activeAccount', $accountId);
     }
 
     main::INFOLOG && $log->info(
         "TokenManager: account $accountId stored (displayName=$displayName)");
+
+    # Trigger daemon start when a fresh account was activated
+    if ($needsDaemonStart) {
+        require Plugins::SpotOn::Unified::DaemonManager;
+        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+    }
     $log->warn("[DIAG] account_stored: account=" . substr($accountId, 0, 4) . "**** display_name=$displayName is_active=" . (($prefs->get('activeAccount') || '') eq $accountId ? 1 : 0)) if $prefs->get('diagnosticMode');
     $cb->($accountId);
 }

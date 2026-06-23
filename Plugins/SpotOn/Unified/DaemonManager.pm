@@ -41,6 +41,12 @@ sub _isConnectEnabled {
         // $prefs->get('enableSpotifyConnect');
 }
 
+sub scheduleInit {
+    my $class = __PACKAGE__;
+    Slim::Utils::Timers::killTimers($class, \&initHelpers);
+    Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + DAEMON_INIT_DELAY, \&initHelpers);
+}
+
 sub init {
     my $class = shift;
 
@@ -252,8 +258,15 @@ sub startHelper {
         return;
     }
 
-    # No need to restart if already present and alive
     my $helper = $helperInstances{$clientId};
+
+    if ($helper && $helper->alive && ($helper->_accountId || '') ne $activeAccountId) {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Account changed for $clientId (was " . ($helper->_accountId || 'none') . ", now $activeAccountId) — restarting daemon"
+        );
+        $class->stopHelper($clientId);
+        $helper = undef;
+    }
 
     if (!$helper) {
         main::INFOLOG && $log->is_info && $log->info("Need to create Unified daemon for $clientId");

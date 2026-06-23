@@ -242,6 +242,9 @@ sub _autoSetupAccount {
 
     unless ($prefs->get('activeAccount')) {
         $prefs->set('activeAccount', $accountId);
+
+        require Plugins::SpotOn::Unified::DaemonManager;
+        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
     }
 
     $log->info("Settings: account $accountId created from ZeroConf discovery (user=$username)");

@@ -27,6 +27,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	mac
 	name
 	cache
+	_accountId
 	_lastSeen
 	_proc
 	_startTimes
@@ -88,6 +89,7 @@ sub start {
 		? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
 		: catdir($serverPrefs->get('cachedir'), 'spoton');
 	$self->cache($cacheDir);
+	$self->_accountId($activeAccountId);
 
 	# Clear stream port before attempt (WR-04: stale _streamPort after failed restart)
 	$self->_streamPort(undef);
