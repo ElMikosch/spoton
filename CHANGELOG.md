@@ -5,6 +5,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-23
+### Added
+- **Unified Browse + Connect daemon**: Browse and Spotify Connect now run in a single persistent process per player instead of separate daemons — eliminates per-track process spawning, halves memory footprint
+- **HTTP track serving**: Browse mode streams tracks via HTTP from the persistent daemon instead of the old pipe-based `--single-track` pipeline — no process startup delay, no broken-pipe edge cases
+- **Podcast episode route**: `/episode/{id}` endpoint in the unified daemon for podcast streaming alongside `/track/{id}`
+- **Rapid-skip debounce**: `browse_abort_gen` counter detects superseded track requests and cancels them before hitting Spotify's audio-key API
+- **Daemon lifecycle: account removal**: removing a Spotify account now immediately stops all daemons and restarts them with fresh credentials on ZeroConf re-authentication (~2s instead of up to 60s)
+- **Daemon lifecycle: scheduleInit()**: public method for external callers (TokenManager, Settings) to trigger daemon restart without function-reference issues
+- **DSTM auto-configuration**: Don't Stop The Music provider is now automatically set for all players with autoplay enabled — no more silent DSTM failures on players that never opened SpotOn settings
+
+### Fixed
+- **Sync group: stale daemon name after unsync** — name-mismatch check in `startHelper()` detects when a daemon's Spirc name doesn't match the current sync state and restarts it (fixes [#25](https://github.com/stiefenm/spoton/issues/25))
+- **Sync group: no Connect audio on re-sync** — merged LMS event dispatcher and mode-watcher into a single async task, eliminating the race condition that dropped the `start` notification to LMS (fixes [#25](https://github.com/stiefenm/spoton/issues/25))
+- **Early track skip in Browse mode** — tracks no longer cut short before finishing; the old pipe-based architecture could lose buffered data on process exit, especially with FLAC transcoding (fixes [#28](https://github.com/stiefenm/spoton/issues/28))
+- **Browse/Connect mode transitions** — Spirc shutdown on Browse takeover, ready-event suppression during Browse, Connect metadata bleed prevention
+- **Settings/Player.pm** — fixed stale `Connect::DaemonManager` reference (module removed in v2.0), now uses `Unified::DaemonManager->scheduleInit()`
+
+### Changed
+- **Autoplay tooltip** updated to explain it controls both Connect autoplay and Browse DSTM together
+- `custom-convert.conf` simplified to single `soc pcm * *` entry (all legacy `son-*` pipelines removed)
+- Binary version bumped to 2.0.0
+- All `--single-track` mode code removed from Rust binary
+- Legacy Browse::DM, Browse::Daemon, Connect::DM, Connect::Daemon Perl modules removed
+
+### Removed
+- `browseMode` / `daemonMode` toggle preferences (unified is the only mode)
+- `son-*` transcoding pipelines from `custom-convert.conf`
+- `--single-track` and `--browse-daemon` CLI modes from the Rust binary
+
 ## [1.9.1] - 2026-06-22
 ### Fixed
 - Prefetch hang watchdog redesigned: URL-based "same song after 10s?" check replaces fragile elapsed-arithmetic approach — more robust, seek-safe, max 13s worst-case hang
@@ -215,7 +244,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-player settings (bitrate, format, Connect toggle, Autoplay toggle)
 - mDNS discovery for Spotify Connect visibility
 
-[Unreleased]: https://github.com/stiefenm/spoton/compare/v1.6.3...HEAD
+[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/stiefenm/spoton/compare/v1.9.1...v2.0.0
+[1.9.1]: https://github.com/stiefenm/spoton/compare/v1.9.0...v1.9.1
+[1.9.0]: https://github.com/stiefenm/spoton/compare/v1.7.8...v1.9.0
 [1.6.3]: https://github.com/stiefenm/spoton/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/stiefenm/spoton/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/stiefenm/spoton/compare/v1.6.0...v1.6.1
