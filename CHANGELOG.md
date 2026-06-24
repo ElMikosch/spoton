@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-06-24
+### Fixed
+- **Browse session auto-reconnect**: when the Spotify TCP connection drops overnight, Browse mode now detects consecutive track failures and automatically reconnects the session — previously all tracks failed with 404 until LMS restart
+- **Event dispatcher after Spirc reconnect**: Connect notifications (start/stop/volume/seek) no longer silently stop working after a ZeroConf credential rotation — the event dispatcher is now respawned with a fresh player event channel
+- **CSRF protection on settings endpoints**: clearLogs, discovery/start, and discovery/stop now validate X-Requested-With header when LMS authentication is enabled
+- **Windows token refresh**: shell commands for `--get-token` now use double-quotes on Windows instead of Unix single-quotes, fixing "filename, directory name, or volume label syntax is incorrect" errors (#40)
+- **Diagnostic bundle expanded**: now includes unified daemon logs (`*-unified.log`) and SpotOn-related entries from LMS server.log — log size calculation and clear-logs updated accordingly
+- **Cache version alignment**: ProtocolHandler, Connect, and DontStopTheMusic modules now use the same cache namespace version as Plugin.pm
+- **12 code review findings**: use warnings in 3 modules, Retry-After minimum backoff, UTF-8 Content-Length, helperCheck explicit return, library action allowlist, HTTP body limit on /control/*, CRLF sanitization, TCP graceful shutdown, translated URL cap, fetchAllPages circular reference cleanup, reconnect timeout 503, source-before-execute for Connect loop prevention
+
 ## [2.0.2] - 2026-06-24
 ### Fixed
 - **Browse session auto-reconnect**: when the Spotify TCP connection drops overnight, Browse mode now detects consecutive track failures and automatically reconnects the session — previously all tracks failed with 404 until LMS restart
