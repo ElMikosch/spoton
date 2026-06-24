@@ -414,12 +414,13 @@ sub _diagnosticBundleHandler {
     my $content = $header . $logs;
     my $filename = "spoton-diag-$timestamp.txt";
 
-    $response->header('Content-Length' => length(encode('UTF-8', $content)));
+    my $bytes = encode('UTF-8', $content);
+    $response->header('Content-Length' => length($bytes));
     $response->code(200);
     $response->header('Connection' => 'close');
     $response->content_type('text/plain; charset=utf-8');
     $response->header('Content-Disposition' => "attachment; filename=\"$filename\"");
-    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$bytes);
 }
 
 # ============================================================
@@ -465,12 +466,12 @@ sub _clearLogsHandler {
 sub _jsonResponse {
     my ($httpClient, $response, $data, $code) = @_;
     $code //= 200;
-    my $content = to_json($data);
-    $response->header('Content-Length' => length(encode('UTF-8', $content)));
+    my $bytes = encode('UTF-8', to_json($data));
+    $response->header('Content-Length' => length($bytes));
     $response->code($code);
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
-    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$content);
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$bytes);
 }
 
 # ============================================================
