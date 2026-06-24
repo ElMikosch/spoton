@@ -15,7 +15,7 @@ use Digest::MD5 qw(md5_hex);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
-my $cache = Slim::Utils::Cache->new('spoton', 3);
+my $cache = Slim::Utils::Cache->new('spoton', 4);
 my $CRLF  = "\x0d\x0a";
 
 # D-05: debounce — one in-flight re-fetch per URL

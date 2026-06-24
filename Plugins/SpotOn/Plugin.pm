@@ -190,12 +190,12 @@ sub shutdownPlugin {
 # images dir, with a fallback to {prefs_dir}/material-skin/images/.
 # Deploy our SVG there so the icon renders in the Material Skin grid.
 sub _deployMaterialSkinIcon {
-    my $src = catdir(dirname(__FILE__), 'HTML', 'EN', 'plugins', 'SpotOn',
-                     'html', 'images', 'spoton_material.svg');
+    my $src = catfile(dirname(__FILE__), 'HTML', 'EN', 'plugins', 'SpotOn',
+                      'html', 'images', 'spoton_material.svg');
     return unless -e $src;
 
     my $destDir = catdir(Slim::Utils::Prefs::dir(), 'material-skin', 'images');
-    my $dest    = catdir($destDir, 'spoton.svg');
+    my $dest    = catfile($destDir, 'spoton.svg');
     return if -e $dest && (stat($dest))[9] >= (stat($src))[9];
 
     eval {

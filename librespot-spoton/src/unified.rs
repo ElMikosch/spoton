@@ -1136,7 +1136,7 @@ pub async fn run_unified(
                         s.clone()
                     };
                     let new_session = if session_cur.is_invalid() {
-                        let ns = Session::new(session_config.clone(), None);
+                        let ns = Session::new(session_config.clone(), Some(cache.clone()));
                         // Update the shared Session reference so Browse requests use new session.
                         {
                             let mut s = session_shared.lock().await;
@@ -1337,6 +1337,8 @@ pub async fn run_unified(
                         }
                         Err(e) => {
                             log::error!("[spoton/unified] Browse-only session reconnect failed: {e}");
+                            let fallback = Session::new(session_config.clone(), Some(cache.clone()));
+                            *session_shared.lock().await = fallback;
                         }
                     }
                     browse_reconnect_pending.store(false, Ordering::Release);
