@@ -930,16 +930,25 @@ pub async fn run_unified(
         let lms_reconnect = lms.clone();
         lms_for_reconnect = Some(lms_reconnect);
 
+        // Clone LMS for event dispatcher respawn on reconnect (R-WR-07).
+        // lms.clone() drops flush_tx (watch::Sender is not Clone), which is fine:
+        // seek-flush signals go through UnifiedHttpStreamSink's own flush_tx,
+        // and the Seeked event still sends "seek" via notify() (unaffected by flush_tx).
+        let lms_for_dispatcher = lms.clone();
+
         // LMS event dispatcher + mode transition (combined to avoid race condition).
         // Previously two separate tasks raced on the mode mutex: the LMS dispatcher
         // could see Browse mode and drop a TrackChanged event before the mode-watcher
         // transitioned to Connect, losing the "start" notification to LMS.
+        // R-WR-07: Track event dispatcher JoinHandle so we can abort+respawn on reconnect.
+        let mut event_dispatcher_handle: Option<tokio::task::JoinHandle<()>>;
+
         if lms.is_configured() {
             let mut event_chan = connect_player.get_player_event_channel();
             let mode_state_lms = Arc::clone(&mode_state);
             let sa = Arc::clone(&spirc_active);
             let browse_cancel_lms = Arc::clone(&browse_cancel);
-            tokio::spawn(async move {
+            event_dispatcher_handle = Some(tokio::spawn(async move {
                 let mut current_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
                     // Track spirc_active for SessionConnected/Playing/TrackChanged
@@ -976,14 +985,14 @@ pub async fn run_unified(
 
                     lms.handle_player_event(&event, &mut current_track).await;
                 }
-            });
+            }));
         } else {
             // No LMS configured — still need spirc_active tracking for mode transitions.
             let mut event_chan = connect_player.get_player_event_channel();
             let sa = Arc::clone(&spirc_active);
             let mode_state_w = Arc::clone(&mode_state);
             let browse_cancel_w = Arc::clone(&browse_cancel);
-            tokio::spawn(async move {
+            event_dispatcher_handle = Some(tokio::spawn(async move {
                 while let Some(event) = event_chan.recv().await {
                     if matches!(event,
                         PlayerEvent::SessionConnected { .. } |
@@ -1004,7 +1013,7 @@ pub async fn run_unified(
                         }
                     }
                 }
-            });
+            }));
         }
 
         // ConnectConfig + Spirc::new().
@@ -1174,6 +1183,77 @@ pub async fn run_unified(
                                 }
                                 current_spirc_task = Some(tokio::spawn(new_task));
                                 connecting = false;
+
+                                // R-WR-07: Abort old event dispatcher and respawn with fresh
+                                // player event channel. The old dispatcher's recv loop may have
+                                // exited when the Player's internal sender closed during Spirc
+                                // shutdown, so we must create a new one.
+                                if let Some(ref h) = event_dispatcher_handle {
+                                    h.abort();
+                                }
+                                let mut event_chan = connect_player_opt.as_ref().unwrap().get_player_event_channel();
+                                if lms_for_dispatcher.is_configured() {
+                                    let lms_d = lms_for_dispatcher.clone();
+                                    let mode_state_d = Arc::clone(&mode_state);
+                                    let sa_d = Arc::clone(&spirc_active);
+                                    let browse_cancel_d = Arc::clone(&browse_cancel);
+                                    event_dispatcher_handle = Some(tokio::spawn(async move {
+                                        let mut current_track: Option<String> = None;
+                                        while let Some(event) = event_chan.recv().await {
+                                            if matches!(event,
+                                                PlayerEvent::SessionConnected { .. } |
+                                                PlayerEvent::Playing { .. } |
+                                                PlayerEvent::TrackChanged { .. }
+                                            ) {
+                                                sa_d.store(true, Ordering::SeqCst);
+                                            }
+                                            let mut mode = mode_state_d.lock().await;
+                                            if matches!(*mode, ActiveMode::Browse(_))
+                                                && matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. })
+                                            {
+                                                browse_cancel_d.notify_waiters();
+                                                log::info!("[spoton/unified] Connect taking over -- Browse cancelled");
+                                                *mode = ActiveMode::Connect;
+                                            } else if *mode == ActiveMode::Idle
+                                                && matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. })
+                                            {
+                                                *mode = ActiveMode::Connect;
+                                            }
+                                            if matches!(*mode, ActiveMode::Browse(_)) {
+                                                continue;
+                                            }
+                                            drop(mode);
+                                            lms_d.handle_player_event(&event, &mut current_track).await;
+                                        }
+                                    }));
+                                } else {
+                                    let sa_d = Arc::clone(&spirc_active);
+                                    let mode_state_d = Arc::clone(&mode_state);
+                                    let browse_cancel_d = Arc::clone(&browse_cancel);
+                                    event_dispatcher_handle = Some(tokio::spawn(async move {
+                                        while let Some(event) = event_chan.recv().await {
+                                            if matches!(event,
+                                                PlayerEvent::SessionConnected { .. } |
+                                                PlayerEvent::Playing { .. } |
+                                                PlayerEvent::TrackChanged { .. }
+                                            ) {
+                                                sa_d.store(true, Ordering::SeqCst);
+                                                if matches!(event, PlayerEvent::TrackChanged { .. } | PlayerEvent::Playing { .. }) {
+                                                    let mut mode = mode_state_d.lock().await;
+                                                    if matches!(*mode, ActiveMode::Browse(_)) {
+                                                        browse_cancel_d.notify_waiters();
+                                                        log::info!("[spoton/unified] Connect taking over -- Browse cancelled");
+                                                        *mode = ActiveMode::Connect;
+                                                    } else if *mode == ActiveMode::Idle {
+                                                        *mode = ActiveMode::Connect;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }));
+                                }
+                                log::info!("[spoton/unified] Event dispatcher respawned after reconnect");
+
                                 // Send "ready" to LMS so Connect.pm re-issues playlist play
                                 // after a ZeroConf credential rotation + Spirc reconnect.
                                 // Skip while Browse is active — the reconnect is just restoring
@@ -1278,6 +1358,11 @@ pub async fn run_unified(
         }
 
         // Graceful shutdown.
+        // R-WR-07: abort event dispatcher on shutdown to prevent orphaned tasks.
+        if let Some(ref h) = event_dispatcher_handle {
+            h.abort();
+        }
+        event_dispatcher_handle = None;
         {
             let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(ref s) = *guard {
