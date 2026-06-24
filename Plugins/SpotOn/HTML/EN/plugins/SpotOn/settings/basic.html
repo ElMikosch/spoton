@@ -11,6 +11,7 @@
 				var timer = setInterval(function() {
 					var xhr = new XMLHttpRequest();
 					xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
+					xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 					xhr.onload = function() {
 						if (xhr.status === 200) {
 							try { var data = JSON.parse(xhr.responseText); }
@@ -203,6 +204,7 @@
 	function spotonDiscovery(action) {
 		var xhr = new XMLHttpRequest();
 		xhr.open('POST', '/plugins/SpotOn/settings/discovery/' + action, true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		xhr.onload = function() {
 			window.location.href = window.location.pathname;
 		};
@@ -218,6 +220,7 @@
 		result.style.display = 'none';
 		var xhr = new XMLHttpRequest();
 		xhr.open('POST', '/plugins/SpotOn/settings/clearLogs', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		xhr.onload = function() {
 			if (xhr.status === 200) {
 				try { var data = JSON.parse(xhr.responseText); } catch(e) { return; }

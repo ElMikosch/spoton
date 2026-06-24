@@ -286,6 +286,8 @@ sub _discoveryStatusHandler {
 sub _discoveryStartHandler {
     my ($httpClient, $response) = @_;
 
+    return unless _csrfCheck($httpClient, $response);
+
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->startDiscovery();
 
@@ -298,6 +300,8 @@ sub _discoveryStartHandler {
 # ============================================================
 sub _discoveryStopHandler {
     my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
 
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->stopDiscovery();
@@ -401,6 +405,8 @@ sub _diagnosticBundleHandler {
 sub _clearLogsHandler {
     my ($httpClient, $response) = @_;
 
+    return unless _csrfCheck($httpClient, $response);
+
     my $serverPrefs = preferences('server');
     my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
     my @logFiles    = glob(catfile($spotonDir, '*-connect.log'));
@@ -478,6 +484,33 @@ sub _isDiscoveryRunning {
     # If TokenManager is not loaded yet, discovery is not running
     return 0 unless $INC{'Plugins/SpotOn/API/TokenManager.pm'};
     return Plugins::SpotOn::API::TokenManager->isDiscoveryRunning();
+}
+
+# ============================================================
+# CSRF guard for write endpoints (P-CR-03)
+# addRawFunction handlers bypass LMS's built-in CSRF protection
+# (Slim::Web::HTTP dispatches raw functions before CSRF check on line 512).
+# This guard validates X-Requested-With: XMLHttpRequest for write endpoints
+# when LMS has csrfProtectionLevel enabled.
+# Read-only endpoints (discoveryStatus, diagnosticBundle) are not guarded.
+# ============================================================
+sub _csrfCheck {
+    my ($httpClient, $response) = @_;
+
+    my $serverPrefs = preferences('server');
+    return 1 unless $serverPrefs->get('csrfProtectionLevel');
+
+    my $request = $response->request;
+    return 1 if $request
+        && $request->header('X-Requested-With')
+        && $request->header('X-Requested-With') eq 'XMLHttpRequest';
+
+    $response->code(403);
+    $response->header('Content-Length' => 0);
+    $response->header('Connection' => 'close');
+    $response->content_type('text/plain');
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \'');
+    return 0;
 }
 
 1;

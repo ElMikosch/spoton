@@ -618,4 +618,55 @@ SKIP: {
     }
 }
 
+# ============================================================
+# P-CR-03: CSRF guard on write endpoints
+# ============================================================
+{
+    my $settings_file = "$project_dir/Plugins/SpotOn/Settings.pm";
+    my $html_file     = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
+
+    SKIP: {
+        skip "Settings.pm not found", 6 unless -f $settings_file;
+
+        open(my $fh, '<', $settings_file) or die $!;
+        my $src = do { local $/; <$fh> };
+        close($fh);
+
+        # 1. _csrfCheck sub is defined
+        ok($src =~ /sub _csrfCheck\b/, 'P-CR-03: _csrfCheck helper defined in Settings.pm');
+
+        # 2-4. Write handlers call _csrfCheck
+        # Extract each handler body (from sub declaration to next sub or end of file)
+        # and verify _csrfCheck is called within it.
+        for my $handler (qw(_clearLogsHandler _discoveryStartHandler _discoveryStopHandler)) {
+            my ($body) = $src =~ /(sub \Q$handler\E\b.*?)(?=\nsub \w|\z)/s;
+            ok(defined $body && $body =~ /_csrfCheck/,
+                "P-CR-03: $handler calls _csrfCheck");
+        }
+
+        # 5. _discoveryStatusHandler does NOT call _csrfCheck (read-only)
+        my ($status_body) = $src =~ /(sub _discoveryStatusHandler\b.*?)(?=\nsub \w|\z)/s;
+        ok(defined $status_body && $status_body !~ /_csrfCheck/,
+            'P-CR-03: _discoveryStatusHandler does NOT call _csrfCheck (read-only)');
+
+        # 6. _diagnosticBundleHandler does NOT call _csrfCheck (read-only, gated by diagnosticMode)
+        my ($diag_body) = $src =~ /(sub _diagnosticBundleHandler\b.*?)(?=\nsub \w|\z)/s;
+        ok(defined $diag_body && $diag_body !~ /_csrfCheck/,
+            'P-CR-03: _diagnosticBundleHandler does NOT call _csrfCheck (read-only)');
+    }
+
+    SKIP: {
+        skip "basic.html not found", 1 unless -f $html_file;
+
+        open(my $fh, '<', $html_file) or die $!;
+        my $html = do { local $/; <$fh> };
+        close($fh);
+
+        # 7. basic.html contains X-Requested-With in AJAX calls
+        my @matches = ($html =~ /X-Requested-With/g);
+        ok(scalar @matches >= 3,
+            'P-CR-03: basic.html has X-Requested-With in >= 3 AJAX calls (got ' . scalar(@matches) . ')');
+    }
+}
+
 done_testing();
