@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-06-24
+### Fixed
+- **Browse session auto-reconnect**: when the Spotify TCP connection drops overnight, Browse mode now detects consecutive track failures and automatically reconnects the session — previously all tracks failed with 404 until LMS restart
+
 ## [2.0.1] - 2026-06-23
 ### Fixed
 - **Play All performance**: Material Skin Play All on large lists (1600+ liked songs) no longer triggers individual API calls per track — results are served from an in-memory cache populated by the initial batch fetch (15s instead of 10+ minutes)

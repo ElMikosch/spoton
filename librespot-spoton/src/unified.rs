@@ -28,7 +28,7 @@
 //   Pitfall 5: Rate-limiting is FORBIDDEN in BrowseHttpSink. Only HttpStreamSink is rate-limited.
 
 use std::io::Write as IoWrite;
-use std::sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering}};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -227,6 +227,11 @@ async fn unified_http_server(
     // rapid-skip supersession (T-30-05). Pre-spawn check drops pcm_tx if a newer request
     // arrived while waiting for Player::load() to complete.
     browse_abort_gen: Arc<AtomicU64>,
+    // Session reconnect infrastructure: Browse requests signal the main event loop
+    // when consecutive track failures indicate a dead Spotify session.
+    browse_reconnect_signal: Arc<tokio::sync::Notify>,
+    browse_reconnect_pending: Arc<AtomicBool>,
+    consecutive_browse_fails: Arc<AtomicU32>,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -252,6 +257,9 @@ async fn unified_http_server(
                 let last_data_time = Arc::clone(&last_data_time);
                 let browse_preempting = Arc::clone(&browse_preempting);
                 let browse_abort_gen = Arc::clone(&browse_abort_gen);
+                let browse_reconnect_signal = Arc::clone(&browse_reconnect_signal);
+                let browse_reconnect_pending = Arc::clone(&browse_reconnect_pending);
+                let consecutive_browse_fails = Arc::clone(&consecutive_browse_fails);
                 let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -265,6 +273,9 @@ async fn unified_http_server(
                     let last_data_time = Arc::clone(&last_data_time);
                     let browse_preempting = Arc::clone(&browse_preempting);
                     let browse_abort_gen = Arc::clone(&browse_abort_gen);
+                    let browse_reconnect_signal = Arc::clone(&browse_reconnect_signal);
+                    let browse_reconnect_pending = Arc::clone(&browse_reconnect_pending);
+                    let consecutive_browse_fails = Arc::clone(&consecutive_browse_fails);
                     let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -285,6 +296,7 @@ async fn unified_http_server(
                                 .expect("health response builder");
                             return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
                         }
+
 
                         // ---- GET /stream — Connect PCM relay ----
                         if method == Method::GET && path == "/stream" {
@@ -476,6 +488,18 @@ async fn unified_http_server(
                             let content_type = content_prefix.to_owned();
                             log::debug!("[spoton/unified] GET /{}/{} start_position_ms={}", content_type, track_id, start_position_ms);
 
+                            // Wait for ongoing session reconnect before using the session.
+                            if browse_reconnect_pending.load(Ordering::Acquire) {
+                                log::debug!("[spoton/unified] /track: waiting for session reconnect...");
+                                for _ in 0..50 {
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    if !browse_reconnect_pending.load(Ordering::Acquire) { break; }
+                                }
+                                if browse_reconnect_pending.load(Ordering::Acquire) {
+                                    log::warn!("[spoton/unified] /track: reconnect timed out after 5s");
+                                }
+                            }
+
                             // T-30-05 (mitigate): increment browse_abort_gen to signal any
                             // in-flight /track/ task that it has been superseded by this request.
                             // fetch_add returns the OLD value; after our increment the counter is
@@ -585,7 +609,8 @@ async fn unified_http_server(
                             ).await;
 
                             if let Ok(Ok(StatusCode::NOT_FOUND)) = early_status {
-                                log::info!("[spoton/unified] track unavailable — returning 404");
+                                let fails = consecutive_browse_fails.fetch_add(1, Ordering::SeqCst) + 1;
+                                log::info!("[spoton/unified] track unavailable — returning 404 (consecutive_fails={})", fails);
                                 cancel_abort.abort();
                                 // Reset mode to Idle since the track failed.
                                 {
@@ -594,8 +619,18 @@ async fn unified_http_server(
                                         *mode = ActiveMode::Idle;
                                     }
                                 }
+                                // Trigger session reconnect after 2+ consecutive failures.
+                                // Single failure = likely genuinely unavailable track.
+                                // Multiple failures = likely dead session (audio key channel closed).
+                                if fails >= 2 && !browse_reconnect_pending.swap(true, Ordering::AcqRel) {
+                                    log::warn!("[spoton/unified] {} consecutive Browse failures — triggering session reconnect", fails);
+                                    browse_reconnect_signal.notify_one();
+                                }
                                 return Ok(empty_response(StatusCode::NOT_FOUND));
                             }
+
+                            // Track started streaming — reset consecutive failure counter.
+                            consecutive_browse_fails.store(0, Ordering::SeqCst);
 
                             // Build streaming response.
                             let stream = TokioStreamExt::map(
@@ -822,6 +857,11 @@ pub async fn run_unified(
     // browse_abort_gen: monotonic counter for rapid-skip debounce (T-30-05).
     // Incremented on each /track/ request; in-flight tasks check if gen advanced.
     let browse_abort_gen = Arc::new(AtomicU64::new(0));
+    // Session reconnect: Browse handler signals main loop when consecutive failures
+    // indicate a dead Spotify session (audio key channel closed).
+    let browse_reconnect_signal = Arc::new(tokio::sync::Notify::new());
+    let browse_reconnect_pending = Arc::new(AtomicBool::new(false));
+    let consecutive_browse_fails = Arc::new(AtomicU32::new(0));
 
     // 6. Conditional Connect infrastructure (D-01).
     let volume_ctrl_enum = match volume_ctrl_str {
@@ -1046,6 +1086,9 @@ pub async fn run_unified(
             http_shutdown_rx,
             Arc::clone(&browse_preempting),
             Arc::clone(&browse_abort_gen),
+            Arc::clone(&browse_reconnect_signal),
+            Arc::clone(&browse_reconnect_pending),
+            Arc::clone(&consecutive_browse_fails),
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1141,13 +1184,50 @@ pub async fn run_unified(
                                     }
                                 }
                                 log::debug!("[spoton/unified] Spirc reconnected");
+                                browse_reconnect_pending.store(false, Ordering::Release);
                             }
                             Err(e) => {
+                                browse_reconnect_pending.store(false, Ordering::Release);
                                 log::error!("[spoton/unified] Spirc reconnect failed: {e}");
                                 break;
                             }
                         }
                     }
+                },
+
+                // Browse-triggered session reconnect: consecutive Browse failures
+                // indicate the Spotify TCP connection is dead. Tear down Spirc + session,
+                // then let the existing reconnect logic (connecting=true) rebuild everything.
+                _ = browse_reconnect_signal.notified(), if !connecting => {
+                    log::warn!("[spoton/unified] Browse-triggered session reconnect");
+                    consecutive_browse_fails.store(0, Ordering::SeqCst);
+
+                    // Shut down Spirc (if alive).
+                    {
+                        let mut guard = spirc_handle.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(ref s) = *guard {
+                            let _ = s.shutdown();
+                        }
+                        *guard = None;
+                    }
+                    spirc_active.store(false, Ordering::SeqCst);
+
+                    // Abort the old Spirc task so "Spirc task died" doesn't also fire.
+                    if let Some(ref task) = current_spirc_task {
+                        task.abort();
+                    }
+                    current_spirc_task = None;
+
+                    // Shut down session to force is_invalid() → true for reconnect path.
+                    let session_cur = {
+                        let s = session_shared.lock().await;
+                        s.clone()
+                    };
+                    if !session_cur.is_invalid() {
+                        session_cur.shutdown();
+                    }
+
+                    connecting = true;
                 },
 
                 // Spirc task died — attempt reconnect with backoff.
@@ -1231,10 +1311,39 @@ pub async fn run_unified(
             http_shutdown_rx,
             Arc::clone(&browse_preempting),
             Arc::clone(&browse_abort_gen),
+            Arc::clone(&browse_reconnect_signal),
+            Arc::clone(&browse_reconnect_pending),
+            Arc::clone(&consecutive_browse_fails),
         ));
 
-        // Pure Browse: wait for Ctrl+C.
-        tokio::signal::ctrl_c().await.ok();
+        // Pure Browse: wait for Ctrl+C or session reconnect.
+        loop {
+            tokio::select! {
+                _ = browse_reconnect_signal.notified() => {
+                    log::warn!("[spoton/unified] Browse-only session reconnect");
+                    consecutive_browse_fails.store(0, Ordering::SeqCst);
+                    let session_cur = {
+                        let s = session_shared.lock().await;
+                        s.clone()
+                    };
+                    if !session_cur.is_invalid() {
+                        session_cur.shutdown();
+                    }
+                    let ns = Session::new(session_config.clone(), Some(cache.clone()));
+                    match ns.connect(credentials.clone(), false).await {
+                        Ok(()) => {
+                            *session_shared.lock().await = ns;
+                            log::info!("[spoton/unified] Browse-only session reconnected");
+                        }
+                        Err(e) => {
+                            log::error!("[spoton/unified] Browse-only session reconnect failed: {e}");
+                        }
+                    }
+                    browse_reconnect_pending.store(false, Ordering::Release);
+                }
+                _ = tokio::signal::ctrl_c() => break,
+            }
+        }
 
         let _ = http_shutdown_tx.send(());
         let _ = http_handle.await;
