@@ -73,7 +73,6 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut mode = Mode::Check;
-    let mut _name_provided = false;
     let mut device_name = String::new();
     let mut username = String::new();
     let mut password = String::new();
@@ -176,7 +175,6 @@ async fn main() {
             }
             "-n" | "--name" => {
                 if i + 1 < args.len() {
-                    _name_provided = true;
                     device_name = args[i + 1].clone();
                     i += 1;
                 }

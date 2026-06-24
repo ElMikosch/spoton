@@ -1051,7 +1051,7 @@ sub _savedTracksFeed {
             return;
         }
         delete $_playAllItemCache{$cacheKey};
-        goto &_savedTracksFeed;
+        goto &_savedTracksFeed;  # re-enter with same @_ after cache eviction
     } else {
         Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
             offset => $offset,
@@ -1360,7 +1360,7 @@ sub _showFeed {
             return;
         }
         delete $_playAllItemCache{$showCacheKey};
-        goto &_showFeed;
+        goto &_showFeed;  # re-enter with same @_ after cache eviction
     } else {
         # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
         my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
@@ -2100,7 +2100,7 @@ sub _albumFeed {
             return;
         }
         delete $_playAllItemCache{$albumCacheKey};
-        goto &_albumFeed;
+        goto &_albumFeed;  # re-enter with same @_ after cache eviction
     } elsif ($offset == 0) {
         # Initial browse load: fetch full album (includes first page of tracks in tracks.items).
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
@@ -2268,7 +2268,7 @@ sub _playlistFeed {
             return;
         }
         delete $_playAllItemCache{$plCacheKey};
-        goto &_playlistFeed;
+        goto &_playlistFeed;  # re-enter with same @_ after cache eviction
     } else {
         Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
             offset => $offset,

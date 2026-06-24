@@ -632,11 +632,12 @@ sub _connectEvent {
             }
 
             my $ts      = int(Time::HiRes::time() * 1000);
-            my $playReq = $client->execute([
+            my $playReq = Slim::Control::Request->new($client->id, [
                 'playlist', 'play',
                 sprintf("spoton://connect-%u", $ts)
             ]);
             $playReq->source(__PACKAGE__);
+            $playReq->execute();
 
             $client->pluginData(pendingConnect => 0);
 
@@ -738,11 +739,12 @@ sub _connectEvent {
         # The spoton://connect-<ts> URL signals Connect mode to ProtocolHandler.pm
         # which returns 'soc' from formatOverride() and provides canDirectStream URL.
         my $ts      = int(Time::HiRes::time() * 1000);
-        my $playReq = $client->execute([
+        my $playReq = Slim::Control::Request->new($client->id, [
             'playlist', 'play',
             sprintf("spoton://connect-%u", $ts)
         ]);
         $playReq->source(__PACKAGE__);
+        $playReq->execute();
 
         $client->pluginData(pendingConnect => 0);
 
@@ -868,11 +870,12 @@ sub _connectEvent {
         if ($_activeConnectPlayer && $_activeConnectPlayer eq $client->id) {
             $client->pluginData(connectStartTime => Time::HiRes::time());
             my $ts      = int(Time::HiRes::time() * 1000);
-            my $playReq = $client->execute([
+            my $playReq = Slim::Control::Request->new($client->id, [
                 'playlist', 'play',
                 sprintf("spoton://connect-%u", $ts)
             ]);
             $playReq->source(__PACKAGE__);
+            $playReq->execute();
         }
         return;
     }
