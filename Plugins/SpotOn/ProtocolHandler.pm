@@ -334,6 +334,9 @@ sub getNextTrack {
                 "getNextTrack: translating dead Connect URL to $browseUrl"
             );
             $song->streamUrl($browseUrl);
+            if (keys %_translatedConnectUrls >= 200) {
+                delete $_translatedConnectUrls{(keys %_translatedConnectUrls)[0]};
+            }
             $_translatedConnectUrls{$url} = 1;
 
             # Set duration from cached metadata for the translated Browse URL
@@ -440,6 +443,7 @@ sub explodePlaylist {
                 }, sub {
                     my ($data, $err) = @_;
                     unless ($data && $data->{items}) {
+                        undef $fetchPage;
                         $cb->($allTracks);
                         return;
                     }
@@ -452,6 +456,7 @@ sub explodePlaylist {
                     if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
                         $fetchPage->($offset + scalar(@{ $data->{items} }));
                     } else {
+                        undef $fetchPage;
                         main::INFOLOG && $log->is_info && $log->info(
                             "explodePlaylist: album $albumId => " . scalar(@$allTracks) . " tracks"
                         );
@@ -481,6 +486,7 @@ sub explodePlaylist {
             }, sub {
                 my ($data, $err) = @_;
                 unless ($data && $data->{items}) {
+                    undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
                         "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
                     );
@@ -500,6 +506,7 @@ sub explodePlaylist {
                 if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
                     $fetchPage->($offset + scalar(@{ $data->{items} }));
                 } else {
+                    undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
                         "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
                     );

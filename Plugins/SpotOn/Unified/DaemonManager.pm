@@ -205,17 +205,15 @@ sub _streamAlivePoll {
 
     # Unified daemon is always a streaming daemon when alive — no _streamMode gate
     # (matches Browse::DaemonManager pattern, not Connect::DaemonManager pattern).
-    my @alive = grep { $_->alive } values %helperInstances;
+    # Self-stop when no daemons are registered — avoids idle timer overhead
+    return unless values %helperInstances;
 
-    # Self-stop when no unified daemons are active — avoids idle timer overhead
-    return unless @alive;
-
-    for my $helper (@alive) {
+    for my $helper (values %helperInstances) {
         if (!$helper->alive) {
             main::INFOLOG && $log->is_info && $log->info(
-                "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting immediately"
+                "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting via startHelper"
             );
-            $helper->start;
+            $class->startHelper($helper->mac);
         }
         elsif (main::DEBUGLOG && $log->is_debug) {
             $log->debug("SpotOn Unified daemon alive: " . $helper->mac . " pid=" . ($helper->pid || '?'));

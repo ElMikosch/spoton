@@ -72,10 +72,8 @@ impl LMS {
         flush_tx: Option<watch::Sender<u64>>,
     ) -> Self {
         Self {
-            host_port,
-            player_mac,
-            // T-05-01: sanitize auth header — trim whitespace + remove embedded CR/LF
-            // to prevent CRLF injection into hand-rolled HTTP/1.0 notify request.
+            host_port: host_port.map(|raw| raw.trim().replace(['\r', '\n'], "").to_owned()),
+            player_mac: player_mac.map(|raw| raw.trim().replace(['\r', '\n'], "").to_owned()),
             auth: auth.map(|raw| raw.trim().replace(['\r', '\n'], "").to_owned()),
             suppress_next_volume: Arc::new(AtomicBool::new(false)),
             flush_tx,
@@ -324,6 +322,8 @@ impl LMS {
             Ok(mut stream) => {
                 if let Err(e) = stream.write_all(request.as_bytes()).await {
                     log::debug!("[spoton] notify({cmd}): write failed: {e}");
+                } else {
+                    let _ = stream.shutdown().await;
                 }
             }
             Err(e) => {
