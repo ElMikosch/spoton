@@ -71,11 +71,6 @@ jobs:
           - target: i686-unknown-linux-musl
             bin_dir: i386-linux
             use_cross: true
-          - target: x86_64-pc-windows-gnu
-            bin_dir: x86_64-win64
-            binary_ext: .exe
-            use_cross: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,34 +80,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (Linux targets only)
-        if: matrix.use_cross == true
+      - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Install MinGW-w64 (Windows target only)
-        if: matrix.use_cross == false
-        run: sudo apt-get install -y gcc-mingw-w64-x86-64-posix
-
-      - name: Configure linker for Windows target
-        if: matrix.use_cross == false
-        run: |
-          mkdir -p $HOME/.cargo
-          cat >> $HOME/.cargo/config.toml <<'EOF'
-          [target.x86_64-pc-windows-gnu]
-          linker = "x86_64-w64-mingw32-gcc"
-          EOF
-
-      - name: Build binary (cross)
-        if: matrix.use_cross == true
+      - name: Build binary
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           cross build --release --target ${{ matrix.target }}
-
-      - name: Build binary (cargo)
-        if: matrix.use_cross == false
-        working-directory: ${{ env.SOURCE_DIR }}
-        run: |
-          cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
         run: |
@@ -141,6 +115,38 @@ jobs:
         with:
           name: spoton-${{ matrix.bin_dir }}
           path: Plugins/SpotOn/Bin/${{ matrix.bin_dir }}/spoton${{ matrix.binary_ext }}
+          retention-days: 30
+
+  build-windows:
+    name: Build Windows x86_64
+    runs-on: windows-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.rust_changed == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build binary
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: cargo build --release
+
+      - name: Verify binary
+        run: |
+          $binary = "${{ env.SOURCE_DIR }}\target\release\${{ env.BINARY_NAME }}.exe"
+          Write-Host "=== Binary info ==="
+          Get-Item $binary | Select-Object Name, Length
+          Write-Host "=== SHA256 ==="
+          Get-FileHash $binary -Algorithm SHA256 | Select-Object Hash
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoton-x86_64-win64
+          path: ${{ env.SOURCE_DIR }}/target/release/${{ env.BINARY_NAME }}.exe
           retention-days: 30
 
   build-macos:
@@ -317,7 +323,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [detect-changes, build, lipo, reuse-binaries]
+    needs: [detect-changes, build, build-windows, lipo, reuse-binaries]
     if: startsWith(github.ref, 'refs/tags/') && !cancelled() && !failure()
     permissions:
       contents: write
