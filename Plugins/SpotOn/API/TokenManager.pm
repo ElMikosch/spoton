@@ -379,27 +379,34 @@ sub _fetchKeymasterToken {
     my $serverPrefs = preferences('server');
     my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
 
-    # T-04.3-05: Single-quote escaping to prevent shell injection
-    (my $safeHelper = $helper)   =~ s/'/'\\''/g;
-    (my $safeDir    = $cacheDir) =~ s/'/'\\''/g;
+    # T-04.3-05: Shell quoting for injection prevention.
+    # Windows cmd.exe requires double-quotes; Unix shells use single-quotes.
+    my ($q, $escFn);
+    if (main::ISWINDOWS) {
+        $q = '"';
+        $escFn = sub { (my $s = $_[0]) =~ s/"/\\"/g; $s };
+    } else {
+        $q = "'";
+        $escFn = sub { (my $s = $_[0]) =~ s/'/'\\''/g; $s };
+    }
+    my $safeHelper = $escFn->($helper);
+    my $safeDir    = $escFn->($cacheDir);
+    my $stderr     = main::ISWINDOWS ? '2>&1' : '2>&1';
 
     my $cmd;
     if ($flavor eq 'bundled') {
-        # bundled = SPOTON_DEFAULT_CLIENT_ID (shared app, access to browse/categories)
-        (my $safeBundledId = SPOTON_DEFAULT_CLIENT_ID) =~ s/'/'\\''/g;
-        $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+        my $safeBundledId = $escFn->(SPOTON_DEFAULT_CLIENT_ID);
+        $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
             $safeHelper, $safeDir, $safeBundledId);
     } else {
-        # own = user's custom Client-ID (Dev Mode app, access to me/*, search)
         my $ownClientId = $prefs->get('clientId');
         if ($ownClientId) {
-            (my $safeClientId = $ownClientId) =~ s/'/'\\''/g;
-            $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+            my $safeClientId = $escFn->($ownClientId);
+            $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
                 $safeHelper, $safeDir, $safeClientId);
         } else {
-            # No own Client-ID — use SPOTON_DEFAULT_CLIENT_ID as fallback
-            (my $safeFallbackId = SPOTON_DEFAULT_CLIENT_ID) =~ s/'/'\\''/g;
-            $cmd = sprintf("'%s' --get-token --cache '%s' --client-id '%s' 2>&1",
+            my $safeFallbackId = $escFn->(SPOTON_DEFAULT_CLIENT_ID);
+            $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
                 $safeHelper, $safeDir, $safeFallbackId);
         }
     }
