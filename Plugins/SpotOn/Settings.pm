@@ -185,8 +185,11 @@ sub handler {
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
 
     my $logTotal = 0;
-    for my $f (bsd_glob(catfile($serverPrefs->get('cachedir'), 'spoton', '*-connect.log'))) {
-        $logTotal += -s $f || 0;
+    my $spotonDir = catdir($serverPrefs->get('cachedir'), 'spoton');
+    for my $pattern ('*-connect.log', '*-unified.log', 'browse-errors.log') {
+        for my $f (bsd_glob(catfile($spotonDir, $pattern))) {
+            $logTotal += -s $f || 0;
+        }
     }
     $paramRef->{connectLogSize} = $logTotal >= 1048576 ? sprintf('%.1f MB', $logTotal / 1048576)
                                 : $logTotal >= 1024    ? sprintf('%.1f KB', $logTotal / 1024)
@@ -325,8 +328,11 @@ sub _diagnosticBundleHandler {
     my $serverPrefs = preferences('server');
     my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
 
-    # Collect daemon logs (*-connect.log files)
-    my @logFiles = bsd_glob(catfile($spotonDir, '*-connect.log'));
+    # Collect all daemon logs (connect + unified)
+    my @logFiles = (
+        bsd_glob(catfile($spotonDir, '*-connect.log')),
+        bsd_glob(catfile($spotonDir, '*-unified.log')),
+    );
 
     # Build header with system info
     my $activeId = $prefs->get('activeAccount') || '';
@@ -387,6 +393,24 @@ sub _diagnosticBundleHandler {
     }
     $logs .= "\n";
 
+    # Extract SpotOn-related lines from LMS server.log
+    my $serverLogFile = catfile($serverPrefs->get('logdir'), 'server.log');
+    if (-f $serverLogFile) {
+        $logs .= "--- LMS server.log (SpotOn entries, last 200) ---\n";
+        if (open(my $sfh, '<', $serverLogFile)) {
+            my @spotonLines;
+            while (my $line = <$sfh>) {
+                push @spotonLines, $line if $line =~ /SpotOn|spoton/i;
+                shift @spotonLines if @spotonLines > 200;
+            }
+            close $sfh;
+            $logs .= join('', @spotonLines) || "(no SpotOn entries found)\n";
+        } else {
+            $logs .= "(could not open server.log: $!)\n";
+        }
+        $logs .= "\n";
+    }
+
     my $content = $header . $logs;
     my $filename = "spoton-diag-$timestamp.txt";
 
@@ -409,7 +433,10 @@ sub _clearLogsHandler {
 
     my $serverPrefs = preferences('server');
     my $spotonDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
-    my @logFiles    = glob(catfile($spotonDir, '*-connect.log'));
+    my @logFiles = (
+        glob(catfile($spotonDir, '*-connect.log')),
+        glob(catfile($spotonDir, '*-unified.log')),
+    );
 
     my $deleted = 0;
     for my $logFile (@logFiles) {
