@@ -5,6 +5,7 @@ use warnings;
 use base qw(Slim::Web::Settings);
 
 use Digest::MD5 qw(md5_hex);
+use Encode qw(encode);
 use File::Basename qw(basename);
 use File::Glob qw(bsd_glob);
 use File::Spec::Functions qw(catdir catfile);
@@ -385,7 +386,7 @@ sub _diagnosticBundleHandler {
     my $content = $header . $logs;
     my $filename = "spoton-diag-$timestamp.txt";
 
-    $response->header('Content-Length' => length($content));
+    $response->header('Content-Length' => length(encode('UTF-8', $content)));
     $response->code(200);
     $response->header('Connection' => 'close');
     $response->content_type('text/plain; charset=utf-8');
@@ -432,7 +433,7 @@ sub _jsonResponse {
     my ($httpClient, $response, $data, $code) = @_;
     $code //= 200;
     my $content = to_json($data);
-    $response->header('Content-Length' => length($content));
+    $response->header('Content-Length' => length(encode('UTF-8', $content)));
     $response->code($code);
     $response->header('Connection' => 'close');
     $response->content_type('application/json');

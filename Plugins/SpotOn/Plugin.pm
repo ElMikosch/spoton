@@ -522,9 +522,14 @@ sub _likedCacheKey {
     return "spoton_liked_${accountId}_${trackId}";
 }
 
+my %_LIBRARY_API_METHODS = map { $_ => 1 } qw(saveTracks removeTracks saveShows removeShows);
+
 sub _doLibraryAction {
     my ($client, $cb, $args, $apiMethod, $successKey, $opts) = @_;
     $opts //= {};
+
+    die "Invalid API method: $apiMethod" unless $_LIBRARY_API_METHODS{$apiMethod};
+
     my $uri       = $args->{trackUri} // $args->{showUri};
     my $accountId = $args->{accountId};
     my $cacheKey  = $args->{cacheKey};

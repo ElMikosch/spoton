@@ -1,6 +1,7 @@
 package Plugins::SpotOn::Unified::Daemon;
 
 use strict;
+use warnings;
 
 use base qw(Slim::Utils::Accessor);
 

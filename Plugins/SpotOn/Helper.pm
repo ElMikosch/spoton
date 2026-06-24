@@ -105,6 +105,8 @@ sub helperCheck {
 
         return 1;
     }
+
+    return 0;
 }
 
 sub getCapability {

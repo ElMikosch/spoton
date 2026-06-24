@@ -1,6 +1,7 @@
 package Plugins::SpotOn::Unified::DaemonManager;
 
 use strict;
+use warnings;
 
 use File::Basename qw(basename);
 use File::Spec::Functions qw(catdir catfile);

@@ -687,6 +687,7 @@ sub _doFlavouredRequest {
                         # T-02-08: Cap Retry-After at 300s to prevent self-DoS
                         $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
                     }
+                    $retryAfter = 1   if $retryAfter < 1;
                     $retryAfter = 300 if $retryAfter > 300;
 
                     # Per-flavor rate-limit key only (D-01) — no global key (CR-02)

@@ -1,6 +1,7 @@
 package Plugins::SpotOn::Connect;
 
 use strict;
+use warnings;
 
 use Digest::MD5 qw(md5_hex);
 use File::Path qw(mkpath);

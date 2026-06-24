@@ -496,7 +496,8 @@ async fn unified_http_server(
                                     if !browse_reconnect_pending.load(Ordering::Acquire) { break; }
                                 }
                                 if browse_reconnect_pending.load(Ordering::Acquire) {
-                                    log::warn!("[spoton/unified] /track: reconnect timed out after 5s");
+                                    log::warn!("[spoton/unified] /track: reconnect timed out after 5s — returning 503");
+                                    return Ok(empty_response(StatusCode::SERVICE_UNAVAILABLE));
                                 }
                             }
 
@@ -659,8 +660,8 @@ async fn unified_http_server(
                             // T-29-02 (mitigate): reuse connect.rs control dispatch with full
                             // validation (volume clamped, seek validated as u32).
                             let body_bytes = {
-                                use http_body_util::BodyExt as _;
-                                match req.into_body().collect().await {
+                                use http_body_util::{BodyExt as _, Limited};
+                                match Limited::new(req.into_body(), 4096).collect().await {
                                     Ok(collected) => collected.to_bytes(),
                                     Err(_) => Bytes::new(),
                                 }
