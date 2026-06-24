@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-06-24
+### Fixed
+- **Windows binary compatibility**: switched from MinGW cross-compilation to native MSVC build on GitHub Actions — the MinGW-built binary failed to run on Windows 11 with "incompatible with 64-bit Windows" error (#40)
+
 ## [2.0.4] - 2026-06-24
 ### Fixed
 - **Diagnostic bundle download truncated**: Content-Length header and actual body size could mismatch on non-ASCII log content — now encodes to UTF-8 before measuring and sending
