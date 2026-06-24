@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-06-24
+### Fixed
+- **Diagnostic bundle download truncated**: Content-Length header and actual body size could mismatch on non-ASCII log content — now encodes to UTF-8 before measuring and sending
+- **Diagnostic bundle expanded**: now includes unified daemon logs (`*-unified.log`), browse error log, and SpotOn-related entries from LMS server.log (last 200 lines)
+- **Log size calculation**: Settings page now shows total size of all SpotOn logs (connect + unified + browse errors), not just connect logs
+- **Clear logs**: now also deletes unified daemon logs alongside connect and browse error logs
+
 ## [2.0.3] - 2026-06-24
 ### Fixed
 - **Browse session auto-reconnect**: when the Spotify TCP connection drops overnight, Browse mode now detects consecutive track failures and automatically reconnects the session — previously all tracks failed with 404 until LMS restart
