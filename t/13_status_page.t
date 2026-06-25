@@ -438,5 +438,3 @@ is_deeply(\@actual_keys, \@expected_keys, 'statusSnapshot has all 5 expected key
 Plugins::SpotOn::API::Client->reset();
 my $after_reset = Plugins::SpotOn::API::Client->statusSnapshot();
 is($after_reset->{apiRequestCount}, 0, 'apiRequestCount is 0 after reset');
-
-done_testing();

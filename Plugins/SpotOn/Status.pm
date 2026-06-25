@@ -108,12 +108,12 @@ sub _collectDaemons {
     my @daemons;
 
     require Plugins::SpotOn::Unified::DaemonManager;
+    require Slim::Player::Client;
     for my $helper (Plugins::SpotOn::Unified::DaemonManager->helperInstances()) {
         my $mac  = $helper->mac;
         my $name = $mac;
 
         # Resolve player name if available
-        require Slim::Player::Client;
         my $client = Slim::Player::Client->getClient($mac);
         $name = $client->name if $client && $client->can('name');
 
@@ -124,7 +124,7 @@ sub _collectDaemons {
             pid            => $helper->pid || 0,
             uptime         => int($helper->uptime || 0),
             connectEnabled => $helper->_connectEnabled ? 1 : 0,
-            streamPort     => $helper->_streamPort || undef,
+            streamPort     => $helper->_streamPort // undef,
         };
     }
 
@@ -147,6 +147,7 @@ sub _systemInfo {
     return $_systemInfo if $_systemInfo;
 
     require Plugins::SpotOn::Helper;
+    require Plugins::SpotOn::Plugin;
     my ($helperPath, $helperVersion) = Plugins::SpotOn::Helper->get();
 
     $_systemInfo = {

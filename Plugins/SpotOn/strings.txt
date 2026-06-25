@@ -2005,7 +2005,7 @@ PLUGIN_SPOTON_STATUS_PAGE
 	DA	Statusside
 	DE	Statusseite
 	EN	Status Page
-	ES	Pagina de estado
+	ES	Página de estado
 	FR	Page de statut
 	IT	Pagina di stato
 	NL	Statuspagina
@@ -2014,15 +2014,15 @@ PLUGIN_SPOTON_STATUS_PAGE
 	SV	Statussida
 
 PLUGIN_SPOTON_STATUS_PAGE_DESC
-	CS	Otevrit panel stavu SpotOn v nove zalozce.
-	DA	Abn SpotOn status-dashboardet i en ny fane.
-	DE	Das SpotOn Status-Dashboard in einem neuen Tab oeffnen.
+	CS	Otevřít panel stavu SpotOn v nové záložce.
+	DA	Åbn SpotOn status-dashboardet i en ny fane.
+	DE	Das SpotOn Status-Dashboard in einem neuen Tab öffnen.
 	EN	Open the SpotOn status dashboard in a new tab.
-	ES	Abrir el panel de estado de SpotOn en una nueva pestana.
+	ES	Abrir el panel de estado de SpotOn en una nueva pestaña.
 	FR	Ouvrir le tableau de bord SpotOn dans un nouvel onglet.
 	IT	Apri la dashboard di stato SpotOn in una nuova scheda.
 	NL	Open het SpotOn statusdashboard in een nieuw tabblad.
-	NO	Apne SpotOn statusdashbordet i en ny fane.
-	PL	Otworz panel stanu SpotOn w nowej karcie.
-	SV	Oppna SpotOn statusdashboard i en ny flik.
+	NO	Åpne SpotOn statusdashbordet i en ny fane.
+	PL	Otwórz panel stanu SpotOn w nowej karcie.
+	SV	Öppna SpotOn statusdashboard i en ny flik.
 
