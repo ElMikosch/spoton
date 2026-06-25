@@ -162,11 +162,18 @@ sub start {
 
 	# Tempfile for synchronous port capture (cross-platform: IO::Select on pipes
 	# fails on Windows where select() only works on sockets).
-	my ($port_fh, $port_tmpfile) = tempfile('spoton-port-XXXX',
-		DIR => catdir($serverPrefs->get('cachedir'), 'spoton'),
-		UNLINK => 1,
-	);
-	close($port_fh);
+	my ($port_fh, $port_tmpfile);
+	eval {
+		($port_fh, $port_tmpfile) = tempfile('spoton-port-XXXX',
+			DIR => catdir($serverPrefs->get('cachedir'), 'spoton'),
+			UNLINK => 0,
+		);
+		close($port_fh);
+	};
+	if ($@ || !$port_tmpfile) {
+		$log->error("tempfile() failed for port capture: $@");
+		return;
+	}
 
 	# T-29-09: stderr log only when diagnosticMode is on; /dev/null otherwise.
 	# Append mode (>>) matches Browse::Daemon pattern — preserves logs across restarts.
@@ -226,14 +233,20 @@ sub start {
 			if (open(my $pfh, '<', $port_tmpfile)) {
 				$port_line = readline($pfh);
 				close($pfh);
-				last if defined $port_line && $port_line =~ /stream_port=\d+/;
+				last if defined $port_line && $port_line =~ /stream_port=\d+\s*$/;
 				undef $port_line;
 			}
 		}
 		last unless $self->_proc && $self->_proc->alive;
 		Time::HiRes::usleep(100_000);
 	}
+	# Clean up tempfile. On Windows the daemon may still hold the FD open
+	# (no POSIX unlink semantics), so unlink can fail — stale files are
+	# cleaned up on next daemon start via the glob below.
 	unlink $port_tmpfile;
+	for my $stale (glob(catfile(catdir($serverPrefs->get('cachedir'), 'spoton'), 'spoton-port-*'))) {
+		unlink $stale;
+	}
 
 	if (!defined $port_line || $port_line !~ /^stream_port=(\d+)/) {
 		my $reason = defined $port_line ? "unexpected output: $port_line" : "timeout";

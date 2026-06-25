@@ -272,8 +272,9 @@ sub _killOrphanedProcesses {
                             %unifiedPids = map { $_ => 1 }
                                 Plugins::SpotOn::Unified::DaemonManager->helperPids();
                         }
+                        (my $procName = $name) =~ s/\.exe$//i;
                         my @pids = map { /^\s*(\d+)/ ? $1 : () }
-                            `wmic process where "name='$name'" get ProcessId 2>nul`;
+                            `powershell -NoProfile -Command "Get-Process -Name '$procName' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id" 2>nul`;
                         for my $pid (@pids) {
                             next if $activePids{$pid};
                             next if $unifiedPids{$pid};
