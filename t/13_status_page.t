@@ -128,10 +128,21 @@ sub addRawFunction  { }
 1;
 END
 
+# Stub: URI::Escape (Client.pm dependency, not available in CI)
+write_stub($stub_dir, 'URI::Escape', <<'END');
+package URI::Escape;
+use Exporter 'import';
+our @EXPORT_OK = qw(uri_escape uri_escape_utf8);
+sub uri_escape { $_[0] }
+sub uri_escape_utf8 { $_[0] }
+1;
+END
+
 # Stub: Slim::Web::HTTP
 write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
 package Slim::Web::HTTP;
 sub addHTTPResponse { }
+sub filltemplatefile { \'' }
 1;
 END
 
