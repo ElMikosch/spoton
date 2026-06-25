@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.9] - 2026-06-25
+### Added
+- **Status Page**: standalone diagnostic dashboard at `/plugins/SpotOn/status.html` — dark-themed 4-card grid with Player Daemon Health, API & Tokens, Recent Errors, and System Info. Auto-polls every 5 seconds, pauses when browser tab is hidden. Link in Settings Diagnostics section.
+- **API telemetry**: request counter, 429 counter, and rate-limit status tracked in Client.pm with `statusSnapshot()` method for Status Page
+- **Error ring-buffer**: last 30 errors stored in Status.pm, displayed newest-first in Status Page
+
+### Fixed
+- **Browse 404 retry**: transient audio-key throttles from Spotify no longer cause immediate track skip — retries up to 3 times with 2-second delay before skipping. Prevents playlist playback from stopping when consecutive tracks hit temporary 404s.
+- **Search routing**: search requests now route through bundled token with limit raised to 50 results per type
+
 ## [2.0.8] - 2026-06-25
 ### Added
 - **Troubleshooting guide**: setup page links to TROUBLESHOOTING.md for Docker/VLAN/mDNS issues with manual credential transfer instructions (11 languages)
