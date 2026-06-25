@@ -70,3 +70,49 @@ Your player should appear in the Spotify app immediately after reboot.
 4. If the username is there, authentication was successful. You can now browse Spotify and use Connect normally.
 
 **Known limitation:** This cannot be fixed without architectural changes. Discovery runs under the LMS server name (one instance for all players), while Connect daemons run under individual player names. Starting a Connect session during discovery would require matching these identities, which is not feasible with the current design. The Spotify app will always show "Connecting..." during ZeroConf auth — but the credentials are received successfully in the background.
+
+## mDNS Discovery Not Working (Docker, VLANs, Remote LMS)
+
+SpotOn uses mDNS (ZeroConf) for initial authentication: the Spotify app on your phone discovers the SpotOn daemon on your LMS server via local network broadcast. This requires both devices to be on the **same network segment**.
+
+This won't work if:
+- LMS runs in a **Docker container** (isolated network namespace)
+- LMS and your phone are on **different VLANs/subnets**
+- A **firewall** blocks mDNS (UDP port 5353)
+
+### Solution: Manual Credential Transfer
+
+You can run the discovery step on any machine that IS on the same network as your phone, then copy the credentials to your LMS server.
+
+**Step 1:** Download the SpotOn binary for your platform from the [latest release](https://github.com/stiefenm/spoton/releases/latest).
+
+**Step 2:** Run discovery on a machine on the same network as your phone:
+
+```
+spoton --discover-once --name "SpotOn Setup" -c /tmp/spoton-auth
+```
+
+**Step 3:** Open the Spotify app on your phone, tap the device icon, and select "SpotOn Setup" from the list.
+
+**Step 4:** Once connected, a `credentials.json` file is created in `/tmp/spoton-auth/`. Copy this file to your LMS server:
+
+```
+scp /tmp/spoton-auth/credentials.json user@lms-server:/path/to/lms/cache/spoton/<account-id>/
+```
+
+The `<account-id>` is the first 8 characters of the MD5 hash of the Spotify username. You can find the correct directory in LMS under: `<cache-dir>/spoton/`.
+
+**Step 5:** Restart LMS. Your Spotify account should appear in SpotOn settings.
+
+## Windows: Missing VCRUNTIME140.dll
+
+The SpotOn binary requires the Visual C++ Redistributable. Download and install it from:
+https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+This is a one-time installation. A future SpotOn release will bundle this statically.
+
+## Windows: "Binary not found" or Daemon Timeout
+
+Make sure you're running SpotOn v2.0.7 or later. Earlier versions had a Windows-specific issue where the daemon couldn't communicate its port to LMS.
+
+Update via: LMS Settings → Plugins → Check for Updates → Restart LMS.

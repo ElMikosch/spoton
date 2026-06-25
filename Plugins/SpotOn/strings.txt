@@ -1155,6 +1155,32 @@ PLUGIN_SPOTON_SETUP_CONNECT_NOTE
 	PL	Uwaga: Połączenie w aplikacji Spotify nie zostanie pokazane jako „udane" — to normalne. Po nawiązaniu połączenia Twoje konto pojawi się automatycznie na tej stronie.
 	SV	Observera: Anslutningen i Spotify-appen visas aldrig som „lyckad" — det är normalt. När anslutningen är klar visas ditt konto automatiskt på denna sida.
 
+PLUGIN_SPOTON_SETUP_TROUBLESHOOT_HINT
+	CS	Nefunguje vám nastavení? U Docker kontejnerů nebo nastavení s oddělenými sítěmi (VLAN) nemusí fungovat mDNS rozpoznávání.
+	DA	Virker opsætningen ikke? Ved Docker-containere eller opsætninger med separate netværk (VLAN) virker mDNS-registrering muligvis ikke.
+	DE	Setup funktioniert nicht? Bei Docker-Containern oder Setups mit getrennten Netzwerken (VLANs) kann mDNS-Discovery fehlschlagen.
+	EN	Setup not working? In Docker containers or setups with separate networks (VLANs), mDNS discovery may not work.
+	ES	¿No funciona la configuración? En contenedores Docker o configuraciones con redes separadas (VLAN), la detección mDNS puede no funcionar.
+	FR	La configuration ne fonctionne pas ? Dans les conteneurs Docker ou les configurations avec des réseaux séparés (VLAN), la découverte mDNS peut ne pas fonctionner.
+	IT	La configurazione non funziona? Nei container Docker o nelle configurazioni con reti separate (VLAN), il rilevamento mDNS potrebbe non funzionare.
+	NL	Werkt de configuratie niet? Bij Docker-containers of opstellingen met gescheiden netwerken (VLAN's) werkt mDNS-detectie mogelijk niet.
+	NO	Fungerer ikke oppsettet? I Docker-containere eller oppsett med separate nettverk (VLAN) kan mDNS-oppdagelse mislykkes.
+	PL	Konfiguracja nie działa? W kontenerach Docker lub konfiguracjach z oddzielnymi sieciami (VLAN) wykrywanie mDNS może nie działać.
+	SV	Fungerar inte konfigurationen? I Docker-containrar eller konfigurationer med separata nätverk (VLAN) kanske mDNS-upptäckt inte fungerar.
+
+PLUGIN_SPOTON_SETUP_TROUBLESHOOT_LINK
+	CS	Viz průvodce řešením problémů
+	DA	Se fejlfindingsguiden
+	DE	Siehe Troubleshooting-Anleitung
+	EN	See troubleshooting guide
+	ES	Ver guía de solución de problemas
+	FR	Voir le guide de dépannage
+	IT	Vedi guida alla risoluzione dei problemi
+	NL	Zie handleiding probleemoplossing
+	NO	Se feilsøkingsguiden
+	PL	Zobacz przewodnik rozwiązywania problemów
+	SV	Se felsökningsguiden
+
 PLUGIN_SPOTON_SETUP_BROWSE_TITLE
 	CS	Hotovo — Spotify Browse je připraven
 	DA	Færdig — Spotify Browse er klar
