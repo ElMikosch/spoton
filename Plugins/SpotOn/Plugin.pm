@@ -272,9 +272,8 @@ sub _killOrphanedProcesses {
                             %unifiedPids = map { $_ => 1 }
                                 Plugins::SpotOn::Unified::DaemonManager->helperPids();
                         }
-                        (my $procName = $name) =~ s/\.exe$//i;
-                        my @pids = map { /^\s*(\d+)/ ? $1 : () }
-                            `powershell -NoProfile -Command "Get-Process -Name '$procName' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id" 2>nul`;
+                        my @pids = map { /^"[^"]*","(\d+)"/ ? $1 : () }
+                            `tasklist /FI "IMAGENAME eq $name" /FO CSV /NH 2>nul`;
                         for my $pid (@pids) {
                             next if $activePids{$pid};
                             next if $unifiedPids{$pid};
