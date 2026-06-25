@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-06-25
+### Fixed
+- **Windows daemon startup**: replaced pipe+IO::Select with cross-platform tempfile polling for port capture — IO::Select fails on pipe filehandles on Windows where select() only works on sockets (#40)
+- **Windows orphan cleanup**: replaced deprecated `wmic` (removed from Windows 11) and blanket `taskkill /IM` with PowerShell `Get-Process` + PID-based filtering that protects active daemons
+- **Tempfile robustness**: eval-wrapped tempfile creation, stale tempfile cleanup on daemon start, partial-write guard with EOL anchor
+
 ## [2.0.5] - 2026-06-24
 ### Fixed
 - **Windows binary compatibility**: switched from MinGW cross-compilation to native MSVC build on GitHub Actions — the MinGW-built binary failed to run on Windows 11 with "incompatible with 64-bit Windows" error (#40)
