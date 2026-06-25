@@ -2000,3 +2000,29 @@ PLUGIN_SPOTON_RESUME_FINISHED
 	PL	Ukończone
 	SV	Klar
 
+PLUGIN_SPOTON_STATUS_PAGE
+	CS	Stavová stránka
+	DA	Statusside
+	DE	Statusseite
+	EN	Status Page
+	ES	Pagina de estado
+	FR	Page de statut
+	IT	Pagina di stato
+	NL	Statuspagina
+	NO	Statusside
+	PL	Strona statusu
+	SV	Statussida
+
+PLUGIN_SPOTON_STATUS_PAGE_DESC
+	CS	Otevrit panel stavu SpotOn v nove zalozce.
+	DA	Abn SpotOn status-dashboardet i en ny fane.
+	DE	Das SpotOn Status-Dashboard in einem neuen Tab oeffnen.
+	EN	Open the SpotOn status dashboard in a new tab.
+	ES	Abrir el panel de estado de SpotOn en una nueva pestana.
+	FR	Ouvrir le tableau de bord SpotOn dans un nouvel onglet.
+	IT	Apri la dashboard di stato SpotOn in una nuova scheda.
+	NL	Open het SpotOn statusdashboard in een nieuw tabblad.
+	NO	Apne SpotOn statusdashbordet i en ny fane.
+	PL	Otworz panel stanu SpotOn w nowej karcie.
+	SV	Oppna SpotOn statusdashboard i en ny flik.
+
