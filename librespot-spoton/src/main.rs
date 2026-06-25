@@ -69,7 +69,18 @@ enum Mode {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    // SPOTON_LOG_FILE: Windows services can't redirect stderr via Proc::Background.
+    // When set, write logs to this file instead of stderr.
+    if let Ok(log_path) = std::env::var("SPOTON_LOG_FILE") {
+        use std::fs::OpenOptions;
+        let file = OpenOptions::new().create(true).append(true).open(&log_path)
+            .expect("Cannot open SPOTON_LOG_FILE");
+        env_logger::Builder::from_default_env()
+            .target(env_logger::Target::Pipe(Box::new(file)))
+            .init();
+    } else {
+        env_logger::init();
+    }
     let args: Vec<String> = env::args().collect();
 
     let mut mode = Mode::Check;

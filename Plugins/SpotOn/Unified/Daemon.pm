@@ -206,6 +206,7 @@ sub start {
 	# directly, bypassing stdout capture entirely.
 	if (main::ISWINDOWS) {
 		$ENV{SPOTON_PORT_FILE} = $port_tmpfile;
+		$ENV{SPOTON_LOG_FILE} = $stderrFile if $stderrFile;
 	}
 
 	eval {
@@ -218,7 +219,10 @@ sub start {
 		) );
 	};
 
-	delete $ENV{SPOTON_PORT_FILE} if main::ISWINDOWS;
+	if (main::ISWINDOWS) {
+		delete $ENV{SPOTON_PORT_FILE};
+		delete $ENV{SPOTON_LOG_FILE};
+	}
 
 	delete $ENV{RUST_LOG};
 
