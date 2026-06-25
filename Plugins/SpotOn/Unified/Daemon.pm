@@ -168,7 +168,6 @@ sub start {
 			DIR => catdir($serverPrefs->get('cachedir'), 'spoton'),
 			UNLINK => 0,
 		);
-		close($port_fh);
 	};
 	if ($@ || !$port_tmpfile) {
 		$log->error("tempfile() failed for port capture: $@");
@@ -199,14 +198,27 @@ sub start {
 
 	$ENV{RUST_LOG} = $diagMode ? 'spoton=debug,librespot=info' : 'spoton=info,librespot=warn';
 
+	close($port_fh);
+
+	# On Windows services, Proc::Background's stdout/stderr redirect fails
+	# because STDOUT/STDERR have no valid file descriptors. Use the
+	# SPOTON_PORT_FILE env var to tell the daemon to write its port to a file
+	# directly, bypassing stdout capture entirely.
+	if (main::ISWINDOWS) {
+		$ENV{SPOTON_PORT_FILE} = $port_tmpfile;
+	}
+
 	eval {
 		$self->_proc( Proc::Background->new(
-			{ 'die_upon_destroy' => 1, stdout => $port_tmpfile,
-			  ($stderr_fh ? (stderr => $stderr_fh) : ()) },
+			{ 'die_upon_destroy' => 1,
+			  (main::ISWINDOWS ? () : (stdout => $port_tmpfile)),
+			  ($stderr_fh && !main::ISWINDOWS ? (stderr => $stderr_fh) : ()) },
 			$helperPath,
 			@helperArgs,
 		) );
 	};
+
+	delete $ENV{SPOTON_PORT_FILE} if main::ISWINDOWS;
 
 	delete $ENV{RUST_LOG};
 

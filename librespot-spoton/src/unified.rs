@@ -842,9 +842,17 @@ pub async fn run_unified(
     //    "stream_port" — NOT "unified_port" — Perl Daemon code matches `stream_port=(\d+)`.
     let listener = TcpListener::bind("0.0.0.0:0").await?;
     let port = listener.local_addr()?.port();
-    println!("stream_port={}", port);
+    let port_announcement = format!("stream_port={}", port);
+    println!("{}", port_announcement);
     // Explicit flush — stdout is pipe-buffered; without this Perl IO::Select times out.
     std::io::stdout().flush()?;
+    // SPOTON_PORT_FILE: Windows services have broken stdout piping in Proc::Background.
+    // When this env var is set, write the port to a file directly.
+    if let Ok(port_file) = std::env::var("SPOTON_PORT_FILE") {
+        if let Ok(mut f) = std::fs::File::create(&port_file) {
+            let _ = writeln!(f, "{}", port_announcement);
+        }
+    }
 
     // 5. Shared state.
     let mode_state = Arc::new(tokio::sync::Mutex::new(ActiveMode::Idle));
