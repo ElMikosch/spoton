@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpotOn Status</title>
+<style>
+body {
+    background: #1a1a1a;
+    color: #e0e0e0;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 24px 16px;
+}
+header {
+    max-width: 900px;
+    margin: 0 auto 16px;
+}
+header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+header p {
+    font-size: 13px;
+    opacity: 0.5;
+    margin: 0 0 8px;
+}
+#poll-indicator {
+    color: #1db954;
+    font-size: 13px;
+    opacity: 0.7;
+}
+.poll-flash {
+    transition: opacity 0.2s;
+}
+#last-updated {
+    font-size: 13px;
+    opacity: 0.5;
+    margin-left: 16px;
+}
+#error-banner {
+    display: none;
+    background: rgba(229,57,53,0.15);
+    color: #e53935;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    text-align: center;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+@media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+}
+.card {
+    background: #242424;
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.card h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 14px;
+}
+.metric-label {
+    opacity: 0.6;
+    font-size: 13px;
+}
+.metric-value {
+    font-weight: 400;
+}
+.dot-alive { color: #1db954; }
+.dot-dead { color: #e53935; }
+.dot-unknown { color: rgba(224,224,224,0.3); }
+.error-row {
+    padding: 4px 0;
+    font-size: 13px;
+    border-left: 3px solid transparent;
+    padding-left: 8px;
+}
+.error-row--error { border-left-color: #e53935; }
+.error-row--warn { border-left-color: #f5a623; }
+.error-ts, .error-module {
+    font-family: monospace;
+    font-size: 13px;
+}
+.error-msg { margin-left: 8px; }
+.rate-limited { color: #f5a623; }
+.mono {
+    font-family: monospace;
+    font-size: 13px;
+}
+.muted { opacity: 0.5; }
+hr {
+    border: 0;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin: 8px 0;
+}
+footer {
+    text-align: center;
+    opacity: 0.4;
+    font-size: 13px;
+    margin-top: 24px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+</style>
+</head>
+<body>
+<div id="spoton-status">
+    <header>
+        <h1>SpotOn Status</h1>
+        <p>Plugin health &mdash; auto-updating every 5 seconds</p>
+        <span id="poll-indicator" class="poll-flash">&#9679; Live</span>
+        <span id="last-updated" class="muted"></span>
+    </header>
+
+    <div id="error-banner">Status unavailable &mdash; retrying.</div>
+
+    <div class="grid">
+        <div class="card" id="card-daemon">
+            <h2>Daemon Health</h2>
+            <div class="card-body" id="daemon-body"></div>
+        </div>
+        <div class="card" id="card-api">
+            <h2>API &amp; Tokens</h2>
+            <div class="card-body" id="api-body"></div>
+        </div>
+        <div class="card" id="card-errors">
+            <h2>Recent Errors</h2>
+            <div class="card-body" id="errors-body"></div>
+        </div>
+        <div class="card" id="card-system">
+            <h2>System Info</h2>
+            <div class="card-body" id="system-body"></div>
+        </div>
+    </div>
+
+    <footer id="footer-credits">SpotOn &mdash; Lyrion Music Server plugin</footer>
+</div>
+
+[% FILTER null %]
+<script>
+(function() {
+    var pollTimer;
+    var systemLoaded = false;
+
+    function formatUptime(s) {
+        if (s === null || s === undefined || s === 0) return '—';
+        var days = Math.floor(s / 86400);
+        var hours = Math.floor((s % 86400) / 3600);
+        var minutes = Math.floor((s % 3600) / 60);
+        if (days > 0) return days + 'd ' + hours + 'h ' + minutes + 'm';
+        return hours + 'h ' + minutes + 'm';
+    }
+
+    function val(v) {
+        if (v === null || v === undefined) return '—';
+        return String(v);
+    }
+
+    function createMetricRow(label, value, extraClass) {
+        var row = document.createElement('div');
+        row.className = 'metric-row';
+        var lbl = document.createElement('span');
+        lbl.className = 'metric-label';
+        lbl.textContent = label;
+        var vl = document.createElement('span');
+        vl.className = 'metric-value';
+        if (extraClass) vl.className += ' ' + extraClass;
+        vl.textContent = value;
+        row.appendChild(lbl);
+        row.appendChild(vl);
+        return row;
+    }
+
+    function renderDaemon(data) {
+        var body = document.getElementById('daemon-body');
+        body.textContent = '';
+
+        if (!data.daemons || data.daemons.length === 0) {
+            var msg = document.createElement('div');
+            msg.className = 'muted';
+            msg.textContent = 'No players configured.';
+            body.appendChild(msg);
+            return;
+        }
+
+        for (var i = 0; i < data.daemons.length; i++) {
+            if (i > 0) {
+                body.appendChild(document.createElement('hr'));
+            }
+            var d = data.daemons[i];
+
+            var nameRow = document.createElement('div');
+            nameRow.className = 'metric-row';
+            var nameLbl = document.createElement('span');
+            nameLbl.className = 'metric-label';
+            var dot = document.createElement('span');
+            dot.className = d.alive ? 'dot-alive' : 'dot-dead';
+            dot.textContent = '● ';
+            nameLbl.appendChild(dot);
+            var nameText = document.createTextNode(d.name || d.mac);
+            nameLbl.appendChild(nameText);
+            var statusVal = document.createElement('span');
+            statusVal.className = 'metric-value';
+            statusVal.textContent = d.alive ? 'alive' : 'dead';
+            nameRow.appendChild(nameLbl);
+            nameRow.appendChild(statusVal);
+            body.appendChild(nameRow);
+
+            body.appendChild(createMetricRow('PID', d.pid ? String(d.pid) : '—', 'mono'));
+            body.appendChild(createMetricRow('Uptime', formatUptime(d.uptime)));
+            body.appendChild(createMetricRow('Connect', d.connectEnabled ? 'Yes' : 'No'));
+            body.appendChild(createMetricRow('Stream Port', d.streamPort != null ? String(d.streamPort) : '—', 'mono'));
+        }
+    }
+
+    function renderApi(data) {
+        var body = document.getElementById('api-body');
+        body.textContent = '';
+
+        var api = data.api || {};
+        var tokens = data.tokens || {};
+
+        body.appendChild(createMetricRow('Total Requests', val(api.apiRequestCount)));
+        body.appendChild(createMetricRow('In-flight', val(api.inflightCount)));
+        body.appendChild(createMetricRow('429 Responses', val(api.api429Count)));
+
+        var rlOwnVal = api.rateLimitedOwn ? 'Yes' : 'No';
+        var rlOwnClass = api.rateLimitedOwn ? 'rate-limited' : '';
+        body.appendChild(createMetricRow('Rate Limited Own', rlOwnVal, rlOwnClass));
+
+        var rlBundledVal = api.rateLimitedBundled ? 'Yes' : 'No';
+        var rlBundledClass = api.rateLimitedBundled ? 'rate-limited' : '';
+        body.appendChild(createMetricRow('Rate Limited Bundled', rlBundledVal, rlBundledClass));
+
+        body.appendChild(createMetricRow('Active Accounts', val(tokens.accountCount)));
+        body.appendChild(createMetricRow('Discovery Running', tokens.discoveryRunning ? 'Yes' : 'No'));
+    }
+
+    function renderErrors(data) {
+        var body = document.getElementById('errors-body');
+        body.textContent = '';
+
+        if (!data.errors || data.errors.length === 0) {
+            var msg = document.createElement('div');
+            msg.className = 'muted';
+            msg.textContent = 'No errors recorded.';
+            body.appendChild(msg);
+            return;
+        }
+
+        for (var i = 0; i < data.errors.length; i++) {
+            var e = data.errors[i];
+            var row = document.createElement('div');
+            row.className = 'error-row';
+            if (e.level === 'error') row.className += ' error-row--error';
+            else if (e.level === 'warn') row.className += ' error-row--warn';
+
+            var ts = document.createElement('span');
+            ts.className = 'error-ts';
+            ts.textContent = new Date(e.ts * 1000).toLocaleTimeString();
+            row.appendChild(ts);
+
+            var mod = document.createElement('span');
+            mod.className = 'error-module';
+            mod.textContent = ' [' + (e.module || '') + ']';
+            row.appendChild(mod);
+
+            var msg = document.createElement('span');
+            msg.className = 'error-msg';
+            var fullMsg = e.message || '';
+            msg.textContent = fullMsg.length > 80 ? fullMsg.substring(0, 80) + '…' : fullMsg;
+            if (fullMsg.length > 80) msg.title = fullMsg;
+            row.appendChild(msg);
+
+            body.appendChild(row);
+        }
+    }
+
+    function renderSystem(data) {
+        if (systemLoaded) return;
+        systemLoaded = true;
+
+        var body = document.getElementById('system-body');
+        body.textContent = '';
+
+        var sys = data.system || {};
+
+        body.appendChild(createMetricRow('Plugin Version', sys.pluginVersion ? 'v' + sys.pluginVersion : '—'));
+        body.appendChild(createMetricRow('Binary Version', sys.binaryVersion ? 'v' + sys.binaryVersion : '—'));
+        body.appendChild(createMetricRow('LMS Version', val(sys.lmsVersion)));
+        body.appendChild(createMetricRow('Perl Version', val(sys.perlVersion)));
+        body.appendChild(createMetricRow('OS', val(sys.os)));
+
+        var footer = document.getElementById('footer-credits');
+        footer.textContent = 'SpotOn v' + (sys.pluginVersion || '?') + ' — Lyrion Music Server plugin';
+    }
+
+    function render(data) {
+        renderDaemon(data);
+        renderApi(data);
+        renderErrors(data);
+        renderSystem(data);
+    }
+
+    function poll() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/plugins/SpotOn/status/data', true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    render(data);
+                    document.getElementById('error-banner').style.display = 'none';
+
+                    var indicator = document.getElementById('poll-indicator');
+                    indicator.style.opacity = '1';
+                    setTimeout(function() { indicator.style.opacity = '0.7'; }, 200);
+
+                    var updated = document.getElementById('last-updated');
+                    updated.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                } catch(e) {
+                    document.getElementById('error-banner').style.display = 'block';
+                }
+            } else {
+                document.getElementById('error-banner').style.display = 'block';
+            }
+        };
+        xhr.onerror = function() {
+            document.getElementById('error-banner').style.display = 'block';
+        };
+        xhr.send();
+    }
+
+    function startPolling() {
+        clearInterval(pollTimer);
+        poll();
+        pollTimer = setInterval(poll, 5000);
+        document.getElementById('poll-indicator').style.display = '';
+    }
+
+    function stopPolling() {
+        clearInterval(pollTimer);
+        document.getElementById('poll-indicator').style.display = 'none';
+    }
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopPolling();
+        } else {
+            startPolling();
+        }
+    });
+
+    startPolling();
+})();
+</script>
+[% END %]
+</body>
+</html>
