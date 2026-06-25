@@ -39,6 +39,10 @@ my $cache = Slim::Utils::Cache->new('spoton', 4);
 # to prevent stale counter after plugin reload (Pitfall 2 from RESEARCH.md).
 my $inflightCount = 0;
 
+# API telemetry counters (Phase 32 — Status Page)
+my $apiRequestCount = 0;
+my $api429Count     = 0;
+
 # me/* family guard — ALWAYS checked first (D-05)
 # Source: Spotty-NG API.pm:112
 my $_meFamilyRegex = qr{^me(?:$|/|\?)};
@@ -64,11 +68,26 @@ my @KNOWN_DEPRECATED_FAMILIES = (
 # ============================================================
 
 # reset($class)
-# Resets the inflight counter. Called by Plugin.pm::initPlugin on startup.
+# Resets the inflight and telemetry counters. Called by Plugin.pm::initPlugin on startup.
 sub reset {
     my ($class) = @_;
-    $inflightCount = 0;
-    main::INFOLOG && $log->info("Client: inflightCount reset to 0");
+    $inflightCount  = 0;
+    $apiRequestCount = 0;
+    $api429Count     = 0;
+    main::INFOLOG && $log->info("Client: inflightCount, apiRequestCount, api429Count reset to 0");
+}
+
+# statusSnapshot($class)
+# Returns a hashref with current API telemetry for the Status Page.
+sub statusSnapshot {
+    my $class = shift;
+    return {
+        inflightCount      => $inflightCount,
+        apiRequestCount    => $apiRequestCount,
+        api429Count        => $api429Count,
+        rateLimitedOwn     => $cache->get('spoton_rate_limit_own')     ? 1 : 0,
+        rateLimitedBundled => $cache->get('spoton_rate_limit_bundled') ? 1 : 0,
+    };
 }
 
 # getMe($class, $accountId, $cb)
@@ -544,6 +563,7 @@ sub _request {
     # Step 4: Increment inflight counter and wrap $cb in double-callback guard.
     # $inflightCount is decremented exactly once per request by $userCb.
     $inflightCount++;
+    $apiRequestCount++;
     my $userCbCalled = 0;
     my $userCb = sub {
         return if $userCbCalled++;
@@ -696,6 +716,10 @@ sub _doFlavouredRequest {
                         ? 'spoton_rate_limit_bundled'
                         : 'spoton_rate_limit_own';
                     $cache->set($rlKey, 1, $retryAfter);
+                    $api429Count++;
+                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                        Plugins::SpotOn::Status->recordError('warn', 'API', "429 on $cleanPath");
+                    }
                     $log->warn("Client: 429 rate limited [flavor=$flavor] for ${retryAfter}s on $cleanPath");
                     $log->warn("[DIAG] api_429: endpoint=$cleanPath flavor=$flavor retry_after=${retryAfter}s") if $prefs->get('diagnosticMode');
                     $userCb->(undef, { error => 'rate_limited', code => 429 });

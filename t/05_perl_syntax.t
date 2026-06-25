@@ -21,6 +21,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Settings/Callback.pm",
     "$project_dir/Plugins/SpotOn/Connect.pm",
     "$project_dir/Plugins/SpotOn/Connect/Daemon.pm",
+    "$project_dir/Plugins/SpotOn/Status.pm",
 );
 
 # Check which files actually exist
@@ -250,6 +251,13 @@ sub can     { 1 }
 1;
 END
 
+# Stub: Slim::Web::HTTP (needed by Status.pm _jsonResponse)
+write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
+package Slim::Web::HTTP;
+sub addHTTPResponse { }
+1;
+END
+
 # Stub: Slim::Web::HTTP::CSRF
 write_stub($stub_dir, 'Slim::Web::HTTP::CSRF', <<'END');
 package Slim::Web::HTTP::CSRF;
@@ -258,10 +266,11 @@ sub protectURI  { $_[1] }
 1;
 END
 
-# Stub: Slim::Web::Pages (needed by Settings/Callback.pm)
+# Stub: Slim::Web::Pages (needed by Settings/Callback.pm and Status.pm)
 write_stub($stub_dir, 'Slim::Web::Pages', <<'END');
 package Slim::Web::Pages;
 sub addPageFunction { }
+sub addRawFunction  { }
 1;
 END
 

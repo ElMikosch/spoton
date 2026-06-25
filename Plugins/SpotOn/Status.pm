@@ -107,7 +107,7 @@ sub _collectDaemons {
             pid            => $helper->pid || 0,
             uptime         => int($helper->uptime || 0),
             connectEnabled => $helper->_connectEnabled ? 1 : 0,
-            streamPort     => $helper->_streamPort || JSON::null,
+            streamPort     => $helper->_streamPort || undef,
         };
     }
 
