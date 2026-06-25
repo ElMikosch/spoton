@@ -265,9 +265,21 @@ sub _killOrphanedProcesses {
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
-                    $name =~ s/[^A-Za-z0-9._-]//g;    # CR-02: allowlist not blocklist — prevents shell injection via &, |, ;
+                    $name =~ s/[^A-Za-z0-9._-]//g;
                     if ($name) {
-                        system(qq{taskkill /IM "$name" /F 1>nul 2>&1});
+                        my %unifiedPids;
+                        if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
+                            %unifiedPids = map { $_ => 1 }
+                                Plugins::SpotOn::Unified::DaemonManager->helperPids();
+                        }
+                        my @pids = map { /^\s*(\d+)/ ? $1 : () }
+                            `wmic process where "name='$name'" get ProcessId 2>nul`;
+                        for my $pid (@pids) {
+                            next if $activePids{$pid};
+                            next if $unifiedPids{$pid};
+                            kill 'KILL', $pid;
+                            main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid (Windows)");
+                        }
                     }
                 } else {
                     # CR-01: Use PID-based kill to avoid killing active transcoding processes.

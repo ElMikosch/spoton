@@ -391,7 +391,7 @@ sub _fetchKeymasterToken {
     }
     my $safeHelper = $escFn->($helper);
     my $safeDir    = $escFn->($cacheDir);
-    my $stderr     = main::ISWINDOWS ? '2>&1' : '2>&1';
+    my $stderr     = '2>&1';
 
     my $cmd;
     if ($flavor eq 'bundled') {

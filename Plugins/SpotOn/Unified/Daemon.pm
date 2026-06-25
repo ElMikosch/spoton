@@ -7,7 +7,7 @@ use base qw(Slim::Utils::Accessor);
 
 use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
-use IO::Select;
+use File::Temp qw(tempfile);
 use MIME::Base64 qw(encode_base64);
 
 use Slim::Utils::Log;
@@ -160,9 +160,13 @@ sub start {
 				$serverPrefs->get('password')), '');
 	}
 
-	# Pipe for synchronous port capture (CON-16)
-	pipe(my $port_r, my $port_w)
-		or do { $log->error("pipe() failed for unified port capture: $!"); return; };
+	# Tempfile for synchronous port capture (cross-platform: IO::Select on pipes
+	# fails on Windows where select() only works on sockets).
+	my ($port_fh, $port_tmpfile) = tempfile('spoton-port-XXXX',
+		DIR => catdir($serverPrefs->get('cachedir'), 'spoton'),
+		UNLINK => 1,
+	);
+	close($port_fh);
 
 	# T-29-09: stderr log only when diagnosticMode is on; /dev/null otherwise.
 	# Append mode (>>) matches Browse::Daemon pattern — preserves logs across restarts.
@@ -190,7 +194,7 @@ sub start {
 
 	eval {
 		$self->_proc( Proc::Background->new(
-			{ 'die_upon_destroy' => 1, stdout => $port_w,
+			{ 'die_upon_destroy' => 1, stdout => $port_tmpfile,
 			  ($stderr_fh ? (stderr => $stderr_fh) : ()) },
 			$helperPath,
 			@helperArgs,
@@ -202,14 +206,9 @@ sub start {
 	# Re-tie STDERR to LMS log trapper immediately after spawn
 	tie *STDERR, 'Slim::Utils::Log::Trapper' if $had_stderr_tie;
 
-	# CRITICAL (Pitfall 5): close write-end in parent BEFORE IO::Select — otherwise
-	# readline blocks forever because write-end remains open in parent.
-	# $stderr_fh intentionally NOT closed — must remain open for lifetime of process.
-	close($port_w);
-
 	if ($@ || !$self->_proc) {
 		$log->warn("Failed to launch SpotOn Unified daemon: $@");
-		close($port_r);
+		unlink $port_tmpfile;
 		$self->_streamPort(undef);
 		return;
 	}
@@ -217,15 +216,24 @@ sub start {
 	# Store stderr file handle as accessor to prevent premature GC (Pitfall 3)
 	$self->_stderrFh($stderr_fh) if $stderr_fh;
 
-	# Synchronous port read with 5s timeout (avoids SIGALRM in LMS event loop).
-	# Unified daemon emits stream_port=N (same key as Connect daemon — Pitfall 4).
+	# Poll tempfile for port announcement (cross-platform, 5s timeout).
+	# Unified daemon writes stream_port=N to stdout which Proc::Background
+	# redirects to the tempfile.
 	my $portWaitStart = Time::HiRes::time();
 	my $port_line;
-	my $sel = IO::Select->new($port_r);
-	if ($sel->can_read(5)) {
-		$port_line = readline($port_r);
+	for (1..50) {
+		if (-s $port_tmpfile) {
+			if (open(my $pfh, '<', $port_tmpfile)) {
+				$port_line = readline($pfh);
+				close($pfh);
+				last if defined $port_line && $port_line =~ /stream_port=\d+/;
+				undef $port_line;
+			}
+		}
+		last unless $self->_proc && $self->_proc->alive;
+		Time::HiRes::usleep(100_000);
 	}
-	close($port_r);
+	unlink $port_tmpfile;
 
 	if (!defined $port_line || $port_line !~ /^stream_port=(\d+)/) {
 		my $reason = defined $port_line ? "unexpected output: $port_line" : "timeout";
