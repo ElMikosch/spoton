@@ -27,6 +27,14 @@ sub new {
     my $class = shift;
 
     require Slim::Web::Pages;
+
+    # Register status.html as a page function so LMS serves and TT-processes it
+    Slim::Web::Pages->addPageFunction(
+        'plugins/SpotOn/status.html',
+        \&_statusPageHandler
+    );
+
+    # Register JSON data endpoint
     Slim::Web::Pages->addRawFunction(
         'plugins/SpotOn/status/data',
         \&_statusDataHandler
@@ -51,6 +59,15 @@ sub recordError {
 
     # Trim oldest entries beyond MAX_ERROR_HISTORY
     shift @_errorHistory while scalar @_errorHistory > MAX_ERROR_HISTORY;
+}
+
+# ============================================================
+# Handler: /plugins/SpotOn/status.html (TT page)
+# ============================================================
+
+sub _statusPageHandler {
+    my ($client, $params) = @_;
+    return Slim::Web::HTTP::filltemplatefile('plugins/SpotOn/status.html', $params);
 }
 
 # ============================================================
