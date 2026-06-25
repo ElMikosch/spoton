@@ -73,11 +73,17 @@ async fn main() {
     // When set, write logs to this file instead of stderr.
     if let Ok(log_path) = std::env::var("SPOTON_LOG_FILE") {
         use std::fs::OpenOptions;
-        let file = OpenOptions::new().create(true).append(true).open(&log_path)
-            .expect("Cannot open SPOTON_LOG_FILE");
-        env_logger::Builder::from_default_env()
-            .target(env_logger::Target::Pipe(Box::new(file)))
-            .init();
+        match OpenOptions::new().create(true).append(true).open(&log_path) {
+            Ok(file) => {
+                env_logger::Builder::from_default_env()
+                    .target(env_logger::Target::Pipe(Box::new(file)))
+                    .init();
+            }
+            Err(e) => {
+                env_logger::init();
+                log::warn!("Cannot open SPOTON_LOG_FILE '{}': {} — falling back to stderr", log_path, e);
+            }
+        }
     } else {
         env_logger::init();
     }

@@ -384,7 +384,7 @@ sub _fetchKeymasterToken {
     my ($q, $escFn);
     if (main::ISWINDOWS) {
         $q = '"';
-        $escFn = sub { (my $s = $_[0]) =~ s/"/\\"/g; $s };
+        $escFn = sub { my $s = $_[0]; $s =~ s/"/\\"/g; $s =~ s/%/%%/g; $s };
     } else {
         $q = "'";
         $escFn = sub { (my $s = $_[0]) =~ s/'/'\\''/g; $s };
