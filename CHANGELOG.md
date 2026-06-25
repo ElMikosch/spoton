@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.8] - 2026-06-25
+### Added
+- **Troubleshooting guide**: setup page links to TROUBLESHOOTING.md for Docker/VLAN/mDNS issues with manual credential transfer instructions (11 languages)
+
+### Fixed
+- **Windows: static VCRUNTIME**: Visual C++ Runtime is now statically linked — no separate redistributable install needed
+- **Windows: log file fallback**: daemon falls back to stderr logging if SPOTON_LOG_FILE can't be opened (prevents crash-loop on permissions errors)
+- **Windows: shell escaping**: escape `%` characters in cmd.exe commands to prevent environment variable injection
+- **Windows: orphan cleanup**: use `tasklist` instead of PowerShell (avoids enterprise execution policy restrictions)
+
 ## [2.0.7] - 2026-06-25
 ### Fixed
 - **Windows daemon startup**: Proc::Background stdout/stderr redirect fails on Windows services (no valid STDOUT/STDERR file descriptors). Port capture now uses `SPOTON_PORT_FILE` env var — daemon writes port directly to a file. Daemon logging uses `SPOTON_LOG_FILE` env var — logs written to file instead of stderr. Both mechanisms bypass Proc::Background handle redirect entirely. (#40)
