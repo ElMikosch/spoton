@@ -24,6 +24,11 @@ our %_pendingRefetch;
 # Track Connect URLs translated to Browse by getNextTrack
 my %_translatedConnectUrls;
 
+# Per-client retry state for transient Browse daemon 404s (audio-key throttle)
+use constant MAX_BROWSE_404_RETRIES => 3;
+use constant BROWSE_404_RETRY_DELAY => 2;   # seconds between retries
+my %_browse404Retries;  # "$clientId|$trackUrl" => attempt_count
+
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
@@ -183,7 +188,8 @@ sub requestString {
 
 # handleDirectError($class, $client, $url, $response, $status_line)
 # Called by Squeezebox2::directHeaders when the direct stream returns a non-2xx/3xx status.
-# For Browse daemon 404: skip to next track immediately instead of LMS retry loop.
+# For Browse daemon 404: retry up to MAX_BROWSE_404_RETRIES times with a delay before skipping.
+# Transient 404s (audio-key throttle from Spotify) often resolve within seconds.
 sub handleDirectError {
     my ($class, $client, $url, $response, $status_line) = @_;
 
@@ -191,6 +197,7 @@ sub handleDirectError {
         my $streaming = $client->streamingSong();
         my $playing   = $client->playingSong();
         if ($streaming && $playing && $streaming != $playing) {
+            # Prefetch context: current track still playing, schedule skip at track end
             my $remaining = ($client->controller()->playingSongDuration() || 0)
                           - ($client->controller()->playingSongElapsed() || 0);
             $remaining = 1 if $remaining < 1;
@@ -199,19 +206,49 @@ sub handleDirectError {
             Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $remaining, \&_skipUnavailable);
             return;
         }
-        $log->warn("Browse daemon 404 for $url — skipping to next track");
+
+        # Play context: retry before skipping (audio-key throttle resilience)
+        my $retryKey = $client->id . '|' . $url;
+        my $attempt  = ($_browse404Retries{$retryKey} || 0) + 1;
+        $_browse404Retries{$retryKey} = $attempt;
+
+        if ($attempt <= MAX_BROWSE_404_RETRIES) {
+            $log->warn("Browse daemon 404 for $url — retry $attempt/" . MAX_BROWSE_404_RETRIES
+                      . " in " . BROWSE_404_RETRY_DELAY . "s");
+            Slim::Utils::Timers::killTimers($client, \&_retryStream);
+            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + BROWSE_404_RETRY_DELAY,
+                \&_retryStream);
+            return;
+        }
+
+        # Exhausted retries — skip to next track and clean up
+        $log->warn("Browse daemon 404 for $url — $attempt attempts exhausted, skipping to next track");
+        delete $_browse404Retries{$retryKey};
+        Slim::Utils::Timers::killTimers($client, \&_retryStream);
         Slim::Utils::Timers::killTimers($client, \&_skipUnavailable);
-        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.1, sub {
-            $_[0]->execute(['playlist', 'index', '+1']);
-        });
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.1, \&_skipUnavailable);
         return;
     }
 
     $client->failedDirectStream($status_line);
 }
 
+# _retryStream($client)
+# Re-triggers playback of the current track after a transient 404.
+# Uses 'playlist index' with the current index to force a fresh stream attempt,
+# which re-enters canDirectStream → handleDirectError if still 404.
+sub _retryStream {
+    my $client = shift;
+    my $idx = Slim::Player::Playlist::shuffleIndex($client) // 0;
+    $log->info("Retrying stream for playlist index $idx");
+    $client->execute(['playlist', 'index', $idx]);
+}
+
 sub _skipUnavailable {
     my $client = shift;
+    # Clean up any leftover retry state for this client
+    my $prefix = $client->id . '|';
+    delete @_browse404Retries{ grep { index($_, $prefix) == 0 } keys %_browse404Retries };
     $client->execute(['playlist', 'index', '+1']);
 }
 
