@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.7] - 2026-06-25
+### Fixed
+- **Windows daemon startup**: Proc::Background stdout/stderr redirect fails on Windows services (no valid STDOUT/STDERR file descriptors). Port capture now uses `SPOTON_PORT_FILE` env var — daemon writes port directly to a file. Daemon logging uses `SPOTON_LOG_FILE` env var — logs written to file instead of stderr. Both mechanisms bypass Proc::Background handle redirect entirely. (#40)
+- **Windows orphan cleanup**: replaced deprecated `wmic` with PowerShell `Get-Process` + PID-based filtering
+
 ## [2.0.6] - 2026-06-25
 ### Fixed
 - **Windows daemon startup**: replaced pipe+IO::Select with cross-platform tempfile polling for port capture — IO::Select fails on pipe filehandles on Windows where select() only works on sockets (#40)
