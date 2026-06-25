@@ -55,7 +55,8 @@ my @KNOWN_DEPRECATED_FAMILIES = (
     qr{^users/[^/?]+/playlists\b},
     qr{^artists/[^/?]+/top-tracks\b},
     qr{^artists/[^/?]+/related-artists\b},
-    qr{^playlists/37i9[A-Za-z0-9]+\b},  # Curated Spotify playlists (spoton_rate_limit_own / spoton_rate_limit_bundled)
+    qr{^playlists/37i9[A-Za-z0-9]+\b},
+    qr{^search\b},
 );
 
 # ============================================================
@@ -92,7 +93,7 @@ sub search {
         _accountId => $accountId,
         q          => $params->{q} // '',
         type       => $params->{type}   // 'track,album,artist,playlist',
-        limit      => $params->{limit}  // 10,
+        limit      => $params->{limit}  // 50,
         offset     => $params->{offset} // 0,
     }, $cb);
 }

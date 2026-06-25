@@ -1696,7 +1696,7 @@ sub _podcastSearchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'show,episode',
-        limit  => 10,
+        limit  => 50,
         offset => 0,
     }, sub {
         my $data = shift;
@@ -1749,13 +1749,10 @@ sub _podcastSearchTypeFeed {
 
     my $accountId = _getAccountId($client);
 
-    # Dev Mode: max 10 results per type. Always fetch the full page (offset=0, limit=10)
-    # and let LMS handle item selection. Using $args->{index} as API offset causes
-    # wrong-item-on-click when Material Skin re-requests with index=N, quantity=1.
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 10,
+        limit  => 50,
         offset => 0,
     }, sub {
         my $data = shift;
@@ -1807,7 +1804,7 @@ sub _searchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'track,album,artist,playlist',
-        limit  => 10,
+        limit  => 50,
         offset => 0,
     }, sub {
         my $data = shift;
@@ -1891,12 +1888,10 @@ sub _searchTypeFeed {
 
     my $accountId = _getAccountId($client);
 
-    # Dev Mode: max 10 results per type. Always fetch full page (offset=0, limit=10).
-    # Same fix as _podcastSearchTypeFeed: prevents wrong-item-on-click.
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 10,
+        limit  => 50,
         offset => 0,
     }, sub {
         my $data = shift;
@@ -1915,15 +1910,17 @@ sub _searchTypeFeed {
         my $typeData  = $data->{$key} || {};
         my $resultItems = $typeData->{items} || [];
 
+        my @valid = grep { $_->{name} && $_->{name} =~ /\S/ } @{$resultItems};
+
         my @items;
         if ($type eq 'track') {
-            @items = map { _trackItem($client, $_) } @{$resultItems};
+            @items = map { _trackItem($client, $_) } @valid;
         } elsif ($type eq 'album') {
-            @items = map { _albumItem($client, $_) } @{$resultItems};
+            @items = map { _albumItem($client, $_) } @valid;
         } elsif ($type eq 'artist') {
-            @items = map { _artistItem($client, $_) } @{$resultItems};
+            @items = map { _artistItem($client, $_) } @valid;
         } elsif ($type eq 'playlist') {
-            @items = map { _playlistItem($client, $_) } @{$resultItems};
+            @items = map { _playlistItem($client, $_) } @valid;
         }
 
         if (!@items) {
