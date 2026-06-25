@@ -101,4 +101,14 @@ Make sure you are running the latest SpotOn version. Earlier versions had Window
 
 Update via: LMS Settings → Plugins → Check for Updates → Restart LMS.
 
+### Windows Defender Firewall
+
+You may need to add the SpotOn binary to the Windows Defender Firewall allowed apps list. The binary is located at:
+
+```
+C:\ProgramData\Lyrion\Cache\InstalledPlugins\Plugins\SpotOn\Bin\x86_64-win64\spoton.exe
+```
+
+Go to: Windows Security → Firewall & network protection → Allow an app through firewall → Add the path above.
+
 If the issue persists after updating, collect a diagnostic bundle and open a [GitHub issue](https://github.com/stiefenm/spoton/issues).
