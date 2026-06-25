@@ -132,6 +132,8 @@ jobs:
 
       - name: Build binary
         working-directory: ${{ env.SOURCE_DIR }}
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --release
 
       - name: Verify binary
