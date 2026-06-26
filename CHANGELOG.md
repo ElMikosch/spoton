@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-06-26
+### Fixed
+- **Play-All performance**: large playlists and Liked Songs (1000+ tracks) no longer cause song skips or extreme slowdown. Metadata cache writes are now deferred to background batches of 50 per event-loop tick, preventing SQLite I/O from blocking audio streaming. Reduces API token usage from 200+ to <30 for 1633 Liked Songs. (#51)
+
 ## [2.1.1] - 2026-06-26
 ### Added
 - **Add to Playlist**: track and episode context menus now include "Add to Playlist" — shows a paginated picker of the user's Spotify playlists, selecting one adds the item via Spotify API with confirmation popup
