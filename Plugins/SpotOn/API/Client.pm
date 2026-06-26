@@ -666,6 +666,9 @@ sub _doFlavouredRequest {
                     $result = eval { from_json($content) };
                     if ($@) {
                         $log->error("Client: JSON parse error for $cleanPath [flavor=$flavor]: $@");
+                        if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                            Plugins::SpotOn::Status->recordError('error', 'API', "JSON parse error for $cleanPath");
+                        }
                         $userCb->(undef, { error => 'parse_error' });
                         return;
                     }
@@ -752,6 +755,9 @@ sub _doFlavouredRequest {
 
                 # T-02-10: Log only status code and path, never token value
                 $log->error("Client: HTTP $code error [flavor=$flavor] for $cleanPath: $error");
+                if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for $cleanPath");
+                }
                 $log->warn("[DIAG] api_error: endpoint=$cleanPath flavor=$flavor code=$code error=$error") if $prefs->get('diagnosticMode');
                 $userCb->(undef, { error => $error, code => $code });
             },

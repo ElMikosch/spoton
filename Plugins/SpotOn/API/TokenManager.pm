@@ -146,8 +146,12 @@ sub refreshAllTokens {
                 my $token = shift;
                 main::INFOLOG && $log->info("TokenManager: refreshed token for account $id (own)")
                     if $token;
-                $log->error("TokenManager: failed to refresh token for account $id (own)")
-                    unless $token;
+                unless ($token) {
+                    $log->error("TokenManager: failed to refresh token for account $id (own)");
+                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                        Plugins::SpotOn::Status->recordError('error', 'Token', "refresh failed for $id");
+                    }
+                }
             });
         }
     }
@@ -188,6 +192,9 @@ sub startDiscovery {
     my ($helperPath) = Plugins::SpotOn::Helper->get();
     unless ($helperPath) {
         $log->error("TokenManager: cannot start discovery — binary not found");
+        if ($INC{'Plugins/SpotOn/Status.pm'}) {
+            Plugins::SpotOn::Status->recordError('error', 'Token', "binary not found for discovery");
+        }
         return;
     }
 
@@ -215,6 +222,9 @@ sub startDiscovery {
 
     unless ($discoveryProc && $discoveryProc->alive()) {
         $log->error("TokenManager: discovery process failed to start");
+        if ($INC{'Plugins/SpotOn/Status.pm'}) {
+            Plugins::SpotOn::Status->recordError('error', 'Token', "discovery process failed to start");
+        }
         $discoveryProc = undef;
         return;
     }
@@ -422,6 +432,9 @@ sub _fetchKeymasterToken {
 
         if ($exit != 0 || !$output) {
             $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
+            if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                Plugins::SpotOn::Status->recordError('error', 'Token', "get-token failed for $accountId ($flavor)");
+            }
             $log->warn("[DIAG] token_refresh_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor exit=$exit") if $prefs->get('diagnosticMode');
             $cb->(undef);
             return;

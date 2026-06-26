@@ -171,6 +171,9 @@ sub start {
 	};
 	if ($@ || !$port_tmpfile) {
 		$log->error("tempfile() failed for port capture: $@");
+		if ($INC{'Plugins/SpotOn/Status.pm'}) {
+			Plugins::SpotOn::Status->recordError('error', 'Daemon', "tempfile failed: $@");
+		}
 		return;
 	}
 

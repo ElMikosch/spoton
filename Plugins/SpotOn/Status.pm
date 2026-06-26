@@ -113,9 +113,34 @@ sub _collectDaemons {
         my $mac  = $helper->mac;
         my $name = $mac;
 
-        # Resolve player name if available
-        my $client = Slim::Player::Client->getClient($mac);
+        my $client = Slim::Player::Client::getClient($mac);
         $name = $client->name if $client && $client->can('name');
+
+        my $playing      = 0;
+        my $currentTrack = undef;
+        my $syncGroup    = undef;
+
+        if ($client) {
+            # Playback status: only report when playing a SpotOn track
+            if ($client->isPlaying) {
+                my $url = Slim::Player::Playlist::url($client) || '';
+                if ($url =~ /^spoton:/) {
+                    $playing = 1;
+                    require Plugins::SpotOn::ProtocolHandler;
+                    my $meta = Plugins::SpotOn::ProtocolHandler->getMetadataFor($client, $url);
+                    $currentTrack = $meta->{title} if $meta && $meta->{title};
+                }
+            }
+
+            # Sync group members
+            if ($client->isSynced()) {
+                my @members;
+                for my $peer ($client->syncGroupActiveMembers()) {
+                    push @members, $peer->name if $peer->id ne $mac;
+                }
+                $syncGroup = \@members if @members;
+            }
+        }
 
         push @daemons, {
             mac            => $mac,
@@ -125,6 +150,9 @@ sub _collectDaemons {
             uptime         => int($helper->uptime || 0),
             connectEnabled => $helper->_connectEnabled ? 1 : 0,
             streamPort     => $helper->_streamPort // undef,
+            playing        => $playing,
+            currentTrack   => $currentTrack,
+            syncGroup      => $syncGroup,
         };
     }
 

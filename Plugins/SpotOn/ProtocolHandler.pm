@@ -223,6 +223,9 @@ sub handleDirectError {
 
         # Exhausted retries — skip to next track and clean up
         $log->warn("Browse daemon 404 for $url — $attempt attempts exhausted, skipping to next track");
+        if ($INC{'Plugins/SpotOn/Status.pm'}) {
+            Plugins::SpotOn::Status->recordError('warn', 'Browse', "404 retries exhausted, skipping track");
+        }
         delete $_browse404Retries{$retryKey};
         Slim::Utils::Timers::killTimers($client, \&_retryStream);
         Slim::Utils::Timers::killTimers($client, \&_skipUnavailable);

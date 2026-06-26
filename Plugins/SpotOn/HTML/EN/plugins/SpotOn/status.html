@@ -219,14 +219,34 @@ footer {
             dot.className = d.alive ? 'dot-alive' : 'dot-dead';
             dot.textContent = '● ';
             nameLbl.appendChild(dot);
-            var nameText = document.createTextNode(d.name || d.mac);
+            var playerName = (d.name && d.name !== d.mac) ? d.name : d.mac;
+            var nameText = document.createTextNode(playerName);
             nameLbl.appendChild(nameText);
+            if (d.name && d.name !== d.mac) {
+                var macSpan = document.createElement('span');
+                macSpan.className = 'muted mono';
+                macSpan.style.marginLeft = '8px';
+                macSpan.style.fontSize = '11px';
+                macSpan.textContent = d.mac;
+                nameLbl.appendChild(macSpan);
+            }
             var statusVal = document.createElement('span');
             statusVal.className = 'metric-value';
             statusVal.textContent = d.alive ? 'alive' : 'dead';
             nameRow.appendChild(nameLbl);
             nameRow.appendChild(statusVal);
             body.appendChild(nameRow);
+
+            if (d.syncGroup && d.syncGroup.length > 0) {
+                body.appendChild(createMetricRow('Group', d.syncGroup.join(', ')));
+            }
+
+            if (d.playing) {
+                var playText = d.currentTrack ? '▶ ' + d.currentTrack : '▶ Playing';
+                var playRow = createMetricRow('Playback', playText);
+                playRow.querySelector('.metric-value').style.color = '#1db954';
+                body.appendChild(playRow);
+            }
 
             body.appendChild(createMetricRow('PID', d.pid ? String(d.pid) : '—', 'mono'));
             body.appendChild(createMetricRow('Uptime', formatUptime(d.uptime)));
