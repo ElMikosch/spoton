@@ -12,7 +12,6 @@ use Slim::Utils::Versions;
 use Slim::Utils::Cache;
 use Slim::Utils::Network;
 use Digest::MD5 qw(md5_hex);
-use JSON::XS qw(encode_json);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -797,6 +796,7 @@ sub trackInfoURL {
             url         => \&Plugins::SpotOn::Plugin::SpotOnManageLike,
             passthrough => [{ trackUri => "spotify:track:$id", accountId => $accountId }],
             type        => 'link',
+            favorites   => 0,
         };
     } elsif ($accountId && $type eq 'episode') {
         if ($meta->{showId}) {
@@ -824,20 +824,17 @@ sub trackInfoURL {
 
 sub _cacheExplodedTrack {
     my ($trackUrl, $track, $albumName, $albumCover, $albumId) = @_;
-    my $artists   = $track->{artists} || [];
-    my $artistId  = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
-    my @named     = grep { $_->{id} && $_->{name} } @$artists;
-    my $artistIds = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
+    require Plugins::SpotOn::Plugin;
+    my %ids = Plugins::SpotOn::Plugin::_extractTrackIds($track);
+    $ids{albumId} = $albumId if defined $albumId;    # explicit album context overrides
     $cache->set('spoton_meta_' . md5_hex($trackUrl), {
         title     => $track->{name} || '',
-        artist    => join(', ', map { $_->{name} } @$artists),
+        artist    => join(', ', map { $_->{name} } @{ $track->{artists} || [] }),
         album     => $albumName || '',
         duration  => ($track->{duration_ms} || 0) / 1000,
         cover     => $albumCover || '/html/images/cover.png',
         icon      => $albumCover || '/html/images/cover.png',
-        artistId  => $artistId,
-        artistIds => $artistIds,
-        albumId   => $albumId,
+        %ids,
     }, 3600);
 }
 
@@ -954,11 +951,9 @@ sub _asyncRefetch {
             $new_meta{showId}   = $show->{id};
             $new_meta{showName} = $show->{name};
         } else {
-            my $artists   = $info->{artists} || [];
-            $new_meta{artistId} = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
-            my @named = grep { $_->{id} && $_->{name} } @$artists;
-            $new_meta{artistIds} = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
-            $new_meta{albumId} = ($info->{album} || {})->{id};
+            require Plugins::SpotOn::Plugin;
+            my %ids = Plugins::SpotOn::Plugin::_extractTrackIds($info);
+            @new_meta{keys %ids} = values %ids;
         }
 
         # Pitfall 3: for Connect URLs, store under Browse URL key so future lookups find it

@@ -458,6 +458,21 @@ sub _getAccountId {
 # Like / Unlike (Phase 15)
 # ============================================================
 
+# _extractTrackIds($track)
+# Extracts artist and album IDs from a Spotify track hash for cache storage.
+# Returns a hash with keys: artistId (first artist), artistIds (JSON-encoded array
+# of {id, name} pairs for all artists), albumId.
+# Single source of truth — called from all cache write sites (WR-01).
+sub _extractTrackIds {
+    my ($track) = @_;
+    my $artists   = $track->{artists} || [];
+    my $artistId  = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
+    my @named     = grep { $_->{id} && $_->{name} } @$artists;
+    my $artistIds = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
+    my $albumId   = ($track->{album} || {})->{id};
+    return (artistId => $artistId, artistIds => $artistIds, albumId => $albumId);
+}
+
 sub trackInfoMenu {
     my ($client, $url, $track, $remoteMeta, $tags) = @_;
 
@@ -474,7 +489,13 @@ sub trackInfoMenu {
     my $accountId = _getAccountId($client);
     return unless $accountId;
 
-    my $meta = $cache->get('spoton_meta_' . md5_hex($url)) || {};
+    # CR-01: Normalize URL for cache lookup — cache is keyed on spoton:// (with //)
+    # but LMS may pass spoton:track:ID (without //).
+    my $cacheUrl = $url;
+    if ($cacheUrl && $cacheUrl =~ m{^spoton:(?!//)}) {
+        $cacheUrl =~ s{^spoton:}{spoton://};
+    }
+    my $meta = $cache->get('spoton_meta_' . md5_hex($cacheUrl)) || {};
     my @items;
 
     if ($type eq 'track') {
@@ -498,6 +519,7 @@ sub trackInfoMenu {
             name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
             url         => \&SpotOnManageLike,
             passthrough => [{ trackUri => "spotify:track:$id", accountId => $accountId }],
+            type        => 'link',
             favorites   => 0,
         };
     } else {
@@ -774,11 +796,7 @@ sub _trackItem {
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
     # Store IDs so trackInfoMenu can build Artist/Album navigation without a live API call.
-    my $_artists    = $track->{artists} || [];
-    my $_artistId   = (@$_artists && $_artists->[0]{id}) ? $_artists->[0]{id} : undef;
-    my @_namedA     = grep { $_->{id} && $_->{name} } @$_artists;
-    my $_artistIds  = @_namedA ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @_namedA]) : undef;
-    my $_albumId    = ($track->{album} && $track->{album}{id}) ? $track->{album}{id} : undef;
+    my %trackIds = _extractTrackIds($track);
 
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title     => $title,
@@ -789,9 +807,7 @@ sub _trackItem {
         icon      => $image,
         bitrate   => __PACKAGE__->_bitrateForClient($client) . 'k',
         type      => __PACKAGE__->_typeString($client, 'Browse'),
-        artistId  => $_artistId,
-        artistIds => $_artistIds,
-        albumId   => $_albumId,
+        %trackIds,
     }, 604800);
 
     my %item = (
