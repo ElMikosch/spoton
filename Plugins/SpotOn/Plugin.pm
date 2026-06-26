@@ -1184,6 +1184,8 @@ sub _savedTracksFeed {
 
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
+        # GH-51: initialize cache immediately so concurrent browse requests can serve from it
+        $_playAllItemCache{$cacheKey} = { items => [], ts => time(), loading => 1 };
         _fetchAllPages({
             accountId    => $accountId,
             apiFn        => sub {
@@ -1192,15 +1194,25 @@ sub _savedTracksFeed {
             },
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
+            onPage       => sub {
+                my ($pageItems) = @_;
+                my @mapped = map  { _trackItem($client, $_->{track}) }
+                             grep { defined $_->{track} }
+                             @{$pageItems};
+                push @{ $_playAllItemCache{$cacheKey}{items} }, @mapped;
+                $_playAllItemCache{$cacheKey}{ts} = time();
+            },
             done         => sub {
-                my ($allItems) = @_;
-                my @items = map  { _trackItem($client, $_->{track}) }
-                            grep { defined $_->{track} }
-                            @{$allItems};
+                my $cached = $_playAllItemCache{$cacheKey};
+                if ($cached) {
+                    delete $cached->{loading};
+                    $cached->{ts} = time();
+                }
+                my @items = $cached ? @{ $cached->{items} } : ();
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 }
-                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
             },
         });
@@ -1212,8 +1224,23 @@ sub _savedTracksFeed {
             $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
             return;
         }
-        delete $_playAllItemCache{$cacheKey};
-        goto &_savedTracksFeed;  # re-enter with same @_ after cache eviction
+        if ($cached->{loading}) {
+            Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
+                offset => $offset,
+                limit  => $limit,
+            }, sub {
+                my $data = shift;
+                unless ($data) {
+                    $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                    return;
+                }
+                my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
+                $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+            });
+        } else {
+            delete $_playAllItemCache{$cacheKey};
+            goto &_savedTracksFeed;
+        }
     } else {
         Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
             offset => $offset,
@@ -1327,6 +1354,7 @@ sub _fetchAllPages {
     my $pageLimit    = $args->{pageLimit}    || 50;
     my $extractItems = $args->{extractItems} || sub { $_[0]->{items} || [] };
     my $done         = $args->{done};
+    my $onPage       = $args->{onPage};
 
     my @accumulated;
 
@@ -1342,6 +1370,7 @@ sub _fetchAllPages {
             }
             my $items = $extractItems->($data);
             push @accumulated, @{$items};
+            $onPage->($items) if $onPage;
 
             my $total = $data->{total} // 0;
             # T-25-01: stop if current page returned no items (prevents infinite loop)
