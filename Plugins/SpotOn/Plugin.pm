@@ -522,6 +522,13 @@ sub trackInfoMenu {
             type        => 'link',
             favorites   => 0,
         };
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ADD_TO_PLAYLIST'),
+            url         => \&SpotOnAddToPlaylist,
+            passthrough => [{ spotifyUri => "spotify:track:$id", accountId => $accountId }],
+            type        => 'link',
+            favorites   => 0,
+        };
     } else {
         if ($meta->{showId}) {
             push @items, {
@@ -537,6 +544,13 @@ sub trackInfoMenu {
                 favorites   => 0,
             };
         }
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ADD_TO_PLAYLIST'),
+            url         => \&SpotOnAddToPlaylist,
+            passthrough => [{ spotifyUri => "spotify:episode:$id", accountId => $accountId }],
+            type        => 'link',
+            favorites   => 0,
+        };
     }
 
     return @items ? \@items : undef;
@@ -697,6 +711,74 @@ sub _followCacheKey {
     my ($accountId, $showUri) = @_;
     my ($showId) = $showUri =~ /^spotify:show:(.+)$/;
     return "spoton_followed_${accountId}_${showId}";
+}
+
+
+# ============================================================
+# Add to Playlist (Phase 34)
+# ============================================================
+
+sub SpotOnAddToPlaylist {
+    my ($client, $cb, $params, $args) = @_;
+
+    my $spotifyUri = $args->{spotifyUri} // '';
+    return unless $spotifyUri =~ /^spotify:(track|episode):[A-Za-z0-9]+$/;
+    my $accountId = $args->{accountId};
+
+    my $offset = $args->{index} || 0;
+    my $qty    = $args->{quantity} || 200;
+    my $limit  = $qty > 50 ? 50 : $qty;
+
+    Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
+        offset => $offset,
+        limit  => $limit,
+    }, sub {
+        my ($data, $err) = @_;
+        unless ($data && $data->{items}) {
+            $cb->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            return;
+        }
+
+        my @items;
+        for my $pl (@{ $data->{items} }) {
+            next unless $pl && $pl->{id};
+            next if _isMadeForYou($pl);
+            push @items, {
+                name        => $pl->{name} // '',
+                url         => \&_doAddToPlaylist,
+                passthrough => [{ playlistId => $pl->{id}, playlistName => $pl->{name}, spotifyUri => $spotifyUri, accountId => $accountId }],
+                image       => _largestImage($pl->{images}),
+                line2       => ($pl->{owner} || {})->{display_name} // '',
+                type        => 'link',
+            };
+        }
+
+        $cb->({ items => \@items, offset => $offset, total => $data->{total} || 0 });
+    });
+}
+
+sub _doAddToPlaylist {
+    my ($client, $cb, $params, $args) = @_;
+
+    my $playlistId   = $args->{playlistId};
+    my $playlistName = $args->{playlistName} // '';
+    my $spotifyUri   = $args->{spotifyUri};
+    my $accountId    = $args->{accountId};
+
+    Plugins::SpotOn::API::Client->addToPlaylist($accountId, $playlistId, [$spotifyUri], sub {
+        my ($result, $err) = @_;
+        if ($err) {
+            $cb->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_ADD_TO_PLAYLIST_ERROR') }] });
+            return;
+        }
+        $client->showBriefly({
+            jive => { type => 'popupplay', text => [ sprintf(cstring($client, 'PLUGIN_SPOTON_ADDED_TO_PLAYLIST'), $playlistName) ] },
+        }) if $client;
+        $cb->({ items => [{
+            name       => sprintf(cstring($client, 'PLUGIN_SPOTON_ADDED_TO_PLAYLIST'), $playlistName),
+            nextWindow => 'grandparent',
+        }] });
+    });
 }
 
 
@@ -2264,6 +2346,8 @@ sub _albumTrackItem {
     # WR-01: Album name passed from caller; fallback to empty if undef (e.g., future callers).
     $albumName //= '';
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
+    # WR-01: include artist/album IDs so trackInfoMenu can build navigation items.
+    my %trackIds = _extractTrackIds($track);
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
         title    => $title,
         artist   => $artists,
@@ -2273,6 +2357,7 @@ sub _albumTrackItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
+        %trackIds,
     }, 604800);
 
     my %item = (

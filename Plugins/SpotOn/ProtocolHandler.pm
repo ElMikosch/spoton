@@ -798,6 +798,13 @@ sub trackInfoURL {
             type        => 'link',
             favorites   => 0,
         };
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ADD_TO_PLAYLIST'),
+            url         => \&Plugins::SpotOn::Plugin::SpotOnAddToPlaylist,
+            passthrough => [{ spotifyUri => "spotify:track:$id", accountId => $accountId }],
+            type        => 'link',
+            favorites   => 0,
+        };
     } elsif ($accountId && $type eq 'episode') {
         if ($meta->{showId}) {
             push @items, {
@@ -813,6 +820,13 @@ sub trackInfoURL {
                 type        => 'link',
             };
         }
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_ADD_TO_PLAYLIST'),
+            url         => \&Plugins::SpotOn::Plugin::SpotOnAddToPlaylist,
+            passthrough => [{ spotifyUri => "spotify:episode:$id", accountId => $accountId }],
+            type        => 'link',
+            favorites   => 0,
+        };
     }
 
     return {
