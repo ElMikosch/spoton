@@ -13,6 +13,7 @@ use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Timers;
 use Slim::Utils::Cache;
 use Digest::MD5 qw(md5_hex);
+use JSON::XS qw(encode_json);
 use Time::HiRes;
 use Time::Local qw(timelocal);
 use File::Basename;
@@ -165,7 +166,8 @@ sub initPlugin {
     # require (not use) — Slim::Menu::TrackInfo may not be available at compile time in all LMS contexts
     require Slim::Menu::TrackInfo;
     Slim::Menu::TrackInfo->registerInfoProvider( spotonTrackInfo => (
-        func => \&trackInfoMenu,
+        after => 'top',
+        func  => \&trackInfoMenu,
     ) );
 }
 
@@ -456,29 +458,66 @@ sub _getAccountId {
 # Like / Unlike (Phase 15)
 # ============================================================
 
-# trackInfoMenu($client, $url, $track, $remoteMeta, $tags)
-# LMS Track Info menu hook — registered via registerInfoProvider in initPlugin.
-# Called for every track's Info context menu (all sources, not just SpotOn).
-# Guards reject non-SpotOn URIs and clients with no active account.
-# Per D-01, D-02, D-04; T-15-01 URI validation.
 sub trackInfoMenu {
     my ($client, $url, $track, $remoteMeta, $tags) = @_;
 
-    my $trackUri;
+    my ($type, $id);
     if ($url && $url =~ m{^spoton:(?://)?track:([A-Za-z0-9]+)}) {
-        $trackUri = "spotify:track:$1";
+        $type = 'track';
+        $id   = $1;
+    } elsif ($url && $url =~ m{^spoton:(?://)?episode:([A-Za-z0-9]+)}) {
+        $type = 'episode';
+        $id   = $1;
     }
-    return unless $trackUri;
+    return unless $type;
 
     my $accountId = _getAccountId($client);
     return unless $accountId;
 
-    return {
-        name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
-        url         => \&SpotOnManageLike,
-        passthrough => [{ trackUri => $trackUri, accountId => $accountId }],
-        favorites   => 0,
-    };
+    my $meta = $cache->get('spoton_meta_' . md5_hex($url)) || {};
+    my @items;
+
+    if ($type eq 'track') {
+        if ($meta->{artistId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
+                url         => \&_artistFeed,
+                passthrough => [{ artistId => $meta->{artistId} }],
+                type        => 'link',
+            };
+        }
+        if ($meta->{albumId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ALBUM_VIEW'),
+                url         => \&_albumFeed,
+                passthrough => [{ albumId => $meta->{albumId} }],
+                type        => 'link',
+            };
+        }
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
+            url         => \&SpotOnManageLike,
+            passthrough => [{ trackUri => "spotify:track:$id", accountId => $accountId }],
+            favorites   => 0,
+        };
+    } else {
+        if ($meta->{showId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_SHOW_VIEW'),
+                url         => \&_showFeed,
+                passthrough => [{ showId => $meta->{showId}, showName => $meta->{showName} }],
+                type        => 'link',
+            };
+        }
+        push @items, {
+            name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+            url         => \&SpotOnManageFollow,
+            passthrough => [{ showUri => "spotify:show:$meta->{showId}", accountId => $accountId }],
+            favorites   => 0,
+        };
+    }
+
+    return @items ? \@items : undef;
 }
 
 # SpotOnManageLike($client, $cb, $params, $args)
@@ -734,15 +773,25 @@ sub _trackItem {
 
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
+    # Store IDs so trackInfoMenu can build Artist/Album navigation without a live API call.
+    my $_artists    = $track->{artists} || [];
+    my $_artistId   = (@$_artists && $_artists->[0]{id}) ? $_artists->[0]{id} : undef;
+    my @_namedA     = grep { $_->{id} && $_->{name} } @$_artists;
+    my $_artistIds  = @_namedA ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @_namedA]) : undef;
+    my $_albumId    = ($track->{album} && $track->{album}{id}) ? $track->{album}{id} : undef;
+
     $cache->set('spoton_meta_' . md5_hex($spoton_url), {
-        title    => $title,
-        artist   => $artist,
-        album    => $album,
-        duration => $duration,
-        cover    => $image,
-        icon     => $image,
-        bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
-        type     => __PACKAGE__->_typeString($client, 'Browse'),
+        title     => $title,
+        artist    => $artist,
+        album     => $album,
+        duration  => $duration,
+        cover     => $image,
+        icon      => $image,
+        bitrate   => __PACKAGE__->_bitrateForClient($client) . 'k',
+        type      => __PACKAGE__->_typeString($client, 'Browse'),
+        artistId  => $_artistId,
+        artistIds => $_artistIds,
+        albumId   => $_albumId,
     }, 604800);
 
     my %item = (

@@ -954,6 +954,10 @@ sub _fetchTrackMetadata {
         # Cache key uses connect-timestamp URL; spotifyUri enables future Browse translation.
         my $cacheUrl = $song->track->url || $song->streamUrl;
         if ($cacheUrl) {
+            my $artists   = $trackInfo->{artists} || [];
+            my $artistId  = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
+            my @named     = grep { $_->{id} && $_->{name} } @$artists;
+            my $artistIds = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
             $cache->set(
                 'spoton_meta_' . md5_hex($cacheUrl),
                 {
@@ -966,6 +970,9 @@ sub _fetchTrackMetadata {
                     bitrate    => $bitrate . 'k',
                     type       => $type_str,
                     spotifyUri => $trackInfo->{uri},
+                    artistId   => $artistId,
+                    artistIds  => $artistIds,
+                    albumId    => ($trackInfo->{album} || {})->{id},
                 },
                 604800,
             );

@@ -12,6 +12,7 @@ use Slim::Utils::Versions;
 use Slim::Utils::Cache;
 use Slim::Utils::Network;
 use Digest::MD5 qw(md5_hex);
+use JSON::XS qw(encode_json);
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -463,7 +464,7 @@ sub explodePlaylist {
                 next unless $track && $track->{id};
                 my $trackUrl = 'spoton://track:' . $track->{id};
                 push @$allTracks, $trackUrl;
-                _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover);
+                _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover, $albumId);
             }
 
             if (scalar(@$allTracks) >= $total) {
@@ -491,7 +492,7 @@ sub explodePlaylist {
                         next unless $track && $track->{id};
                         my $trackUrl = 'spoton://track:' . $track->{id};
                         push @$allTracks, $trackUrl;
-                        _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover);
+                        _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover, $albumId);
                     }
                     if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
                         $fetchPage->($offset + scalar(@{ $data->{items} }));
@@ -540,7 +541,7 @@ sub explodePlaylist {
                     push @$allTracks, $trackUrl;
                     my $albumInfo = $track->{album} || {};
                     _cacheExplodedTrack($trackUrl, $track,
-                        $albumInfo->{name}, _largestImage($albumInfo->{images}));
+                        $albumInfo->{name}, _largestImage($albumInfo->{images}), $albumInfo->{id});
                 }
                 my $total = $data->{total} || 0;
                 if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
@@ -758,8 +759,15 @@ sub getMetadataFor {
 sub trackInfoURL {
     my ($class, $client, $url) = @_;
 
-    my ($trackId) = ($url // '') =~ m{spoton:(?://)?track:([A-Za-z0-9]+)};
-    return unless $trackId;
+    my ($type, $id);
+    if (($url // '') =~ m{spoton:(?://)?track:([A-Za-z0-9]+)}) {
+        $type = 'track';
+        $id   = $1;
+    } elsif (($url // '') =~ m{spoton:(?://)?episode:([A-Za-z0-9]+)}) {
+        $type = 'episode';
+        $id   = $1;
+    }
+    return unless $type;
 
     my $meta = $class->getMetadataFor($client, $url) || {};
 
@@ -767,13 +775,44 @@ sub trackInfoURL {
     my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
 
     my @items;
-    if ($accountId) {
+    if ($accountId && $type eq 'track') {
+        if ($meta->{artistId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
+                url         => \&Plugins::SpotOn::Plugin::_artistFeed,
+                passthrough => [{ artistId => $meta->{artistId} }],
+                type        => 'link',
+            };
+        }
+        if ($meta->{albumId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_ALBUM_VIEW'),
+                url         => \&Plugins::SpotOn::Plugin::_albumFeed,
+                passthrough => [{ albumId => $meta->{albumId} }],
+                type        => 'link',
+            };
+        }
         push @items, {
             name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_LIKE'),
             url         => \&Plugins::SpotOn::Plugin::SpotOnManageLike,
-            passthrough => [{ trackUri => "spotify:track:$trackId", accountId => $accountId }],
+            passthrough => [{ trackUri => "spotify:track:$id", accountId => $accountId }],
             type        => 'link',
         };
+    } elsif ($accountId && $type eq 'episode') {
+        if ($meta->{showId}) {
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_SHOW_VIEW'),
+                url         => \&Plugins::SpotOn::Plugin::_showFeed,
+                passthrough => [{ showId => $meta->{showId}, showName => $meta->{showName} }],
+                type        => 'link',
+            };
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&Plugins::SpotOn::Plugin::SpotOnManageFollow,
+                passthrough => [{ showUri => "spotify:show:$meta->{showId}", accountId => $accountId }],
+                type        => 'link',
+            };
+        }
     }
 
     return {
@@ -784,29 +823,39 @@ sub trackInfoURL {
 }
 
 sub _cacheExplodedTrack {
-    my ($trackUrl, $track, $albumName, $albumCover) = @_;
+    my ($trackUrl, $track, $albumName, $albumCover, $albumId) = @_;
+    my $artists   = $track->{artists} || [];
+    my $artistId  = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
+    my @named     = grep { $_->{id} && $_->{name} } @$artists;
+    my $artistIds = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
     $cache->set('spoton_meta_' . md5_hex($trackUrl), {
-        title    => $track->{name} || '',
-        artist   => join(', ', map { $_->{name} } @{ $track->{artists} || [] }),
-        album    => $albumName || '',
-        duration => ($track->{duration_ms} || 0) / 1000,
-        cover    => $albumCover || '/html/images/cover.png',
-        icon     => $albumCover || '/html/images/cover.png',
+        title     => $track->{name} || '',
+        artist    => join(', ', map { $_->{name} } @$artists),
+        album     => $albumName || '',
+        duration  => ($track->{duration_ms} || 0) / 1000,
+        cover     => $albumCover || '/html/images/cover.png',
+        icon      => $albumCover || '/html/images/cover.png',
+        artistId  => $artistId,
+        artistIds => $artistIds,
+        albumId   => $albumId,
     }, 3600);
 }
 
 sub _cacheExplodedEpisode {
     my ($epUrl, $ep) = @_;
+    my $show  = $ep->{show} || {};
     my $cover = _largestImage($ep->{images})
-             || _largestImage(($ep->{show} || {})->{images})
+             || _largestImage($show->{images})
              || '/html/images/cover.png';
     $cache->set('spoton_meta_' . md5_hex($epUrl), {
         title    => $ep->{name} || '',
-        artist   => ($ep->{show} || {})->{name} || '',
+        artist   => $show->{name} || '',
         album    => '',
         duration => ($ep->{duration_ms} || 0) / 1000,
         cover    => $cover,
         icon     => $cover,
+        showId   => $show->{id},
+        showName => $show->{name},
     }, 3600);
 }
 
@@ -899,6 +948,18 @@ sub _asyncRefetch {
             cover    => $cover,
             icon     => $cover,
         );
+
+        if ($episodeId) {
+            my $show = $info->{show} || {};
+            $new_meta{showId}   = $show->{id};
+            $new_meta{showName} = $show->{name};
+        } else {
+            my $artists   = $info->{artists} || [];
+            $new_meta{artistId} = (@$artists && $artists->[0]{id}) ? $artists->[0]{id} : undef;
+            my @named = grep { $_->{id} && $_->{name} } @$artists;
+            $new_meta{artistIds} = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
+            $new_meta{albumId} = ($info->{album} || {})->{id};
+        }
 
         # Pitfall 3: for Connect URLs, store under Browse URL key so future lookups find it
         my $cacheUrl = ($url && $url =~ m{spoton://connect-})
