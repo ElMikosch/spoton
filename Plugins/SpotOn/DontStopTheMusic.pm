@@ -263,6 +263,8 @@ sub _cacheAndExtractUris {
         my $image  = @$images ? (sort { ($b->{width}||0) <=> ($a->{width}||0) } @$images)[0]->{url} : '';
 
         # D-02: 7-day TTL (604800s) so DSTM tracks survive in history for a week
+        # WR-01: include artist/album IDs so trackInfoMenu can build navigation items.
+        my %trackIds = Plugins::SpotOn::Plugin::_extractTrackIds($track);
         $cache->set('spoton_meta_' . md5_hex($uri), {
             title    => $track->{name} // '',
             artist   => $artist,
@@ -272,6 +274,7 @@ sub _cacheAndExtractUris {
             icon     => $image,
             bitrate  => Plugins::SpotOn::Plugin->_bitrateForClient(undef) . 'k',
             type     => $type_str,
+            %trackIds,
         }, 604800);
 
         push @uris, $uri;
