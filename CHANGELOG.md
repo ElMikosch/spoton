@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-06-26
+### Added
+- **Add to Playlist**: track and episode context menus now include "Add to Playlist" — shows a paginated picker of the user's Spotify playlists, selecting one adds the item via Spotify API with confirmation popup
+
+### Fixed
+- **Playlist pagination**: playlist picker reads pagination offset from correct LMS parameter source
+
 ## [2.1.0] - 2026-06-26
 ### Added
 - **More Context Menu**: track info menu now shows Artist View, Album View, and Like/Unlike for tracks; View Show and Follow/Unfollow for episodes. Navigation items link directly into SpotOn Browse. Resolves #29, #33.
