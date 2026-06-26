@@ -725,8 +725,8 @@ sub SpotOnAddToPlaylist {
     return unless $spotifyUri =~ /^spotify:(track|episode):[A-Za-z0-9]+$/;
     my $accountId = $args->{accountId};
 
-    my $offset = $args->{index} || 0;
-    my $qty    = $args->{quantity} || 200;
+    my $offset = $params->{index} || 0;
+    my $qty    = $params->{quantity} || 200;
     my $limit  = $qty > 50 ? 50 : $qty;
 
     Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
