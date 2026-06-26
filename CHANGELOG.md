@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-26
+### Added
+- **More Context Menu**: track info menu now shows Artist View, Album View, and Like/Unlike for tracks; View Show and Follow/Unfollow for episodes. Navigation items link directly into SpotOn Browse. Resolves #29, #33.
+
+### Fixed
+- **Cache-key normalization**: trackInfoMenu now normalizes `spoton:` to `spoton://` before cache lookup, preventing silent Artist/Album View disappearance when LMS passes non-double-slash URL form
+- **Episode menu guard**: Follow/Unfollow item for episodes is now guarded behind showId availability check, preventing invalid API calls on cache miss
+- **Like item consistency**: Like/Unlike item attributes (`type`, `favorites`) aligned between trackInfoMenu and trackInfoURL entry points
+
+### Changed
+- **Shared ID extraction**: artist/album ID extraction consolidated into `_extractTrackIds()` helper, replacing 4 inline copies across Plugin.pm, ProtocolHandler.pm, and Connect.pm
+
 ## [2.0.9] - 2026-06-25
 ### Added
 - **Status Page**: standalone diagnostic dashboard at `/plugins/SpotOn/status.html` — dark-themed 4-card grid with Player Daemon Health, API & Tokens, Recent Errors, and System Info. Auto-polls every 5 seconds, pauses when browser tab is hidden. Link in Settings Diagnostics section.
