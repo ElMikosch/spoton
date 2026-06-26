@@ -1553,6 +1553,8 @@ sub _episodeItem {
         icon     => $image,
         bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
         type     => __PACKAGE__->_typeString($client, 'Browse'),
+        showId   => $showId || undef,
+        showName => $showName || undef,
     }, 604800);
 
     my %item = (
