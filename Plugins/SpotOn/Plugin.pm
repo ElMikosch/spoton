@@ -508,13 +508,13 @@ sub trackInfoMenu {
                 passthrough => [{ showId => $meta->{showId}, showName => $meta->{showName} }],
                 type        => 'link',
             };
+            push @items, {
+                name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                url         => \&SpotOnManageFollow,
+                passthrough => [{ showUri => "spotify:show:$meta->{showId}", accountId => $accountId }],
+                favorites   => 0,
+            };
         }
-        push @items, {
-            name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
-            url         => \&SpotOnManageFollow,
-            passthrough => [{ showUri => "spotify:show:$meta->{showId}", accountId => $accountId }],
-            favorites   => 0,
-        };
     }
 
     return @items ? \@items : undef;
