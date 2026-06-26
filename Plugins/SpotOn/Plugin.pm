@@ -23,6 +23,7 @@ use Slim::Player::TranscodingHelper;
 
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
 use constant SPOTON_CACHE_VERSION  => 4;       # Bump to flush all SpotOn cache entries (D-01/D-02)
+use constant FLUSH_BATCH           => 50;      # Items per event-loop tick in _flushDeferredMeta (FIX-01)
 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
@@ -31,6 +32,61 @@ my %_playAllItemCache;
 sub _evictPlayAllCache {
     my $now = time();
     delete @_playAllItemCache{ grep { $now - $_playAllItemCache{$_}{ts} > 120 } keys %_playAllItemCache };
+}
+
+# _flushDeferredMeta($context, $pending, $start)
+# Background metadata cache writer — processes deferred cache->set calls from play-all
+# done callbacks in batches of 50 items per event-loop tick, yielding between batches
+# so audio prefetch / streaming I/O can be serviced between writes.
+#
+# Called via Slim::Utils::Timers::setTimer (first arg is the timer context, ignored).
+# Each entry in @$pending is a hashref:
+#   { url, title, artist, album, duration, cover, icon, track, client }
+# where 'track' is the raw Spotify track hashref (for _extractTrackIds / encode_json)
+# and 'client' is the LMS player object (for _bitrateForClient / _typeString).
+#
+# Design (FIX-01): separates the O(N) string-building path (fast, in done callback)
+# from the O(N) SQLite INSERT path (deferred here), preventing event-loop starvation
+# on large Liked Songs / playlist play-all operations.
+sub _flushDeferredMeta {
+    my (undef, $pending, $start) = @_;
+    return unless $pending && @$pending && $start <= $#$pending;
+
+    my $end = $start + FLUSH_BATCH - 1;
+    $end = $#$pending if $end > $#$pending;
+
+    for my $i ($start .. $end) {
+        my $p = $pending->[$i] or next;
+        my %trackIds = _extractTrackIds($p->{track});
+        # Guard: client may have disconnected before flush completes
+        my ($bitrate, $type);
+        if ($p->{client} && $p->{client}->can('id')) {
+            $bitrate = __PACKAGE__->_bitrateForClient($p->{client}) . 'k';
+            $type    = __PACKAGE__->_typeString($p->{client}, 'Browse');
+        } else {
+            $bitrate = '320k';
+            $type    = 'Spotify';
+        }
+        $cache->set(
+            'spoton_meta_' . md5_hex($p->{url}),
+            {
+                title    => $p->{title},
+                artist   => $p->{artist},
+                album    => $p->{album},
+                duration => $p->{duration},
+                cover    => $p->{cover},
+                icon     => $p->{icon},
+                bitrate  => $bitrate,
+                type     => $type,
+                %trackIds,
+            },
+            604800
+        );
+    }
+
+    if ($end < $#$pending) {
+        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time(), \&_flushDeferredMeta, $pending, $end + 1);
+    }
 }
 
 my $log = Slim::Utils::Log->addLogCategory( {
@@ -808,13 +864,17 @@ sub _isMadeForYou {
     return ($playlist->{name} // '') =~ $PERSONAL_MIX_REGEX;
 }
 
-# _trackItem($client, $track)
+# _trackItem($client, $track, $opts)
 # Builds an OPML audio item hashref for a Spotify track.
 # Per RESEARCH.md Pattern 3 and PATTERNS.md Track-Item pattern.
 # D-06: url and play set to spotify:// URI for Play-Intent.
 # D-07: items array carries context navigation (Artist view, Album view).
+# FIX-01: $opts->{defer_cache} — arrayref to accumulate deferred metadata writes.
+#   When set, skips the synchronous $cache->set and instead pushes a pending entry
+#   onto the arrayref. Caller must call _flushDeferredMeta to write them in background.
+#   Used by play-all done callbacks to avoid blocking the event loop with N SQLite writes.
 sub _trackItem {
-    my ($client, $track) = @_;
+    my ($client, $track, $opts) = @_;
     my $title    = $track->{name} // '';
     my $artist   = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
     my $album    = $track->{album}{name} // '';
@@ -878,19 +938,34 @@ sub _trackItem {
     # Cache metadata for getMetadataFor (STR-03): NowPlaying artwork + title display
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
     # Store IDs so trackInfoMenu can build Artist/Album navigation without a live API call.
-    my %trackIds = _extractTrackIds($track);
-
-    $cache->set('spoton_meta_' . md5_hex($spoton_url), {
-        title     => $title,
-        artist    => $artist,
-        album     => $album,
-        duration  => $duration,
-        cover     => $image,
-        icon      => $image,
-        bitrate   => __PACKAGE__->_bitrateForClient($client) . 'k',
-        type      => __PACKAGE__->_typeString($client, 'Browse'),
-        %trackIds,
-    }, 604800);
+    # FIX-01: In play-all mode ($opts->{defer_cache} set), push to deferred list instead of
+    # writing SQLite immediately — prevents event-loop blocking on N-item done callbacks.
+    if (my $dc = $opts && ref $opts eq 'HASH' && $opts->{defer_cache}) {
+        push @$dc, {
+            url      => $spoton_url,
+            title    => $title,
+            artist   => $artist,
+            album    => $album,
+            duration => $duration,
+            cover    => $image,
+            icon     => $image,
+            track    => $track,    # kept for _extractTrackIds (encode_json deferred to flush)
+            client   => $client,
+        };
+    } else {
+        my %trackIds = _extractTrackIds($track);
+        $cache->set('spoton_meta_' . md5_hex($spoton_url), {
+            title     => $title,
+            artist    => $artist,
+            album     => $album,
+            duration  => $duration,
+            cover     => $image,
+            icon      => $image,
+            bitrate   => __PACKAGE__->_bitrateForClient($client) . 'k',
+            type      => __PACKAGE__->_typeString($client, 'Browse'),
+            %trackIds,
+        }, 604800);
+    }
 
     my %item = (
         name          => "$title \x{2014} $artist",    # em-dash fallback for older clients
@@ -1194,7 +1269,10 @@ sub _savedTracksFeed {
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
                 my ($allItems) = @_;
-                my @items = map  { _trackItem($client, $_->{track}) }
+                # FIX-01: defer metadata cache writes to avoid blocking event loop
+                # with N synchronous SQLite INSERTs before callback fires.
+                my @deferredMeta;
+                my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
@@ -1202,6 +1280,8 @@ sub _savedTracksFeed {
                 }
                 $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
+                # Flush deferred metadata cache writes in background (50 per event-loop tick).
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
             },
         });
     } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
@@ -2203,12 +2283,15 @@ sub _albumFeed {
 
             if ($total <= scalar(@{$seedTracks})) {
                 # All tracks already in getAlbum response — no further API calls needed
-                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @{$seedTracks};
+                # FIX-01: defer metadata cache writes.
+                my @deferredMeta;
+                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @{$seedTracks};
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
                 $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
                 return;
             }
 
@@ -2226,12 +2309,15 @@ sub _albumFeed {
                     my $data = shift;
                     unless ($data) {
                         undef $fetchPage;
-                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
+                        # FIX-01: defer metadata cache writes.
+                        my @deferredMeta;
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
                         $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
+                        _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
                         return;
                     }
                     my $pageItems = $data->{items} || [];
@@ -2241,12 +2327,15 @@ sub _albumFeed {
                         $fetchPage->(scalar(@accumulated));
                     } else {
                         undef $fetchPage;
-                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm) } @accumulated;
+                        # FIX-01: defer metadata cache writes.
+                        my @deferredMeta;
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
                         $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
+                        _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
                     }
                 });
             };
@@ -2313,8 +2402,9 @@ sub _albumFeed {
 # line2: featuring artists — shown only if they differ from the album's primary artist.
 # Album images passed from the getAlbum call since simplified track objects lack images.
 # WR-01: $albumName passed from caller for metadata cache (simplified track objects lack album name).
+# FIX-01: $opts->{defer_cache} — same deferred write protocol as _trackItem.
 sub _albumTrackItem {
-    my ($client, $track, $albumImages, $albumArtist, $albumName) = @_;
+    my ($client, $track, $albumImages, $albumArtist, $albumName, $opts) = @_;
 
     my $trackNum  = $track->{track_number} // '';
     my $title     = $track->{name}         // '';
@@ -2347,18 +2437,33 @@ sub _albumTrackItem {
     $albumName //= '';
     # D-02: 7-day TTL (604800s) so Browse tracks survive in history for a week
     # WR-01: include artist/album IDs so trackInfoMenu can build navigation items.
-    my %trackIds = _extractTrackIds($track);
-    $cache->set('spoton_meta_' . md5_hex($spoton_url), {
-        title    => $title,
-        artist   => $artists,
-        album    => $albumName,
-        duration => $duration,
-        cover    => $image,
-        icon     => $image,
-        bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
-        type     => __PACKAGE__->_typeString($client, 'Browse'),
-        %trackIds,
-    }, 604800);
+    # FIX-01: defer to background flush when in play-all mode.
+    if (my $dc = $opts && ref $opts eq 'HASH' && $opts->{defer_cache}) {
+        push @$dc, {
+            url      => $spoton_url,
+            title    => $title,
+            artist   => $artists,
+            album    => $albumName,
+            duration => $duration,
+            cover    => $image,
+            icon     => $image,
+            track    => $track,
+            client   => $client,
+        };
+    } else {
+        my %trackIds = _extractTrackIds($track);
+        $cache->set('spoton_meta_' . md5_hex($spoton_url), {
+            title    => $title,
+            artist   => $artists,
+            album    => $albumName,
+            duration => $duration,
+            cover    => $image,
+            icon     => $image,
+            bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
+            type     => __PACKAGE__->_typeString($client, 'Browse'),
+            %trackIds,
+        }, 604800);
+    }
 
     my %item = (
         name      => ($trackNum ? "$trackNum. " : '') . $title,
@@ -2413,7 +2518,9 @@ sub _playlistFeed {
             done         => sub {
                 my ($allItems) = @_;
                 # T-03-10: Skip null track entries (local files in playlists return null track objects).
-                my @items = map  { _trackItem($client, $_->{track}) }
+                # FIX-01: defer metadata cache writes to avoid blocking event loop with N SQLite INSERTs.
+                my @deferredMeta;
+                my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
@@ -2421,6 +2528,7 @@ sub _playlistFeed {
                 }
                 $_playAllItemCache{$plCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
             },
         });
     } elsif (my $cached = $_playAllItemCache{$plCacheKey}) {
