@@ -2026,3 +2026,55 @@ PLUGIN_SPOTON_STATUS_PAGE_DESC
 	PL	Otwórz panel stanu SpotOn w nowej karcie.
 	SV	Öppna SpotOn statusdashboard i en ny flik.
 
+PLUGIN_SPOTON_ADD_TO_PLAYLIST
+	CS	Přidat do playlistu
+	DA	Tilføj til playliste
+	DE	Zu Playlist hinzufügen
+	EN	Add to Playlist
+	ES	Añadir a playlist
+	FR	Ajouter à la playlist
+	IT	Aggiungi alla playlist
+	NL	Toevoegen aan afspeellijst
+	NO	Legg til i spilleliste
+	PL	Dodaj do playlisty
+	SV	Lägg till i spellista
+
+PLUGIN_SPOTON_SELECT_PLAYLIST
+	CS	Vybrat playlist
+	DA	Vælg playliste
+	DE	Playlist auswählen
+	EN	Select Playlist
+	ES	Seleccionar playlist
+	FR	Choisir la playlist
+	IT	Seleziona playlist
+	NL	Selecteer afspeellijst
+	NO	Velg spilleliste
+	PL	Wybierz playlistę
+	SV	Välj spellista
+
+PLUGIN_SPOTON_ADDED_TO_PLAYLIST
+	CS	Přidáno do %s!
+	DA	Tilføjet til %s!
+	DE	Zu %s hinzugefügt!
+	EN	Added to %s!
+	ES	Añadido a %s!
+	FR	Ajouté à %s !
+	IT	Aggiunto a %s!
+	NL	Toegevoegd aan %s!
+	NO	Lagt til i %s!
+	PL	Dodano do %s!
+	SV	Tillagd i %s!
+
+PLUGIN_SPOTON_ADD_TO_PLAYLIST_ERROR
+	CS	Nelze přidat do playlistu
+	DA	Kunne ikke tilføje til playliste
+	DE	Konnte nicht zur Playlist hinzufügen
+	EN	Could not add to playlist
+	ES	No se pudo añadir a la playlist
+	FR	Impossible d'ajouter à la playlist
+	IT	Impossibile aggiungere alla playlist
+	NL	Kan niet toevoegen aan afspeellijst
+	NO	Kunne ikke legge til i spilleliste
+	PL	Nie można dodać do playlisty
+	SV	Kunde inte lägga till i spellista
+

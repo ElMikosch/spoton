@@ -336,6 +336,22 @@ sub getUserPlaylists {
     }, $cb);
 }
 
+# addToPlaylist($class, $accountId, $playlistId, $uris, $cb)
+# Adds items to a playlist (POST /playlists/{playlistId}/items?uris=...).
+# $uris: arrayref of full Spotify URIs (spotify:track:ID or spotify:episode:ID).
+# Response: {"snapshot_id": "..."} — parsed normally.
+# Scope: playlist-modify-public, playlist-modify-private
+sub addToPlaylist {
+    my ($class, $accountId, $playlistId, $uris, $cb) = @_;
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $playlistId && $playlistId =~ /^[A-Za-z0-9]{1,40}$/;
+    $class->_request('post', "playlists/$playlistId/items", {
+        _accountId => $accountId,
+        _noCache   => 1,
+        uris       => join(',', @{$uris || []}),
+    }, $cb);
+}
+
 # getPersonalMixes($class, $accountId, $params, $cb)
 # Fetches Spotify personal mix playlists via the browse/categories endpoint (D-05).
 # Source: Spotty API.pm categoryPlaylists pattern.
