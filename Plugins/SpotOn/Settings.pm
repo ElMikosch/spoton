@@ -394,8 +394,9 @@ sub _diagnosticBundleHandler {
     $logs .= "\n";
 
     # Extract SpotOn-related lines from LMS server.log
-    my $serverLogFile = catfile($serverPrefs->get('logdir'), 'server.log');
-    if (-f $serverLogFile) {
+    my $logdir = $serverPrefs->get('logdir');
+    my $serverLogFile = $logdir ? catfile($logdir, 'server.log') : undef;
+    if ($serverLogFile && -f $serverLogFile) {
         $logs .= "--- LMS server.log (SpotOn entries, last 200) ---\n";
         if (open(my $sfh, '<', $serverLogFile)) {
             my @spotonLines;
