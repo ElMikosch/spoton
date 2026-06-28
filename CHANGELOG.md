@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-06-28
+### Fixed
+- **Connect credential isolation**: Connect sessions from a different Spotify user no longer overwrite the Browse account's `credentials.json`. Reconnect sessions now use a credential-free cache, preserving audio key caching while preventing credential writes. Fixes regression from Phase 14 where `Spirc::new()` always called `store_credentials=true`.
+
 ## [2.1.4] - 2026-06-28
 ### Fixed
 - **Multi-account switch**: Settings page account switch now clears per-player overrides so all players fall back to the new global account. Previously, players that had been switched via the OPML menu silently ignored the Settings switch. (#75)

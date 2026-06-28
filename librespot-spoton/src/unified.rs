@@ -810,6 +810,13 @@ pub async fn run_unified(
         }
     };
 
+    // Phase 14 (Credential Isolation): reconnect cache WITHOUT credentials_location.
+    // Spirc::new() always calls session.connect(creds, store_credentials=true), so
+    // the only way to prevent credential overwrite on reconnect (ZeroConf from a
+    // different user, Spirc death, Browse failure) is to strip credentials_location
+    // from the cache. Audio key caching is preserved via audio_path.
+    let reconnect_cache = Cache::new(None::<&str>, None::<&str>, Some(cache_dir), None)?;
+
     // 2. Device ID — FNV-1a hash of cache_dir + player_mac (same as connect.rs lines 878-885).
     //    Ensures per-player uniqueness even when sharing the same Spotify account.
     let device_id_shared = {
@@ -1154,7 +1161,7 @@ pub async fn run_unified(
                         s.clone()
                     };
                     let new_session = if session_cur.is_invalid() {
-                        let ns = Session::new(session_config.clone(), Some(cache.clone()));
+                        let ns = Session::new(session_config.clone(), Some(reconnect_cache.clone()));
                         // Update the shared Session reference so Browse requests use new session.
                         {
                             let mut s = session_shared.lock().await;
@@ -1423,7 +1430,7 @@ pub async fn run_unified(
                     if !session_cur.is_invalid() {
                         session_cur.shutdown();
                     }
-                    let ns = Session::new(session_config.clone(), Some(cache.clone()));
+                    let ns = Session::new(session_config.clone(), Some(reconnect_cache.clone()));
                     match ns.connect(credentials.clone(), false).await {
                         Ok(()) => {
                             *session_shared.lock().await = ns;
@@ -1431,7 +1438,7 @@ pub async fn run_unified(
                         }
                         Err(e) => {
                             log::error!("[spoton/unified] Browse-only session reconnect failed: {e}");
-                            let fallback = Session::new(session_config.clone(), Some(cache.clone()));
+                            let fallback = Session::new(session_config.clone(), Some(reconnect_cache.clone()));
                             *session_shared.lock().await = fallback;
                         }
                     }
