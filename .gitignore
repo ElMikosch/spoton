@@ -4,6 +4,9 @@ librespot-spoton/target/
 # Perl test artifacts
 *.bak
 
+# Platform binaries (built by CI, distributed via GitHub Releases)
+Plugins/SpotOn/Bin/
+
 # Release ZIP archives (built locally, distributed via GitHub Releases)
 SpotOn-v*.zip
 
