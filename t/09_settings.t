@@ -200,6 +200,15 @@ sub registerHandler { }
 1;
 END
 
+# Stub: Slim::Player::Client
+write_stub($stub_dir, 'Slim::Player::Client', <<'END');
+package Slim::Player::Client;
+our @_mock_clients = ();
+sub clients { return @_mock_clients }
+sub set_mock_clients { @_mock_clients = @_ }
+1;
+END
+
 # Stub: Slim::Web::Settings
 write_stub($stub_dir, 'Slim::Web::Settings', <<'END');
 package Slim::Web::Settings;
@@ -396,6 +405,7 @@ SKIP: {
             $src =~ /switchAccount/;
         };
 
+    require Slim::Player::Client;
     require_ok('Plugins::SpotOn::Settings')
         or BAIL_OUT("Failed to load Settings.pm");
 

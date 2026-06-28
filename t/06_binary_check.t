@@ -11,17 +11,12 @@ my $test_dir    = dirname(abs_path($0));
 my $project_dir = dirname($test_dir);
 my $bin_dir     = "$project_dir/Plugins/SpotOn/Bin/x86_64-linux";
 
-# Verify the Bin directory exists
-ok(-d $bin_dir, "Plugins/SpotOn/Bin/x86_64-linux/ directory exists");
-
-# Look for an executable 'spoton' binary in the x86_64 Bin dir
+# Binaries are built by CI and not tracked in git.
+# Skip gracefully if the binary is not present locally.
 my $binary = "$bin_dir/spoton";
 
-unless (-f $binary && -x $binary) {
-    # Binary not yet built — will be provided by Plan 01-04
-    # Skip remaining tests gracefully
-    done_testing();
-    exit 0;
+unless (-d $bin_dir && -f $binary && -x $binary) {
+    plan skip_all => 'Binary not present (built by CI, not tracked in git)';
 }
 
 # Binary found — validate the --check contract
