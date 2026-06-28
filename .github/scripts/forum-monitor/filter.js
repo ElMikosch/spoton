@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,7 +6,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOPICS_PATH = join(__dirname, 'forum-topics.json');
 
 let _topics = null;
-let _dismissed = null;
 
 async function loadTopics() {
   if (_topics) return _topics;
@@ -18,25 +16,6 @@ async function loadTopics() {
     _topics = { resolved: {} };
   }
   return _topics;
-}
-
-function loadDismissedPostIds() {
-  if (_dismissed) return _dismissed;
-  _dismissed = new Set();
-  try {
-    const out = execSync(
-      'gh issue list --state closed --label forum-reply-draft --limit 100 --json body --jq ".[].body"',
-      { encoding: 'utf-8', timeout: 15000 }
-    );
-    const postIdPattern = /<!-- POST_ID:(\d+) -->/g;
-    let match;
-    while ((match = postIdPattern.exec(out)) !== null) {
-      _dismissed.add(match[1]);
-    }
-  } catch {
-    // gh CLI unavailable or no closed issues — continue without
-  }
-  return _dismissed;
 }
 
 export function isQuoteOnly(post) {
@@ -69,14 +48,15 @@ export async function matchesTopic(post) {
   return null;
 }
 
-export function isDismissed(post) {
-  const dismissed = loadDismissedPostIds();
-  return dismissed.has(post.postId);
+export function isAlreadyQueued(post, state) {
+  const pending = state.pendingTriage || [];
+  const triaged = state.triagedPostIds || [];
+  return pending.some(p => p.postId === post.postId) || triaged.includes(post.postId);
 }
 
-export async function filterPost(post) {
-  if (isDismissed(post)) {
-    return { skip: true, reason: `dismissed (closed draft for post ${post.postId})` };
+export async function filterPost(post, state) {
+  if (isAlreadyQueued(post, state)) {
+    return { skip: true, reason: `already queued or triaged (post ${post.postId})` };
   }
 
   if (isQuoteOnly(post)) {

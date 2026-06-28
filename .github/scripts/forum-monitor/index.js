@@ -3,9 +3,8 @@ import { loadState, saveState, diffPosts } from './state.js';
 import { buildContext } from './context.js';
 import { generateDraft } from './drafter.js';
 import { filterPost } from './filter.js';
-import { execSync } from 'node:child_process';
 
-const MAX_ISSUES_PER_RUN = 5;
+const MAX_POSTS_PER_RUN = 5;
 const OWN_USERNAME = 'sti';
 
 async function main() {
@@ -24,7 +23,7 @@ async function main() {
 
   const postsToProcess = newPosts
     .filter(p => p.author !== OWN_USERNAME)
-    .slice(0, MAX_ISSUES_PER_RUN);
+    .slice(0, MAX_POSTS_PER_RUN);
 
   if (!postsToProcess.length) {
     console.log('[forum-monitor] No new posts from other users');
@@ -34,10 +33,12 @@ async function main() {
 
   console.log(`[forum-monitor] ${postsToProcess.length} new post(s) to process`);
 
+  if (!state.pendingTriage) state.pendingTriage = [];
+
   const context = await buildContext();
 
   for (const post of postsToProcess) {
-    const { skip, reason } = await filterPost(post);
+    const { skip, reason } = await filterPost(post, state);
     if (skip) {
       console.log(`[forum-monitor] Skipping #${post.postNumber} by ${post.author}: ${reason}`);
       continue;
@@ -50,61 +51,26 @@ async function main() {
       draft = await generateDraft(post, posts, context);
     } catch (err) {
       console.error(`[forum-monitor] Draft generation failed: ${err.message}`);
-      draft = `*Draft generation failed: ${err.message}*\n\nPlease write a manual reply.`;
+      draft = null;
     }
 
-    const title = `Forum: @${post.author} — ${post.contentText.slice(0, 60).replace(/\n/g, ' ')}`;
-    const body = formatIssueBody(post, draft);
+    state.pendingTriage.push({
+      postId: post.postId,
+      postNumber: post.postNumber,
+      author: post.author,
+      timestamp: post.timestamp,
+      threadUrl: THREAD_URL,
+      contentPreview: post.contentText.slice(0, 300).replace(/\n/g, ' '),
+      draft,
+      scrapedAt: new Date().toISOString(),
+    });
 
-    try {
-      const result = execSync(
-        `gh issue create --title "${escapeShell(title)}" --label "forum-reply-draft" --body "$(cat <<'GHEOF'\n${body}\nGHEOF\n)"`,
-        { encoding: 'utf-8', timeout: 30000 }
-      );
-      console.log(`[forum-monitor] Created issue: ${result.trim()}`);
-    } catch (err) {
-      console.error(`[forum-monitor] Issue creation failed: ${err.message}`);
-    }
+    console.log(`[forum-monitor] Queued #${post.postNumber} by ${post.author} for triage`);
   }
 
   await saveState(state);
-  console.log('[forum-monitor] Done');
-}
-
-function formatIssueBody(post, draft) {
-  return `## Original Post
-
-**Author:** ${post.author}
-**Date:** ${post.timestamp}
-**Post:** #${post.postNumber}
-**Link:** ${THREAD_URL}#post-${post.postId}
-
----
-
-${post.contentText}
-
----
-
-## Draft Reply
-
-<!-- DRAFT_START -->
-${draft}
-<!-- DRAFT_END -->
-
-<!-- THREAD_URL:${THREAD_URL} -->
-<!-- POST_ID:${post.postId} -->
-<!-- POST_NUMBER:${post.postNumber} -->
-
----
-
-**Actions:**
-- Add label \`approved\` to trigger auto-post (Phase 24)
-- Edit the draft above, then approve
-- Close this issue to ignore`;
-}
-
-function escapeShell(str) {
-  return str.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+  const pending = state.pendingTriage.length;
+  console.log(`[forum-monitor] Done — ${pending} post(s) pending triage`);
 }
 
 main().catch(err => {
