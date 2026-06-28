@@ -203,14 +203,11 @@ sub start {
 
 	close($port_fh);
 
-	# On Windows services, Proc::Background's stdout/stderr redirect fails
-	# because STDOUT/STDERR have no valid file descriptors. Use the
-	# SPOTON_PORT_FILE env var to tell the daemon to write its port to a file
-	# directly, bypassing stdout capture entirely.
-	if (main::ISWINDOWS) {
-		$ENV{SPOTON_PORT_FILE} = $port_tmpfile;
-		$ENV{SPOTON_LOG_FILE} = $stderrFile if $stderrFile;
-	}
+	# SPOTON_PORT_FILE: tell the daemon to write its port to a file directly.
+	# Always set as primary mechanism — Proc::Background stdout redirect
+	# fails in Docker/s6 and Windows service environments.
+	$ENV{SPOTON_PORT_FILE} = $port_tmpfile;
+	$ENV{SPOTON_LOG_FILE} = $stderrFile if $stderrFile;
 
 	eval {
 		$self->_proc( Proc::Background->new(
@@ -222,10 +219,8 @@ sub start {
 		) );
 	};
 
-	if (main::ISWINDOWS) {
-		delete $ENV{SPOTON_PORT_FILE};
-		delete $ENV{SPOTON_LOG_FILE};
-	}
+	delete $ENV{SPOTON_PORT_FILE};
+	delete $ENV{SPOTON_LOG_FILE};
 
 	delete $ENV{RUST_LOG};
 
