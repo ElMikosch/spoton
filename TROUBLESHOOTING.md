@@ -66,7 +66,7 @@ Note: this only affects the initial setup. Once credentials are stored, Spotify 
 
 ### Solution: Manual Credential Transfer
 
-You can run the discovery step on any machine that IS on the same network as your phone, then copy the credentials to your LMS server.
+You can run the discovery step on any machine that IS on the same network as your phone, then transfer the credentials to your LMS server.
 
 **Step 1:** Download the SpotOn binary for your platform from the [latest release](https://github.com/stiefenm/spoton/releases/latest).
 
@@ -78,22 +78,26 @@ spoton --discover-once --name "SpotOn Setup" -c /tmp/spoton-auth
 
 **Step 3:** Open the Spotify app on your phone, tap the device icon, and select "SpotOn Setup" from the list.
 
-**Step 4:** Once connected, a `credentials.json` file is created in `/tmp/spoton-auth/`. Copy this file to your LMS server's SpotOn cache directory:
+**Step 4:** Copy the `credentials.json` from `/tmp/spoton-auth/` into SpotOn's `__DISCOVER__` directory on your LMS server. LMS must be running (do NOT restart between this step and the next):
 
-```
-# Find the cache directory (typically /var/lib/squeezeboxserver/cache/spoton/ on Linux)
-# The <account-id> is the first 8 hex characters of the MD5 hash of the Spotify username.
-# If you don't have an existing account directory, create one:
-
-sudo -u squeezeboxserver mkdir -p /var/lib/squeezeboxserver/cache/spoton/<account-id>
-sudo cp /tmp/spoton-auth/credentials.json /var/lib/squeezeboxserver/cache/spoton/<account-id>/
-sudo chown squeezeboxserver:nogroup /var/lib/squeezeboxserver/cache/spoton/<account-id>/credentials.json
-sudo chmod 600 /var/lib/squeezeboxserver/cache/spoton/<account-id>/credentials.json
+```bash
+# Linux (typical path — adjust if your cache directory differs)
+sudo -u squeezeboxserver mkdir -p /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__
+sudo cp /tmp/spoton-auth/credentials.json /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__/
+sudo chown -R squeezeboxserver:nogroup /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__/
 ```
 
 On Windows, the cache directory is typically `C:\ProgramData\Lyrion\Cache\spoton\`.
 
-**Step 5:** Restart LMS. Your Spotify account should appear in SpotOn settings.
+**Step 5:** Open the SpotOn Settings page in your browser (LMS → Settings → Plugins → SpotOn). The page load automatically detects the credentials, creates the account directory, registers the account, and starts the daemon. Your Spotify username should appear under Account Settings.
+
+> **Important:** Do NOT restart LMS between steps 4 and 5. The startup sequence cleans up `__DISCOVER__/` before you can visit the Settings page. Always place the file while LMS is running, then load the Settings page.
+
+### Docker / Kubernetes Notes
+
+- The `__DISCOVER__` directory must be a **writable volume**, not a ConfigMap or read-only mount. SpotOn needs to rename it during account setup.
+- Do not place `credentials.json` directly in a hash-named directory (e.g. `e20xxxxx/`). SpotOn only checks directories registered in its preferences — manual file placement skips that registration.
+- If you previously created hash directories manually, remove them before following the steps above.
 
 ## Windows: Daemon Timeout or "Binary not found"
 
