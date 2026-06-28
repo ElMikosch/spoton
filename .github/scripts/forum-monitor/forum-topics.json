@@ -15,6 +15,17 @@
       "status": "community-self-help",
       "keywords": ["bootlocal.sh", "pcp bu", "filetool.lst", "/opt/bootlocal"],
       "note": "piCorePlayer persistence — community helps each other"
+    },
+    "connect-volume-difference": {
+      "status": "tracked",
+      "keywords": ["volume", "Connect", "half as loud", "lower than", "browse mode"],
+      "ghIssue": 74,
+      "note": "Connect uses librespot volume curve, Browse uses LMS — different gain paths"
+    },
+    "shuffleindex-crash": {
+      "status": "fixed",
+      "keywords": ["shuffleIndex", "Undefined subroutine", "ProtocolHandler.pm line 245"],
+      "note": "Fixed in v2.1.3 — streamingSongIndex replaces non-existent shuffleIndex"
     }
   }
 }
