@@ -140,6 +140,16 @@ sub handler {
                 if (defined $newActive) {
                     $prefs->set('activeAccount', $newActive);
                 }
+
+                # Clear per-client prefs pointing to the removed account so players
+                # fall back to the new global. Prefs pointing to other accounts are
+                # left intact (those per-client settings remain valid).
+                for my $c (Slim::Player::Client::clients()) {
+                    my $clientAcct = $prefs->client($c)->get('activeAccount') // '';
+                    if ($clientAcct eq $removeId) {
+                        $prefs->client($c)->remove('activeAccount');
+                    }
+                }
             }
         }
 
@@ -152,6 +162,13 @@ sub handler {
             my $accounts = $prefs->get('accounts') || {};
             if (exists $accounts->{$switchId}) {
                 $prefs->set('activeAccount', $switchId);
+                # Clear per-client overrides for all connected players so they fall back
+                # to the new global setting. _getAccountId() checks per-client first, so
+                # without this, the Settings switch has no effect on players that already
+                # have a per-client activeAccount pref set via the OPML account switcher.
+                for my $c (Slim::Player::Client::clients()) {
+                    $prefs->client($c)->remove('activeAccount');
+                }
             }
         }
 

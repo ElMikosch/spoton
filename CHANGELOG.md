@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-06-28
+### Fixed
+- **Multi-account switch**: Settings page account switch now clears per-player overrides so all players fall back to the new global account. Previously, players that had been switched via the OPML menu silently ignored the Settings switch. (#75)
+- **Account removal cleanup**: removing an account now clears per-player preferences pointing to the deleted account
+- **OPML switch breadcrumb**: removed nested "SpotOn" link from account switch confirmation to prevent breadcrumb stacking in Default skin
+
 ## [2.1.3] - 2026-06-28
 ### Fixed
 - **Browse 404 retry crash**: `_retryStream` called non-existent `shuffleIndex` — replaced with correct `streamingSongIndex` API. Affected users who hit a transient 404 from the browse daemon (e.g. audio-key throttle, CDN issues). (#60)

@@ -485,13 +485,8 @@ sub _switchAccount {
 
     $callback->({ items => [
         {
-            name        => $msg,
-            type        => 'text',
-        },
-        {
-            name        => cstring($client, 'PLUGIN_SPOTON_NAME'),
-            url         => \&handleFeed,
-            type        => 'link',
+            name => $msg,
+            type => 'text',
         },
     ] });
 }
