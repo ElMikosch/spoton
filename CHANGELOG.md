@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-06-28
+### Fixed
+- **Browse 404 retry crash**: `_retryStream` called non-existent `shuffleIndex` — replaced with correct `streamingSongIndex` API. Affected users who hit a transient 404 from the browse daemon (e.g. audio-key throttle, CDN issues). (#60)
+- **Docker/s6 daemon startup**: `Proc::Background` stdout redirect fails in Docker containers with s6 process supervisor — the daemon's port announcement was never captured. Now uses `SPOTON_PORT_FILE` env var on all platforms so the daemon writes its port directly to the tempfile. (#60)
+- **Manual credential transfer docs**: instructions in TROUBLESHOOTING.md were broken — placing `credentials.json` in a hash directory never registered the account in preferences. Replaced with the `__DISCOVER__/` flow (place file, visit Settings page). Added Docker/Kubernetes notes. (#52)
+
 ## [2.1.2] - 2026-06-26
 ### Fixed
 - **Play-All performance**: large playlists and Liked Songs (1000+ tracks) no longer cause song skips or extreme slowdown. Metadata cache writes are now deferred to background batches of 50 per event-loop tick, preventing SQLite I/O from blocking audio streaming. Reduces API token usage from 200+ to <30 for 1633 Liked Songs. (#51)
