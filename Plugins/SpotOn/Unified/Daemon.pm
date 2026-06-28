@@ -207,7 +207,8 @@ sub start {
 	# Always set as primary mechanism — Proc::Background stdout redirect
 	# fails in Docker/s6 and Windows service environments.
 	$ENV{SPOTON_PORT_FILE} = $port_tmpfile;
-	$ENV{SPOTON_LOG_FILE} = $stderrFile if $stderrFile;
+	# SPOTON_LOG_FILE only when Proc::Background can't redirect stderr
+	$ENV{SPOTON_LOG_FILE} = $stderrFile if $stderrFile && main::ISWINDOWS;
 
 	eval {
 		$self->_proc( Proc::Background->new(
