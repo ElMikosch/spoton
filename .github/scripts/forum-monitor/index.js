@@ -2,6 +2,7 @@ import { scrapePosts, THREAD_URL } from './scraper.js';
 import { loadState, saveState, diffPosts } from './state.js';
 import { buildContext } from './context.js';
 import { generateDraft } from './drafter.js';
+import { filterPost } from './filter.js';
 import { execSync } from 'node:child_process';
 
 const MAX_ISSUES_PER_RUN = 5;
@@ -36,6 +37,12 @@ async function main() {
   const context = await buildContext();
 
   for (const post of postsToProcess) {
+    const { skip, reason } = await filterPost(post);
+    if (skip) {
+      console.log(`[forum-monitor] Skipping #${post.postNumber} by ${post.author}: ${reason}`);
+      continue;
+    }
+
     console.log(`[forum-monitor] Drafting reply for #${post.postNumber} by ${post.author}`);
 
     let draft;

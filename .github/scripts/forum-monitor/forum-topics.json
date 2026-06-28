@@ -1,0 +1,20 @@
+{
+  "resolved": {
+    "cdn-hosts-workaround": {
+      "status": "community-self-help",
+      "keywords": ["/etc/hosts", "bootlocal", "audio-cf-del", "audio-fa-del", "spotifycdn", "0.0.0.0"],
+      "note": "Community handles CDN workaround via /etc/hosts, upstream fix in librespot #1722"
+    },
+    "squeezedsp-conflict": {
+      "status": "waiting-upstream",
+      "keywords": ["SqueezeDSP", "removeNativeConversion", "soc pcm"],
+      "ghIssue": 42,
+      "note": "PR #19 at Foxenfurter/SqueezeDSP"
+    },
+    "picoreplayer-bootlocal": {
+      "status": "community-self-help",
+      "keywords": ["bootlocal.sh", "pcp bu", "filetool.lst", "/opt/bootlocal"],
+      "note": "piCorePlayer persistence — community helps each other"
+    }
+  }
+}
