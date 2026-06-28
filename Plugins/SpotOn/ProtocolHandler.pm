@@ -242,7 +242,7 @@ sub handleDirectError {
 # which re-enters canDirectStream → handleDirectError if still 404.
 sub _retryStream {
     my $client = shift;
-    my $idx = Slim::Player::Playlist::shuffleIndex($client) // 0;
+    my $idx = Slim::Player::Source::streamingSongIndex($client) // 0;
     $log->info("Retrying stream for playlist index $idx");
     $client->execute(['playlist', 'index', $idx]);
 }
