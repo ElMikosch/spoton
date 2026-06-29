@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: write
   issues: write
 
 jobs:
@@ -43,3 +44,12 @@ jobs:
         working-directory: .github/scripts/forum-monitor
         run: |
           [ -f forum-state.json ] && cp forum-state.json "$STATE_DIR/forum-state.json" || true
+
+      - name: Commit state to repo
+        if: always()
+        working-directory: .github/scripts/forum-monitor
+        run: |
+          git add forum-state.json
+          git diff --cached --quiet || \
+            git commit -m "chore: update forum monitor state [skip ci]" && \
+            git push
