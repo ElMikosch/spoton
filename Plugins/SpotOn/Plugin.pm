@@ -2745,6 +2745,7 @@ sub _typeString {
 # ============================================================
 
 my %_watchdogTriggerUrl;
+my %_pauseRequestedAt;
 
 sub _onNewSongWatchdog {
     my $request = shift;
@@ -2793,15 +2794,55 @@ sub _onNewSongWatchdog {
 
 sub _onModeChange {
     my $request = shift;
-    return unless $prefs->get('diagnosticMode');
     my $client = $request->client() || return;
+    my $id = $client->id;
     my $song = $client->playingSong();
     my $url = $song ? ($song->track->url || '') : 'none';
     return unless $url =~ m{^spoton://};
     my $mode = Slim::Player::Source::playmode($client) || '?';
-    my $duration = $song ? ($song->duration || 0) : 0;
-    my $canSeek = $song ? ($song->canSeek() || 0) : '?';
-    $log->warn("[DIAG] ModeChange: pause event mode=$mode url=$url duration=${duration}s canSeek=$canSeek");
+
+    if ($mode eq 'pause') {
+        $_pauseRequestedAt{$id} = Time::HiRes::time();
+        Slim::Utils::Timers::killTimers($client, \&_pauseGuardCheck);
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 2.5, \&_pauseGuardCheck);
+    } elsif ($mode eq 'play') {
+        if (exists $_pauseRequestedAt{$id}) {
+            my $age = Time::HiRes::time() - $_pauseRequestedAt{$id};
+            if ($age > 2.0) {
+                # User explicitly resumed — clear guard
+                delete $_pauseRequestedAt{$id};
+                Slim::Utils::Timers::killTimers($client, \&_pauseGuardCheck);
+            }
+            # age <= 2.0: keep flag, let the timer handle it
+        }
+    }
+
+    if ($prefs->get('diagnosticMode')) {
+        my $duration = $song ? ($song->duration || 0) : 0;
+        my $canSeek = $song ? ($song->canSeek() || 0) : '?';
+        my $guard = exists $_pauseRequestedAt{$id} ? sprintf("%.1fs ago", Time::HiRes::time() - $_pauseRequestedAt{$id}) : 'none';
+        $log->warn("[DIAG] ModeChange: pause event mode=$mode url=$url duration=${duration}s canSeek=$canSeek pauseGuard=$guard");
+    }
+}
+
+sub _pauseGuardCheck {
+    my $client = shift;
+    return unless $client;
+    my $id = $client->id;
+    return unless exists $_pauseRequestedAt{$id};
+
+    my $mode = Slim::Player::Source::playmode($client) || '';
+    my $age = Time::HiRes::time() - $_pauseRequestedAt{$id};
+
+    if ($mode eq 'play') {
+        $log->warn("[DIAG] PauseGuard: re-applying pause (swallowed ${age}s ago)") if $prefs->get('diagnosticMode');
+        delete $_pauseRequestedAt{$id};
+        Slim::Control::Request::executeRequest($client, ['pause', '1']);
+    } elsif ($age < 5.0) {
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1.0, \&_pauseGuardCheck);
+    } else {
+        delete $_pauseRequestedAt{$id};
+    }
 }
 
 sub _prefetchWatchdog {
