@@ -626,6 +626,18 @@ sub _doFlavouredRequest {
         unless ($token) {
             # T-04.4-01: log only flavor, not token value
             main::INFOLOG && $log->info("Client: no token available [flavor=$flavor] for account $accountId");
+
+            # Bundled fallback: if own-token retrieval fails (e.g. Keymaster 403
+            # for custom Client ID), retry with bundled token for non-me/* paths.
+            # Mirrors the HTTP 403/410 fallback in D-06 below.
+            if (!$isRetry && $flavor eq 'own' && !$isMeFamily) {
+                main::INFOLOG && $log->info(
+                    "Client: no_token on own — retrying with bundled token for $cleanPath");
+                $class->_doFlavouredRequest(
+                    $method, $cleanPath, $params, $userCb, 'bundled', 1, $isMeFamily);
+                return;
+            }
+
             $userCb->(undef, { error => 'no_token', flavor => $flavor });
             return;
         }

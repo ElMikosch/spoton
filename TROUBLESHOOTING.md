@@ -53,17 +53,18 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 3. If it doesn't update, refresh the page manually
 4. If the username is there, authentication was successful. You can now browse Spotify and use Connect normally.
 
-### Search or Playlists return "No results" with custom Client ID
+### Search or Browse return "No results" with custom Client ID
 
-**Symptoms:** SpotOn search returns "Keine Ergebnisse" / "No results" for any query. Playlist contents may also show as empty. Removing the custom client ID from SpotOn settings fixes the issue.
+**Symptoms:** SpotOn search returns "No results" for any query. Browse menus may also show as empty. Removing the custom Client ID from SpotOn settings fixes the issue. Spotify Connect continues to work normally.
 
-**Cause:** Since February 2026, Spotify requires the **owner of a Developer App to have an active Premium subscription**. If your Developer App is registered under a Free account, API requests through that client ID will silently fail — returning empty results instead of an error. See [Spotify's February 2026 migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide).
+**Cause:** Spotify's internal Keymaster server maintains a whitelist of Client IDs. Newly created Developer Apps (especially after the Nov 2024 / Feb 2026 API changes) are **not on this whitelist** and get rejected with HTTP 403 or 404. The standard OAuth flow (`client_credentials` via accounts.spotify.com) still works with these IDs, but the Keymaster/Mercury path used by librespot does not. This affects all librespot-based projects ([librespot #754](https://github.com/librespot-org/librespot/issues/754), [#1532](https://github.com/librespot-org/librespot/issues/1532)).
 
 **Solutions:**
-- **Remove the custom client ID** from SpotOn settings. SpotOn's built-in authentication already provides full API access (search, library, playlists) via a bundled token — no Developer App needed. This is the recommended setup.
-- If you want to keep your custom client ID: verify that the Spotify account owning the app has Premium, and that the app is properly configured on the [Developer Dashboard](https://developer.spotify.com/dashboard).
+- **Remove the custom Client ID** from SpotOn settings (recommended). SpotOn's built-in authentication provides full API access via a bundled token — no Developer App needed.
+- **Update to v2.1.8+** — SpotOn now automatically falls back to the bundled token when a custom Client ID fails at Keymaster. Search and Browse work regardless.
+- If you have an **older (pre-2025) Developer App** that already works, you can keep using it.
 
-**Background:** SpotOn uses three token sources from a single ZeroConf authentication: a **Keymaster token** for Connect, a **bundled client ID** for API access out of the box, and an optional **custom client ID** for users with Extended Quota. The bundled token covers all API functionality — a custom client ID is only needed if you have specific quota requirements from Spotify.
+**Background:** SpotOn uses three token sources from a single ZeroConf authentication: a **Keymaster token** for Connect, a **bundled Client ID** for API access out of the box, and an optional **custom Client ID** for users with Extended Quota. Only older/grandfathered Client IDs work with Keymaster — creating a new Developer App will not help.
 
 ### Tracks skip or fail with "404" in logs (CDN errors)
 

@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.8] - 2026-06-29
+### Fixed
+- **Custom Client ID fallback**: when a custom Spotify Developer App Client ID fails token retrieval (Keymaster 403/404), SpotOn now automatically falls back to the bundled token for Browse/Search/Library requests. Previously, a failing custom Client ID caused "No results" with no recovery. Fixes #86, #91.
+
+### Changed
+- **Custom Client ID documentation**: Settings page, Setup Guide, README, and Troubleshooting now clarify that custom Client IDs only work with older (pre-2025) Spotify Developer Apps. Newly created apps are rejected by Spotify's Keymaster server — this is a Spotify-side restriction, not a SpotOn bug.
+
 ## [2.1.7] - 2026-06-29
 ### Fixed
 - **Pause guard**: pause commands that were silently swallowed during HTTP stream setup or track transitions are now detected and re-applied automatically. Uses a per-client timer chain that monitors play mode for up to 5 seconds after a pause, re-issuing the pause if the stream setup overrides it. Explicit user resume clears the guard immediately.

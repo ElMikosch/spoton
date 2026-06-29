@@ -701,17 +701,17 @@ PLUGIN_SPOTON_CLIENT_ID_SETTINGS
 	SV	Anpassad Spotify App
 
 PLUGIN_SPOTON_CLIENT_ID_DESC
-	CS	Volitelné vlastní ID Spotify Developer App pro vyšší limity přenosové rychlosti
-	DA	Valgfrit brugerdefineret Spotify Developer App-ID for højere rategrænser
-	DE	Optionale eigene Spotify Developer App-ID für höhere Rate-Limits
-	EN	Optional custom Spotify Developer App ID for higher rate limits
-	ES	ID de app Spotify Developer personalizado para límites de velocidad más altos (opcional)
-	FR	ID d'application Spotify Developer personnalisé pour des limites de débit plus élevées (optionnel)
-	IT	ID app Spotify Developer personalizzato per limiti di frequenza più elevati (opzionale)
-	NL	Optioneel aangepast Spotify Developer App-ID voor hogere tarieflimieten
-	NO	Valgfritt egendefinert Spotify Developer App-ID for høyere hastighetsbegrensninger
-	PL	Opcjonalny własny identyfikator Spotify Developer App dla wyższych limitów szybkości
-	SV	Valfritt anpassat Spotify Developer App-ID för högre hastighetsgränser
+	CS	Volitelné — funguje pouze s existujícími (staršími) Spotify Developer App. Nově vytvořené aplikace budou odmítnuty serverem Spotify Keymaster.
+	DA	Valgfrit — virker kun med eksisterende (ældre) Spotify Developer Apps. Nyoprettede apps afvises af Spotifys Keymaster-server.
+	DE	Optional — funktioniert nur mit bestehenden (älteren) Spotify Developer Apps. Neu erstellte Apps werden von Spotifys Keymaster-Server abgelehnt.
+	EN	Optional — only works with existing (older) Spotify Developer Apps. Newly created apps are rejected by Spotify's Keymaster server.
+	ES	Opcional — solo funciona con Spotify Developer Apps existentes (antiguas). Las apps recién creadas son rechazadas por el servidor Keymaster de Spotify.
+	FR	Optionnel — fonctionne uniquement avec les Spotify Developer Apps existantes (anciennes). Les apps nouvellement créées sont rejetées par le serveur Keymaster de Spotify.
+	IT	Opzionale — funziona solo con Spotify Developer App esistenti (più vecchie). Le app appena create vengono rifiutate dal server Keymaster di Spotify.
+	NL	Optioneel — werkt alleen met bestaande (oudere) Spotify Developer Apps. Nieuw aangemaakte apps worden geweigerd door Spotify's Keymaster-server.
+	NO	Valgfritt — fungerer kun med eksisterende (eldre) Spotify Developer Apps. Nyopprettede apper avvises av Spotifys Keymaster-server.
+	PL	Opcjonalnie — działa tylko z istniejącymi (starszymi) Spotify Developer App. Nowo utworzone aplikacje są odrzucane przez serwer Keymaster Spotify.
+	SV	Valfritt — fungerar bara med befintliga (äldre) Spotify Developer Apps. Nyligen skapade appar avvisas av Spotifys Keymaster-server.
 
 PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
 	CS	Spotify Client-ID (32 znaků, alfanumerické)
@@ -727,17 +727,17 @@ PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
 	SV	Spotify Client-ID (32 tecken, alfanumeriskt)
 
 PLUGIN_SPOTON_DEGRADED_MODE_WARNING
-	CS	Není nakonfigurováno vlastní Spotify App ID. Pro plnou funkčnost prosím zaregistrujte vlastní aplikaci:
-	DA	Intet brugerdefineret Spotify App-ID konfigureret. For fuld funktionalitet, registrér venligst din egen app:
-	DE	Keine eigene Spotify App-ID konfiguriert. Für volle Funktionalität bitte eigene App registrieren:
-	EN	No custom Spotify App ID configured. For full functionality, please register your own app:
-	ES	No hay ID de App de Spotify personalizado configurado. Para funcionalidad completa, registra tu propia app:
-	FR	Aucun ID d'application Spotify personnalisé configuré. Pour une fonctionnalité complète, veuillez enregistrer votre propre application:
-	IT	Nessun ID app Spotify personalizzato configurato. Per la piena funzionalità, registra la tua app:
-	NL	Geen aangepast Spotify App-ID geconfigureerd. Voor volledige functionaliteit, registreer uw eigen app:
-	NO	Ingen egendefinert Spotify App-ID konfigurert. For full funksjonalitet, registrer din egen app:
-	PL	Brak skonfigurowanego własnego identyfikatora Spotify App. Aby uzyskać pełną funkcjonalność, zarejestruj własną aplikację:
-	SV	Inget anpassat Spotify App-ID konfigurerat. För full funktionalitet, registrera din egen app:
+	CS	Není nakonfigurováno žádné vlastní Spotify App ID. SpotOn funguje plně bez něj — vlastní ID je potřeba pouze pro starší aplikace s rozšířenou kvótou.
+	DA	Intet brugerdefineret Spotify App-ID konfigureret. SpotOn fungerer fuldt ud uden et — brugerdefineret ID er kun nødvendigt for ældre apps med udvidet kvote.
+	DE	Keine eigene Spotify App-ID konfiguriert. SpotOn funktioniert vollständig ohne — eine eigene ID wird nur für ältere Apps mit erweitertem Kontingent benötigt.
+	EN	No custom Spotify App ID configured. SpotOn works fully without one — a custom ID is only needed for older apps with Extended Quota.
+	ES	No hay ID de App de Spotify personalizado configurado. SpotOn funciona completamente sin uno — un ID personalizado solo se necesita para apps antiguas con cuota extendida.
+	FR	Aucun ID d'application Spotify personnalisé configuré. SpotOn fonctionne pleinement sans — un ID personnalisé n'est nécessaire que pour les anciennes applications avec un quota étendu.
+	IT	Nessun ID app Spotify personalizzato configurato. SpotOn funziona completamente senza — un ID personalizzato è necessario solo per app più vecchie con quota estesa.
+	NL	Geen aangepast Spotify App-ID geconfigureerd. SpotOn werkt volledig zonder — een eigen ID is alleen nodig voor oudere apps met uitgebreid quotum.
+	NO	Ingen egendefinert Spotify App-ID konfigurert. SpotOn fungerer fullt ut uten — et egendefinert ID er kun nødvendig for eldre apper med utvidet kvote.
+	PL	Brak skonfigurowanego własnego identyfikatora Spotify App. SpotOn działa w pełni bez niego — własne ID jest potrzebne tylko dla starszych aplikacji z rozszerzonym limitem.
+	SV	Inget anpassat Spotify App-ID konfigurerat. SpotOn fungerar fullt ut utan — ett anpassat ID behövs bara för äldre appar med utökad kvot.
 
 PLUGIN_SPOTON_REGISTER_APP_LINK
 	CS	Zaregistrovat vlastní aplikaci
@@ -1234,30 +1234,30 @@ PLUGIN_SPOTON_SETUP_PLAYBACK_DESC
 	SV	För att strömma musik från Spotify-appen till en spelare, anslut till den specifika spelaren (inte servern). Connect konfigureras separat per spelare — se Spelarinställningar.
 
 PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
-	CS	Vlastní Developer App-ID (volitelné, doporučeno)
-	DA	Eget Developer App-ID (valgfrit, anbefalet)
-	DE	Eigene Developer App-ID (optional, empfohlen)
-	EN	Custom Developer App ID (optional, recommended)
-	ES	ID de Developer App personalizada (opcional, recomendado)
-	FR	ID d'application Developer personnalisée (optionnel, recommandé)
-	IT	ID Developer App personalizzato (opzionale, consigliato)
-	NL	Aangepast Developer App-ID (optioneel, aanbevolen)
-	NO	Egendefinert Developer App-ID (valgfritt, anbefalt)
-	PL	Własne Developer App ID (opcjonalnie, zalecane)
-	SV	Anpassat Developer App-ID (valfritt, rekommenderat)
+	CS	Vlastní Developer App-ID (volitelné, pouze starší aplikace)
+	DA	Eget Developer App-ID (valgfrit, kun ældre apps)
+	DE	Eigene Developer App-ID (optional, nur ältere Apps)
+	EN	Custom Developer App ID (optional, older apps only)
+	ES	ID de Developer App personalizada (opcional, solo apps antiguas)
+	FR	ID d'application Developer personnalisée (optionnel, anciennes apps uniquement)
+	IT	ID Developer App personalizzato (opzionale, solo app più vecchie)
+	NL	Aangepast Developer App-ID (optioneel, alleen oudere apps)
+	NO	Egendefinert Developer App-ID (valgfritt, kun eldre apper)
+	PL	Własne Developer App ID (opcjonalnie, tylko starsze aplikacje)
+	SV	Anpassat Developer App-ID (valfritt, bara äldre appar)
 
 PLUGIN_SPOTON_SETUP_DEVAPP_DESC
-	CS	SpotOn používá sdílené Client-ID s omezenými API limity. Pro spolehlivější provoz důrazně doporučujeme vytvořit vlastní Spotify Developer App na developer.spotify.com/dashboard a zadat Client-ID níže. Jako Redirect URI zadejte: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DA	SpotOn bruger et delt Client-ID med begrænsede API-grænser. For mere pålidelig drift anbefales det kraftigt at oprette din egen Spotify Developer App på developer.spotify.com/dashboard og indtaste Client-ID nedenfor. Angiv som Redirect URI: http://127.0.0.1:9000/plugins/SpotOn/callback
-	DE	SpotOn nutzt eine gemeinsame Client-ID mit begrenzten API-Limits. Für zuverlässigeren Betrieb wird dringend empfohlen, eine eigene Spotify Developer App auf developer.spotify.com/dashboard zu erstellen und die Client-ID unten einzutragen. Als Redirect URI verwende: http://127.0.0.1:9000/plugins/SpotOn/callback
-	EN	SpotOn uses a shared Client ID with limited API rate limits. For more reliable operation it is strongly recommended to create your own Spotify Developer App at developer.spotify.com/dashboard and enter the Client ID below. Set the Redirect URI to: http://127.0.0.1:9000/plugins/SpotOn/callback
-	ES	SpotOn usa un Client-ID compartido con límites de API limitados. Para un funcionamiento más fiable se recomienda encarecidamente crear tu propia Spotify Developer App en developer.spotify.com/dashboard e introducir el Client-ID abajo. Establece la Redirect URI como: http://127.0.0.1:9000/plugins/SpotOn/callback
-	FR	SpotOn utilise un Client-ID partagé avec des limites d'API restreintes. Pour un fonctionnement plus fiable, il est fortement recommandé de créer votre propre Spotify Developer App sur developer.spotify.com/dashboard et de saisir le Client-ID ci-dessous. Définissez la Redirect URI sur : http://127.0.0.1:9000/plugins/SpotOn/callback
-	IT	SpotOn utilizza un Client-ID condiviso con limiti API limitati. Per un funzionamento più affidabile si consiglia vivamente di creare la propria Spotify Developer App su developer.spotify.com/dashboard e inserire il Client-ID qui sotto. Imposta la Redirect URI su: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NL	SpotOn gebruikt een gedeeld Client-ID met beperkte API-limieten. Voor betrouwbaarder gebruik wordt sterk aanbevolen een eigen Spotify Developer App aan te maken op developer.spotify.com/dashboard en het Client-ID hieronder in te voeren. Stel de Redirect URI in op: http://127.0.0.1:9000/plugins/SpotOn/callback
-	NO	SpotOn bruker en delt Client-ID med begrensede API-grenser. For mer pålitelig drift anbefales det sterkt å opprette din egen Spotify Developer App på developer.spotify.com/dashboard og skrive inn Client-ID nedenfor. Sett Redirect URI til: http://127.0.0.1:9000/plugins/SpotOn/callback
-	PL	SpotOn używa współdzielonego Client-ID z ograniczonymi limitami API. Dla bardziej niezawodnego działania zdecydowanie zaleca się utworzenie własnej Spotify Developer App na developer.spotify.com/dashboard i wpisanie Client-ID poniżej. Ustaw Redirect URI na: http://127.0.0.1:9000/plugins/SpotOn/callback
-	SV	SpotOn använder ett delat Client-ID med begränsade API-gränser. För mer tillförlitlig drift rekommenderas det starkt att skapa din egen Spotify Developer App på developer.spotify.com/dashboard och ange Client-ID nedan. Ange Redirect URI som: http://127.0.0.1:9000/plugins/SpotOn/callback
+	CS	Pokud již máte starší Spotify Developer App, můžete její Client-ID zadat níže. Nově vytvořené aplikace nefungují — Spotify Keymaster odmítá novější Client-ID. SpotOn funguje plně bez vlastního Client-ID.
+	DA	Hvis du allerede har en ældre Spotify Developer App, kan du indtaste dens Client-ID nedenfor. Nyoprettede apps virker ikke — Spotify Keymaster afviser nyere Client-ID'er. SpotOn fungerer fuldt ud uden et brugerdefineret Client-ID.
+	DE	Falls du bereits eine ältere Spotify Developer App hast, kannst du ihre Client-ID unten eintragen. Neu erstellte Apps funktionieren nicht — Spotify Keymaster lehnt neuere Client-IDs ab. SpotOn funktioniert vollständig ohne eigene Client-ID.
+	EN	If you already have an older Spotify Developer App, you can enter its Client ID below. Newly created apps do not work — Spotify Keymaster rejects newer Client IDs. SpotOn works fully without a custom Client ID.
+	ES	Si ya tienes una Spotify Developer App antigua, puedes introducir su Client ID abajo. Las apps recién creadas no funcionan — Spotify Keymaster rechaza Client IDs más nuevos. SpotOn funciona completamente sin un Client ID personalizado.
+	FR	Si vous avez déjà une ancienne Spotify Developer App, vous pouvez saisir son Client ID ci-dessous. Les apps nouvellement créées ne fonctionnent pas — Spotify Keymaster rejette les Client ID plus récents. SpotOn fonctionne pleinement sans Client ID personnalisé.
+	IT	Se hai già una Spotify Developer App più vecchia, puoi inserire il suo Client ID qui sotto. Le app appena create non funzionano — Spotify Keymaster rifiuta i Client ID più recenti. SpotOn funziona completamente senza un Client ID personalizzato.
+	NL	Als u al een oudere Spotify Developer App heeft, kunt u het Client-ID hieronder invoeren. Nieuw aangemaakte apps werken niet — Spotify Keymaster weigert nieuwere Client-ID's. SpotOn werkt volledig zonder een aangepast Client-ID.
+	NO	Hvis du allerede har en eldre Spotify Developer App, kan du skrive inn Client-ID nedenfor. Nyopprettede apper fungerer ikke — Spotify Keymaster avviser nyere Client-ID-er. SpotOn fungerer fullt ut uten en egendefinert Client-ID.
+	PL	Jeśli masz już starszą Spotify Developer App, możesz wpisać jej Client ID poniżej. Nowo utworzone aplikacje nie działają — Spotify Keymaster odrzuca nowsze Client ID. SpotOn działa w pełni bez własnego Client ID.
+	SV	Om du redan har en äldre Spotify Developer App kan du ange dess Client-ID nedan. Nyligen skapade appar fungerar inte — Spotify Keymaster avvisar nyare Client-ID:n. SpotOn fungerar fullt ut utan ett anpassat Client-ID.
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".

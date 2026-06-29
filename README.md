@@ -34,7 +34,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 - LMS 8.0+ (LMS 9.x recommended)
 - Spotify Premium account
-- Spotify Developer App (recommended) — [create one here](https://developer.spotify.com/dashboard), then enter your Client ID in SpotOn settings. **The app owner account must have Spotify Premium** (required since Feb 2026). SpotOn also works without a custom Client ID via built-in tokens, but your own app gives you a dedicated API quota.
+- Spotify Developer App — **not required**. SpotOn works fully via built-in tokens. A custom Client ID is only useful if you already have an older (pre-2025) Spotify Developer App. Newly created Developer Apps are rejected by Spotify's internal Keymaster server. If you do have an older app, you can enter its Client ID in SpotOn settings for a dedicated API quota.
 - Supported platforms: x86_64 Linux, i386 Linux, aarch64 Linux (Pi 4+), armhf Linux (Pi 2/3), arm Linux, x86_64 Windows, macOS (Universal Binary: Intel + Apple Silicon). On macOS, if you download the binary manually (not via LMS plugin manager), you may need to run `xattr -d com.apple.quarantine /path/to/spoton` in Terminal before first use.
 
 ## Installation
