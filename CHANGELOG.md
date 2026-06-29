@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.7] - 2026-06-29
+### Fixed
+- **Pause guard**: pause commands that were silently swallowed during HTTP stream setup or track transitions are now detected and re-applied automatically. Uses a per-client timer chain that monitors play mode for up to 5 seconds after a pause, re-issuing the pause if the stream setup overrides it. Explicit user resume clears the guard immediately.
+
+### Changed
+- **Custom Client ID docs**: README now notes that Developer App owners must have Spotify Premium (required since Feb 2026). Added troubleshooting entry for empty search results with custom client IDs.
+- **CDN 404 troubleshooting**: added entry for track skip / 404 errors with upgrade and `/etc/hosts` workaround guidance.
+
 ## [2.1.6] - 2026-06-29
 ### Changed
 - **librespot upgraded to dev branch** (post-v0.8.0): includes CDN fallback fix (#1722), 32-bit overflow fix (#1678), multi-address connection fix (#1651), credential file permissions (#1650), and volume-ctrl fixed fix (#1642). Combined with SpotOn's existing 404 retry layer (3 attempts, 2s delay), this provides significantly improved playback reliability against Spotify CDN issues.
