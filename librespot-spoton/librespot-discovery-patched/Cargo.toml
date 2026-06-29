@@ -104,7 +104,8 @@ version = "0.10"
 optional = true
 
 [dependencies.librespot-core]
-version = "0.8.0"
+git = "https://github.com/librespot-org/librespot"
+branch = "dev"
 default-features = false
 
 [dependencies.log]

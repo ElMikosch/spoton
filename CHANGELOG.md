@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-06-29
+### Changed
+- **librespot upgraded to dev branch** (post-v0.8.0): includes CDN fallback fix (#1722), 32-bit overflow fix (#1678), multi-address connection fix (#1651), credential file permissions (#1650), and volume-ctrl fixed fix (#1642). Combined with SpotOn's existing 404 retry layer (3 attempts, 2s delay), this provides significantly improved playback reliability against Spotify CDN issues.
+
+### Added
+- **Diagnostic logging for pause events**: tracks `newsong` race conditions and pause mode state for intermittent pause-not-working investigation
+
 ## [2.1.5] - 2026-06-28
 ### Fixed
 - **Connect credential isolation**: Connect sessions from a different Spotify user no longer overwrite the Browse account's `credentials.json`. Reconnect sessions now use a credential-free cache, preserving audio key caching while preventing credential writes. Fixes regression from Phase 14 where `Spirc::new()` always called `store_credentials=true`.

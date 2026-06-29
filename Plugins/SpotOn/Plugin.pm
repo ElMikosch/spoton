@@ -206,6 +206,7 @@ sub initPlugin {
     # at the end because the next track's pipeline failed (unavailable, audio key
     # error, timeout). Forces skip after duration + 5s if player is still stuck.
     Slim::Control::Request::subscribe(\&_onNewSongWatchdog, [['playlist'], ['newsong']]);
+    Slim::Control::Request::subscribe(\&_onModeChange, [['playlist'], ['pause']]);
 
     _deployMaterialSkinIcon();
 
@@ -236,6 +237,7 @@ sub shutdownPlugin {
     # Unsubscribe watchdog registered in initPlugin — prevents duplicate handler
     # accumulation across plugin reloads (each reload calls shutdown then init).
     Slim::Control::Request::unsubscribe(\&_onNewSongWatchdog);
+    Slim::Control::Request::unsubscribe(\&_onModeChange);
 
     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
         require Plugins::SpotOn::Unified::DaemonManager;
@@ -2753,7 +2755,25 @@ sub _onNewSongWatchdog {
     Slim::Utils::Timers::killTimers($client, \&_prefetchHangCheck);
     delete $_watchdogTriggerUrl{$id};
 
-    my $song = $client->playingSong() || return;
+    my $song = $client->playingSong();
+    if (!$song) {
+        if ($prefs->get('diagnosticMode')) {
+            my $streaming = $client->streamingSong();
+            my $sUrl = $streaming ? ($streaming->track->url || '?') : 'none';
+            $log->warn("[DIAG] Watchdog: newsong but playingSong=undef (streamingSong=$sUrl) — deferring 0.5s");
+        }
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.5, sub {
+            my $c = shift;
+            my $s = $c->playingSong() || return;
+            my $u = $s->track->url || '';
+            return unless $u =~ m{^spoton://(?!connect-)};
+            my $d = $s->duration || 0;
+            $log->warn("[DIAG] Watchdog: deferred newsong url=$u duration=${d}s") if $prefs->get('diagnosticMode');
+            return unless $d > 0;
+            Slim::Utils::Timers::setTimer($c, Time::HiRes::time() + 10, \&_prefetchWatchdog);
+        });
+        return;
+    }
     my $url = $song->track->url || '';
 
     return unless $url =~ m{^spoton://(?!connect-)};
@@ -2769,6 +2789,19 @@ sub _onNewSongWatchdog {
         Time::HiRes::time() + 10,
         \&_prefetchWatchdog,
     );
+}
+
+sub _onModeChange {
+    my $request = shift;
+    return unless $prefs->get('diagnosticMode');
+    my $client = $request->client() || return;
+    my $song = $client->playingSong();
+    my $url = $song ? ($song->track->url || '') : 'none';
+    return unless $url =~ m{^spoton://};
+    my $mode = Slim::Player::Source::playmode($client) || '?';
+    my $duration = $song ? ($song->duration || 0) : 0;
+    my $canSeek = $song ? ($song->canSeek() || 0) : '?';
+    $log->warn("[DIAG] ModeChange: pause event mode=$mode url=$url duration=${duration}s canSeek=$canSeek");
 }
 
 sub _prefetchWatchdog {

@@ -137,7 +137,7 @@ impl LMS {
             // Exception: after TrackChanged sent `start`, the next same-id Playing carries
             // position_ms — send `seek` to sync LMS progress bar.
             PlayerEvent::Playing { track_id, position_ms, .. } => {
-                let new_id = track_id.to_id().unwrap_or_default();
+                let new_id = track_id.to_id();
                 log::debug!("[spoton] Playing: track_id={new_id}, position_ms={position_ms}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => {
@@ -237,7 +237,7 @@ impl LMS {
             // TrackChanged: authoritative source for "start" and "change" notifications.
             // Playing only handles seek-sync for the same track.
             PlayerEvent::TrackChanged { audio_item } => {
-                let new_id = audio_item.track_id.to_id().unwrap_or_default();
+                let new_id = audio_item.track_id.to_id();
                 log::debug!("[spoton] TrackChanged: track_id={new_id}");
                 match current_track.as_deref() {
                     Some(prev) if prev == new_id.as_str() => {
