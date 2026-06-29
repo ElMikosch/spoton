@@ -29,6 +29,7 @@ my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
 
 my %_playAllItemCache;
+my %_pauseRequestedAt;
 sub _evictPlayAllCache {
     my $now = time();
     delete @_playAllItemCache{ grep { $now - $_playAllItemCache{$_}{ts} > 120 } keys %_playAllItemCache };
@@ -207,6 +208,7 @@ sub initPlugin {
     # error, timeout). Forces skip after duration + 5s if player is still stuck.
     Slim::Control::Request::subscribe(\&_onNewSongWatchdog, [['playlist'], ['newsong']]);
     Slim::Control::Request::subscribe(\&_onModeChange, [['playlist'], ['pause']]);
+    Slim::Control::Request::subscribe(\&_onPauseCommand, [['pause']]);
 
     _deployMaterialSkinIcon();
 
@@ -238,6 +240,7 @@ sub shutdownPlugin {
     # accumulation across plugin reloads (each reload calls shutdown then init).
     Slim::Control::Request::unsubscribe(\&_onNewSongWatchdog);
     Slim::Control::Request::unsubscribe(\&_onModeChange);
+    Slim::Control::Request::unsubscribe(\&_onPauseCommand);
 
     for my $id (keys %_pauseRequestedAt) {
         next if $id eq '_reapplying';
@@ -2752,7 +2755,6 @@ sub _typeString {
 # ============================================================
 
 my %_watchdogTriggerUrl;
-my %_pauseRequestedAt;
 
 sub _onNewSongWatchdog {
     my $request = shift;
@@ -2818,9 +2820,20 @@ sub _onModeChange {
     }
 
     if ($prefs->get('diagnosticMode')) {
-        my $duration = $song ? ($song->duration || 0) : 0;
         my $guard = exists $_pauseRequestedAt{$id} ? sprintf("%.1fs ago", Time::HiRes::time() - $_pauseRequestedAt{$id}) : 'none';
-        $log->warn("[DIAG] ModeChange: mode=$mode url=$url duration=${duration}s pauseGuard=$guard");
+        $log->warn("[DIAG] ModeChange: mode=$mode url=$url pauseGuard=$guard");
+    }
+}
+
+sub _onPauseCommand {
+    my $request = shift;
+    my $client = $request->client() || return;
+    my $id = $client->id;
+    return unless exists $_pauseRequestedAt{$id};
+    my $newvalue = $request->getRequest(1);
+    if (defined $newvalue && $newvalue eq '0') {
+        delete $_pauseRequestedAt{$id};
+        Slim::Utils::Timers::killTimers($client, \&_pauseGuardCheck);
     }
 }
 
