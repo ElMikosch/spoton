@@ -65,6 +65,16 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 
 **Background:** SpotOn uses three token sources from a single ZeroConf authentication: a **Keymaster token** for Connect, a **bundled client ID** for API access out of the box, and an optional **custom client ID** for users with Extended Quota. The bundled token covers all API functionality — a custom client ID is only needed if you have specific quota requirements from Spotify.
 
+### Tracks skip or fail with "404" in logs (CDN errors)
+
+**Symptoms:** Tracks skip to the next song after a few seconds, or playback fails entirely. The LMS log shows `Browse daemon 404` or `attempts exhausted, skipping to next track`.
+
+**Cause:** Spotify occasionally returns bad CDN endpoints that respond with HTTP 404. This is a server-side issue on Spotify's end.
+
+**Solutions:**
+- **Update to v2.1.6 or later** — includes an upgraded librespot with CDN fallback (automatically tries the next CDN URL on 404) plus SpotOn's own 404 retry layer (3 attempts with 2s delay)
+- If errors persist after updating, you can block specific bad CDN hosts via `/etc/hosts` — see the [forum thread](https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton) for known problematic hosts
+
 ## mDNS Discovery Not Working (Docker, VLANs, Remote LMS)
 
 SpotOn uses mDNS (ZeroConf) for initial authentication: the Spotify app on your phone discovers the SpotOn daemon on your LMS server via local network broadcast. This requires both devices to be on the **same network segment**.
