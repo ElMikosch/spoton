@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-30T17:30:29.188Z",
+  "lastChecked": "2026-06-30T19:25:25.958Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -127,9 +127,11 @@
         "1827437",
         "1827439",
         "1827440",
-        "1827441"
+        "1827441",
+        "1827442",
+        "1827444"
       ],
-      "lastPostCount": 125
+      "lastPostCount": 127
     }
   },
   "pendingTriage": [
@@ -162,6 +164,26 @@
       "contentPreview": "sti - so SpotOn is working on Windows, thanks for the fix. I have managed to get it co-existing with my SqueezeDSP plugin, but I was hoping to be able to pipe the audio from Spoton through SqueezeDSP by adding some custom-convert.conf settings on a per player basis, but the conversion table seems to",
       "draft": "Hey foxesden, glad to hear SpotOn is working on Windows and you've got it co-existing with SqueezeDSP! That's a nice setup.\n\nRegarding piping through a custom [B]convert.conf[/B] — you're right that SpotOn populates the conversion table a bit differently. SpotOn uses a [B]spoton://[/B] URI scheme for its tracks, so your convert.conf rules need to match against that protocol rather than the usual [B]flc://[/B] or [B]spotify://[/B] style you might have seen elsewhere.\n\nA rule targeting SpotOn output would look something like:\n\n[CODE]\nspoton wav * * flac flac [PARAMETERS]\n[/CODE]\n\nThe general format follows the standard LMS convert.conf syntax:\n\n[CODE]\n<protocol> <source-format> <dest-format> <player-mac> <application> [options]\n[/CODE]\n\nUsing [B]*[/B] as a wildcard for the player MAC will apply it globally, or you can specify a particular player's MAC address for per-player rules.\n\nThat said, I want to be honest — I'd recommend testing carefully, as the interaction between SpotOn's stream handling and a transcoding step could introduce buffering or timing quirks, especially with Spotify Connect mode vs. Browse/queue mode.\n\nTo help narrow things down if you run into issues:\n\n1. Check [B]SpotOn Settings → Diagnostics[/B] for any stream-related errors\n2. Enable LMS server logging for [B]transcoding[/B] to see if the convert rule is being picked up\n\nIf you find a combination that works well, I'd love to hear the exact rule — it would be useful to document for other users wanting a similar setup.\n\nIf things go sideways, feel free to open a GitHub issue with your convert.conf snippet and the diagnostic bundle: [URL]https://github.com/stiefenm/spoton/issues[/URL]",
       "scrapedAt": "2026-06-30T17:30:29.188Z"
+    },
+    {
+      "postId": "1827442",
+      "postNumber": 126,
+      "author": "urknall",
+      "timestamp": "2026-06-30T10:31:32-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\t[USER=\"56286\"]  Background: SpotOn uses `soc` as its input format (Ogg Vorbis from the daemon, decoded to PC",
+      "draft": "[QUOTE=urknall;post126]i have a a question about that. is this the usual data flow in lms? i would expect there will be ogg, flac whatever be sent to the player and the player decodes itself...[/QUOTE]\n\nGreat question! The short answer is: it depends on the plugin and the player's capabilities.\n\n[B]Typical LMS data flow:[/B]\nYou're right that LMS can send compressed streams (Ogg, FLAC, MP3, etc.) directly to the player, and the player decodes them locally. This is the preferred path when the player supports the codec natively — it saves CPU on the server side.\n\n[B]How SpotOn currently works:[/B]\nSpotOn's daemon delivers audio as Ogg/Vorbis internally. Right now, LMS decodes that PCM on the server side (via the [CODE]soc[/CODE] format handler) and sends raw PCM to the player. This is why [CODE]soc pcm * *[/CODE] appears in the transcoding rules.\n\nThe reason for this approach is essentially compatibility — PCM works universally across all player types without worrying about whether a given player can handle Ogg natively.\n\n[B]Could Ogg be passed through directly to the player?[/B]\nYes, in principle — and there is actually an open enhancement request for exactly this: [URL=https://github.com/stiefenm/spoton/issues/95]#95: Add optional Ogg/Vorbis passthrough streaming to players[/URL]. This would allow capable players (like squeezelite) to receive the Ogg stream and decode it themselves, reducing server CPU usage. It's on the roadmap but not yet implemented.\n\nSo the current behaviour is intentional but not necessarily the final state. The PCM passthrough approach trades a bit of server CPU for broad compatibility — the Ogg passthrough enhancement would make it more \"LMS-native\" for players that support it.\n\nHope that clears it up! Feel free to follow or comment on issue #95 if this is something you'd find useful.",
+      "scrapedAt": "2026-06-30T19:25:21.979Z"
+    },
+    {
+      "postId": "1827444",
+      "postNumber": 127,
+      "author": "CJS",
+      "timestamp": "2026-06-30T10:54:13-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tCJS Back in post Single MP3+CUE vs. multiple MP3s you reported that the SpotOn More menu was missing standar",
+      "draft": "[QUOTE=CJS;127]Thanks sti! I can confirm that the SpotOn More menu is looking fine now, as illustrated in the screenshot below.[/QUOTE]\n\nGlad to hear it, CJS — thanks for confirming! 🎉\n\nThat fix has been a while coming, so it's great to have it verified working. For anyone else who was affected by the missing [B]Add to Favorites[/B], play controls, or More Info items in the SpotOn context menu, updating to [B]v2.2.1[/B] should resolve it.",
+      "scrapedAt": "2026-06-30T19:25:25.958Z"
     }
   ]
 }
