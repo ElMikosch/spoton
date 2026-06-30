@@ -358,7 +358,10 @@ require_ok('Plugins::SpotOn::Plugin')
 # Test 1: ProtocolHandler does NOT define trackInfoURL
 # This is the permanent regression gate (RED before Task 2, GREEN after Task 2).
 # ============================================================
-ok( !Plugins::SpotOn::ProtocolHandler->can('trackInfoURL'),
+# Use symbol table check instead of ->can() to avoid the stub's AUTOLOAD/can override.
+# The base class stub (Slim::Formats::RemoteStream) defines 'sub can { 1 }' which
+# returns true for any method name. Direct symbol table lookup bypasses that.
+ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
     'CTX-01: trackInfoURL not defined in ProtocolHandler (regression gate)' );
 
 # ============================================================
