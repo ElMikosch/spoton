@@ -654,8 +654,17 @@ async fn unified_http_server(
                                 return Ok(empty_response(StatusCode::NOT_FOUND));
                             }
 
-                            // Track started streaming — reset consecutive failure counter.
-                            consecutive_browse_fails.store(0, Ordering::SeqCst);
+                            // Track started streaming — reset consecutive failure counter ONLY if
+                            // the status channel confirmed the track actually loaded (not a slow 404).
+                            // early_was_success: channel replied with a non-404 status (happy path)
+                            // timed_out: channel did not reply in 500ms (optimistic reset; the spawned
+                            //   task's eventual drop of pcm_tx will deliver EOF if it was really a 404)
+                            // Ok(Err(_)): channel dropped without sending — don't reset (WR-01)
+                            let early_was_success = matches!(early_status, Ok(Ok(ref s)) if *s != StatusCode::NOT_FOUND);
+                            let timed_out         = early_status.is_err();
+                            if early_was_success || timed_out {
+                                consecutive_browse_fails.store(0, Ordering::SeqCst);
+                            }
                             // Phase 36: update activity timestamp on successful Browse track
                             { *last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now(); }
 
