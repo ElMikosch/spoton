@@ -458,6 +458,9 @@ SKIP: {
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
         Slim::Networking::SimpleAsyncHTTP::reset_requests();
 
+        # me/* needs clientId pref to route via flavor=own (D-05 fallback change)
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', 'test-client-id');
+
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
         $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 60 };
 
@@ -475,6 +478,7 @@ SKIP: {
         # Reset for next test
         $cache->clear();
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', undef);
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
     }
 
@@ -483,6 +487,8 @@ SKIP: {
         Slim::Utils::Cache->new()->clear();
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
         Slim::Networking::SimpleAsyncHTTP::reset_requests();
+
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', 'test-client-id');
 
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
         $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 9999 };
@@ -496,6 +502,7 @@ SKIP: {
         # Reset
         Slim::Utils::Cache->new()->clear();
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
+        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', undef);
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
     }
 }
