@@ -403,6 +403,21 @@ sub _restartForHealth {
 
     return unless $helper && $helper->alive;
 
+    # Rate-limit health restarts: no more than 1 per 5 minutes (WR-02).
+    # stopHelper deletes the Daemon object, losing _startTimes and thus crash-loop
+    # history. A permanently dead session (revoked credentials, broken token cache)
+    # would otherwise restart indefinitely at the health-check cadence (~60s).
+    my $now  = time();
+    my $last = $helper->_lastHealthRestart // 0;
+    if ($now - $last < 300) {
+        main::INFOLOG && $log->is_info && $log->info(
+            sprintf("Health restart suppressed for %s (last was %ds ago): %s",
+                    $helper->mac, $now - $last, $reason)
+        );
+        return;
+    }
+    $helper->_lastHealthRestart($now);
+
     main::INFOLOG && $log->is_info && $log->info(
         sprintf("Health check restart for %s: %s", $helper->mac, $reason)
     );

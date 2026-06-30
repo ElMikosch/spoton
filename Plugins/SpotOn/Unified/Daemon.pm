@@ -37,6 +37,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	_stderrFh
 	_healthCheckCount
 	_lastHealthSession
+	_lastHealthRestart
 ) );
 
 # NOTE: No _streamMode accessor (unified daemon is always streaming when alive)
