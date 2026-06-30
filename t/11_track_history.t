@@ -169,6 +169,18 @@ sub utf8toLatin1Transliterate { $_[1] }
 1;
 END
 
+# Stub: JSON::XS (Plugin.pm uses 'use JSON::XS qw(encode_json)')
+# JSON::XS is an XS module bundled by LMS but not available in the test env.
+write_stub($stub_dir, 'JSON::XS', <<'END');
+package JSON::XS;
+use parent 'Exporter';
+our @EXPORT_OK = qw(encode_json decode_json);
+use JSON::PP ();
+sub encode_json { JSON::PP::encode_json($_[0]) }
+sub decode_json { JSON::PP::decode_json($_[0]) }
+1;
+END
+
 # Stub: JSON::XS::VersionOneAndTwo
 write_stub($stub_dir, 'JSON::XS::VersionOneAndTwo', <<'END');
 package JSON::XS::VersionOneAndTwo;
