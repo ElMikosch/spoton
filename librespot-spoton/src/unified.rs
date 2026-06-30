@@ -232,6 +232,9 @@ async fn unified_http_server(
     browse_reconnect_signal: Arc<tokio::sync::Notify>,
     browse_reconnect_pending: Arc<AtomicBool>,
     consecutive_browse_fails: Arc<AtomicU32>,
+    // Session health monitoring (Phase 36): track session creation time and last audio activity for /health endpoint
+    session_created_at: Arc<std::sync::Mutex<Instant>>,
+    last_activity: Arc<std::sync::Mutex<Instant>>,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -260,6 +263,8 @@ async fn unified_http_server(
                 let browse_reconnect_signal = Arc::clone(&browse_reconnect_signal);
                 let browse_reconnect_pending = Arc::clone(&browse_reconnect_pending);
                 let consecutive_browse_fails = Arc::clone(&consecutive_browse_fails);
+                let session_created_at = Arc::clone(&session_created_at);
+                let last_activity = Arc::clone(&last_activity);
                 let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -276,6 +281,8 @@ async fn unified_http_server(
                     let browse_reconnect_signal = Arc::clone(&browse_reconnect_signal);
                     let browse_reconnect_pending = Arc::clone(&browse_reconnect_pending);
                     let consecutive_browse_fails = Arc::clone(&consecutive_browse_fails);
+                    let session_created_at = Arc::clone(&session_created_at);
+                    let last_activity = Arc::clone(&last_activity);
                     let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
 
@@ -373,6 +380,7 @@ async fn unified_http_server(
                             let relay_active_clone = Arc::clone(&relay_active);
                             let last_data_time_clone = Arc::clone(&last_data_time);
                             let browse_preempting_clone = Arc::clone(&browse_preempting);
+                            let last_activity_relay = Arc::clone(&last_activity);
                             tokio::spawn(async move {
                                 struct RelayGuard(Arc<AtomicBool>);
                                 impl Drop for RelayGuard {
@@ -878,6 +886,9 @@ pub async fn run_unified(
     let browse_reconnect_signal = Arc::new(tokio::sync::Notify::new());
     let browse_reconnect_pending = Arc::new(AtomicBool::new(false));
     let consecutive_browse_fails = Arc::new(AtomicU32::new(0));
+    // Session health monitoring (Phase 36): track session creation time and last audio activity for /health endpoint
+    let session_created_at: Arc<std::sync::Mutex<Instant>> = Arc::new(std::sync::Mutex::new(Instant::now()));
+    let last_activity: Arc<std::sync::Mutex<Instant>> = Arc::new(std::sync::Mutex::new(Instant::now()));
 
     // 6. Conditional Connect infrastructure (D-01).
     let volume_ctrl_enum = match volume_ctrl_str {
@@ -1114,6 +1125,8 @@ pub async fn run_unified(
             Arc::clone(&browse_reconnect_signal),
             Arc::clone(&browse_reconnect_pending),
             Arc::clone(&consecutive_browse_fails),
+            Arc::clone(&session_created_at),
+            Arc::clone(&last_activity),
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1415,6 +1428,8 @@ pub async fn run_unified(
             Arc::clone(&browse_reconnect_signal),
             Arc::clone(&browse_reconnect_pending),
             Arc::clone(&consecutive_browse_fails),
+            Arc::clone(&session_created_at),
+            Arc::clone(&last_activity),
         ));
 
         // Pure Browse: wait for Ctrl+C or session reconnect.
