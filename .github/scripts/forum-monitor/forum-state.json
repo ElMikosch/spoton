@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-30T19:25:25.958Z",
+  "lastChecked": "2026-06-30T21:20:00.606Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -129,9 +129,12 @@
         "1827440",
         "1827441",
         "1827442",
-        "1827444"
+        "1827444",
+        "1827455",
+        "1827456",
+        "1827457"
       ],
-      "lastPostCount": 127
+      "lastPostCount": 130
     }
   },
   "pendingTriage": [
@@ -184,6 +187,16 @@
       "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tCJS Back in post Single MP3+CUE vs. multiple MP3s you reported that the SpotOn More menu was missing standar",
       "draft": "[QUOTE=CJS;127]Thanks sti! I can confirm that the SpotOn More menu is looking fine now, as illustrated in the screenshot below.[/QUOTE]\n\nGlad to hear it, CJS — thanks for confirming! 🎉\n\nThat fix has been a while coming, so it's great to have it verified working. For anyone else who was affected by the missing [B]Add to Favorites[/B], play controls, or More Info items in the SpotOn context menu, updating to [B]v2.2.1[/B] should resolve it.",
       "scrapedAt": "2026-06-30T19:25:25.958Z"
+    },
+    {
+      "postId": "1827456",
+      "postNumber": 129,
+      "author": "urknall",
+      "timestamp": "2026-06-30T13:14:28-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Thanks for the explanation. I checked the current source again, and I may still be missing something, but I cannot find the code path that actually streams Ogg/Vorbis passthrough.  What I see in unified.rs is that /stream is implemented as a PCM relay and returns Content-Type: audio/L16;rate=44100;c",
+      "draft": "urknall, that's a really sharp code review — and you're right to push back on this. I owe you a correction.\n\n[QUOTE]So from the current source, it looks like the bytes served by /stream are still PCM/L16, not a raw Ogg/Vorbis container.[/QUOTE]\n\nYes, that's accurate. I overstated things in my previous reply. The [B]current implementation[/B] does relay PCM/L16 from the daemon — [B]not raw Ogg/Vorbis[/B]. The [CODE]UnifiedHttpStreamSink[/CODE] operates entirely on [CODE]AudioPacket::Samples[/CODE] after the librespot pipeline has already decoded the stream, converts via [CODE]f64_to_s16()[/CODE], and serves that as [CODE]audio/L16[/CODE]. You're correct that [CODE]AudioPacket::Raw[/CODE] packets are discarded.\n\nThe [CODE]streamFormat[/CODE] UI setting and the [CODE]auto + passthrough → OGG[/CODE] resolution in the metadata/tests is aspirational — it reflects [B]intended future behaviour[/B] rather than a currently wired code path. The passthrough flag is not passed to the daemon at startup, and [CODE]PlayerConfig.passthrough[/CODE] is not set. That work is incomplete.\n\nSo to be precise about the actual data flow today:\n\n[CODE]\nlibrespot → decoded PCM samples → f64_to_s16() → HTTP /stream (audio/L16) → LMS → player\n[/CODE]\n\nThe [CODE]soc pcm * *[/CODE] transcoding rule in LMS reflects this — [CODE]soc[/CODE] is the LMS-side format identifier for SpotOn's stream, but the content being served is already PCM, not an Ogg container. The rule exists so LMS knows how to handle it, not because Ogg is being passed through natively.\n\nTrue Ogg passthrough (where librespot's [CODE]AudioPacket::Raw[/CODE] is forwarded directly) would require a separate sink implementation and wiring the passthrough config — that's something I have on the roadmap but isn't there yet.\n\nThanks for digging into this carefully — this is exactly the kind of scrutiny that keeps the documentation honest. I'll make sure the in-plugin UI copy is updated to not imply passthrough is already active.",
+      "scrapedAt": "2026-06-30T21:20:00.605Z"
     }
   ]
 }
