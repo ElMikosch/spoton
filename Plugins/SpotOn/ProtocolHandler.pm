@@ -755,6 +755,17 @@ sub getMetadataFor {
     return $meta;
 }
 
+sub getIcon {
+    my ($class, $url) = @_;
+
+    if ($url) {
+        my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+        return $meta->{cover} if $meta && $meta->{cover} && $meta->{cover} ne '/html/images/cover.png';
+    }
+
+    return 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png';
+}
+
 sub _cacheExplodedTrack {
     my ($trackUrl, $track, $albumName, $albumCover, $albumId) = @_;
     require Plugins::SpotOn::Plugin;
