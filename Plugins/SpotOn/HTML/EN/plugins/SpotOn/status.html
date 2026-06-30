@@ -371,7 +371,12 @@ footer {
 
     function poll() {
         var xhr = new XMLHttpRequest();
+        xhr.timeout = 4000; // 4s — shorter than the 5s poll interval (WR-04)
         xhr.open('GET', '/plugins/SpotOn/status/data', true);
+        xhr.ontimeout = function() {
+            document.getElementById('error-banner').style.display = 'block';
+            pollTimer = setTimeout(poll, 5000);
+        };
         xhr.onload = function() {
             if (xhr.status === 200) {
                 try {
@@ -391,22 +396,23 @@ footer {
             } else {
                 document.getElementById('error-banner').style.display = 'block';
             }
+            pollTimer = setTimeout(poll, 5000);
         };
         xhr.onerror = function() {
             document.getElementById('error-banner').style.display = 'block';
+            pollTimer = setTimeout(poll, 5000);
         };
         xhr.send();
     }
 
     function startPolling() {
-        clearInterval(pollTimer);
+        clearTimeout(pollTimer);
         poll();
-        pollTimer = setInterval(poll, 5000);
         document.getElementById('poll-indicator').style.display = '';
     }
 
     function stopPolling() {
-        clearInterval(pollTimer);
+        clearTimeout(pollTimer);
         document.getElementById('poll-indicator').style.display = 'none';
     }
 
