@@ -401,6 +401,16 @@ sub _onHealthError {
     # alive check in _streamAlivePoll already handles process death.
     # Log but don't restart (avoid double-restart race with alive poll).
     $log->warn("Health check failed for " . $helper->mac . ": " . ($http->error || 'unknown'));
+
+    # Mark last health data as unavailable so Status UI shows stale-data indicator
+    # rather than displaying the previous (potentially outdated) snapshot (WR-05).
+    $helper->_lastHealthSession({
+        session_valid    => undef,
+        session_age_secs => undef,
+        idle_secs        => undef,
+        checked_at       => time(),
+        error            => $http->error || 'connection failed',
+    });
 }
 
 sub _restartForHealth {
