@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-06-30
+### Fixed
+- **Context menu: standard LMS items restored**: removed `trackInfoURL` override that prevented standard LMS actions (Add to Favorites, play controls, More Info) from appearing in the More menu for SpotOn tracks. The LMS framework now merges standard items with SpotOn entries automatically. Fixes #55.
+- **Context menu: SpotOn items labeled**: SpotOn-specific menu entries (Artist View, Album View, Like/Unlike, Follow/Unfollow, Show View, Add to Playlist) now have a "SpotOn:" prefix to distinguish them from standard LMS items.
+- **Favorites artwork**: single tracks added to LMS Favorites now display album cover art instead of a generic icon. Added `getIcon` method to ProtocolHandler with URL normalization for cache lookups.
+
 ## [2.2.0] - 2026-06-30
 ### Added
 - **Session Health Monitoring**: the unified daemon's `/health` endpoint now returns JSON with `session_valid`, `session_age_secs`, and `idle_secs` fields. The Perl side polls each daemon every 60 seconds and proactively restarts daemons with stale Spotify sessions (invalid session or >4h idle) before users experience cold-start playback failure.
