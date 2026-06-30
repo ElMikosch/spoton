@@ -598,8 +598,9 @@ sub _request {
 sub _resolveStartFlavor {
     my ($class, $cleanPath, $isMeFamily) = @_;
 
-    # D-05: me/* ALWAYS uses own-token — no fallback ever (hard guard)
-    return 'own' if $isMeFamily;
+    # D-05: me/* prefers own-token when a custom Client ID is configured.
+    # Without a custom ID, me/* uses bundled (same Keymaster session, same user scopes).
+    return 'own' if $isMeFamily && $prefs->get('clientId');
 
     # D-06: Hint cache hit → skip own-token trial, go directly to bundled
     my $hintFlavor = $class->_lookupBundledHint($cleanPath);
@@ -628,9 +629,9 @@ sub _doFlavouredRequest {
             main::INFOLOG && $log->info("Client: no token available [flavor=$flavor] for account $accountId");
 
             # Bundled fallback: if own-token retrieval fails (e.g. Keymaster 403
-            # for custom Client ID), retry with bundled token for non-me/* paths.
-            # Mirrors the HTTP 403/410 fallback in D-06 below.
-            if (!$isRetry && $flavor eq 'own' && !$isMeFamily) {
+            # for custom Client ID), retry with bundled token — including me/* paths.
+            # Keymaster tokens share the same user session regardless of client_id.
+            if (!$isRetry && $flavor eq 'own') {
                 main::INFOLOG && $log->info(
                     "Client: no_token on own — retrying with bundled token for $cleanPath");
                 $class->_doFlavouredRequest(
@@ -766,11 +767,11 @@ sub _doFlavouredRequest {
                     return;
                 }
 
-                # D-06 bundled fallback: 403/410 on own-token for non-me/* paths
+                # D-06 bundled fallback: 403/410 on own-token — retry with bundled.
                 # Also triggers on 404 if path is a known deprecated endpoint (Pitfall 4)
-                # D-05: me/* NEVER falls back to bundled — hard guard
+                # me/* included: bundled tokens share the same Keymaster user session.
                 # Anti-pattern: no re-entry into _request() (would re-run routing logic)
-                if (!$isRetry && $flavor eq 'own' && !$isMeFamily
+                if (!$isRetry && $flavor eq 'own'
                         && ($code == 403 || $code == 410
                             || ($code == 404 && $class->_is404Deprecated($cleanPath)))) {
                     $log->warn("[DIAG] api_bundled_fallback: endpoint=$cleanPath trigger_code=$code") if $prefs->get('diagnosticMode');
