@@ -7,9 +7,11 @@ use File::Basename qw(basename);
 use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 
+use JSON::XS::VersionOneAndTwo;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
+use Slim::Networking::SimpleAsyncHTTP;
 
 use Plugins::SpotOn::Plugin;
 use Plugins::SpotOn::Unified::Daemon;
@@ -124,7 +126,7 @@ sub initHelpers {
         $prefs->set('disableDiscovery', 0);
     }
 
-    main::INFOLOG && $log->is_info && $log->info("Checking SpotOn Unified helper daemons...");
+    main::DEBUGLOG && $log->is_debug && $log->debug("Checking SpotOn Unified helper daemons...");
 
     # Shut down orphaned instances (players that disconnected)
     $class->shutdown('inactive-only');
@@ -160,8 +162,8 @@ sub initHelpers {
             if (!$handled{$syncMasterId}) {
                 my $delegateClient = Slim::Player::Client::getClient($syncMasterId);
                 if ($delegateClient) {
-                    main::INFOLOG && $log->is_info && $log->info(
-                        "Starting Unified daemon for sync group master: $syncMasterId"
+                    main::DEBUGLOG && $log->is_debug && $log->debug(
+                        "Evaluating Unified daemon for sync group master: $syncMasterId"
                     );
                     $class->startHelper($delegateClient);
                     $handled{$syncMasterId} = 'started';
@@ -170,8 +172,8 @@ sub initHelpers {
         }
         else {
             # Standalone player or sync master — start directly (credential-gated in startHelper)
-            main::INFOLOG && $log->is_info && $log->info(
-                "Starting Unified daemon for player: " . $client->id
+            main::DEBUGLOG && $log->is_debug && $log->debug(
+                "Evaluating Unified daemon for player: " . $client->id
             );
             $class->startHelper($client);
             $handled{$client->id} = 'started';
@@ -217,6 +219,19 @@ sub _streamAlivePoll {
         }
         elsif (main::DEBUGLOG && $log->is_debug) {
             $log->debug("SpotOn Unified daemon alive: " . $helper->mac . " pid=" . ($helper->pid || '?'));
+        }
+
+        if ($helper->alive && $helper->_streamPort) {
+            my $count = ($helper->_healthCheckCount || 0) + 1;
+            $helper->_healthCheckCount($count);
+
+            if ($count % 12 == 0) {
+                Slim::Networking::SimpleAsyncHTTP->new(
+                    sub { $class->_onHealthResponse($helper, @_) },
+                    sub { $class->_onHealthError($helper, @_) },
+                    { timeout => 5 }
+                )->get("http://127.0.0.1:" . $helper->_streamPort . "/health");
+            }
         }
     }
 
@@ -334,6 +349,67 @@ sub startHelper {
     }
 
     return $helper if $helper && $helper->alive;
+}
+
+sub _onHealthResponse {
+    my ($class, $helper, $http) = @_;
+
+    return unless $helper && $helper->alive;
+
+    my $json = eval { from_json($http->content) };
+
+    # Always store health data on daemon (even before restart checks)
+    $helper->_lastHealthSession({
+        session_valid    => $json ? ($json->{session_valid} ? 1 : 0) : undef,
+        session_age_secs => $json ? ($json->{session_age_secs} // 0) : undef,
+        idle_secs        => $json ? ($json->{idle_secs} // 0) : undef,
+        checked_at       => time(),
+    });
+
+    # Malformed response: daemon is confused, restart
+    unless ($json && defined $json->{status} && $json->{status} eq 'ok') {
+        $class->_restartForHealth($helper, 'malformed health response');
+        return;
+    }
+
+    # Signal 1: librespot explicitly reports dead session
+    if (!$json->{session_valid}) {
+        $class->_restartForHealth($helper, 'session_valid=false');
+        return;
+    }
+
+    # Signal 2: stale session (old + idle) — proactive restart
+    # session_age > 4h AND idle > 5 min
+    # Idle guard prevents restarting during active playback/Connect use
+    if ($json->{session_age_secs} > 14400 && $json->{idle_secs} > 300) {
+        $class->_restartForHealth($helper,
+            sprintf('stale session (age=%ds, idle=%ds)', $json->{session_age_secs}, $json->{idle_secs}));
+        return;
+    }
+}
+
+sub _onHealthError {
+    my ($class, $helper, $http) = @_;
+
+    # HTTP error to localhost health endpoint while daemon process is alive
+    # = daemon HTTP server not responding. Unusual but not critical — process-level
+    # alive check in _streamAlivePoll already handles process death.
+    # Log but don't restart (avoid double-restart race with alive poll).
+    $log->warn("Health check failed for " . $helper->mac . ": " . ($http->error || 'unknown'));
+}
+
+sub _restartForHealth {
+    my ($class, $helper, $reason) = @_;
+
+    return unless $helper && $helper->alive;
+
+    main::INFOLOG && $log->is_info && $log->info(
+        sprintf("Health check restart for %s: %s", $helper->mac, $reason)
+    );
+
+    $helper->_healthCheckCount(0);
+    $class->stopHelper($helper->mac);
+    $class->startHelper($helper->mac);
 }
 
 sub stopHelper {

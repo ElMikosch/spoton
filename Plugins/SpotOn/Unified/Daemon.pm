@@ -35,6 +35,8 @@ __PACKAGE__->mk_accessor( rw => qw(
 	_startTimes
 	_streamPort
 	_stderrFh
+	_healthCheckCount
+	_lastHealthSession
 ) );
 
 # NOTE: No _streamMode accessor (unified daemon is always streaming when alive)
@@ -54,6 +56,7 @@ sub new {
 	$id =~ s/://g;
 	$self->id($id);
 	$self->_startTimes([]);
+	$self->_healthCheckCount(0);
 	$self->start();
 
 	return $self;
