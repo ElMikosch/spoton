@@ -356,7 +356,12 @@ sub _onHealthResponse {
 
     return unless $helper && $helper->alive;
 
-    my $json = eval { from_json($http->content) };
+    my $raw  = $http->content // '';
+    my $json = eval { from_json($raw) };
+    if ($@) {
+        $log->warn("Health check JSON parse error for " . $helper->mac
+                   . ": $@ (body: " . substr($raw, 0, 200) . ")");
+    }
 
     # Always store health data on daemon (even before restart checks)
     $helper->_lastHealthSession({
