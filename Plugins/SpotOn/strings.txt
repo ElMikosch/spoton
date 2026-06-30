@@ -519,30 +519,30 @@ PLUGIN_SPOTON_NO_RESULTS
 	SV	Inga resultat
 
 PLUGIN_SPOTON_ARTIST_VIEW
-	CS	Zobrazit interpreta
-	DA	Vis kunstner
-	DE	Künstler anzeigen
-	EN	View Artist
-	ES	Ver artista
-	FR	Voir l'artiste
-	IT	Visualizza artista
-	NL	Artiest bekijken
-	NO	Vis artist
-	PL	Pokaż wykonawcę
-	SV	Visa artist
+	CS	SpotOn: Zobrazit interpreta
+	DA	SpotOn: Vis kunstner
+	DE	SpotOn: Künstler anzeigen
+	EN	SpotOn: View Artist
+	ES	SpotOn: Ver artista
+	FR	SpotOn: Voir l'artiste
+	IT	SpotOn: Visualizza artista
+	NL	SpotOn: Artiest bekijken
+	NO	SpotOn: Vis artist
+	PL	SpotOn: Pokaż wykonawcę
+	SV	SpotOn: Visa artist
 
 PLUGIN_SPOTON_ALBUM_VIEW
-	CS	Zobrazit album
-	DA	Vis album
-	DE	Album anzeigen
-	EN	View Album
-	ES	Ver álbum
-	FR	Voir l'album
-	IT	Visualizza album
-	NL	Album bekijken
-	NO	Vis album
-	PL	Pokaż album
-	SV	Visa album
+	CS	SpotOn: Zobrazit album
+	DA	SpotOn: Vis album
+	DE	SpotOn: Album anzeigen
+	EN	SpotOn: View Album
+	ES	SpotOn: Ver álbum
+	FR	SpotOn: Voir l'album
+	IT	SpotOn: Visualizza album
+	NL	SpotOn: Album bekijken
+	NO	SpotOn: Vis album
+	PL	SpotOn: Pokaż album
+	SV	SpotOn: Visa album
 
 PLUGIN_SPOTON_STREAMING_SETTINGS
 	CS	Nastavení streamování
@@ -1598,30 +1598,30 @@ PLUGIN_SPOTON_LIKE_ERROR_SCOPE
 	SV	Kunde inte spara spåret – behörighet user-library-modify saknas. Logga in igen via Inställningar.
 
 PLUGIN_SPOTON_MANAGE_LIKE
-	CS	Líbit se / Přestat
-	DA	Synes om / Fjern
-	DE	Gefällt mir / Entfernen
-	EN	Like / Unlike
-	ES	Me gusta / Quitar
-	FR	J'aime / Retirer
-	IT	Mi piace / Rimuovi
-	NL	Leuk / Verwijderen
-	NO	Lik / Fjern
-	PL	Lubię / Usuń
-	SV	Gilla / Ogilla
+	CS	SpotOn: Líbit se / Přestat
+	DA	SpotOn: Synes om / Fjern
+	DE	SpotOn: Gefällt mir / Entfernen
+	EN	SpotOn: Like / Unlike
+	ES	SpotOn: Me gusta / Quitar
+	FR	SpotOn: J'aime / Retirer
+	IT	SpotOn: Mi piace / Rimuovi
+	NL	SpotOn: Leuk / Verwijderen
+	NO	SpotOn: Lik / Fjern
+	PL	SpotOn: Lubię / Usuń
+	SV	SpotOn: Gilla / Ogilla
 
 PLUGIN_SPOTON_MANAGE_FOLLOW
-	CS	Odebrat / Sledovat
-	DA	Folg / Fjern
-	DE	Folgen / Entfolgen
-	EN	Follow / Unfollow
-	ES	Seguir / Dejar
-	FR	Suivre / Ne plus suivre
-	IT	Segui / Non seguire
-	NL	Volgen / Ontvolgen
-	NO	Folg / Slutt a folge
-	PL	Obserwuj / Przestań
-	SV	Följa / Sluta följa
+	CS	SpotOn: Odebrat / Sledovat
+	DA	SpotOn: Folg / Fjern
+	DE	SpotOn: Folgen / Entfolgen
+	EN	SpotOn: Follow / Unfollow
+	ES	SpotOn: Seguir / Dejar
+	FR	SpotOn: Suivre / Ne plus suivre
+	IT	SpotOn: Segui / Non seguire
+	NL	SpotOn: Volgen / Ontvolgen
+	NO	SpotOn: Folg / Slutt a folge
+	PL	SpotOn: Obserwuj / Przestań
+	SV	SpotOn: Följa / Sluta följa
 
 PLUGIN_SPOTON_FOLLOW_SHOW
 	CS	Sledovat
@@ -1715,17 +1715,17 @@ PLUGIN_SPOTON_N_RESULTS
 	SV	%s resultat
 
 PLUGIN_SPOTON_SHOW_VIEW
-	CS	Zobrazit pořad
-	DA	Vis show
-	DE	Show anzeigen
-	EN	View show
-	ES	Ver programa
-	FR	Voir l'émission
-	IT	Vedi programma
-	NL	Toon show
-	NO	Vis show
-	PL	Pokaż program
-	SV	Visa show
+	CS	SpotOn: Zobrazit pořad
+	DA	SpotOn: Vis show
+	DE	SpotOn: Show anzeigen
+	EN	SpotOn: View show
+	ES	SpotOn: Ver programa
+	FR	SpotOn: Voir l'émission
+	IT	SpotOn: Vedi programma
+	NL	SpotOn: Toon show
+	NO	SpotOn: Vis show
+	PL	SpotOn: Pokaż program
+	SV	SpotOn: Visa show
 
 PLUGIN_SPOTON_DURATION_HM
 	CS	%s hod %s min
@@ -2027,17 +2027,17 @@ PLUGIN_SPOTON_STATUS_PAGE_DESC
 	SV	Öppna SpotOn statusdashboard i en ny flik.
 
 PLUGIN_SPOTON_ADD_TO_PLAYLIST
-	CS	Přidat do playlistu
-	DA	Tilføj til playliste
-	DE	Zu Playlist hinzufügen
-	EN	Add to Playlist
-	ES	Añadir a playlist
-	FR	Ajouter à la playlist
-	IT	Aggiungi alla playlist
-	NL	Toevoegen aan afspeellijst
-	NO	Legg til i spilleliste
-	PL	Dodaj do playlisty
-	SV	Lägg till i spellista
+	CS	SpotOn: Přidat do playlistu
+	DA	SpotOn: Tilføj til playliste
+	DE	SpotOn: Zu Playlist hinzufügen
+	EN	SpotOn: Add to Playlist
+	ES	SpotOn: Añadir a playlist
+	FR	SpotOn: Ajouter à la playlist
+	IT	SpotOn: Aggiungi alla playlist
+	NL	SpotOn: Toevoegen aan afspeellijst
+	NO	SpotOn: Legg til i spilleliste
+	PL	SpotOn: Dodaj do playlisty
+	SV	SpotOn: Lägg till i spellista
 
 PLUGIN_SPOTON_SELECT_PLAYLIST
 	CS	Vybrat playlist
