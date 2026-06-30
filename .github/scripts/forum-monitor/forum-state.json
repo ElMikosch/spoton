@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-30T15:19:33.416Z",
+  "lastChecked": "2026-06-30T17:30:29.188Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -123,9 +123,13 @@
         "1827310",
         "1827322",
         "1827392",
-        "1827424"
+        "1827424",
+        "1827437",
+        "1827439",
+        "1827440",
+        "1827441"
       ],
-      "lastPostCount": 121
+      "lastPostCount": 125
     }
   },
   "pendingTriage": [
@@ -138,6 +142,26 @@
       "contentPreview": "Originally posted by paul- \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tThe host file will get updated by dhcp. So doing it after start would be best. But sometimes pcp_startup.s",
       "draft": "Hey Nikos,\n\nThanks for checking in! Just to make sure — are you still seeing the CDN/404 playback issues after updating to [B]SpotOn v2.1.6[/B], or has the new librespot engine helped in your case?\n\nIf you're still experiencing problems, it would be really helpful if you could grab a diagnostic bundle from [B]SpotOn Settings → Diagnostics[/B] and share the relevant log sections so we can see what's happening on your end.\n\nCheers!",
       "scrapedAt": "2026-06-30T15:19:33.416Z"
+    },
+    {
+      "postId": "1827437",
+      "postNumber": 122,
+      "author": "paul-",
+      "timestamp": "2026-06-30T08:53:50-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "It’s from long running processes not disconnecting from stdout/err, even though they are redirected to null.  Busybox ash is a little quirky sometimes.",
+      "draft": "Hey [B]paul-[/B],\n\nThanks for digging into that — that's a useful data point. The Busybox ash stdout/stderr behaviour with long-running processes is a known pain point, and it lines up with what we've been seeing in the HA addon / Docker / s6 environment too (tracked in [URL=https://github.com/stiefenm/spoton/issues/60]issue #60[/URL]).\n\nThe symptom there is that [CODE]Proc::Background[/CODE] stdout redirection doesn't fully detach, which means the [CODE]stream_port[/CODE] never gets captured reliably. If your findings shed any light on that specific case, it'd be really helpful to have them noted over on that issue.\n\nDo you have a reproducible workaround, or is this more of an observation at this stage? Happy to keep the discussion going here, but if there's something actionable, dropping it on GitHub would make sure it doesn't get lost in the thread.",
+      "scrapedAt": "2026-06-30T17:30:16.861Z"
+    },
+    {
+      "postId": "1827439",
+      "postNumber": 123,
+      "author": "foxesden",
+      "timestamp": "2026-06-30T09:12:37-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "sti - so SpotOn is working on Windows, thanks for the fix. I have managed to get it co-existing with my SqueezeDSP plugin, but I was hoping to be able to pipe the audio from Spoton through SqueezeDSP by adding some custom-convert.conf settings on a per player basis, but the conversion table seems to",
+      "draft": "Hey foxesden, glad to hear SpotOn is working on Windows and you've got it co-existing with SqueezeDSP! That's a nice setup.\n\nRegarding piping through a custom [B]convert.conf[/B] — you're right that SpotOn populates the conversion table a bit differently. SpotOn uses a [B]spoton://[/B] URI scheme for its tracks, so your convert.conf rules need to match against that protocol rather than the usual [B]flc://[/B] or [B]spotify://[/B] style you might have seen elsewhere.\n\nA rule targeting SpotOn output would look something like:\n\n[CODE]\nspoton wav * * flac flac [PARAMETERS]\n[/CODE]\n\nThe general format follows the standard LMS convert.conf syntax:\n\n[CODE]\n<protocol> <source-format> <dest-format> <player-mac> <application> [options]\n[/CODE]\n\nUsing [B]*[/B] as a wildcard for the player MAC will apply it globally, or you can specify a particular player's MAC address for per-player rules.\n\nThat said, I want to be honest — I'd recommend testing carefully, as the interaction between SpotOn's stream handling and a transcoding step could introduce buffering or timing quirks, especially with Spotify Connect mode vs. Browse/queue mode.\n\nTo help narrow things down if you run into issues:\n\n1. Check [B]SpotOn Settings → Diagnostics[/B] for any stream-related errors\n2. Enable LMS server logging for [B]transcoding[/B] to see if the convert rule is being picked up\n\nIf you find a combination that works well, I'd love to hear the exact rule — it would be useful to document for other users wanting a similar setup.\n\nIf things go sideways, feel free to open a GitHub issue with your convert.conf snippet and the diagnostic bundle: [URL]https://github.com/stiefenm/spoton/issues[/URL]",
+      "scrapedAt": "2026-06-30T17:30:29.188Z"
     }
   ]
 }
