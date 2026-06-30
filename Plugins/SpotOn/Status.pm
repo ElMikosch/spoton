@@ -153,6 +153,7 @@ sub _collectDaemons {
             playing        => $playing,
             currentTrack   => $currentTrack,
             syncGroup      => $syncGroup,
+            sessionHealth  => $helper->_lastHealthSession,
         };
     }
 

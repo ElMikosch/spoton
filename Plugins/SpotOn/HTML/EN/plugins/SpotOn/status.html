@@ -173,6 +173,22 @@ footer {
         return hours + 'h ' + minutes + 'm';
     }
 
+    function formatDuration(s) {
+        if (s === null || s === undefined) return '—';
+        s = Math.floor(s);
+        if (s >= 3600) {
+            var h = Math.floor(s / 3600);
+            var m = Math.floor((s % 3600) / 60);
+            return h + 'h ' + m + 'm';
+        }
+        if (s >= 60) {
+            var m = Math.floor(s / 60);
+            var sec = s % 60;
+            return m + 'm ' + sec + 's';
+        }
+        return s + 's';
+    }
+
     function val(v) {
         if (v === null || v === undefined) return '—';
         return String(v);
@@ -252,6 +268,15 @@ footer {
             body.appendChild(createMetricRow('Uptime', formatUptime(d.uptime)));
             body.appendChild(createMetricRow('Connect', d.connectEnabled ? 'Yes' : 'No'));
             body.appendChild(createMetricRow('Stream Port', d.streamPort != null ? String(d.streamPort) : '—', 'mono'));
+
+            if (d.sessionHealth) {
+                var sessionValid = d.sessionHealth.session_valid;
+                var sessionLabel = sessionValid ? 'valid' : 'invalid';
+                var sessionClass = sessionValid ? 'dot-alive' : 'dot-dead';
+                body.appendChild(createMetricRow('Session', sessionLabel, sessionClass));
+                body.appendChild(createMetricRow('Session Age', formatDuration(d.sessionHealth.session_age_secs)));
+                body.appendChild(createMetricRow('Idle Time', formatDuration(d.sessionHealth.idle_secs)));
+            }
         }
     }
 
