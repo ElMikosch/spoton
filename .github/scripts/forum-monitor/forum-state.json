@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-30T12:32:33.649Z",
+  "lastChecked": "2026-06-30T15:19:33.416Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -122,10 +122,22 @@
         "1827308",
         "1827310",
         "1827322",
-        "1827392"
+        "1827392",
+        "1827424"
       ],
-      "lastPostCount": 120
+      "lastPostCount": 121
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1827424",
+      "postNumber": 121,
+      "author": "_NK_",
+      "timestamp": "2026-06-30T06:17:08-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by paul- \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tThe host file will get updated by dhcp. So doing it after start would be best. But sometimes pcp_startup.s",
+      "draft": "Hey Nikos,\n\nThanks for checking in! Just to make sure — are you still seeing the CDN/404 playback issues after updating to [B]SpotOn v2.1.6[/B], or has the new librespot engine helped in your case?\n\nIf you're still experiencing problems, it would be really helpful if you could grab a diagnostic bundle from [B]SpotOn Settings → Diagnostics[/B] and share the relevant log sections so we can see what's happening on your end.\n\nCheers!",
+      "scrapedAt": "2026-06-30T15:19:33.416Z"
+    }
+  ]
 }
