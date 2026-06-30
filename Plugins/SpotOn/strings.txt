@@ -1611,7 +1611,7 @@ PLUGIN_SPOTON_MANAGE_LIKE
 	SV	SpotOn: Gilla / Ogilla
 
 PLUGIN_SPOTON_MANAGE_FOLLOW
-	CS	SpotOn: Odebrat / Sledovat
+	CS	SpotOn: Sledovat / Odebrat
 	DA	SpotOn: Folg / Fjern
 	DE	SpotOn: Folgen / Entfolgen
 	EN	SpotOn: Follow / Unfollow
@@ -1718,7 +1718,7 @@ PLUGIN_SPOTON_SHOW_VIEW
 	CS	SpotOn: Zobrazit pořad
 	DA	SpotOn: Vis show
 	DE	SpotOn: Show anzeigen
-	EN	SpotOn: View show
+	EN	SpotOn: View Show
 	ES	SpotOn: Ver programa
 	FR	SpotOn: Voir l'émission
 	IT	SpotOn: Vedi programma
