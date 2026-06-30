@@ -81,21 +81,36 @@ sub _statusDataHandler {
 
     my %data;
 
+    # Each collector is eval-guarded so a broken module or missing method
+    # at startup returns partial data rather than crashing the handler (CR-01).
+
     # --- Daemons ---
-    $data{daemons} = _collectDaemons();
+    $data{daemons} = eval { _collectDaemons() } // [];
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: _collectDaemons failed: $@");
+    }
 
     # --- API telemetry ---
     require Plugins::SpotOn::API::Client;
-    $data{api} = Plugins::SpotOn::API::Client->statusSnapshot();
+    $data{api} = eval { Plugins::SpotOn::API::Client->statusSnapshot() } // {};
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: statusSnapshot failed: $@");
+    }
 
     # --- Errors (newest first) ---
-    $data{errors} = _errorHistory();
+    $data{errors} = eval { _errorHistory() } // [];
 
     # --- Tokens ---
-    $data{tokens} = _collectTokens();
+    $data{tokens} = eval { _collectTokens() } // {};
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: _collectTokens failed: $@");
+    }
 
     # --- System info (D-05: cached, computed once) ---
-    $data{system} = _systemInfo();
+    $data{system} = eval { _systemInfo() } // {};
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: _systemInfo failed: $@");
+    }
 
     _jsonResponse($httpClient, $response, \%data);
 }
