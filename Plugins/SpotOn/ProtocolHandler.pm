@@ -759,7 +759,11 @@ sub getIcon {
     my ($class, $url) = @_;
 
     if ($url) {
-        my $meta = $cache->get('spoton_meta_' . md5_hex($url));
+        my $canonical = $url;
+        if ($canonical =~ m{^spoton:(?!//)}) {
+            $canonical =~ s{^spoton:}{spoton://};
+        }
+        my $meta = $cache->get('spoton_meta_' . md5_hex($canonical));
         return $meta->{cover} if $meta && $meta->{cover} && $meta->{cover} ne '/html/images/cover.png';
     }
 
