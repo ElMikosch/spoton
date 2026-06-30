@@ -292,13 +292,28 @@ async fn unified_http_server(
 
                         // ---- GET /health ----
                         if method == Method::GET && path == "/health" {
-                            let body = Full::new(Bytes::from("ok"))
+                            let session_valid = {
+                                let s = session.lock().await;
+                                !s.is_invalid()
+                            };
+                            let age_secs = {
+                                let t = session_created_at.lock().unwrap_or_else(|e| e.into_inner());
+                                t.elapsed().as_secs()
+                            };
+                            let idle_secs = {
+                                let t = last_activity.lock().unwrap_or_else(|e| e.into_inner());
+                                t.elapsed().as_secs()
+                            };
+                            let json = format!(
+                                r#"{{"status":"ok","session_valid":{},"session_age_secs":{},"idle_secs":{}}}"#,
+                                session_valid, age_secs, idle_secs
+                            );
+                            let body = Full::new(Bytes::from(json))
                                 .map_err(|e| match e {})
                                 .boxed();
                             let resp = Response::builder()
                                 .status(StatusCode::OK)
-                                .header("Content-Type", "text/plain")
-                                .header("Content-Length", "2")
+                                .header("Content-Type", "application/json")
                                 .body(body)
                                 .expect("health response builder");
                             return Ok::<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>(resp);
@@ -439,6 +454,7 @@ async fn unified_http_server(
                                                 break;
                                             }
                                             *last_data_time_clone.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                                            *last_activity_relay.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
                                         }
                                         None => {
                                             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -640,6 +656,8 @@ async fn unified_http_server(
 
                             // Track started streaming — reset consecutive failure counter.
                             consecutive_browse_fails.store(0, Ordering::SeqCst);
+                            // Phase 36: update activity timestamp on successful Browse track
+                            { *last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now(); }
 
                             // Build streaming response.
                             let stream = TokioStreamExt::map(
@@ -1293,6 +1311,7 @@ pub async fn run_unified(
                                     }
                                 }
                                 log::debug!("[spoton/unified] Spirc reconnected");
+                                { *session_created_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now(); }
                                 browse_reconnect_pending.store(false, Ordering::Release);
                             }
                             Err(e) => {
@@ -1450,6 +1469,7 @@ pub async fn run_unified(
                         Ok(()) => {
                             *session_shared.lock().await = ns;
                             log::info!("[spoton/unified] Browse-only session reconnected");
+                            { *session_created_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now(); }
                         }
                         Err(e) => {
                             log::error!("[spoton/unified] Browse-only session reconnect failed: {e}");
