@@ -5,6 +5,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-30
+### Added
+- **Session Health Monitoring**: the unified daemon's `/health` endpoint now returns JSON with `session_valid`, `session_age_secs`, and `idle_secs` fields. The Perl side polls each daemon every 60 seconds and proactively restarts daemons with stale Spotify sessions (invalid session or >4h idle) before users experience cold-start playback failure.
+- **Status Page: Session Health**: the diagnostic status page now shows per-daemon session validity, session age, and idle time with live-updating green/red indicators.
+
+### Fixed
+- **me/* endpoint fallback**: API requests to `me/*` endpoints (library, playlists, player state) now fall back to the bundled token when Keymaster returns 403 for a custom Client ID. Previously, only Browse/Search had this fallback — library and player endpoints failed silently. (#91)
+- **Status page crash resilience**: all five data collectors in `_statusDataHandler` are now wrapped in `eval` guards — a failing collector returns an empty default instead of crashing the entire status page.
+- **Browse fail counter race**: the consecutive-failure counter is no longer incorrectly reset when `serve_track_request` returns a slow 404 after the 500ms early-status timeout.
+- **Health restart crash-loop**: health-triggered daemon restarts are now rate-limited to once per 5 minutes, preventing indefinite restart cycles when a session is permanently dead.
+- **Health check error logging**: JSON parse errors from the `/health` endpoint are now logged with the raw response body instead of being silently discarded.
+- **Status page XHR pileup**: added 4-second request timeout and switched from `setInterval` to `setTimeout`-chained polling to prevent request accumulation when LMS is slow.
+- **Stale health data display**: the status page now shows "invalid" when the health endpoint is unreachable, instead of displaying the last successful (potentially outdated) snapshot.
+
+### Changed
+- **Watchdog log cleanup**: three `initHelpers` log lines that fired every 5 seconds (>800/day) downgraded from INFO to DEBUG.
+
 ## [2.1.8] - 2026-06-29
 ### Fixed
 - **Custom Client ID fallback**: when a custom Spotify Developer App Client ID fails token retrieval (Keymaster 403/404), SpotOn now automatically falls back to the bundled token for Browse/Search/Library requests. Previously, a failing custom Client ID caused "No results" with no recovery. Fixes #86, #91.
