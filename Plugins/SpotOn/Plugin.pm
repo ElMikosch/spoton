@@ -985,7 +985,6 @@ sub _trackItem {
         type          => 'audio',
         # spoton:// URL for LMS Favorites playback
         favorites_url => $spoton_url,
-        weblink       => 'https://open.spotify.com/track/' . ($track->{id} // ''),
     );
     $item{items} = \@contextItems if @contextItems;
 
@@ -1013,7 +1012,6 @@ sub _albumItem {
         image         => _largestImage($album->{images}),
         line2         => $line2,
         favorites_url => $album_spoton,
-        weblink       => 'https://open.spotify.com/album/' . ($album->{id} // ''),
         type          => 'playlist',
     };
 }
@@ -1047,7 +1045,6 @@ sub _playlistItem {
         image         => _largestImage($playlist->{images}),
         line2         => $playlist->{owner}{display_name} // '',
         favorites_url => $pl_spoton,
-        weblink       => 'https://open.spotify.com/playlist/' . ($playlist->{id} // ''),
         type          => 'playlist',
     };
 }
@@ -1553,7 +1550,6 @@ sub _showItem {
         passthrough   => [{ showId => $show->{id}, showUri => $show->{uri}, showImages => $show->{images}, showName => $name }],
         image         => _largestImage($show->{images}),
         favorites_url => $show_spoton,
-        weblink       => 'https://open.spotify.com/show/' . ($show->{id} // ''),
         type          => 'playlist',
     };
 }
@@ -1756,7 +1752,6 @@ sub _episodeItem {
         type          => 'audio',
         # spoton:// URL for LMS Favorites playback
         favorites_url => $spoton_url,
-        weblink       => 'https://open.spotify.com/episode/' . ($episode->{id} // ''),
     );
     $item{items} = \@contextItems;
 
@@ -2486,7 +2481,6 @@ sub _albumTrackItem {
         image     => $image,
         duration  => $duration,
         type      => 'audio',
-        weblink   => 'https://open.spotify.com/track/' . ($track->{id} // ''),
     );
     $item{items} = \@contextItems if @contextItems;
 
