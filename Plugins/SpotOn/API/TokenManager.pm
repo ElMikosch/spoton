@@ -433,14 +433,20 @@ sub _fetchKeymasterToken {
         if ($exit != 0 || !$output) {
             $log->error("TokenManager: --get-token failed for $accountId ($flavor, client_id=$maskedId) (exit $exit)");
 
-            # Parse Keymaster error payload from librespot stderr (e.g. {"code":4,"errorDescription":"Invalid request"})
-            if ($output && $output =~ /\{[^{}]*"errorDescription"\s*:\s*"([^"]*)"[^{}]*\}/) {
-                my $errDesc = $1;
-                my ($errCode) = ($output =~ /"code"\s*:\s*(\d+)/);
-                $log->error("TokenManager: keymaster_error: code=" . ($errCode // '?') . " message=\"$errDesc\" (client_id=$maskedId)");
-            }
-            if ($output && $output =~ /status_code:\s*(\d+)/) {
-                $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
+            if ($output) {
+                # Extract Keymaster HTTP status from librespot's MercuryResponse debug format
+                if ($output =~ /status_code:\s*(\d+)/) {
+                    $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
+                }
+                # Decode Keymaster error payload from byte array (e.g. payload: [[123, 34, ...]])
+                if ($output =~ /payload:\s*\[\[([0-9,\s]+)\]\]/) {
+                    my $payloadJson = join('', map { chr($_) } split(/,\s*/, $1));
+                    my $payload = eval { from_json($payloadJson) };
+                    if ($payload && $payload->{errorDescription}) {
+                        $log->error("TokenManager: keymaster_error: code=" . ($payload->{code} // '?')
+                            . " message=\"$payload->{errorDescription}\" (client_id=$maskedId)");
+                    }
+                }
             }
 
             if ($INC{'Plugins/SpotOn/Status.pm'}) {
