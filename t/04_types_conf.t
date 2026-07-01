@@ -31,7 +31,7 @@ SKIP: {
         my @fields = split(/\s+/, $son_line);
 
         # MIME-Type is 3rd field (index 2)
-        is($fields[2], 'audio/x-sb-spoton', "MIME-Type is audio/x-sb-spoton");
+        is($fields[2], 'audio/ogg', "MIME-Type is audio/ogg (SpotOn Native OGG passthrough)");
 
         # Server-File-Type is 4th field (index 3)
         is($fields[3], 'audio', "Server-File-Type is audio");
