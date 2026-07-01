@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.5] - 2026-07-01
+### Fixed
+- **Song Info URL**: the URL line in Track Info / Song Info now shows a clickable `https://open.spotify.com/...` link instead of the raw `spoton://` protocol URL. (#93)
+- **Favorites album/playlist display**: album and playlist favorites now show track names with artist and cover art instead of raw `spoton://track:ID` URLs. The underlying `explodePlaylist` now returns full OPML items instead of bare URL strings.
+- **OGG passthrough auto-mode**: removed the `model=squeezelite` gate — auto mode now trusts the player's format announcement. Any player that reports `ogg` in its capabilities gets OGG passthrough (SqueezePlay, WiiM Ultra, etc.). Players without OGG support can set Stream Format to "PCM" as fallback.
+
 ## [2.2.4] - 2026-07-01
 ### Added
 - **OGG Vorbis Passthrough**: squeezelite players now receive raw Ogg/Vorbis data from SpotOn, offloading audio decoding from the server to the player. Hardware Squeezebox players continue to receive PCM automatically. Mixed sync groups fall back to PCM when any member can't decode OGG. (#96)
