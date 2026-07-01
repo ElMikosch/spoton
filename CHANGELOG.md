@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-07-01
+### Fixed
+- **Keymaster 403 diagnostics**: error payloads from Spotify's Keymaster are now decoded from librespot's byte-array format and logged as structured messages (e.g. `keymaster_error: code=4 message="Invalid request"`). Previously, the raw Rust debug output was hard to interpret.
+- **No-op fallback eliminated**: when no custom Client ID is configured, the bundled fallback retry is skipped since it would use the identical Client ID. Reduces duplicate error output from two identical failures to one clear message.
+
+### Changed
+- **Client ID in token logs**: the Client ID used for each `--get-token` call is now logged (first 8 chars masked) so it's clear whether own and bundled flavors use different IDs.
+
 ## [2.2.1] - 2026-06-30
 ### Fixed
 - **Context menu: standard LMS items restored**: removed `trackInfoURL` override that prevented standard LMS actions (Add to Favorites, play controls, More Info) from appearing in the More menu for SpotOn tracks. The LMS framework now merges standard items with SpotOn entries automatically. Fixes #55.
@@ -393,7 +401,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-player settings (bitrate, format, Connect toggle, Autoplay toggle)
 - mDNS discovery for Spotify Connect visibility
 
-[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.2.2...HEAD
+[2.2.2]: https://github.com/stiefenm/spoton/compare/v2.2.1...v2.2.2
 [2.0.1]: https://github.com/stiefenm/spoton/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/stiefenm/spoton/compare/v1.9.1...v2.0.0
 [1.9.1]: https://github.com/stiefenm/spoton/compare/v1.9.0...v1.9.1
