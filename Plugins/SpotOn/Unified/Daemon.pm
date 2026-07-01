@@ -30,6 +30,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	cache
 	_accountId
 	_connectEnabled
+	_passthrough
 	_lastSeen
 	_proc
 	_startTimes
@@ -109,6 +110,14 @@ sub start {
 		'--disable-audio-cache',
 		'--player-mac', $self->mac,
 	);
+
+	# D-01: Passthrough applies to the whole daemon (Browse AND Connect),
+	# independent of whether Connect is enabled. Resolve via shared capability
+	# function (D-04/D-05/D-08).
+	require Plugins::SpotOn::Unified::DaemonManager;
+	my $wantPassthrough = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client) ? 1 : 0;
+	$self->_passthrough($wantPassthrough);
+	push @helperArgs, '--passthrough' if $wantPassthrough;
 
 	# D-07 / D-01: Connect is conditional on per-player toggle.
 	# The unified daemon always starts (credential-gated), but --enable-connect
