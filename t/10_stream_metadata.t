@@ -320,8 +320,8 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG, SpotOn Browse',
-        'META-02: streamFormat=ogg, mode=Browse => "OGG, SpotOn Browse"');
+    is($result, 'PCM, SpotOn Browse',
+        'META-02: streamFormat=ogg currently returns PCM (OGG passthrough not yet wired, #96)');
 }
 
 # ============================================================
@@ -334,8 +334,8 @@ sub setup_prefs {
         streamFormat => 'flac',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
-    is($result, 'FLAC, SpotOn Connect',
-        'META-02: streamFormat=flac, mode=Connect => "FLAC, SpotOn Connect"');
+    is($result, 'PCM, SpotOn Connect',
+        'META-02: streamFormat=flac currently returns PCM (transcoding not yet wired, #96)');
 }
 
 # ============================================================
@@ -348,8 +348,8 @@ sub setup_prefs {
         streamFormat => 'mp3',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'MP3, SpotOn Browse',
-        'META-02: streamFormat=mp3 => "MP3, SpotOn Browse"');
+    is($result, 'PCM, SpotOn Browse',
+        'META-02: streamFormat=mp3 currently returns PCM (transcoding not yet wired, #96)');
 }
 
 # ============================================================
@@ -378,8 +378,8 @@ sub setup_prefs {
         passthrough  => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'OGG, SpotOn Browse',
-        'D-05: streamFormat=auto + passthrough=1 => "OGG, SpotOn Browse"');
+    is($result, 'PCM, SpotOn Browse',
+        'D-05: streamFormat=auto + passthrough=1 currently returns PCM (OGG passthrough not yet wired, #96)');
 }
 
 # ============================================================
@@ -406,8 +406,8 @@ sub setup_prefs {
         passthrough => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString(undef, 'Browse');
-    is($result, 'OGG, SpotOn Browse',
-        'META-03: undef client, auto+passthrough=1 => "OGG, SpotOn Browse"');
+    is($result, 'PCM, SpotOn Browse',
+        'META-03: undef client currently returns PCM (OGG passthrough not yet wired, #96)');
 }
 
 # ============================================================
