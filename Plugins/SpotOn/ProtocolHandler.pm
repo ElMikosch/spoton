@@ -462,19 +462,18 @@ sub explodePlaylist {
             my $tracksData = $album->{tracks} || {};
             my $total      = $tracksData->{total} || 0;
 
-            my $allTracks = [];
+            my @allItems;
             for my $track (@{ $tracksData->{items} || [] }) {
                 next unless $track && $track->{id};
-                my $trackUrl = 'spoton://track:' . $track->{id};
-                push @$allTracks, $trackUrl;
-                _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover, $albumId);
+                push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
+                _cacheExplodedTrack('spoton://track:' . $track->{id}, $track, $albumName, $albumCover, $albumId);
             }
 
-            if (scalar(@$allTracks) >= $total) {
+            if (scalar(@allItems) >= $total) {
                 main::INFOLOG && $log->is_info && $log->info(
-                    "explodePlaylist: album $albumId => " . scalar(@$allTracks) . " tracks"
+                    "explodePlaylist: album $albumId => " . scalar(@allItems) . " tracks"
                 );
-                $cb->($allTracks);
+                $cb->({ items => \@allItems });
                 return;
             }
 
@@ -488,27 +487,26 @@ sub explodePlaylist {
                     my ($data, $err) = @_;
                     unless ($data && $data->{items}) {
                         undef $fetchPage;
-                        $cb->($allTracks);
+                        $cb->({ items => \@allItems });
                         return;
                     }
                     for my $track (@{ $data->{items} }) {
                         next unless $track && $track->{id};
-                        my $trackUrl = 'spoton://track:' . $track->{id};
-                        push @$allTracks, $trackUrl;
-                        _cacheExplodedTrack($trackUrl, $track, $albumName, $albumCover, $albumId);
+                        push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
+                        _cacheExplodedTrack('spoton://track:' . $track->{id}, $track, $albumName, $albumCover, $albumId);
                     }
-                    if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
+                    if (scalar(@allItems) < $total && @{ $data->{items} }) {
                         $fetchPage->($offset + scalar(@{ $data->{items} }));
                     } else {
                         undef $fetchPage;
                         main::INFOLOG && $log->is_info && $log->info(
-                            "explodePlaylist: album $albumId => " . scalar(@$allTracks) . " tracks"
+                            "explodePlaylist: album $albumId => " . scalar(@allItems) . " tracks"
                         );
-                        $cb->($allTracks);
+                        $cb->({ items => \@allItems });
                     }
                 });
             };
-            $fetchPage->(scalar(@$allTracks));
+            $fetchPage->(scalar(@allItems));
         });
         return;
     }
@@ -520,7 +518,7 @@ sub explodePlaylist {
         my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
         require Plugins::SpotOn::API::Client;
 
-        my $allTracks = [];
+        my @allItems;
         my $fetchPage;
         $fetchPage = sub {
             my ($offset) = @_;
@@ -532,29 +530,30 @@ sub explodePlaylist {
                 unless ($data && $data->{items}) {
                     undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
-                        "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
+                        "explodePlaylist: playlist $playlistId => " . scalar(@allItems) . " tracks"
                     );
-                    $cb->($allTracks);
+                    $cb->({ items => \@allItems });
                     return;
                 }
                 for my $item (@{ $data->{items} }) {
                     next unless $item && $item->{track} && $item->{track}{id};
                     my $track = $item->{track};
-                    my $trackUrl = 'spoton://track:' . $track->{id};
-                    push @$allTracks, $trackUrl;
                     my $albumInfo = $track->{album} || {};
-                    _cacheExplodedTrack($trackUrl, $track,
-                        $albumInfo->{name}, _largestImage($albumInfo->{images}), $albumInfo->{id});
+                    my $albumName  = $albumInfo->{name};
+                    my $albumCover = _largestImage($albumInfo->{images});
+                    push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
+                    _cacheExplodedTrack('spoton://track:' . $track->{id}, $track,
+                        $albumName, $albumCover, $albumInfo->{id});
                 }
                 my $total = $data->{total} || 0;
-                if (scalar(@$allTracks) < $total && @{ $data->{items} }) {
+                if (scalar(@allItems) < $total && @{ $data->{items} }) {
                     $fetchPage->($offset + scalar(@{ $data->{items} }));
                 } else {
                     undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
-                        "explodePlaylist: playlist $playlistId => " . scalar(@$allTracks) . " tracks"
+                        "explodePlaylist: playlist $playlistId => " . scalar(@allItems) . " tracks"
                     );
-                    $cb->($allTracks);
+                    $cb->({ items => \@allItems });
                 }
             });
         };
@@ -569,7 +568,7 @@ sub explodePlaylist {
         my $accountId = Plugins::SpotOn::Plugin::_getAccountId($client);
         require Plugins::SpotOn::API::Client;
 
-        my @episodes;
+        my @allItems;
         my $total = 0;
         my $fetchPage;
         $fetchPage = sub {
@@ -582,27 +581,26 @@ sub explodePlaylist {
                 unless ($data && $data->{items}) {
                     undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
-                        "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
+                        "explodePlaylist: show $showId => " . scalar(@allItems) . " episodes"
                     );
-                    $cb->(\@episodes);
+                    $cb->({ items => \@allItems });
                     return;
                 }
                 $total = $data->{total} || 0;
                 my $pageItems = $data->{items};
                 for my $ep (@{$pageItems}) {
                     next unless $ep && $ep->{id};
-                    my $epUrl = 'spoton://episode:' . $ep->{id};
-                    push @episodes, $epUrl;
-                    _cacheExplodedEpisode($epUrl, $ep);
+                    push @allItems, _buildExplodedEpisodeItem($ep);
+                    _cacheExplodedEpisode('spoton://episode:' . $ep->{id}, $ep);
                 }
-                if (scalar(@episodes) < $total && @{$pageItems} > 0) {
+                if (scalar(@allItems) < $total && @{$pageItems} > 0) {
                     $fetchPage->($offset + scalar(@{$pageItems}));
                 } else {
                     undef $fetchPage;
                     main::INFOLOG && $log->is_info && $log->info(
-                        "explodePlaylist: show $showId => " . scalar(@episodes) . " episodes"
+                        "explodePlaylist: show $showId => " . scalar(@allItems) . " episodes"
                     );
-                    $cb->(\@episodes);
+                    $cb->({ items => \@allItems });
                 }
             });
         };
@@ -772,6 +770,43 @@ sub getIcon {
     }
 
     return 'plugins/SpotOn/html/images/SpotOn_MTL_svg_spoton.png';
+}
+
+sub _buildExplodedTrackItem {
+    my ($track, $albumName, $albumCover) = @_;
+    my $title   = $track->{name} || '';
+    my $artist  = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
+    my $url     = 'spoton://track:' . $track->{id};
+    return {
+        name     => "$title \x{2014} $artist",
+        line1    => $title,
+        line2    => $artist . ($albumName ? " \x{2022} $albumName" : ''),
+        url      => $url,
+        play     => $url,
+        image    => $albumCover || '/html/images/cover.png',
+        duration => ($track->{duration_ms} || 0) / 1000,
+        type     => 'audio',
+    };
+}
+
+sub _buildExplodedEpisodeItem {
+    my ($ep) = @_;
+    my $show  = $ep->{show} || {};
+    my $title = $ep->{name} || '';
+    my $cover = _largestImage($ep->{images})
+             || _largestImage($show->{images})
+             || '/html/images/cover.png';
+    my $url   = 'spoton://episode:' . $ep->{id};
+    return {
+        name     => $title,
+        line1    => $title,
+        line2    => $show->{name} || '',
+        url      => $url,
+        play     => $url,
+        image    => $cover,
+        duration => ($ep->{duration_ms} || 0) / 1000,
+        type     => 'audio',
+    };
 }
 
 sub _cacheExplodedTrack {
