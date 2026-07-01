@@ -491,8 +491,8 @@ sub setup_prefs {
 }
 
 # ============================================================
-# Test 6a: Hardware model + auto + passthrough=1 => PCM
-# D-04: hardware models excluded from passthrough whitelist
+# Test 6a: Player without ogg in formats + auto + passthrough=1 => PCM
+# D-04: passthrough requires ogg in player-announced formats
 # ============================================================
 {
     my $client = MockClient->new('player_hw_auto');
@@ -501,10 +501,11 @@ sub setup_prefs {
         streamFormat => 'auto',
         passthrough  => 1,
         model        => 'squeezebox2',
+        formats      => ['pcm', 'flac', 'mp3'],
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
     is($result, 'PCM, SpotOn Browse',
-        'D-04/OGG-02: hardware model squeezebox2 + auto + passthrough=1 => "PCM, SpotOn Browse"');
+        'D-04/OGG-02: player without ogg format + auto + passthrough=1 => "PCM, SpotOn Browse"');
 }
 
 # ============================================================
@@ -559,17 +560,18 @@ sub setup_prefs {
         master_client => $master_client,  # master points to itself
         sync_slaves  => [$slave_client],  # Slim::Player::Sync::slaves() returns this
     );
-    # Slave: hardware model (not OGG-capable)
+    # Slave: player without ogg format (not OGG-capable)
     setup_prefs(
         client       => $slave_client,
         streamFormat => 'auto',
         model        => 'squeezebox2',
+        formats      => ['pcm', 'flac', 'mp3'],
         synced       => 1,
         master_client => $master_client,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($master_client, 'Browse');
     is($result, 'PCM, SpotOn Browse',
-        'D-08: sync-group with mixed capability (squeezelite master + squeezebox2 slave) => "PCM, SpotOn Browse"');
+        'D-08: sync-group with mixed formats (squeezelite+ogg master + no-ogg slave) => "PCM, SpotOn Browse"');
 }
 
 # ============================================================
