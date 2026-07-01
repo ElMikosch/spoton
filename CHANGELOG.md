@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-07-01
+### Fixed
+- **NowPlaying format display**: now correctly shows "PCM" instead of falsely claiming "OGG". All Rust sinks serve PCM exclusively — the OGG passthrough infrastructure (UI settings, feature flag) is prepared but not yet wired in the streaming pipeline. (#96)
+
 ## [2.2.2] - 2026-07-01
 ### Fixed
 - **Keymaster 403 diagnostics**: error payloads from Spotify's Keymaster are now decoded from librespot's byte-array format and logged as structured messages (e.g. `keymaster_error: code=4 message="Invalid request"`). Previously, the raw Rust debug output was hard to interpret.
@@ -401,7 +405,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-player settings (bitrate, format, Connect toggle, Autoplay toggle)
 - mDNS discovery for Spotify Connect visibility
 
-[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.2.2...HEAD
+[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.2.3...HEAD
+[2.2.3]: https://github.com/stiefenm/spoton/compare/v2.2.2...v2.2.3
 [2.2.2]: https://github.com/stiefenm/spoton/compare/v2.2.1...v2.2.2
 [2.0.1]: https://github.com/stiefenm/spoton/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/stiefenm/spoton/compare/v1.9.1...v2.0.0
