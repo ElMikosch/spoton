@@ -44,6 +44,55 @@ sub _isConnectEnabled {
         // $prefs->get('enableSpotifyConnect');
 }
 
+# resolvePassthroughForClient($class, $client)
+# Single source of truth for OGG passthrough decisions (D-04/D-05/D-08).
+# Called by Daemon.pm (--passthrough flag) and Plugin.pm (_typeString display).
+# Returns 1 if the player should receive raw Ogg/Vorbis, 0 for PCM.
+sub resolvePassthroughForClient {
+    my ($class, $client) = @_;
+    return 0 unless $client;
+
+    # Per-client resolution (used for individual check and sync-group iteration)
+    my $resolveOne = sub {
+        my ($c) = @_;
+        my $fmt = $prefs->client($c)->get('streamFormat') // 'auto';
+
+        # D-05: explicit format override — trust the user's choice directly
+        return 1 if $fmt eq 'ogg';
+        return 0 if $fmt =~ /^(?:pcm|flac|mp3)$/;
+
+        # auto (D-04): all three conditions must be true
+        # 1. Binary has passthrough capability (passthrough-decoder feature compiled in)
+        require Plugins::SpotOn::Helper;
+        return 0 unless Plugins::SpotOn::Helper->getCapability('passthrough');
+        # 2. Player model is squeezelite (NOT hardware Squeezebox — see Pitfall 1)
+        return 0 unless $c->model eq 'squeezelite';
+        # 3. Player formats include ogg (defense against squeezelite started with -e ogg)
+        return 0 unless grep { $_ eq 'ogg' } $c->formats;
+
+        return 1;
+    };
+
+    my $result = $resolveOne->($client);
+
+    # D-08: sync-group aggregation — PCM fallback if ANY member can't do OGG
+    if ($result && $client->isSynced() && $client->master) {
+        my $master = $client->master;
+        $result = $resolveOne->($master) if $master ne $client;
+        if ($result) {
+            for my $slave (Slim::Player::Sync::slaves($master)) {
+                next if "$slave" eq "$client";  # skip self (already resolved above)
+                unless ($resolveOne->($slave)) {
+                    $result = 0;
+                    last;
+                }
+            }
+        }
+    }
+
+    return $result ? 1 : 0;
+}
+
 sub scheduleInit {
     my $class = __PACKAGE__;
     Slim::Utils::Timers::killTimers($class, \&initHelpers);
@@ -320,6 +369,17 @@ sub startHelper {
                 if (($helper->_connectEnabled // -1) != $wantConnect) {
                     main::INFOLOG && $log->is_info && $log->info(
                         "Connect toggle changed for $clientId (was " . ($helper->_connectEnabled // '?') . ", now $wantConnect) — restarting daemon"
+                    );
+                    $class->stopHelper($clientId);
+                    $helper = undef;
+                }
+            }
+
+            if ($helper && $helper->alive) {
+                my $wantPassthrough = $class->resolvePassthroughForClient($client) ? 1 : 0;
+                if (($helper->_passthrough // -1) != $wantPassthrough) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Passthrough format changed for $clientId (was " . ($helper->_passthrough // '?') . ", now $wantPassthrough) — restarting daemon"
                     );
                     $class->stopHelper($clientId);
                     $helper = undef;
