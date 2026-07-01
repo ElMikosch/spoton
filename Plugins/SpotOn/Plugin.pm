@@ -2739,10 +2739,9 @@ sub _typeString {
            || 'auto')
         : 'auto';
 
-    if ($fmt eq 'auto') {
-        require Plugins::SpotOn::Helper;
-        $fmt = Plugins::SpotOn::Helper->getCapability('passthrough') ? 'ogg' : 'pcm';
-    }
+    # All sinks currently deliver PCM regardless of streamFormat setting.
+    # OGG passthrough is prepared (UI, feature flag) but not wired in the Rust sinks.
+    $fmt = 'pcm';
 
     my %LABEL = (ogg => 'OGG', flac => 'FLAC', mp3 => 'MP3', pcm => 'PCM');
     my $fmtLabel = $LABEL{$fmt} || uc($fmt);
