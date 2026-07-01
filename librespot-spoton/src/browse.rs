@@ -164,13 +164,14 @@ pub async fn serve_track_request(
     session: Session,
     pcm_tx: mpsc::Sender<Bytes>,
     start_position_ms: u32,
+    passthrough: bool,
 ) -> StatusCode {
     // Create a per-request Player.
     // The factory closure captures a clone of pcm_tx for BrowseHttpSink.
     // Player::new() spawns its own std::thread with tokio Runtime for decoding.
     let pcm_tx_clone = pcm_tx.clone();
     let player = Player::new(
-        PlayerConfig::default(),
+        PlayerConfig { passthrough, ..PlayerConfig::default() },
         session,
         Box::new(NoOpVolume),
         move || BrowseHttpSink::open(None, AudioFormat::S16, pcm_tx_clone),

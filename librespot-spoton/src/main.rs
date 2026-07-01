@@ -111,6 +111,9 @@ async fn main() {
     // Phase 29: unified mode variable
     let mut enable_connect = false;
 
+    // Phase 42: OGG/Vorbis passthrough mode
+    let mut passthrough = false;
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -134,6 +137,9 @@ async fn main() {
             }
             "--enable-connect" => {
                 enable_connect = true;
+            }
+            "--passthrough" => {
+                passthrough = true;
             }
             "--token" => {
                 if i + 1 < args.len() {
@@ -368,6 +374,7 @@ async fn main() {
                 autoplay,
                 initial_volume_u16,
                 &volume_ctrl_str,
+                passthrough,
             )
             .await
             {
