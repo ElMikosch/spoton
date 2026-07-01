@@ -63,13 +63,11 @@ sub resolvePassthroughForClient {
         return 1 if $fmt eq 'ogg';
         return 0 if $fmt =~ /^(?:pcm|flac|mp3)$/;
 
-        # auto (D-04): all three conditions must be true
+        # auto (D-04): both conditions must be true
         # 1. Binary has passthrough capability (passthrough-decoder feature compiled in)
         require Plugins::SpotOn::Helper;
         return 0 unless Plugins::SpotOn::Helper->getCapability('passthrough');
-        # 2. Player model is squeezelite (NOT hardware Squeezebox — see Pitfall 1)
-        return 0 unless $c->model eq 'squeezelite';
-        # 3. Player formats include ogg (defense against squeezelite started with -e ogg)
+        # 2. Player announces ogg in its supported formats
         return 0 unless grep { $_ eq 'ogg' } $c->formats;
 
         return 1;
