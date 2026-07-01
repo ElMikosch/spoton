@@ -226,6 +226,15 @@ sub initPlugin {
         after => 'top',
         func  => \&trackInfoMenu,
     ) );
+
+    # GH-93: Override built-in URL display for spoton:// URLs.
+    # Shows https://open.spotify.com/{type}/{id} as clickable weblink
+    # instead of the raw spoton:// protocol URL.
+    Slim::Menu::TrackInfo->registerInfoProvider( url => (
+        parent => 'moreinfo',
+        after  => 'lastplayed',
+        func   => \&_infoUrl,
+    ) );
 }
 
 sub shutdownPlugin {
@@ -532,6 +541,23 @@ sub _extractTrackIds {
     my $artistIds = @named ? encode_json([map { { id => $_->{id}, name => $_->{name} } } @named]) : undef;
     my $albumId   = ($track->{album} || {})->{id};
     return (artistId => $artistId, artistIds => $artistIds, albumId => $albumId);
+}
+
+sub _infoUrl {
+    my ($client, $url, $track) = @_;
+
+    if ($url && $url =~ m{^spoton:(?://)?(\w+):([A-Za-z0-9]+)}) {
+        my ($type, $id) = ($1, $2);
+        my $weburl = "https://open.spotify.com/$type/$id";
+        return {
+            type    => 'text',
+            name    => $weburl,
+            label   => 'URL',
+            weblink => $weburl,
+        };
+    }
+
+    return Slim::Menu::TrackInfo::infoUrl($client, $url, $track);
 }
 
 sub trackInfoMenu {
