@@ -632,13 +632,25 @@ sub _doFlavouredRequest {
             # for custom Client ID), retry with bundled token — including me/* paths.
             # Keymaster tokens share the same user session regardless of client_id.
             if (!$isRetry && $flavor eq 'own') {
+                my $hasCustomId = $prefs->get('clientId') ? 1 : 0;
+                if (!$hasCustomId) {
+                    $log->warn("Client: token retrieval failed — bundled fallback skipped (no custom client ID configured, bundled uses identical ID)");
+                    $userCb->(undef, { error => 'no_token', flavor => $flavor });
+                    return;
+                }
+                my $maskedOwn = substr($prefs->get('clientId'), 0, 8) . '...';
+                my $maskedBundled = substr(SPOTON_DEFAULT_CLIENT_ID, 0, 8) . '...';
                 main::INFOLOG && $log->info(
-                    "Client: no_token on own — retrying with bundled token for $cleanPath");
+                    "Client: no_token on own ($maskedOwn) — retrying with bundled ($maskedBundled) for $cleanPath");
                 $class->_doFlavouredRequest(
                     $method, $cleanPath, $params, $userCb, 'bundled', 1, $isMeFamily);
                 return;
             }
 
+            if ($isRetry) {
+                my $maskedBundled = substr(SPOTON_DEFAULT_CLIENT_ID, 0, 8) . '...';
+                $log->error("Client: all token sources exhausted for $cleanPath — own and bundled ($maskedBundled) both failed");
+            }
             $userCb->(undef, { error => 'no_token', flavor => $flavor });
             return;
         }
@@ -775,8 +787,9 @@ sub _doFlavouredRequest {
                         && ($code == 403 || $code == 410
                             || ($code == 404 && $class->_is404Deprecated($cleanPath)))) {
                     $log->warn("[DIAG] api_bundled_fallback: endpoint=$cleanPath trigger_code=$code") if $prefs->get('diagnosticMode');
+                    my $maskedBundled = substr(SPOTON_DEFAULT_CLIENT_ID, 0, 8) . '...';
                     main::INFOLOG && $log->info(
-                        "Client: $code on own-token for $cleanPath — retrying with bundled token");
+                        "Client: $code on own-token for $cleanPath — retrying with bundled ($maskedBundled)");
                     $class->_doFlavouredRequest(
                         $method, $cleanPath, $params, $userCb, 'bundled', 1, $isMeFamily);
                     return;

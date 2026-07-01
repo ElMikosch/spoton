@@ -403,24 +403,24 @@ sub _fetchKeymasterToken {
     my $safeDir    = $escFn->($cacheDir);
     my $stderr     = '2>&1';
 
-    my $cmd;
+    my ($cmd, $usedClientId);
     if ($flavor eq 'bundled') {
-        my $safeBundledId = $escFn->(SPOTON_DEFAULT_CLIENT_ID);
+        $usedClientId = SPOTON_DEFAULT_CLIENT_ID;
+        my $safeBundledId = $escFn->($usedClientId);
         $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
             $safeHelper, $safeDir, $safeBundledId);
     } else {
         my $ownClientId = $prefs->get('clientId');
-        if ($ownClientId) {
-            my $safeClientId = $escFn->($ownClientId);
-            $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
-                $safeHelper, $safeDir, $safeClientId);
-        } else {
-            my $safeFallbackId = $escFn->(SPOTON_DEFAULT_CLIENT_ID);
-            $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
-                $safeHelper, $safeDir, $safeFallbackId);
+        $usedClientId = $ownClientId || SPOTON_DEFAULT_CLIENT_ID;
+        my $safeClientId = $escFn->($usedClientId);
+        $cmd = sprintf("${q}%s${q} --get-token --cache ${q}%s${q} --client-id ${q}%s${q} $stderr",
+            $safeHelper, $safeDir, $safeClientId);
+        if (!$ownClientId) {
+            main::INFOLOG && $log->info("TokenManager: flavor=own has no custom client ID — using bundled ID (fallback will be identical)");
         }
     }
-    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor)");
+    my $maskedId = substr($usedClientId, 0, 8) . '...';
+    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor, client_id=$maskedId)");
 
     # Defer via Timer — prevents event-loop block (~100-500ms Mercury/AP connection)
     # WR-03: blocking backtick is a known limitation; non-blocking fork+waitpid
@@ -431,7 +431,18 @@ sub _fetchKeymasterToken {
         my $exit   = $? >> 8;
 
         if ($exit != 0 || !$output) {
-            $log->error("TokenManager: --get-token failed for $accountId ($flavor) (exit $exit): $output");
+            $log->error("TokenManager: --get-token failed for $accountId ($flavor, client_id=$maskedId) (exit $exit)");
+
+            # Parse Keymaster error payload from librespot stderr (e.g. {"code":4,"errorDescription":"Invalid request"})
+            if ($output && $output =~ /\{[^{}]*"errorDescription"\s*:\s*"([^"]*)"[^{}]*\}/) {
+                my $errDesc = $1;
+                my ($errCode) = ($output =~ /"code"\s*:\s*(\d+)/);
+                $log->error("TokenManager: keymaster_error: code=" . ($errCode // '?') . " message=\"$errDesc\" (client_id=$maskedId)");
+            }
+            if ($output && $output =~ /status_code:\s*(\d+)/) {
+                $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
+            }
+
             if ($INC{'Plugins/SpotOn/Status.pm'}) {
                 Plugins::SpotOn::Status->recordError('error', 'Token', "get-token failed for $accountId ($flavor)");
             }
