@@ -47,18 +47,22 @@ sub getFormatForURL {
 
 # formatOverride($class, $song)
 # Returns the content type (INPUT side of transcoding key) for the current song.
-# Always returns 'soc' — all playback goes through the unified daemon (HTTP).
+# 'son' (SpotOn Native) when daemon sends OGG passthrough, 'soc' (SpotOn Coded) for PCM.
 #
 # LMS Song.pm constructs the transcoding profile key as:
-#   formatOverride-outputFormat-*-*  (e.g. soc-pcm-*-* for unified daemon PCM)
+#   formatOverride-outputFormat-*-*  (e.g. soc-pcm-*-* or son-ogg-*-*)
 sub formatOverride {
     my ($class, $song) = @_;
 
     my $client = $song->master;
     my $url = $song->track->url || '';
 
-    $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc") if $prefs->get('diagnosticMode');
-    return 'soc';
+    require Plugins::SpotOn::Unified::DaemonManager;
+    my $fmt = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client)
+            ? 'son' : 'soc';
+
+    $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=$fmt") if $prefs->get('diagnosticMode');
+    return $fmt;
 }
 
 # canDirectStreamSong($class, $client, $song)

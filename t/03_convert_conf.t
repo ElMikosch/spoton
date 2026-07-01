@@ -19,11 +19,9 @@ SKIP: {
     my $content = do { local $/; <$fh> };
     close($fh);
 
-    # v2.0: unified daemon uses soc pcm pipeline only (son-* pipelines removed)
+    # soc = SpotOn Coded (PCM), son = SpotOn Native (OGG passthrough)
     ok($content =~ m{^soc pcm}m,  "soc pcm pipeline header exists");
-
-    # No son-* pipelines (removed in Phase 30)
-    ok($content !~ m{^son }m, "No son-* pipeline headers (legacy removed)");
+    ok($content =~ m{^son ogg}m,  "son ogg pipeline header exists (OGG passthrough)");
 
     # No [spotty] references
     ok($content !~ m{\[spotty\]}, "No [spotty] references in convert.conf");
