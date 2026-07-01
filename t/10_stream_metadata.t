@@ -281,8 +281,20 @@ require_ok('Plugins::SpotOn::Plugin') or BAIL_OUT("Failed to load Plugin.pm");
 {
     package MockClient;
     use overload '""' => sub { ${$_[0]} };
+    our %_model;    # id => model string, default 'squeezelite'
+    our %_formats;  # id => arrayref, default ['ogg','pcm','flac','mp3']
+    our %_synced;   # id => boolean
+    our %_master;   # id => MockClient instance or undef
     sub new { my $id = $_[1] // 'player1'; bless \$id, $_[0] }
-    sub can { return $_[1] eq 'master' ? 0 : 0 }
+    sub can {
+        my ($self, $method) = @_;
+        return 1 if $method eq 'master' && $_master{${$self}};
+        return 0;
+    }
+    sub model   { return $_model{${$_[0]}}   // 'squeezelite' }
+    sub formats { return @{ $_formats{${$_[0]}} // ['ogg','pcm','flac','mp3'] } }
+    sub isSynced { return $_synced{${$_[0]}} // 0 }
+    sub master  { return $_master{${$_[0]}} }
 }
 
 # ============================================================
@@ -301,6 +313,13 @@ sub setup_prefs {
         $cp->set('bitrateOverride', $opts{bitrateOverride}) if exists $opts{bitrateOverride};
         $cp->set('streamFormat', $opts{streamFormat}) if exists $opts{streamFormat};
         $cp->set('connectOggOverride', $opts{connectOggOverride}) if exists $opts{connectOggOverride};
+
+        # MockClient per-instance state (keyed by stringified client id)
+        my $id = "${$opts{client}}";
+        $MockClient::_model{$id}   = $opts{model}   if exists $opts{model};
+        $MockClient::_formats{$id} = $opts{formats}  if exists $opts{formats};
+        $MockClient::_synced{$id}  = $opts{synced}   if exists $opts{synced};
+        $MockClient::_master{$id}  = $opts{master_client} if exists $opts{master_client};
     }
 
     # Helper passthrough capability
@@ -396,6 +415,87 @@ sub setup_prefs {
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
     is($result, 'PCM, SpotOn Browse',
         'D-05: streamFormat=auto + passthrough=0 => "PCM, SpotOn Browse"');
+}
+
+# ============================================================
+# Test 6a: Hardware model + auto + passthrough=1 => PCM
+# D-04: hardware models excluded from passthrough whitelist
+# ============================================================
+{
+    my $client = MockClient->new('player_hw_auto');
+    setup_prefs(
+        client       => $client,
+        streamFormat => 'auto',
+        passthrough  => 1,
+        model        => 'squeezebox2',
+    );
+    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
+    is($result, 'PCM, SpotOn Browse',
+        'D-04/OGG-02: hardware model squeezebox2 + auto + passthrough=1 => "PCM, SpotOn Browse"');
+}
+
+# ============================================================
+# Test 6b: squeezelite + auto + passthrough=0 (binary lacks capability)
+# ============================================================
+{
+    my $client = MockClient->new('player_sl_nopt');
+    setup_prefs(
+        client       => $client,
+        streamFormat => 'auto',
+        passthrough  => 0,
+        model        => 'squeezelite',
+    );
+    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
+    is($result, 'PCM, SpotOn Browse',
+        'D-04: squeezelite + auto + passthrough=0 => "PCM, SpotOn Browse"');
+}
+
+# ============================================================
+# Test 6c: squeezelite + auto + passthrough=1 but formats excludes ogg
+# Simulates squeezelite started with -e ogg
+# ============================================================
+{
+    my $client = MockClient->new('player_sl_noogg');
+    setup_prefs(
+        client       => $client,
+        streamFormat => 'auto',
+        passthrough  => 1,
+        model        => 'squeezelite',
+        formats      => ['pcm', 'flac', 'mp3'],
+    );
+    my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
+    is($result, 'PCM, SpotOn Browse',
+        'D-04: squeezelite without ogg in formats + auto + passthrough=1 => "PCM, SpotOn Browse"');
+}
+
+# ============================================================
+# Test 6d: Sync-group mixed capability => PCM for entire group
+# D-08: PCM fallback when any sync member cannot decode OGG
+# ============================================================
+{
+    my $master_client = MockClient->new('player_sync_master');
+    my $slave_client  = MockClient->new('player_sync_slave');
+
+    # Master: squeezelite with OGG capability
+    setup_prefs(
+        client       => $master_client,
+        streamFormat => 'auto',
+        passthrough  => 1,
+        model        => 'squeezelite',
+        synced       => 1,
+        master_client => $master_client,  # master points to itself
+    );
+    # Slave: hardware model (not OGG-capable)
+    setup_prefs(
+        client       => $slave_client,
+        streamFormat => 'auto',
+        model        => 'squeezebox2',
+        synced       => 1,
+        master_client => $master_client,
+    );
+    my $result = Plugins::SpotOn::Plugin->_typeString($master_client, 'Browse');
+    is($result, 'PCM, SpotOn Browse',
+        'D-08: sync-group with mixed capability (squeezelite master + squeezebox2 slave) => "PCM, SpotOn Browse"');
 }
 
 # ============================================================
