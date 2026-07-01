@@ -50,15 +50,22 @@ sub init { }
 1;
 END
 
-# Stub: Slim::Utils::Log
+# Stub: Slim::Utils::Log (exports logger() for all consumers)
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
+use Exporter 'import';
+our @EXPORT = qw(logger logWarning logError logBacktrace);
 sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
 sub logger { return bless { _calls => [] }, 'Slim::Utils::Log' }
+sub logWarning { }
+sub logError   { }
+sub logBacktrace { }
 sub info  { }
 sub warn  { }
 sub error { }
 sub debug { }
+sub is_info  { 0 }
+sub is_debug { 0 }
 sub AUTOLOAD { }
 sub can { 1 }
 1;
@@ -247,6 +254,63 @@ sub uri_escape { my ($s) = @_; $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord
 1;
 END
 
+# Stub: Slim::Utils::Accessor — hash-based replacement for LMS array-based accessor
+# Needed when Daemon.pm is loaded via DaemonManager.pm cascade
+write_stub($stub_dir, 'Slim::Utils::Accessor', <<'END');
+package Slim::Utils::Accessor;
+sub new { return bless {}, ref($_[0]) || $_[0] }
+sub mk_accessor {
+    my $class = shift;
+    my $type  = shift;
+    for my $attr (@_) {
+        no strict 'refs';
+        *{"${class}::${attr}"} = sub {
+            $_[0]->{$attr} = $_[1] if @_ > 1;
+            return $_[0]->{$attr};
+        };
+    }
+}
+1;
+END
+
+# Stub: Slim::Networking::SimpleAsyncHTTP — DaemonManager.pm uses at module level
+write_stub($stub_dir, 'Slim::Networking::SimpleAsyncHTTP', <<'END');
+package Slim::Networking::SimpleAsyncHTTP;
+sub new  { bless {}, shift }
+sub get  { }
+sub post { }
+1;
+END
+
+# Stub: Slim::Player::Sync — resolver uses slaves() for D-08 sync-group aggregation
+write_stub($stub_dir, 'Slim::Player::Sync', <<'END');
+package Slim::Player::Sync;
+our %_slaves;
+sub slaves {
+    my $master = shift;
+    my $id = "$master";
+    return @{ $_slaves{$id} // [] };
+}
+sub isSlave  { 0 }
+sub syncname { ref $_[0] ? "$_[0]" : ($_[0] // '') }
+1;
+END
+
+# Stub: Slim::Utils::Network — Daemon.pm start() references serverAddr
+write_stub($stub_dir, 'Slim::Utils::Network', <<'END');
+package Slim::Utils::Network;
+sub serverAddr { '127.0.0.1' }
+1;
+END
+
+# Stub: Slim::Player::Client — DaemonManager runtime calls (not needed for resolver)
+write_stub($stub_dir, 'Slim::Player::Client', <<'END');
+package Slim::Player::Client;
+sub getClient { undef }
+sub clients   { () }
+1;
+END
+
 # ============================================================
 # main:: constants
 # ============================================================
@@ -269,6 +333,10 @@ unshift @INC, $stub_dir, $project_dir;
 # The stub uses a package variable ($helperCapabilities) that tests can control.
 require Plugins::SpotOn::Helper;
 
+# Pre-load Slim::Player::Sync stub so the resolver's sync-group iteration works.
+# The stub provides a controllable slaves() function for D-08 sync-group tests.
+require Slim::Player::Sync;
+
 # ============================================================
 # Load Plugin.pm
 # ============================================================
@@ -280,7 +348,7 @@ require_ok('Plugins::SpotOn::Plugin') or BAIL_OUT("Failed to load Plugin.pm");
 # A blessed hashref that the Prefs stub can stringify for client() namespace.
 {
     package MockClient;
-    use overload '""' => sub { ${$_[0]} };
+    use overload '""' => sub { ${$_[0]} }, fallback => 1;
     our %_model;    # id => model string, default 'squeezelite'
     our %_formats;  # id => arrayref, default ['ogg','pcm','flac','mp3']
     our %_synced;   # id => boolean
@@ -320,6 +388,11 @@ sub setup_prefs {
         $MockClient::_formats{$id} = $opts{formats}  if exists $opts{formats};
         $MockClient::_synced{$id}  = $opts{synced}   if exists $opts{synced};
         $MockClient::_master{$id}  = $opts{master_client} if exists $opts{master_client};
+
+        # Slim::Player::Sync slave list for sync-group tests (D-08)
+        if (exists $opts{sync_slaves}) {
+            $Slim::Player::Sync::_slaves{$id} = $opts{sync_slaves};
+        }
     }
 
     # Helper passthrough capability
@@ -484,6 +557,7 @@ sub setup_prefs {
         model        => 'squeezelite',
         synced       => 1,
         master_client => $master_client,  # master points to itself
+        sync_slaves  => [$slave_client],  # Slim::Player::Sync::slaves() returns this
     );
     # Slave: hardware model (not OGG-capable)
     setup_prefs(
@@ -500,14 +574,15 @@ sub setup_prefs {
 
 # ============================================================
 # Test 7: _typeString with undef client (global prefs only, no crash)
+# D-04: undef client = unknown player = PCM (conservative default)
 # ============================================================
 {
     setup_prefs(
         passthrough => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString(undef, 'Browse');
-    is($result, 'OGG, SpotOn Browse',
-        'META-03: undef client, auto+passthrough=1 => "OGG, SpotOn Browse"');
+    is($result, 'PCM, SpotOn Browse',
+        'D-04: undef client => PCM (unknown player, conservative default)');
 }
 
 # ============================================================

@@ -2579,141 +2579,6 @@ sub _playlistFeed {
 # Transcoding Engine (STR-01 through STR-08, LMS-11)
 # ============================================================
 
-# updateTranscodingTable($client)
-# Injects runtime parameters (bitrate, cache dir, helper name, volume normalization)
-# into LMS commandTable for all son-* single-track pipeline entries.
-# Called from ProtocolHandler::formatOverride before each track start (D-01, Pattern 1).
-# This approach avoids pref-file caching in TranscodingHelper (RESEARCH.md Anti-Pattern 1).
-# LMS single-threaded event loop guarantees no race condition (LMS-11).
-sub updateTranscodingTable {
-    my ($class, $client) = @_;
-
-    my $bitrate   = $prefs->get('bitrate')      || 320;
-    my $normalize = $prefs->get('normalization') || 0;    # Phase 4: global toggle (D-06)
-
-    # Per-player bitrate override (D-01, T-06-05): re-validated here before regex substitution
-    # Only valid numeric values (96/160/320) reach the --bitrate regex — prevents injection
-    if ($client) {
-        my $override = $prefs->client($client)->get('bitrateOverride');
-        $bitrate = $override if $override && $override =~ /^(?:96|160|320)$/;
-    }
-
-    # Compute librespot credentials/session cache dir (Pattern 4)
-    # Multi-account: inject active accountId into cache path (RESEARCH Pitfall 6)
-    # This ensures --single-track finds the correct credentials.json for the active account.
-    my $serverPrefs     = preferences('server');
-    my $activeAccountId = $prefs->get('activeAccount') || '';
-    my $cacheDir = $activeAccountId
-        ? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
-        : catdir($serverPrefs->get('cachedir'), 'spoton');
-
-    # Create cache dir if it does not exist
-    unless (-d $cacheDir) {
-        require File::Path;
-        File::Path::make_path($cacheDir);
-    }
-
-    # Get helper binary name — used to update [spoton] placeholder in commandTable
-    my ($helper) = Plugins::SpotOn::Helper->get();
-    my $helperName = $helper ? basename($helper) : 'spoton';
-
-    # Stderr log path for Browse-mode single-track processes (D-03, T-26-05)
-    # diagnosticMode on: capture to browse-errors.log; off: discard to /dev/null
-    my $stderrLog = $prefs->get('diagnosticMode')
-        ? catfile($serverPrefs->get('cachedir'), 'spoton', 'browse-errors.log')
-        : File::Spec->devnull;
-
-    my $commandTable = Slim::Player::TranscodingHelper::Conversions();
-
-    # Restore base son-* pipelines deleted by a previous call (shared mutable state).
-    # Without this, switching format (e.g. FLAC→PCM) accumulates deletions and leaves
-    # no valid pipeline. Snapshot taken on first call from custom-convert.conf state.
-    our %_baseSonPipelines;
-    if (!%_baseSonPipelines) {
-        for my $k (keys %$commandTable) {
-            $_baseSonPipelines{$k} = $commandTable->{$k} if $k =~ /^son-/ && $commandTable->{$k} =~ /single-track/;
-        }
-    }
-    for my $k (keys %_baseSonPipelines) {
-        $commandTable->{$k} = $_baseSonPipelines{$k} unless exists $commandTable->{$k};
-    }
-
-    foreach my $key (keys %{$commandTable}) {
-        # Only modify son-* entries that use --single-track (skip Connect/other pipelines)
-        next unless $key =~ /^son-/ && $commandTable->{$key} =~ /single-track/;
-
-        # Cache dir injection (Pitfall 4: regex matches any content between quotes)
-        $commandTable->{$key} =~ s/-c "[^"]*"/-c "$cacheDir"/g;
-
-        # Bitrate injection
-        $commandTable->{$key} =~ s/--bitrate \d+/--bitrate $bitrate/;
-
-        # Helper binary name injection (LMS-10 preparation for custom binary support)
-        $commandTable->{$key} =~ s/\[spoton[^\]]*\]/[$helperName]/g;
-
-        # Volume normalisation: always remove first, then conditionally add (STR-08)
-        # Removal of flag ensures idempotent behavior across repeated calls
-        $commandTable->{$key} =~ s/ --enable-volume-normalisation//g;
-        if ($normalize) {
-            my $before = $commandTable->{$key};
-            $commandTable->{$key} =~ s/( -n )/ --enable-volume-normalisation $1/;
-            if ($commandTable->{$key} eq $before) {
-                $log->warn("updateTranscodingTable: could not inject --enable-volume-normalisation for $key");
-            }
-        }
-
-        # NOTE: --disable-audio-cache is NOT touched here (STR-11, D-07)
-        # It is hardcoded in custom-convert.conf and the regex patterns above do not match it
-
-        # Stderr log injection (D-03, T-26-05): replace STDERRLOG placeholder OR
-        # previously injected path with current stderrLog (idempotent).
-        $commandTable->{$key} =~ s{\$STDERRLOG\$|(?<=2>>")[^"]*(?=")}{$stderrLog}g;
-
-        main::INFOLOG && $log->is_info && $log->info("updateTranscodingTable: $key => $commandTable->{$key}");
-    }
-
-    # OGG-Passthrough Guard: remove son-ogg entry when binary lacks passthrough (STR-05)
-    # Prevents LMS from selecting the son-ogg-*-* profile on players that support OGG
-    # natively but where librespot was not built with the passthrough-decoder feature.
-    require Plugins::SpotOn::Helper;
-    unless (Plugins::SpotOn::Helper->getCapability('passthrough')) {
-        delete $commandTable->{'son-ogg-*-*'};
-        delete $commandTable->{'soc-ogg-*-*'};    # same guard for Connect OGG passthrough
-    }
-
-    # Per-player streamFormat: controls which OGG pipeline entries are active (D-11, D-12)
-    # Migration fallback: read new streamFormat first, fall back to old connectOggOverride
-    if ($client) {
-        my $fmt = $prefs->client($client)->get('streamFormat')
-               || $prefs->client($client)->get('connectOggOverride')
-               || 'auto';
-        # Force specific format: delete competing pipelines so LMS uses the desired one.
-        # Pipelines are restored from snapshot at the top of this function on every call.
-        if ($fmt eq 'ogg') {
-            delete $commandTable->{'son-pcm-*-*'};
-            delete $commandTable->{'son-flc-*-*'};
-            delete $commandTable->{'son-mp3-*-*'};
-        } elsif ($fmt eq 'flac') {
-            delete $commandTable->{'son-ogg-*-*'};
-            delete $commandTable->{'soc-ogg-*-*'};
-            delete $commandTable->{'son-mp3-*-*'};
-            delete $commandTable->{'son-pcm-*-*'};
-        } elsif ($fmt eq 'mp3') {
-            delete $commandTable->{'son-ogg-*-*'};
-            delete $commandTable->{'soc-ogg-*-*'};
-            delete $commandTable->{'son-flc-*-*'};
-            delete $commandTable->{'son-pcm-*-*'};
-        } elsif ($fmt eq 'pcm') {
-            delete $commandTable->{'son-ogg-*-*'};
-            delete $commandTable->{'soc-ogg-*-*'};
-            delete $commandTable->{'son-flc-*-*'};
-            delete $commandTable->{'son-mp3-*-*'};
-        }
-        # auto: all pipelines stay — passthrough guard above already removed
-        # son-ogg if the binary lacks passthrough capability.
-    }
-}
-
 sub _bitrateForClient {
     my ($class, $client) = @_;
 
@@ -2739,9 +2604,19 @@ sub _typeString {
            || 'auto')
         : 'auto';
 
-    # All sinks currently deliver PCM regardless of streamFormat setting.
-    # OGG passthrough is prepared (UI, feature flag) but not wired in the Rust sinks.
-    $fmt = 'pcm';
+    # D-09: resolve auto to actual format via shared capability resolver
+    # eval guards against DaemonManager load failure in test environments
+    # that don't stub its dependencies (e.g., t/11_track_history.t)
+    if ($fmt eq 'auto') {
+        my $resolved = 0;
+        if ($client) {
+            eval {
+                require Plugins::SpotOn::Unified::DaemonManager;
+                $resolved = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client);
+            };
+        }
+        $fmt = $resolved ? 'ogg' : 'pcm';
+    }
 
     my %LABEL = (ogg => 'OGG', flac => 'FLAC', mp3 => 'MP3', pcm => 'PCM');
     my $fmtLabel = $LABEL{$fmt} || uc($fmt);
