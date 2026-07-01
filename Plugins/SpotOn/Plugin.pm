@@ -19,8 +19,6 @@ use Time::Local qw(timelocal);
 use File::Basename;
 use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
-use Slim::Player::TranscodingHelper;
-
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
 use constant SPOTON_CACHE_VERSION  => 4;       # Bump to flush all SpotOn cache entries (D-01/D-02)
 use constant FLUSH_BATCH           => 50;      # Items per event-loop tick in _flushDeferredMeta (FIX-01)
@@ -2604,18 +2602,25 @@ sub _typeString {
            || 'auto')
         : 'auto';
 
-    # D-09: resolve auto to actual format via shared capability resolver
-    # eval guards against DaemonManager load failure in test environments
-    # that don't stub its dependencies (e.g., t/11_track_history.t)
-    if ($fmt eq 'auto') {
-        my $resolved = 0;
+    # D-09: resolve via shared capability resolver for formats where
+    # sync-group aggregation can change the actual daemon output.
+    # 'auto': resolver determines OGG vs PCM based on player capabilities.
+    # 'ogg': resolver catches sync-group downgrade (explicit OGG + hardware slave → PCM).
+    # pcm/flac/mp3: always PCM in unified daemon, no sync-group concern.
+    if ($fmt eq 'auto' || $fmt eq 'ogg') {
         if ($client) {
             eval {
                 require Plugins::SpotOn::Unified::DaemonManager;
-                $resolved = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client);
+                $fmt = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client)
+                     ? 'ogg' : 'pcm';
             };
+            if ($@) {
+                main::INFOLOG && $log->is_info && $log->info("resolvePassthroughForClient failed: $@");
+                $fmt = 'pcm';
+            }
+        } else {
+            $fmt = 'pcm';
         }
-        $fmt = $resolved ? 'ogg' : 'pcm';
     }
 
     my %LABEL = (ogg => 'OGG', flac => 'FLAC', mp3 => 'MP3', pcm => 'PCM');

@@ -55,7 +55,9 @@ sub resolvePassthroughForClient {
     # Per-client resolution (used for individual check and sync-group iteration)
     my $resolveOne = sub {
         my ($c) = @_;
-        my $fmt = $prefs->client($c)->get('streamFormat') // 'auto';
+        my $fmt = $prefs->client($c)->get('streamFormat')
+                  || $prefs->client($c)->get('connectOggOverride')
+                  || 'auto';
 
         # D-05: explicit format override — trust the user's choice directly
         return 1 if $fmt eq 'ogg';
@@ -78,7 +80,7 @@ sub resolvePassthroughForClient {
     # D-08: sync-group aggregation — PCM fallback if ANY member can't do OGG
     if ($result && $client->isSynced() && $client->master) {
         my $master = $client->master;
-        $result = $resolveOne->($master) if $master ne $client;
+        $result = $resolveOne->($master) if "$master" ne "$client";
         if ($result) {
             for my $slave (Slim::Player::Sync::slaves($master)) {
                 next if "$slave" eq "$client";  # skip self (already resolved above)
