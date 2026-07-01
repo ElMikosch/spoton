@@ -235,6 +235,8 @@ async fn unified_http_server(
     // Session health monitoring (Phase 36): track session creation time and last audio activity for /health endpoint
     session_created_at: Arc<std::sync::Mutex<Instant>>,
     last_activity: Arc<std::sync::Mutex<Instant>>,
+    // Phase 42: OGG/Vorbis passthrough — determines Content-Type and AudioPacket handling
+    passthrough: bool,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -600,7 +602,7 @@ async fn unified_http_server(
                                     return;
                                 }
 
-                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms).await;
+                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms, passthrough).await;
 
                                 // T-30-05 (informational): post-load gen check.
                                 // serve_track_request drops pcm_tx when it returns, causing
@@ -831,6 +833,7 @@ pub async fn run_unified(
     autoplay: Option<bool>,
     initial_volume: Option<u16>,
     volume_ctrl_str: &str,
+    passthrough: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Cache + Credentials
     //    Third arg (audio_path = Some(cache_dir)) enables audio key cache (D-02).
@@ -959,7 +962,7 @@ pub async fn run_unified(
             s.clone()
         };
         let connect_player = Player::new(
-            PlayerConfig::default(),
+            PlayerConfig { passthrough, ..PlayerConfig::default() },
             session_for_player,
             soft_volume,
             move || {
@@ -1154,6 +1157,7 @@ pub async fn run_unified(
             Arc::clone(&consecutive_browse_fails),
             Arc::clone(&session_created_at),
             Arc::clone(&last_activity),
+            passthrough,
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1458,6 +1462,7 @@ pub async fn run_unified(
             Arc::clone(&consecutive_browse_fails),
             Arc::clone(&session_created_at),
             Arc::clone(&last_activity),
+            passthrough,
         ));
 
         // Pure Browse: wait for Ctrl+C or session reconnect.
