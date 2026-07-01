@@ -144,43 +144,62 @@ impl Sink for UnifiedHttpStreamSink {
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-        let AudioPacket::Samples(samples) = packet else {
-            return Ok(());
-        };
+        match packet {
+            AudioPacket::Samples(samples) => {
+                let samples_s16 = converter.f64_to_s16(&samples);
+                // SAFETY: i16 values are valid as two u8 bytes.
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        samples_s16.as_ptr().cast::<u8>(),
+                        samples_s16.len() * std::mem::size_of::<i16>(),
+                    )
+                };
 
-        let samples_s16 = converter.f64_to_s16(&samples);
-        // SAFETY: i16 values are valid as two u8 bytes.
-        let bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                samples_s16.as_ptr().cast::<u8>(),
-                samples_s16.len() * std::mem::size_of::<i16>(),
-            )
-        };
+                // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
+                let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
+                self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
+                let expected_ns: u128 =
+                    u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
+                    + self.buffer_latency_ns;
+                let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
 
-        // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
-        let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
-        self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
-        let expected_ns: u128 =
-            u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
-            + self.buffer_latency_ns;
-        let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
-
-        if expected_ns > elapsed_ns {
-            let park_ns = (expected_ns - elapsed_ns) as u64;
-            std::thread::sleep(Duration::from_nanos(park_ns));
-        }
-
-        let chunk = Bytes::copy_from_slice(bytes);
-        loop {
-            match self.pcm_tx.try_send(chunk.clone()) {
-                Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    std::thread::sleep(Duration::from_millis(1));
+                if expected_ns > elapsed_ns {
+                    let park_ns = (expected_ns - elapsed_ns) as u64;
+                    std::thread::sleep(Duration::from_nanos(park_ns));
                 }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    return Err(SinkError::OnWrite(
-                        "Unified HTTP stream server shut down".into(),
-                    ));
+
+                let chunk = Bytes::copy_from_slice(bytes);
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "Unified HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
+                }
+            }
+            AudioPacket::Raw(bytes) => {
+                // Phase 42: Forward raw Ogg/Vorbis pages as-is (passthrough mode).
+                // No sample-rate sleep — raw packets are paced by channel backpressure
+                // only, same approach as BrowseHttpSink (Pitfall 3 from RESEARCH.md).
+                let chunk = Bytes::copy_from_slice(&bytes);
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "Unified HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -470,9 +489,14 @@ async fn unified_http_server(
                             });
                             let body = BodyExt::boxed(StreamBody::new(stream));
 
+                            let content_type = if passthrough {
+                                "audio/ogg"
+                            } else {
+                                "audio/L16;rate=44100;channels=2"
+                            };
                             let resp = Response::builder()
                                 .status(StatusCode::OK)
-                                .header("Content-Type", "audio/L16;rate=44100;channels=2")
+                                .header("Content-Type", content_type)
                                 .body(body)
                                 .expect("stream response builder");
                             return Ok(resp);
@@ -677,9 +701,14 @@ async fn unified_http_server(
                             );
                             let body = BodyExt::boxed(StreamBody::new(stream));
 
+                            let content_type = if passthrough {
+                                "audio/ogg"
+                            } else {
+                                "audio/L16;rate=44100;channels=2"
+                            };
                             let resp = Response::builder()
                                 .status(StatusCode::OK)
-                                .header("Content-Type", "audio/L16;rate=44100;channels=2")
+                                .header("Content-Type", content_type)
                                 .body(body)
                                 .expect("browse stream response builder");
 

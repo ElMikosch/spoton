@@ -80,22 +80,24 @@ impl Sink for BrowseHttpSink {
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-        let AudioPacket::Samples(samples) = packet else {
-            // Raw passthrough — not in scope for S16LE sink; skip.
-            return Ok(());
+        let chunk = match packet {
+            AudioPacket::Samples(samples) => {
+                // Convert f64 samples to S16LE bytes.
+                let samples_s16 = converter.f64_to_s16(&samples);
+                // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        samples_s16.as_ptr().cast::<u8>(),
+                        samples_s16.len() * std::mem::size_of::<i16>(),
+                    )
+                };
+                Bytes::copy_from_slice(bytes)
+            }
+            AudioPacket::Raw(bytes) => {
+                // Phase 42: Forward raw Ogg/Vorbis pages as-is (passthrough mode).
+                Bytes::copy_from_slice(&bytes)
+            }
         };
-
-        // Convert f64 samples to S16LE bytes.
-        let samples_s16 = converter.f64_to_s16(&samples);
-        // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
-        let bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                samples_s16.as_ptr().cast::<u8>(),
-                samples_s16.len() * std::mem::size_of::<i16>(),
-            )
-        };
-
-        let chunk = Bytes::copy_from_slice(bytes);
 
         // try_send loop: channel has 256 slots (~1.5s of audio).
         // Spin on Full (backpressure from LMS reading PCM at real-time speed).
