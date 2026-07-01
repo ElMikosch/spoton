@@ -412,8 +412,8 @@ sub setup_prefs {
         streamFormat => 'ogg',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'PCM, SpotOn Browse',
-        'META-02: streamFormat=ogg currently returns PCM (OGG passthrough not yet wired, #96)');
+    is($result, 'OGG, SpotOn Browse',
+        'META-02: streamFormat=ogg + passthrough=1 => "OGG, SpotOn Browse"');
 }
 
 # ============================================================
@@ -426,8 +426,8 @@ sub setup_prefs {
         streamFormat => 'flac',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Connect');
-    is($result, 'PCM, SpotOn Connect',
-        'META-02: streamFormat=flac currently returns PCM (transcoding not yet wired, #96)');
+    is($result, 'FLAC, SpotOn Connect',
+        'META-02: streamFormat=flac => "FLAC, SpotOn Connect"');
 }
 
 # ============================================================
@@ -440,8 +440,8 @@ sub setup_prefs {
         streamFormat => 'mp3',
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'PCM, SpotOn Browse',
-        'META-02: streamFormat=mp3 currently returns PCM (transcoding not yet wired, #96)');
+    is($result, 'MP3, SpotOn Browse',
+        'META-02: streamFormat=mp3 => "MP3, SpotOn Browse"');
 }
 
 # ============================================================
@@ -470,8 +470,8 @@ sub setup_prefs {
         passthrough  => 1,
     );
     my $result = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-    is($result, 'PCM, SpotOn Browse',
-        'D-05: streamFormat=auto + passthrough=1 currently returns PCM (OGG passthrough not yet wired, #96)');
+    is($result, 'OGG, SpotOn Browse',
+        'D-05: streamFormat=auto + passthrough=1 => "OGG, SpotOn Browse"');
 }
 
 # ============================================================

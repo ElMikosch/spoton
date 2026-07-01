@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-07-01
+### Added
+- **OGG Vorbis Passthrough**: squeezelite players now receive raw Ogg/Vorbis data from SpotOn, offloading audio decoding from the server to the player. Hardware Squeezebox players continue to receive PCM automatically. Mixed sync groups fall back to PCM when any member can't decode OGG. (#96)
+
+### Fixed
+- **NowPlaying format display**: now accurately shows "OGG" or "PCM" based on the actual stream format delivered to the player (was hardcoded to "PCM").
+- **Legacy pref fallback**: the passthrough capability resolver now correctly reads the legacy `connectOggOverride` preference when `streamFormat` is not set.
+
+### Changed
+- **Pipeline format types**: `soc` (SpotOn Coded) delivers PCM, `son` (SpotOn Native) delivers raw OGG. `formatOverride` dynamically selects the pipeline based on player capability.
+- **Dead code removed**: the unused `updateTranscodingTable` function (127 lines) and its `Slim::Player::TranscodingHelper` import have been removed.
+
 ## [2.2.3] - 2026-07-01
 ### Fixed
 - **NowPlaying format display**: now correctly shows "PCM" instead of falsely claiming "OGG". All Rust sinks serve PCM exclusively — the OGG passthrough infrastructure (UI settings, feature flag) is prepared but not yet wired in the streaming pipeline. (#96)
