@@ -453,7 +453,7 @@ sub explodePlaylist {
                 main::INFOLOG && $log->is_info && $log->info(
                     "explodePlaylist: album $albumId fetch failed"
                 );
-                $cb->([]);
+                $cb->({ items => [] });
                 return;
             }
 
@@ -465,8 +465,9 @@ sub explodePlaylist {
             my @allItems;
             for my $track (@{ $tracksData->{items} || [] }) {
                 next unless $track && $track->{id};
-                push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
-                _cacheExplodedTrack('spoton://track:' . $track->{id}, $track, $albumName, $albumCover, $albumId);
+                my $item = _buildExplodedTrackItem($track, $albumName, $albumCover);
+                push @allItems, $item;
+                _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId);
             }
 
             if (scalar(@allItems) >= $total) {
@@ -492,8 +493,9 @@ sub explodePlaylist {
                     }
                     for my $track (@{ $data->{items} }) {
                         next unless $track && $track->{id};
-                        push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
-                        _cacheExplodedTrack('spoton://track:' . $track->{id}, $track, $albumName, $albumCover, $albumId);
+                        my $item = _buildExplodedTrackItem($track, $albumName, $albumCover);
+                        push @allItems, $item;
+                        _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId);
                     }
                     if (scalar(@allItems) < $total && @{ $data->{items} }) {
                         $fetchPage->($offset + scalar(@{ $data->{items} }));
@@ -535,14 +537,15 @@ sub explodePlaylist {
                     $cb->({ items => \@allItems });
                     return;
                 }
-                for my $item (@{ $data->{items} }) {
-                    next unless $item && $item->{track} && $item->{track}{id};
-                    my $track = $item->{track};
+                for my $plItem (@{ $data->{items} }) {
+                    next unless $plItem && $plItem->{track} && $plItem->{track}{id};
+                    my $track = $plItem->{track};
                     my $albumInfo = $track->{album} || {};
                     my $albumName  = $albumInfo->{name};
                     my $albumCover = _largestImage($albumInfo->{images});
-                    push @allItems, _buildExplodedTrackItem($track, $albumName, $albumCover);
-                    _cacheExplodedTrack('spoton://track:' . $track->{id}, $track,
+                    my $opmlItem = _buildExplodedTrackItem($track, $albumName, $albumCover);
+                    push @allItems, $opmlItem;
+                    _cacheExplodedTrack($opmlItem->{url}, $track,
                         $albumName, $albumCover, $albumInfo->{id});
                 }
                 my $total = $data->{total} || 0;
@@ -590,8 +593,9 @@ sub explodePlaylist {
                 my $pageItems = $data->{items};
                 for my $ep (@{$pageItems}) {
                     next unless $ep && $ep->{id};
-                    push @allItems, _buildExplodedEpisodeItem($ep);
-                    _cacheExplodedEpisode('spoton://episode:' . $ep->{id}, $ep);
+                    my $opmlItem = _buildExplodedEpisodeItem($ep);
+                    push @allItems, $opmlItem;
+                    _cacheExplodedEpisode($opmlItem->{url}, $ep);
                 }
                 if (scalar(@allItems) < $total && @{$pageItems} > 0) {
                     $fetchPage->($offset + scalar(@{$pageItems}));
