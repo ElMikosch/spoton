@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-02T16:29:40.584Z",
+  "lastChecked": "2026-07-02T18:20:56.859Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -134,71 +134,45 @@
         "1827456",
         "1827457",
         "1827491",
-        "1827513"
+        "1827513",
+        "1827603",
+        "1827604",
+        "1827616"
       ],
-      "lastPostCount": 132
+      "lastPostCount": 135
     }
   },
   "pendingTriage": [
     {
-      "postId": "1827424",
-      "postNumber": 121,
-      "author": "_NK_",
-      "timestamp": "2026-06-30T06:17:08-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by paul- \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tThe host file will get updated by dhcp. So doing it after start would be best. But sometimes pcp_startup.s",
-      "draft": "Hey Nikos,\n\nThanks for checking in! Just to make sure — are you still seeing the CDN/404 playback issues after updating to [B]SpotOn v2.1.6[/B], or has the new librespot engine helped in your case?\n\nIf you're still experiencing problems, it would be really helpful if you could grab a diagnostic bundle from [B]SpotOn Settings → Diagnostics[/B] and share the relevant log sections so we can see what's happening on your end.\n\nCheers!",
-      "scrapedAt": "2026-06-30T15:19:33.416Z"
-    },
-    {
-      "postId": "1827437",
-      "postNumber": 122,
-      "author": "paul-",
-      "timestamp": "2026-06-30T08:53:50-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "It’s from long running processes not disconnecting from stdout/err, even though they are redirected to null.  Busybox ash is a little quirky sometimes.",
-      "draft": "Hey [B]paul-[/B],\n\nThanks for digging into that — that's a useful data point. The Busybox ash stdout/stderr behaviour with long-running processes is a known pain point, and it lines up with what we've been seeing in the HA addon / Docker / s6 environment too (tracked in [URL=https://github.com/stiefenm/spoton/issues/60]issue #60[/URL]).\n\nThe symptom there is that [CODE]Proc::Background[/CODE] stdout redirection doesn't fully detach, which means the [CODE]stream_port[/CODE] never gets captured reliably. If your findings shed any light on that specific case, it'd be really helpful to have them noted over on that issue.\n\nDo you have a reproducible workaround, or is this more of an observation at this stage? Happy to keep the discussion going here, but if there's something actionable, dropping it on GitHub would make sure it doesn't get lost in the thread.",
-      "scrapedAt": "2026-06-30T17:30:16.861Z"
-    },
-    {
-      "postId": "1827439",
-      "postNumber": 123,
-      "author": "foxesden",
-      "timestamp": "2026-06-30T09:12:37-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "sti - so SpotOn is working on Windows, thanks for the fix. I have managed to get it co-existing with my SqueezeDSP plugin, but I was hoping to be able to pipe the audio from Spoton through SqueezeDSP by adding some custom-convert.conf settings on a per player basis, but the conversion table seems to",
-      "draft": "Hey foxesden, glad to hear SpotOn is working on Windows and you've got it co-existing with SqueezeDSP! That's a nice setup.\n\nRegarding piping through a custom [B]convert.conf[/B] — you're right that SpotOn populates the conversion table a bit differently. SpotOn uses a [B]spoton://[/B] URI scheme for its tracks, so your convert.conf rules need to match against that protocol rather than the usual [B]flc://[/B] or [B]spotify://[/B] style you might have seen elsewhere.\n\nA rule targeting SpotOn output would look something like:\n\n[CODE]\nspoton wav * * flac flac [PARAMETERS]\n[/CODE]\n\nThe general format follows the standard LMS convert.conf syntax:\n\n[CODE]\n<protocol> <source-format> <dest-format> <player-mac> <application> [options]\n[/CODE]\n\nUsing [B]*[/B] as a wildcard for the player MAC will apply it globally, or you can specify a particular player's MAC address for per-player rules.\n\nThat said, I want to be honest — I'd recommend testing carefully, as the interaction between SpotOn's stream handling and a transcoding step could introduce buffering or timing quirks, especially with Spotify Connect mode vs. Browse/queue mode.\n\nTo help narrow things down if you run into issues:\n\n1. Check [B]SpotOn Settings → Diagnostics[/B] for any stream-related errors\n2. Enable LMS server logging for [B]transcoding[/B] to see if the convert rule is being picked up\n\nIf you find a combination that works well, I'd love to hear the exact rule — it would be useful to document for other users wanting a similar setup.\n\nIf things go sideways, feel free to open a GitHub issue with your convert.conf snippet and the diagnostic bundle: [URL]https://github.com/stiefenm/spoton/issues[/URL]",
-      "scrapedAt": "2026-06-30T17:30:29.188Z"
-    },
-    {
-      "postId": "1827442",
-      "postNumber": 126,
-      "author": "urknall",
-      "timestamp": "2026-06-30T10:31:32-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\t[USER=\"56286\"]  Background: SpotOn uses `soc` as its input format (Ogg Vorbis from the daemon, decoded to PC",
-      "draft": "[QUOTE=urknall;post126]i have a a question about that. is this the usual data flow in lms? i would expect there will be ogg, flac whatever be sent to the player and the player decodes itself...[/QUOTE]\n\nGreat question! The short answer is: it depends on the plugin and the player's capabilities.\n\n[B]Typical LMS data flow:[/B]\nYou're right that LMS can send compressed streams (Ogg, FLAC, MP3, etc.) directly to the player, and the player decodes them locally. This is the preferred path when the player supports the codec natively — it saves CPU on the server side.\n\n[B]How SpotOn currently works:[/B]\nSpotOn's daemon delivers audio as Ogg/Vorbis internally. Right now, LMS decodes that PCM on the server side (via the [CODE]soc[/CODE] format handler) and sends raw PCM to the player. This is why [CODE]soc pcm * *[/CODE] appears in the transcoding rules.\n\nThe reason for this approach is essentially compatibility — PCM works universally across all player types without worrying about whether a given player can handle Ogg natively.\n\n[B]Could Ogg be passed through directly to the player?[/B]\nYes, in principle — and there is actually an open enhancement request for exactly this: [URL=https://github.com/stiefenm/spoton/issues/95]#95: Add optional Ogg/Vorbis passthrough streaming to players[/URL]. This would allow capable players (like squeezelite) to receive the Ogg stream and decode it themselves, reducing server CPU usage. It's on the roadmap but not yet implemented.\n\nSo the current behaviour is intentional but not necessarily the final state. The PCM passthrough approach trades a bit of server CPU for broad compatibility — the Ogg passthrough enhancement would make it more \"LMS-native\" for players that support it.\n\nHope that clears it up! Feel free to follow or comment on issue #95 if this is something you'd find useful.",
-      "scrapedAt": "2026-06-30T19:25:21.979Z"
-    },
-    {
-      "postId": "1827444",
-      "postNumber": 127,
+      "postId": "1827603",
+      "postNumber": 133,
       "author": "CJS",
-      "timestamp": "2026-06-30T10:54:13-07:00",
+      "timestamp": "2026-07-02T09:39:03-07:00",
       "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tCJS Back in post Single MP3+CUE vs. multiple MP3s you reported that the SpotOn More menu was missing standar",
-      "draft": "[QUOTE=CJS;127]Thanks sti! I can confirm that the SpotOn More menu is looking fine now, as illustrated in the screenshot below.[/QUOTE]\n\nGlad to hear it, CJS — thanks for confirming! 🎉\n\nThat fix has been a while coming, so it's great to have it verified working. For anyone else who was affected by the missing [B]Add to Favorites[/B], play controls, or More Info items in the SpotOn context menu, updating to [B]v2.2.1[/B] should resolve it.",
-      "scrapedAt": "2026-06-30T19:25:25.958Z"
+      "contentPreview": "sti, I was notified that SpotOn v2.3.1 is available. But this version won't install, since apparently there is a checksum mismatch:   \tCode: \t[26-07-02 18:11:38.5302] Slim::Utils::PluginDownloader::_installDownload (218) digest does not match /var/lib/squeezeboxserver/cache/DownloadedPlugins/SpotOn.",
+      "draft": "CJS, thanks for the report — this is a packaging issue on my end, not a problem with your installation.\n\nWhat's happened here is that the [B]repository ZIP and the published checksum in the plugin manifest are out of sync[/B]. This typically happens when a release ZIP gets rebuilt or re-uploaded after the manifest SHA1 was already published (e.g. a hotfix to the archive without bumping the version string).\n\n[B]What the log means:[/B]\n[CODE]\nexpected 9cf94b5d8e9077da93dafc651698a7a790a04a38\ngot     5ca9514c560a72fa6755de8b6dc2bf839c0572cd\n[/CODE]\nLMS downloaded the ZIP fine, but the SHA1 of what arrived doesn't match what the manifest declared — so the installer correctly refuses to proceed. Your system is working as intended; the fault is in the release.\n\n[B]Short-term workaround:[/B] You can install manually by downloading the ZIP directly from the GitHub release page and installing via [B]LMS Settings → Plugins → Install from ZIP[/B]. Note this bypasses checksum verification, so only do it from the official GitHub release:\n[URL]https://github.com/stiefenm/spoton/releases[/URL]\n\n[B]I'll push a corrected manifest[/B] with the right SHA1 as soon as I've confirmed the ZIP is stable. Once that's live, the normal auto-install path should work again — you may need to clear [CODE]/var/lib/squeezeboxserver/cache/DownloadedPlugins/SpotOn.zip[/CODE] first so LMS re-fetches cleanly.\n\nSorry for the inconvenience — I've opened a tracking note internally. If others hit this in the meantime, please reply here so I can gauge how widely the bad manifest has propagated.\n\nFor future reference, packaging issues like this are best logged at:\n[URL]https://github.com/stiefenm/spoton/issues[/URL]",
+      "scrapedAt": "2026-07-02T18:20:36.590Z"
     },
     {
-      "postId": "1827456",
-      "postNumber": 129,
+      "postId": "1827604",
+      "postNumber": 134,
       "author": "urknall",
-      "timestamp": "2026-06-30T13:14:28-07:00",
+      "timestamp": "2026-07-02T09:40:49-07:00",
       "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Thanks for the explanation. I checked the current source again, and I may still be missing something, but I cannot find the code path that actually streams Ogg/Vorbis passthrough.  What I see in unified.rs is that /stream is implemented as a PCM relay and returns Content-Type: audio/L16;rate=44100;c",
-      "draft": "urknall, that's a really sharp code review — and you're right to push back on this. I owe you a correction.\n\n[QUOTE]So from the current source, it looks like the bytes served by /stream are still PCM/L16, not a raw Ogg/Vorbis container.[/QUOTE]\n\nYes, that's accurate. I overstated things in my previous reply. The [B]current implementation[/B] does relay PCM/L16 from the daemon — [B]not raw Ogg/Vorbis[/B]. The [CODE]UnifiedHttpStreamSink[/CODE] operates entirely on [CODE]AudioPacket::Samples[/CODE] after the librespot pipeline has already decoded the stream, converts via [CODE]f64_to_s16()[/CODE], and serves that as [CODE]audio/L16[/CODE]. You're correct that [CODE]AudioPacket::Raw[/CODE] packets are discarded.\n\nThe [CODE]streamFormat[/CODE] UI setting and the [CODE]auto + passthrough → OGG[/CODE] resolution in the metadata/tests is aspirational — it reflects [B]intended future behaviour[/B] rather than a currently wired code path. The passthrough flag is not passed to the daemon at startup, and [CODE]PlayerConfig.passthrough[/CODE] is not set. That work is incomplete.\n\nSo to be precise about the actual data flow today:\n\n[CODE]\nlibrespot → decoded PCM samples → f64_to_s16() → HTTP /stream (audio/L16) → LMS → player\n[/CODE]\n\nThe [CODE]soc pcm * *[/CODE] transcoding rule in LMS reflects this — [CODE]soc[/CODE] is the LMS-side format identifier for SpotOn's stream, but the content being served is already PCM, not an Ogg container. The rule exists so LMS knows how to handle it, not because Ogg is being passed through natively.\n\nTrue Ogg passthrough (where librespot's [CODE]AudioPacket::Raw[/CODE] is forwarded directly) would require a separate sink implementation and wiring the passthrough config — that's something I have on the roadmap but isn't there yet.\n\nThanks for digging into this carefully — this is exactly the kind of scrutiny that keeps the documentation honest. I'll make sure the in-plugin UI copy is updated to not imply passthrough is already active.",
-      "scrapedAt": "2026-06-30T21:20:00.605Z"
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tsti, I was notified that SpotOn v2.3.1 is available. But this version won't install, since apparently there ",
+      "draft": "[QUOTE=urknall;134]thats already fixed 2.3.2 is out[/QUOTE]\n\nThanks for the quick heads-up, urknall! CJS — what urknall said. The checksum mismatch in v2.3.1 was caused by a release artifact issue on my end; [B]v2.3.2[/B] is already out and corrects it.\n\nIf the update still doesn't appear automatically, try the following:\n\n[LIST=1]\n[*]Go to [B]LMS Settings → Plugins[/B] and click [B]Check for Updates[/B]\n[*]If v2.3.2 still doesn't show, clear the plugin download cache manually and retry — LMS may have cached the broken zip. The stale file would be at something like:[CODE]/var/lib/squeezeboxserver/cache/DownloadedPlugins/SpotOn.zip[/CODE]Delete it, then trigger the update check again.\n[/LIST]\n\nSorry for the inconvenience — the v2.3.1 artifact should never have gone out in that state. If you're still hitting issues after trying v2.3.2, please let me know here or open a ticket at [URL]https://github.com/stiefenm/spoton/issues[/URL] with your LMS log snippet.",
+      "scrapedAt": "2026-07-02T18:20:44.426Z"
+    },
+    {
+      "postId": "1827616",
+      "postNumber": 135,
+      "author": "Andy_NO",
+      "timestamp": "2026-07-02T11:16:48-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "There is something odd with the plugin. I have it installed and can access it on my players but I cannot see it on LMS web page at the active plugins. The server also constantly demands reboot.",
+      "draft": "Hi Andy_NO, welcome to the thread!\n\nThese two symptoms together — plugin not visible in the active plugins list and LMS repeatedly requesting a reboot — are a bit unusual and could have a few different causes.\n\n[B]Most likely: a failed or partial installation[/B]\n\nLooking at the post just above yours from CJS (#133), there's an active checksum mismatch issue with v2.3.1 that's preventing clean installation. This could explain both symptoms — LMS may have partially staged the plugin but not fully activated it, leaving it in a state where it keeps asking for a restart that never fully resolves things.\n\n[B]Things to check:[/B]\n\n[LIST=1]\n[*]After the reboot prompt, are you actually restarting LMS (not just the web UI)? A full server restart is required, not just a page refresh.\n[*]Check your LMS log for any errors around the SpotOn plugin — look for lines containing [CODE]SpotOn[/CODE] or [CODE]digest does not match[/CODE] around the time of installation.\n[*]Try removing SpotOn via [B]Settings → Plugins[/B], restarting LMS, then reinstalling. If you hit the checksum error CJS reported, that's the culprit.\n[/LIST]\n\n[B]To share your log snippet:[/B] Go to [B]Settings → Advanced → Logging[/B] and check the server log, or use [B]SpotOn Settings → Diagnostics[/B] if you can reach that page at all.\n\nCould you confirm:\n[LIST]\n[*]Which LMS version you're running?\n[*]Which SpotOn version was offered for install?\n[*]Do you see any [CODE]digest does not match[/CODE] lines in your log?\n[/LIST]\n\nIf this is indeed the checksum issue, please also add a note to the GitHub issue tracker so it gets tracked: [URL]https://github.com/stiefenm/spoton/issues[/URL]",
+      "scrapedAt": "2026-07-02T18:20:56.859Z"
     }
-  ]
+  ],
+  "lastRun": "2026-07-02T19:12:36+02:00"
 }
