@@ -5,6 +5,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-07-02
+### Added
+- **OGG Vorbis Passthrough (Connect)**: Spotify Connect streams can now deliver raw OGG/Vorbis to players that support it, skipping CPU-intensive PCM decoding. Auto-detected via player format announcement; configurable per-player (`streamFormat` pref: auto/ogg/pcm).
+- **OGG Vorbis Passthrough (Browse)**: single-track Browse playback also supports OGG passthrough with the same auto-detection logic.
+- **Shared passthrough resolver**: `resolvePassthroughForClient()` in DaemonManager provides a single source of truth for OGG passthrough decisions across Browse, Connect, and NowPlaying display.
+- **Context Menu cleanup**: removed `trackInfoURL` override from ProtocolHandler — LMS now shows its native Song Info items instead of the broken Spotify web link. Fixes #55.
+- **Favorites artwork**: added `getIcon()` to ProtocolHandler so LMS Favorites show album artwork instead of the generic SpotOn plugin icon.
+
+### Fixed
+- **Connect OGG rate-limiting**: granule_position-based wall-clock pacing ensures OGG data flows at real-time speed, preventing Spirc/audio desync where the Spotify app skipped ahead while LMS was still buffering.
+- **Gapless track transitions (OGG)**: OGG serial number change detection resets the rate-limiter on gapless transitions — librespot does not call stop()/start() between gapless tracks, so the serial number is the only reliable track boundary signal.
+- **Connect Pause/Resume**: resume handler now uses `track->url` (the original `spoton://connect-*` URL) instead of `streamUrl` (which becomes the HTTP proxy URL after `canDirectStream`). Previously, resume always restarted the stream from 0:00.
+- **Resume position offset**: captures the first audio page's granule_position as a baseline offset so the rate-limiting formula starts from 0 relative to `began_at` after pause/resume, instead of sleeping for the entire track prefix.
+- **Negative granule guard**: `.max(0)` before i64-to-u128 cast prevents a negative relative_granule (from a missed serial change in a multi-page chunk) from wrapping to ~2^64 and hanging the audio thread for ~420 years.
+- **OGG header replay on Connect reconnect**: buffered OGG BOS + Vorbis setup headers are replayed when squeezelite reconnects to the `/stream` endpoint, ensuring the decoder always receives valid stream initialization.
+- **Keymaster 403 diagnostics**: error payload is now parsed and logged with client-id context; no-op fallback eliminated.
+- **explodePlaylist format**: returns OPML items hash instead of bare URL array, fixing playlist population in some LMS skins.
+- **Song Info web link**: shows Spotify web link instead of raw `spoton://` URL.
+
+### Changed
+- **NowPlaying format display**: shows actual stream format (PCM vs OGG) based on passthrough state instead of always showing OGG.
+- **Context menu prefix**: SpotOn context menu items now prefixed with "SpotOn:" for clarity.
+
 ## [2.2.0] - 2026-06-30
 ### Added
 - **Session Health Monitoring**: the unified daemon's `/health` endpoint now returns JSON with `session_valid`, `session_age_secs`, and `idle_secs` fields. The Perl side polls each daemon every 60 seconds and proactively restarts daemons with stale Spotify sessions (invalid session or >4h idle) before users experience cold-start playback failure.
