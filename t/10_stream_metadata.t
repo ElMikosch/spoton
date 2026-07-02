@@ -363,6 +363,7 @@ require_ok('Plugins::SpotOn::Plugin') or BAIL_OUT("Failed to load Plugin.pm");
     sub formats { return @{ $_formats{${$_[0]}} // ['ogg','pcm','flac','mp3'] } }
     sub isSynced { return $_synced{${$_[0]}} // 0 }
     sub master  { return $_master{${$_[0]}} }
+    sub playingSong { undef }
 }
 
 # ============================================================
