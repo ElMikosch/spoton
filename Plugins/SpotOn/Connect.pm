@@ -996,6 +996,9 @@ sub _fetchTrackMetadata {
             });
         }
 
+        # Update playlist timestamp so polling clients (WiiM, web UI) detect the change
+        $client->currentPlaylistUpdateTime(Time::HiRes::time());
+
         # Fire newmetadata notification so LMS refreshes Now Playing
         Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
 

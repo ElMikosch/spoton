@@ -782,7 +782,7 @@ sub _buildExplodedTrackItem {
     my $artist  = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
     my $url     = 'spoton://track:' . $track->{id};
     return {
-        name     => "$title \x{2014} $artist",
+        name     => "$title - $artist",
         line1    => $title,
         line2    => $artist . ($albumName ? " \x{2022} $albumName" : ''),
         url      => $url,
@@ -957,6 +957,7 @@ sub _asyncRefetch {
         # Notify LMS to refresh NowPlaying display
         if ($client) {
             require Slim::Control::Request;
+            $client->currentPlaylistUpdateTime(Time::HiRes::time());
             Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
         }
     };
