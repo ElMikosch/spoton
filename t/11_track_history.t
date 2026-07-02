@@ -358,6 +358,7 @@ require_ok('Plugins::SpotOn::ProtocolHandler') or BAIL_OUT("Failed to load Proto
     sub can { return 0 }
     sub master { $_[0] }
     sub playingSong { undef }
+    sub currentPlaylistUpdateTime { 1 }
 }
 
 # ============================================================
