@@ -110,6 +110,16 @@ struct UnifiedHttpStreamSink {
     // Only meaningful when `passthrough` is true; cleared on the first audio page.
     collecting_headers: bool,
     passthrough: bool,
+    // Phase 44 fix: granule_position offset captured on the first audio page after
+    // each start(). On pause/resume librespot re-sends OGG from the resume position,
+    // so granule_position is already deep into the track. Without subtracting this
+    // offset, the rate-limiting formula would sleep for the entire track prefix.
+    // -1 = sentinel meaning "not yet captured".
+    granule_offset: i64,
+    // Phase 44 fix: OGG serial number of the current track. When it changes
+    // (gapless track transition without stop()/start()), reset rate-limiting
+    // state so the new track is paced from its own beginning.
+    ogg_serial: u32,
 }
 
 impl UnifiedHttpStreamSink {
@@ -137,6 +147,8 @@ impl UnifiedHttpStreamSink {
             ogg_header_buf,
             collecting_headers: passthrough,
             passthrough,
+            granule_offset: -1,
+            ogg_serial: 0,
         })
     }
 }
@@ -145,6 +157,8 @@ impl Sink for UnifiedHttpStreamSink {
     fn start(&mut self) -> SinkResult<()> {
         self.began_at = Instant::now();
         self.frames_consumed = 0;
+        self.granule_offset = -1; // Phase 44 fix: re-capture on first audio page
+        self.ogg_serial = 0;
         // Phase 43 (D-03): clear the header buffer on every track start so the
         // /stream handler always replays THIS track's headers, not a stale track's.
         if self.passthrough {
@@ -161,6 +175,8 @@ impl Sink for UnifiedHttpStreamSink {
         // Connect daemon must not exit on track boundary.
         self.frames_consumed = 0;
         self.began_at = Instant::now();
+        self.granule_offset = -1;
+        self.ogg_serial = 0;
         Ok(())
     }
 
@@ -229,18 +245,78 @@ impl Sink for UnifiedHttpStreamSink {
                     }
                 }
 
-                // Phase 44 (D-01/D-02/D-03): parse granule_position (bytes 6..14, i64 LE)
-                // from the first OGG page in this packet and apply the CON-14 formula,
-                // with granule_position replacing frames_consumed as the time reference.
-                // Header pages (granule_position <= 0) flow through immediately (D-03).
-                if chunk.len() >= 14 && &chunk[0..4] == b"OggS" {
-                    let granule_position = i64::from_le_bytes(
-                        chunk[6..14]
-                            .try_into()
-                            .expect("OGG granule_position slice is exactly 8 bytes"),
+                // Phase 44 fix: detect gapless track transitions by watching the
+                // OGG serial number (bytes 14..18). In Connect mode, librespot
+                // does NOT call stop()/start() between gapless tracks — the data
+                // flows continuously. When the serial changes, reset began_at and
+                // granule_offset so the new track is paced from its own beginning.
+                if chunk.len() >= 18 && &chunk[0..4] == b"OggS" {
+                    let serial = u32::from_le_bytes(
+                        chunk[14..18].try_into().expect("OGG serial is 4 bytes"),
                     );
-                    if granule_position > 0 {
-                        let expected_ns: u128 = (granule_position as u128)
+                    if self.ogg_serial != 0 && serial != self.ogg_serial {
+                        log::info!(
+                            "[spoton/unified] OGG serial change: {} -> {} — resetting rate-limiter \
+                             (gapless track transition)",
+                            self.ogg_serial, serial
+                        );
+                        self.began_at = Instant::now();
+                        self.granule_offset = -1;
+                        self.collecting_headers = true;
+                        // Re-buffer headers for the new track
+                        let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
+                        buf.clear();
+                        // This page is a BOS header — buffer it
+                        buf.push(chunk.clone());
+                        drop(buf);
+                    }
+                    self.ogg_serial = serial;
+                }
+
+                // Phase 44: granule_position-based wall-clock rate-limiting.
+                // Scan ALL OGG pages in the chunk (the passthrough decoder may
+                // deliver multiple pages concatenated in a single Raw packet).
+                // Use the LAST audio page's granule_position for the sleep formula
+                // so the pacing matches real-time regardless of chunk size.
+                //
+                // granule_offset: captured on the first audio page after each
+                // start()/resume so pause/resume works correctly.
+                {
+                    let mut last_granule: i64 = -1;
+                    let mut pos = 0usize;
+                    while pos + 27 <= chunk.len() {
+                        if &chunk[pos..pos + 4] != b"OggS" {
+                            break;
+                        }
+                        let granule = i64::from_le_bytes(
+                            chunk[pos + 6..pos + 14]
+                                .try_into()
+                                .expect("OGG granule_position slice is exactly 8 bytes"),
+                        );
+                        // Parse page size: 27-byte header + segment_count bytes of
+                        // segment table + sum of segment sizes.
+                        let n_segments = chunk[pos + 26] as usize;
+                        if pos + 27 + n_segments > chunk.len() {
+                            break;
+                        }
+                        let body_size: usize = chunk[pos + 27..pos + 27 + n_segments]
+                            .iter()
+                            .map(|&b| b as usize)
+                            .sum();
+                        let page_size = 27 + n_segments + body_size;
+
+                        if granule > 0 {
+                            last_granule = granule;
+                        }
+                        pos += page_size;
+                    }
+                    if last_granule > 0 {
+                        // Capture offset on first audio page after start/resume.
+                        if self.granule_offset < 0 {
+                            self.granule_offset = last_granule;
+                        }
+                        let relative_granule = (last_granule - self.granule_offset) as u128;
+                        let expected_ns: u128 = relative_granule
                             * 1_000_000_000u128
                             / u128::from(SAMPLE_RATE)
                             + self.buffer_latency_ns;

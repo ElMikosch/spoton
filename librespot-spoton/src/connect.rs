@@ -356,6 +356,10 @@ pub struct HttpStreamSink {
     began_at: Instant,
     frames_consumed: u64,
     buffer_latency_ns: u128,
+    // Phase 44 fix: granule_position offset captured on the first audio page after
+    // each start(). See UnifiedHttpStreamSink for rationale.
+    granule_offset: i64,
+    ogg_serial: u32,
 }
 
 impl HttpStreamSink {
@@ -378,6 +382,8 @@ impl HttpStreamSink {
             began_at: Instant::now(),
             frames_consumed: 0,
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
+            granule_offset: -1,
+            ogg_serial: 0,
         })
     }
 }
@@ -386,6 +392,8 @@ impl Sink for HttpStreamSink {
     fn start(&mut self) -> SinkResult<()> {
         self.began_at = Instant::now();
         self.frames_consumed = 0;
+        self.granule_offset = -1; // Phase 44 fix: re-capture on first audio page
+        self.ogg_serial = 0;
         Ok(())
     }
 
@@ -395,6 +403,8 @@ impl Sink for HttpStreamSink {
         // Reset counters only. Process outlives track boundaries.
         self.frames_consumed = 0;
         self.began_at = Instant::now();
+        self.granule_offset = -1;
+        self.ogg_serial = 0;
         Ok(())
     }
 
@@ -463,18 +473,58 @@ impl Sink for HttpStreamSink {
                 // standalone sink is not the primary production path.
                 let chunk = Bytes::copy_from_slice(&bytes);
 
-                // Phase 44 (D-01/D-02/D-03): parse granule_position (bytes 6..14, i64 LE)
-                // from the first OGG page in this packet and apply the CON-14 formula,
-                // with granule_position replacing frames_consumed as the time reference.
-                // Header pages (granule_position <= 0) flow through immediately (D-03).
-                if chunk.len() >= 14 && &chunk[0..4] == b"OggS" {
-                    let granule_position = i64::from_le_bytes(
-                        chunk[6..14]
-                            .try_into()
-                            .expect("OGG granule_position slice is exactly 8 bytes"),
+                // Phase 44 fix: detect gapless track transitions via OGG serial
+                // change. See UnifiedHttpStreamSink for full rationale.
+                if chunk.len() >= 18 && &chunk[0..4] == b"OggS" {
+                    let serial = u32::from_le_bytes(
+                        chunk[14..18].try_into().expect("OGG serial is 4 bytes"),
                     );
-                    if granule_position > 0 {
-                        let expected_ns: u128 = (granule_position as u128)
+                    if self.ogg_serial != 0 && serial != self.ogg_serial {
+                        log::info!(
+                            "[spoton/connect] OGG serial change: {} -> {} — resetting rate-limiter",
+                            self.ogg_serial, serial
+                        );
+                        self.began_at = Instant::now();
+                        self.granule_offset = -1;
+                    }
+                    self.ogg_serial = serial;
+                }
+
+                // Phase 44: multi-page rate-limiting — see UnifiedHttpStreamSink
+                // for full rationale. Scan ALL OGG pages, pace by the last one.
+                {
+                    let mut last_granule: i64 = -1;
+                    let mut pos = 0usize;
+                    while pos + 27 <= chunk.len() {
+                        if &chunk[pos..pos + 4] != b"OggS" {
+                            break;
+                        }
+                        let granule = i64::from_le_bytes(
+                            chunk[pos + 6..pos + 14]
+                                .try_into()
+                                .expect("OGG granule_position slice is exactly 8 bytes"),
+                        );
+                        let n_segments = chunk[pos + 26] as usize;
+                        if pos + 27 + n_segments > chunk.len() {
+                            break;
+                        }
+                        let body_size: usize = chunk[pos + 27..pos + 27 + n_segments]
+                            .iter()
+                            .map(|&b| b as usize)
+                            .sum();
+                        let page_size = 27 + n_segments + body_size;
+
+                        if granule > 0 {
+                            last_granule = granule;
+                        }
+                        pos += page_size;
+                    }
+                    if last_granule > 0 {
+                        if self.granule_offset < 0 {
+                            self.granule_offset = last_granule;
+                        }
+                        let relative_granule = (last_granule - self.granule_offset) as u128;
+                        let expected_ns: u128 = relative_granule
                             * 1_000_000_000u128
                             / u128::from(SAMPLE_RATE)
                             + self.buffer_latency_ns;
