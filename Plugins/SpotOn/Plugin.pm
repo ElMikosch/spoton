@@ -2608,6 +2608,36 @@ sub _bitrateForClient {
 
     $client = $client->master if $client && $client->can('master');
 
+    # Issue #97: prefer actual stream bitrate from LMS when available
+    if ($client) {
+        my $song = $client->playingSong();
+        if ($song) {
+            # streambitrate is set by LMS from the audio stream header
+            my $streamBitrate = $song->streambitrate();
+            if ($streamBitrate && $streamBitrate > 0) {
+                # LMS reports bps, convert to kbps and round to nearest Spotify tier
+                my $kbps = int($streamBitrate / 1000 + 0.5);
+                return $kbps if $kbps > 0;
+            }
+        }
+    }
+
+    # Fallback: configured preference
+    my $bitrate = $prefs->get('bitrate') || 320;
+    if ($client) {
+        my $override = $prefs->client($client)->get('bitrateOverride');
+        $bitrate = $override if $override && $override =~ /^(?:96|160|320)$/;
+    }
+
+    return $bitrate;
+}
+
+# Return the configured bitrate preference (for daemon startup, not display)
+sub _bitrateConfigForClient {
+    my ($class, $client) = @_;
+
+    $client = $client->master if $client && $client->can('master');
+
     my $bitrate = $prefs->get('bitrate') || 320;
     if ($client) {
         my $override = $prefs->client($client)->get('bitrateOverride');

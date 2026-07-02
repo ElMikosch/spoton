@@ -49,7 +49,7 @@ use librespot_core::cache::Cache;
 use librespot_core::config::SessionConfig;
 use librespot_core::Session;
 use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot_playback::config::{AudioFormat, PlayerConfig, VolumeCtrl};
+use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
 use librespot_playback::convert::Converter;
 use librespot_playback::decoder::AudioPacket;
 use librespot_playback::mixer::softmixer::SoftMixer;
@@ -404,6 +404,8 @@ async fn unified_http_server(
     // Phase 43 (D-03): OGG header buffer for /stream replay after drain. Some when
     // enable_connect is true, None in Browse-only mode.
     ogg_header_buf: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>,
+    // Issue #97: bitrate for Browse Player creation
+    bitrate: Bitrate,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -804,7 +806,7 @@ async fn unified_http_server(
                                     return;
                                 }
 
-                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms, passthrough).await;
+                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms, passthrough, bitrate).await;
 
                                 // T-30-05 (informational): post-load gen check.
                                 // serve_track_request drops pcm_tx when it returns, causing
@@ -1041,7 +1043,16 @@ pub async fn run_unified(
     initial_volume: Option<u16>,
     volume_ctrl_str: &str,
     passthrough: bool,
+    bitrate_kbps: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #97: convert kbps to librespot Bitrate enum once, reuse everywhere.
+    let bitrate_enum = match bitrate_kbps {
+        96 => Bitrate::Bitrate96,
+        160 => Bitrate::Bitrate160,
+        _ => Bitrate::Bitrate320,
+    };
+    log::info!("[spoton/unified] Bitrate: {} kbps", bitrate_kbps);
+
     // 1. Cache + Credentials
     //    Third arg (audio_path = Some(cache_dir)) enables audio key cache (D-02).
     let cache = Cache::new(Some(cache_dir), None::<&str>, Some(cache_dir), None)?;
@@ -1180,7 +1191,7 @@ pub async fn run_unified(
             s.clone()
         };
         let connect_player = Player::new(
-            PlayerConfig { passthrough, ..PlayerConfig::default() },
+            PlayerConfig { passthrough, bitrate: bitrate_enum, ..PlayerConfig::default() },
             session_for_player,
             soft_volume,
             move || {
@@ -1379,6 +1390,7 @@ pub async fn run_unified(
             Arc::clone(&last_activity),
             passthrough,
             ogg_header_buf_arc,
+            bitrate_enum,
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1686,6 +1698,7 @@ pub async fn run_unified(
             Arc::clone(&last_activity),
             passthrough,
             None,  // ogg_header_buf
+            bitrate_enum,
         ));
 
         // Pure Browse: wait for Ctrl+C or session reconnect.

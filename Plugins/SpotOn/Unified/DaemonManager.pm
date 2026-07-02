@@ -384,6 +384,18 @@ sub startHelper {
                     $class->stopHelper($clientId);
                     $helper = undef;
                 }
+                # Issue #97: restart daemon when bitrate preference changes
+                if ($helper && $helper->alive) {
+                    require Plugins::SpotOn::Plugin;
+                    my $wantBitrate = Plugins::SpotOn::Plugin->_bitrateConfigForClient($client);
+                    if (($helper->_bitrate // '') ne $wantBitrate) {
+                        main::INFOLOG && $log->is_info && $log->info(
+                            "Bitrate changed for $clientId (was " . ($helper->_bitrate // '?') . ", now $wantBitrate) — restarting daemon"
+                        );
+                        $class->stopHelper($clientId);
+                        $helper = undef;
+                    }
+                }
             }
         }
     }

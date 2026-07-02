@@ -31,6 +31,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	_accountId
 	_connectEnabled
 	_passthrough
+	_bitrate
 	_lastSeen
 	_proc
 	_startTimes
@@ -118,6 +119,12 @@ sub start {
 	my $wantPassthrough = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client) ? 1 : 0;
 	$self->_passthrough($wantPassthrough);
 	push @helperArgs, '--passthrough' if $wantPassthrough;
+
+	# Issue #97: pass effective bitrate to daemon
+	require Plugins::SpotOn::Plugin;
+	my $bitrate = Plugins::SpotOn::Plugin->_bitrateConfigForClient($client);
+	$self->_bitrate($bitrate);
+	push @helperArgs, '--bitrate', $bitrate;
 
 	# D-07 / D-01: Connect is conditional on per-player toggle.
 	# The unified daemon always starts (credential-gated), but --enable-connect
