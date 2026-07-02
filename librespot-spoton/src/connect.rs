@@ -356,6 +356,10 @@ pub struct HttpStreamSink {
     began_at: Instant,
     frames_consumed: u64,
     buffer_latency_ns: u128,
+    // Phase 44 fix: granule_position offset captured on the first audio page after
+    // each start(). See UnifiedHttpStreamSink for rationale.
+    granule_offset: i64,
+    ogg_serial: u32,
 }
 
 impl HttpStreamSink {
@@ -378,6 +382,8 @@ impl HttpStreamSink {
             began_at: Instant::now(),
             frames_consumed: 0,
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
+            granule_offset: -1,
+            ogg_serial: 0,
         })
     }
 }
@@ -386,6 +392,8 @@ impl Sink for HttpStreamSink {
     fn start(&mut self) -> SinkResult<()> {
         self.began_at = Instant::now();
         self.frames_consumed = 0;
+        self.granule_offset = -1; // Phase 44 fix: re-capture on first audio page
+        self.ogg_serial = 0;
         Ok(())
     }
 
@@ -395,66 +403,155 @@ impl Sink for HttpStreamSink {
         // Reset counters only. Process outlives track boundaries.
         self.frames_consumed = 0;
         self.began_at = Instant::now();
+        self.granule_offset = -1;
+        self.ogg_serial = 0;
         Ok(())
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-        let AudioPacket::Samples(samples) = packet else {
-            // Raw passthrough — not in scope for S16LE sink; skip.
-            return Ok(());
-        };
+        match packet {
+            AudioPacket::Samples(samples) => {
+                // Convert f64 samples to S16LE bytes.
+                let samples_s16 = converter.f64_to_s16(&samples);
+                // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        samples_s16.as_ptr().cast::<u8>(),
+                        samples_s16.len() * std::mem::size_of::<i16>(),
+                    )
+                };
 
-        // Convert f64 samples to S16LE bytes.
-        let samples_s16 = converter.f64_to_s16(&samples);
-        // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
-        let bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                samples_s16.as_ptr().cast::<u8>(),
-                samples_s16.len() * std::mem::size_of::<i16>(),
-            )
-        };
-
-        // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
-        //
-        // expected_ns = frames_consumed * 1e9 / SAMPLE_RATE + buffer_latency_ns
-        //
-        // Without rate-limiting: decoder races ahead of wall-clock, making Spotify
-        // clients show nonsensical seek positions.
-        //
-        // With buffer_latency_ns > 0: decoder advances `buffer_latency_ms` ms slower
-        // than wall-clock, so reported position matches actual audio output position.
-        let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
-        self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
-        if self.frames_consumed % 1000 == 0 {
-            log::trace!("[spoton] sink write: {} frames consumed", self.frames_consumed);
-        }
-        let expected_ns: u128 =
-            u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
-            + self.buffer_latency_ns;
-        let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
-
-        if expected_ns > elapsed_ns {
-            let park_ns = (expected_ns - elapsed_ns) as u64;
-            std::thread::sleep(Duration::from_nanos(park_ns));
-        }
-
-        // Send PCM bytes over the channel to the HTTP stream server.
-        // Player::new spawns a std::thread with its own tokio Runtime; Sink::write
-        // runs within a tokio context. blocking_send would panic.
-        // try_send with spin-retry: the channel has 256 slots (~1.5s of audio)
-        // and a single consumer — contention is transient, rate-limiter keeps us
-        // at real-time, so the channel is nearly always empty.
-        let chunk = Bytes::copy_from_slice(bytes);
-        loop {
-            match self.pcm_tx.try_send(chunk.clone()) {
-                Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    std::thread::sleep(Duration::from_millis(1));
+                // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
+                //
+                // expected_ns = frames_consumed * 1e9 / SAMPLE_RATE + buffer_latency_ns
+                //
+                // Without rate-limiting: decoder races ahead of wall-clock, making Spotify
+                // clients show nonsensical seek positions.
+                //
+                // With buffer_latency_ns > 0: decoder advances `buffer_latency_ms` ms slower
+                // than wall-clock, so reported position matches actual audio output position.
+                let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
+                self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
+                if self.frames_consumed % 1000 == 0 {
+                    log::trace!("[spoton] sink write: {} frames consumed", self.frames_consumed);
                 }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    return Err(SinkError::OnWrite(
-                        "HTTP stream server shut down".into(),
-                    ));
+                let expected_ns: u128 =
+                    u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
+                    + self.buffer_latency_ns;
+                let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
+
+                if expected_ns > elapsed_ns {
+                    let park_ns = (expected_ns - elapsed_ns) as u64;
+                    std::thread::sleep(Duration::from_nanos(park_ns));
+                }
+
+                // Send PCM bytes over the channel to the HTTP stream server.
+                // Player::new spawns a std::thread with its own tokio Runtime; Sink::write
+                // runs within a tokio context. blocking_send would panic.
+                // try_send with spin-retry: the channel has 256 slots (~1.5s of audio)
+                // and a single consumer — contention is transient, rate-limiter keeps us
+                // at real-time, so the channel is nearly always empty.
+                let chunk = Bytes::copy_from_slice(bytes);
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
+                }
+            }
+            AudioPacket::Raw(bytes) => {
+                // Phase 44 (D-01): granule_position-based wall-clock rate-limiting for
+                // OGG passthrough. Replaces the Phase 43 backpressure-only pacing — for
+                // code consistency with UnifiedHttpStreamSink (D-05), even though this
+                // standalone sink is not the primary production path.
+                let chunk = Bytes::copy_from_slice(&bytes);
+
+                // Phase 44 fix: detect gapless track transitions via OGG serial
+                // change. See UnifiedHttpStreamSink for full rationale.
+                // Note: no header buffer here (standalone sink has no /stream handler).
+                // .max(0) guard on relative_granule prevents hangs if serial change
+                // is missed in a multi-page chunk spanning a track boundary.
+                if chunk.len() >= 18 && &chunk[0..4] == b"OggS" {
+                    let serial = u32::from_le_bytes(
+                        chunk[14..18].try_into().expect("OGG serial is 4 bytes"),
+                    );
+                    if self.ogg_serial != 0 && serial != self.ogg_serial {
+                        log::info!(
+                            "[spoton/connect] OGG serial change: {} -> {} — resetting rate-limiter",
+                            self.ogg_serial, serial
+                        );
+                        self.began_at = Instant::now();
+                        self.granule_offset = -1;
+                    }
+                    self.ogg_serial = serial;
+                }
+
+                // Phase 44: multi-page rate-limiting — see UnifiedHttpStreamSink
+                // for full rationale. Scan ALL OGG pages, pace by the last one.
+                {
+                    let mut last_granule: i64 = -1;
+                    let mut pos = 0usize;
+                    while pos + 27 <= chunk.len() {
+                        if &chunk[pos..pos + 4] != b"OggS" {
+                            break;
+                        }
+                        let granule = i64::from_le_bytes(
+                            chunk[pos + 6..pos + 14]
+                                .try_into()
+                                .expect("OGG granule_position slice is exactly 8 bytes"),
+                        );
+                        let n_segments = chunk[pos + 26] as usize;
+                        if pos + 27 + n_segments > chunk.len() {
+                            break;
+                        }
+                        let body_size: usize = chunk[pos + 27..pos + 27 + n_segments]
+                            .iter()
+                            .map(|&b| b as usize)
+                            .sum();
+                        let page_size = 27 + n_segments + body_size;
+
+                        if granule > 0 {
+                            last_granule = granule;
+                        }
+                        pos += page_size;
+                    }
+                    if last_granule > 0 {
+                        if self.granule_offset < 0 {
+                            self.granule_offset = last_granule;
+                        }
+                        let relative_granule = (last_granule - self.granule_offset).max(0) as u128;
+                        let expected_ns: u128 = relative_granule
+                            * 1_000_000_000u128
+                            / u128::from(SAMPLE_RATE)
+                            + self.buffer_latency_ns;
+                        let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
+
+                        if expected_ns > elapsed_ns {
+                            let park_ns = (expected_ns - elapsed_ns) as u64;
+                            std::thread::sleep(Duration::from_nanos(park_ns));
+                        }
+                    }
+                }
+
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
                 }
             }
         }

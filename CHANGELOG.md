@@ -5,41 +5,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [2.2.5] - 2026-07-01
-### Fixed
-- **Song Info URL**: the URL line in Track Info / Song Info now shows a clickable `https://open.spotify.com/...` link instead of the raw `spoton://` protocol URL. (#93)
-- **Favorites album/playlist display**: album and playlist favorites now show track names with artist and cover art instead of raw `spoton://track:ID` URLs. The underlying `explodePlaylist` now returns full OPML items instead of bare URL strings.
-- **OGG passthrough auto-mode**: removed the `model=squeezelite` gate — auto mode now trusts the player's format announcement. Any player that reports `ogg` in its capabilities gets OGG passthrough (SqueezePlay, WiiM Ultra, etc.). Players without OGG support can set Stream Format to "PCM" as fallback.
-
-## [2.2.4] - 2026-07-01
+## [2.3.0] - 2026-07-02
 ### Added
-- **OGG Vorbis Passthrough**: squeezelite players now receive raw Ogg/Vorbis data from SpotOn, offloading audio decoding from the server to the player. Hardware Squeezebox players continue to receive PCM automatically. Mixed sync groups fall back to PCM when any member can't decode OGG. (#96)
+- **OGG Vorbis Passthrough (Connect)**: Spotify Connect streams can now deliver raw OGG/Vorbis to players that support it, skipping CPU-intensive PCM decoding. Auto-detected via player format announcement; configurable per-player (`streamFormat` pref: auto/ogg/pcm).
+- **OGG Vorbis Passthrough (Browse)**: single-track Browse playback also supports OGG passthrough with the same auto-detection logic.
+- **Shared passthrough resolver**: `resolvePassthroughForClient()` in DaemonManager provides a single source of truth for OGG passthrough decisions across Browse, Connect, and NowPlaying display.
+- **Context Menu cleanup**: removed `trackInfoURL` override from ProtocolHandler — LMS now shows its native Song Info items instead of the broken Spotify web link. Fixes #55.
+- **Favorites artwork**: added `getIcon()` to ProtocolHandler so LMS Favorites show album artwork instead of the generic SpotOn plugin icon.
 
 ### Fixed
-- **NowPlaying format display**: now accurately shows "OGG" or "PCM" based on the actual stream format delivered to the player (was hardcoded to "PCM").
-- **Legacy pref fallback**: the passthrough capability resolver now correctly reads the legacy `connectOggOverride` preference when `streamFormat` is not set.
+- **Connect OGG rate-limiting**: granule_position-based wall-clock pacing ensures OGG data flows at real-time speed, preventing Spirc/audio desync where the Spotify app skipped ahead while LMS was still buffering.
+- **Gapless track transitions (OGG)**: OGG serial number change detection resets the rate-limiter on gapless transitions — librespot does not call stop()/start() between gapless tracks, so the serial number is the only reliable track boundary signal.
+- **Connect Pause/Resume**: resume handler now uses `track->url` (the original `spoton://connect-*` URL) instead of `streamUrl` (which becomes the HTTP proxy URL after `canDirectStream`). Previously, resume always restarted the stream from 0:00.
+- **Resume position offset**: captures the first audio page's granule_position as a baseline offset so the rate-limiting formula starts from 0 relative to `began_at` after pause/resume, instead of sleeping for the entire track prefix.
+- **Negative granule guard**: `.max(0)` before i64-to-u128 cast prevents a negative relative_granule (from a missed serial change in a multi-page chunk) from wrapping to ~2^64 and hanging the audio thread for ~420 years.
+- **OGG header replay on Connect reconnect**: buffered OGG BOS + Vorbis setup headers are replayed when squeezelite reconnects to the `/stream` endpoint, ensuring the decoder always receives valid stream initialization.
+- **Keymaster 403 diagnostics**: error payload is now parsed and logged with client-id context; no-op fallback eliminated.
+- **explodePlaylist format**: returns OPML items hash instead of bare URL array, fixing playlist population in some LMS skins.
+- **Song Info web link**: shows Spotify web link instead of raw `spoton://` URL.
 
 ### Changed
-- **Pipeline format types**: `soc` (SpotOn Coded) delivers PCM, `son` (SpotOn Native) delivers raw OGG. `formatOverride` dynamically selects the pipeline based on player capability.
-- **Dead code removed**: the unused `updateTranscodingTable` function (127 lines) and its `Slim::Player::TranscodingHelper` import have been removed.
-
-## [2.2.3] - 2026-07-01
-### Fixed
-- **NowPlaying format display**: now correctly shows "PCM" instead of falsely claiming "OGG". All Rust sinks serve PCM exclusively — the OGG passthrough infrastructure (UI settings, feature flag) is prepared but not yet wired in the streaming pipeline. (#96)
-
-## [2.2.2] - 2026-07-01
-### Fixed
-- **Keymaster 403 diagnostics**: error payloads from Spotify's Keymaster are now decoded from librespot's byte-array format and logged as structured messages (e.g. `keymaster_error: code=4 message="Invalid request"`). Previously, the raw Rust debug output was hard to interpret.
-- **No-op fallback eliminated**: when no custom Client ID is configured, the bundled fallback retry is skipped since it would use the identical Client ID. Reduces duplicate error output from two identical failures to one clear message.
-
-### Changed
-- **Client ID in token logs**: the Client ID used for each `--get-token` call is now logged (first 8 chars masked) so it's clear whether own and bundled flavors use different IDs.
-
-## [2.2.1] - 2026-06-30
-### Fixed
-- **Context menu: standard LMS items restored**: removed `trackInfoURL` override that prevented standard LMS actions (Add to Favorites, play controls, More Info) from appearing in the More menu for SpotOn tracks. The LMS framework now merges standard items with SpotOn entries automatically. Fixes #55.
-- **Context menu: SpotOn items labeled**: SpotOn-specific menu entries (Artist View, Album View, Like/Unlike, Follow/Unfollow, Show View, Add to Playlist) now have a "SpotOn:" prefix to distinguish them from standard LMS items.
-- **Favorites artwork**: single tracks added to LMS Favorites now display album cover art instead of a generic icon. Added `getIcon` method to ProtocolHandler with URL normalization for cache lookups.
+- **NowPlaying format display**: shows actual stream format (PCM vs OGG) based on passthrough state instead of always showing OGG.
+- **Context menu prefix**: SpotOn context menu items now prefixed with "SpotOn:" for clarity.
 
 ## [2.2.0] - 2026-06-30
 ### Added
@@ -423,9 +410,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-player settings (bitrate, format, Connect toggle, Autoplay toggle)
 - mDNS discovery for Spotify Connect visibility
 
-[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.2.3...HEAD
-[2.2.3]: https://github.com/stiefenm/spoton/compare/v2.2.2...v2.2.3
-[2.2.2]: https://github.com/stiefenm/spoton/compare/v2.2.1...v2.2.2
+[Unreleased]: https://github.com/stiefenm/spoton/compare/v2.0.1...HEAD
 [2.0.1]: https://github.com/stiefenm/spoton/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/stiefenm/spoton/compare/v1.9.1...v2.0.0
 [1.9.1]: https://github.com/stiefenm/spoton/compare/v1.9.0...v1.9.1

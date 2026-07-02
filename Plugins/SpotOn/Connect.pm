@@ -580,16 +580,29 @@ sub _connectEvent {
         # Check actual playing URL, not just the $_activeConnectPlayer flag.
         # The flag stays set after source switch because 'stop' from Spotify
         # (pause forwarding) doesn't clear it — only _onNewSong clears it.
+        # Phase 44 fix: use track->url (the original spoton://connect-* URL),
+        # not streamUrl (which becomes the direct-streamed http://…/stream
+        # proxy URL after canDirectStream resolves it).
         my $song = $client->playingSong();
-        my $currentUrl = $song ? ($song->streamUrl || '') : '';
+        my $currentUrl = $song ? ($song->track->url || $song->streamUrl || '') : '';
 
         # Determine if the player is on a live Connect stream.
         # pluginData('info') is set by _fetchTrackMetadata for live sessions.
         # _isDeadHistoryUrl alone is insufficient: live tracks also get spotifyUri
         # cached during playback, so we must check pluginData to avoid false positives.
         my $hasLiveMetadata = $song && $song->pluginData('info');
+        my $isDeadHistory = $currentUrl =~ m{spoton://connect-} ? _isDeadHistoryUrl($currentUrl) : 0;
         my $actuallyInConnect = ($currentUrl =~ m{spoton://connect-})
-                             && ($hasLiveMetadata || !_isDeadHistoryUrl($currentUrl));
+                             && ($hasLiveMetadata || !$isDeadHistory);
+
+        $log->warn("[DIAG] resume_check: streamUrl=" . ($currentUrl || 'undef')
+            . " trackUrl=" . ($song ? ($song->track->url || 'undef') : 'no_song')
+            . " hasLiveMetadata=" . ($hasLiveMetadata ? 1 : 0)
+            . " isDeadHistory=" . ($isDeadHistory ? 1 : 0)
+            . " actuallyInConnect=" . ($actuallyInConnect ? 1 : 0)
+            . " isPlaying=" . ($client->isPlaying ? 1 : 0)
+            . " isPaused=" . ($client->isPaused ? 1 : 0)
+        ) if $diagMode;
 
         if (!$actuallyInConnect) {
             # History replay: _onPause already skipped the daemon forward, so this
@@ -803,6 +816,7 @@ sub _connectEvent {
         $log->warn("[DIAG] [$diagTs] change: player=" . $client->id
             . " prev=" . ($prevTrackId || 'none')
             . " new=" . ($newTrackId || 'none')
+            . " streamRestart=0"
             . " elapsed=" . sprintf('%.3f', Time::HiRes::time() - $diagTs)
         ) if $diagMode;
 
