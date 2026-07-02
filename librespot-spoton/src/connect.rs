@@ -457,10 +457,36 @@ impl Sink for HttpStreamSink {
                 }
             }
             AudioPacket::Raw(bytes) => {
-                // Phase 43 (D-01): forward raw Ogg/Vorbis pages as-is (passthrough mode).
-                // No wall-clock rate-limiting — OGG pages have variable size; backpressure-only
-                // pacing matches BrowseHttpSink and UnifiedHttpStreamSink (D-02).
+                // Phase 44 (D-01): granule_position-based wall-clock rate-limiting for
+                // OGG passthrough. Replaces the Phase 43 backpressure-only pacing — for
+                // code consistency with UnifiedHttpStreamSink (D-05), even though this
+                // standalone sink is not the primary production path.
                 let chunk = Bytes::copy_from_slice(&bytes);
+
+                // Phase 44 (D-01/D-02/D-03): parse granule_position (bytes 6..14, i64 LE)
+                // from the first OGG page in this packet and apply the CON-14 formula,
+                // with granule_position replacing frames_consumed as the time reference.
+                // Header pages (granule_position <= 0) flow through immediately (D-03).
+                if chunk.len() >= 14 && &chunk[0..4] == b"OggS" {
+                    let granule_position = i64::from_le_bytes(
+                        chunk[6..14]
+                            .try_into()
+                            .expect("OGG granule_position slice is exactly 8 bytes"),
+                    );
+                    if granule_position > 0 {
+                        let expected_ns: u128 = (granule_position as u128)
+                            * 1_000_000_000u128
+                            / u128::from(SAMPLE_RATE)
+                            + self.buffer_latency_ns;
+                        let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
+
+                        if expected_ns > elapsed_ns {
+                            let park_ns = (expected_ns - elapsed_ns) as u64;
+                            std::thread::sleep(Duration::from_nanos(park_ns));
+                        }
+                    }
+                }
+
                 loop {
                     match self.pcm_tx.try_send(chunk.clone()) {
                         Ok(()) => break,
