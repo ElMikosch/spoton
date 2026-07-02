@@ -399,62 +399,80 @@ impl Sink for HttpStreamSink {
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-        let AudioPacket::Samples(samples) = packet else {
-            // Raw passthrough — not in scope for S16LE sink; skip.
-            return Ok(());
-        };
+        match packet {
+            AudioPacket::Samples(samples) => {
+                // Convert f64 samples to S16LE bytes.
+                let samples_s16 = converter.f64_to_s16(&samples);
+                // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        samples_s16.as_ptr().cast::<u8>(),
+                        samples_s16.len() * std::mem::size_of::<i16>(),
+                    )
+                };
 
-        // Convert f64 samples to S16LE bytes.
-        let samples_s16 = converter.f64_to_s16(&samples);
-        // SAFETY: i16 values are valid as two u8 bytes; ptr and len from valid Vec.
-        let bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                samples_s16.as_ptr().cast::<u8>(),
-                samples_s16.len() * std::mem::size_of::<i16>(),
-            )
-        };
-
-        // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
-        //
-        // expected_ns = frames_consumed * 1e9 / SAMPLE_RATE + buffer_latency_ns
-        //
-        // Without rate-limiting: decoder races ahead of wall-clock, making Spotify
-        // clients show nonsensical seek positions.
-        //
-        // With buffer_latency_ns > 0: decoder advances `buffer_latency_ms` ms slower
-        // than wall-clock, so reported position matches actual audio output position.
-        let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
-        self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
-        if self.frames_consumed % 1000 == 0 {
-            log::trace!("[spoton] sink write: {} frames consumed", self.frames_consumed);
-        }
-        let expected_ns: u128 =
-            u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
-            + self.buffer_latency_ns;
-        let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
-
-        if expected_ns > elapsed_ns {
-            let park_ns = (expected_ns - elapsed_ns) as u64;
-            std::thread::sleep(Duration::from_nanos(park_ns));
-        }
-
-        // Send PCM bytes over the channel to the HTTP stream server.
-        // Player::new spawns a std::thread with its own tokio Runtime; Sink::write
-        // runs within a tokio context. blocking_send would panic.
-        // try_send with spin-retry: the channel has 256 slots (~1.5s of audio)
-        // and a single consumer — contention is transient, rate-limiter keeps us
-        // at real-time, so the channel is nearly always empty.
-        let chunk = Bytes::copy_from_slice(bytes);
-        loop {
-            match self.pcm_tx.try_send(chunk.clone()) {
-                Ok(()) => break,
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    std::thread::sleep(Duration::from_millis(1));
+                // Wall-clock rate-limiter with buffer-latency compensation (CON-14).
+                //
+                // expected_ns = frames_consumed * 1e9 / SAMPLE_RATE + buffer_latency_ns
+                //
+                // Without rate-limiting: decoder races ahead of wall-clock, making Spotify
+                // clients show nonsensical seek positions.
+                //
+                // With buffer_latency_ns > 0: decoder advances `buffer_latency_ms` ms slower
+                // than wall-clock, so reported position matches actual audio output position.
+                let frames_in_packet = (samples.len() / NUM_CHANNELS as usize) as u64;
+                self.frames_consumed = self.frames_consumed.saturating_add(frames_in_packet);
+                if self.frames_consumed % 1000 == 0 {
+                    log::trace!("[spoton] sink write: {} frames consumed", self.frames_consumed);
                 }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    return Err(SinkError::OnWrite(
-                        "HTTP stream server shut down".into(),
-                    ));
+                let expected_ns: u128 =
+                    u128::from(self.frames_consumed) * 1_000_000_000u128 / u128::from(SAMPLE_RATE)
+                    + self.buffer_latency_ns;
+                let elapsed_ns: u128 = self.began_at.elapsed().as_nanos();
+
+                if expected_ns > elapsed_ns {
+                    let park_ns = (expected_ns - elapsed_ns) as u64;
+                    std::thread::sleep(Duration::from_nanos(park_ns));
+                }
+
+                // Send PCM bytes over the channel to the HTTP stream server.
+                // Player::new spawns a std::thread with its own tokio Runtime; Sink::write
+                // runs within a tokio context. blocking_send would panic.
+                // try_send with spin-retry: the channel has 256 slots (~1.5s of audio)
+                // and a single consumer — contention is transient, rate-limiter keeps us
+                // at real-time, so the channel is nearly always empty.
+                let chunk = Bytes::copy_from_slice(bytes);
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
+                }
+            }
+            AudioPacket::Raw(bytes) => {
+                // Phase 43 (D-01): forward raw Ogg/Vorbis pages as-is (passthrough mode).
+                // No wall-clock rate-limiting — OGG pages have variable size; backpressure-only
+                // pacing matches BrowseHttpSink and UnifiedHttpStreamSink (D-02).
+                let chunk = Bytes::copy_from_slice(&bytes);
+                loop {
+                    match self.pcm_tx.try_send(chunk.clone()) {
+                        Ok(()) => break,
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Err(SinkError::OnWrite(
+                                "HTTP stream server shut down".into(),
+                            ));
+                        }
+                    }
                 }
             }
         }

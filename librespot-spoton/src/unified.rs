@@ -102,6 +102,14 @@ struct UnifiedHttpStreamSink {
     began_at: Instant,
     frames_consumed: u64,
     buffer_latency_ns: u128,
+    // Phase 43 (D-03): shared with the /stream HTTP handler so buffered OGG BOS +
+    // Vorbis header pages can be replayed after the handler drains stale chunks
+    // from the main channel on each new connection.
+    ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
+    // True while we are still buffering header pages for the current track.
+    // Only meaningful when `passthrough` is true; cleared on the first audio page.
+    collecting_headers: bool,
+    passthrough: bool,
 }
 
 impl UnifiedHttpStreamSink {
@@ -111,6 +119,8 @@ impl UnifiedHttpStreamSink {
         pcm_tx: mpsc::Sender<Bytes>,
         flush_tx: watch::Sender<u64>,
         buffer_latency_ms: u64,
+        ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
+        passthrough: bool,
     ) -> Box<dyn Sink> {
         if format != AudioFormat::S16 {
             panic!(
@@ -124,6 +134,9 @@ impl UnifiedHttpStreamSink {
             began_at: Instant::now(),
             frames_consumed: 0,
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
+            ogg_header_buf,
+            collecting_headers: passthrough,
+            passthrough,
         })
     }
 }
@@ -132,6 +145,14 @@ impl Sink for UnifiedHttpStreamSink {
     fn start(&mut self) -> SinkResult<()> {
         self.began_at = Instant::now();
         self.frames_consumed = 0;
+        // Phase 43 (D-03): clear the header buffer on every track start so the
+        // /stream handler always replays THIS track's headers, not a stale track's.
+        if self.passthrough {
+            let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
+            buf.clear();
+            drop(buf);
+            self.collecting_headers = true;
+        }
         Ok(())
     }
 
@@ -188,6 +209,24 @@ impl Sink for UnifiedHttpStreamSink {
                 // No sample-rate sleep — raw packets are paced by channel backpressure
                 // only, same approach as BrowseHttpSink (Pitfall 3 from RESEARCH.md).
                 let chunk = Bytes::copy_from_slice(&bytes);
+
+                // Phase 43 (D-03): buffer OGG header pages (BOS + Vorbis headers) so the
+                // /stream handler can replay them after draining stale chunks on new
+                // connections. granule_position == 0 (bytes 6..14 of the Ogg page header)
+                // identifies header pages; the first page with a non-zero granule_position
+                // is the first audio data page, which ends header collection for this track.
+                if self.collecting_headers {
+                    let is_header_page = chunk.len() >= 27
+                        && &chunk[0..4] == b"OggS"
+                        && chunk[6..14].iter().all(|&b| b == 0);
+                    if is_header_page {
+                        let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
+                        buf.push(chunk.clone());
+                    } else {
+                        self.collecting_headers = false;
+                    }
+                }
+
                 loop {
                     match self.pcm_tx.try_send(chunk.clone()) {
                         Ok(()) => break,
@@ -256,6 +295,9 @@ async fn unified_http_server(
     last_activity: Arc<std::sync::Mutex<Instant>>,
     // Phase 42: OGG/Vorbis passthrough — determines Content-Type and AudioPacket handling
     passthrough: bool,
+    // Phase 43 (D-03): OGG header buffer for /stream replay after drain. Some when
+    // enable_connect is true, None in Browse-only mode.
+    ogg_header_buf: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -288,6 +330,7 @@ async fn unified_http_server(
                 let last_activity = Arc::clone(&last_activity);
                 let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
+                let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
 
                 let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let session = Arc::clone(&session);
@@ -306,6 +349,7 @@ async fn unified_http_server(
                     let last_activity = Arc::clone(&last_activity);
                     let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
+                    let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
 
                     async move {
                         let path = req.uri().path().to_owned();
@@ -410,6 +454,34 @@ async fn unified_http_server(
 
                             // Per-connection relay channel (64 frames capacity).
                             let (conn_tx, conn_rx) = mpsc::channel::<Bytes>(64);
+
+                            // Phase 43 (D-03): replay buffered OGG headers (BOS + Vorbis
+                            // headers) before the relay begins. The drain above removed them
+                            // from the main channel; the decoder needs them to parse the stream.
+                            if passthrough {
+                                if let Some(ref buf) = ogg_header_buf {
+                                    let headers = {
+                                        let guard = buf.lock().unwrap_or_else(|e| e.into_inner());
+                                        guard.clone()
+                                    };
+                                    let mut replayed = 0u64;
+                                    'replay: for header_chunk in headers {
+                                        loop {
+                                            match conn_tx.try_send(header_chunk.clone()) {
+                                                Ok(()) => { replayed += 1; break; }
+                                                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                                                    tokio::time::sleep(Duration::from_millis(1)).await;
+                                                }
+                                                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                                    log::warn!("[spoton/unified] /stream: conn_tx closed during header replay");
+                                                    break 'replay;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    log::debug!("[spoton/unified] /stream: replayed {} OGG header chunks", replayed);
+                                }
+                            }
 
                             let pcm_rx_clone = Arc::clone(&pcm_rx);
                             let flush_rx_clone = Arc::clone(&flush_rx);
@@ -960,6 +1032,9 @@ pub async fn run_unified(
     // The if/else branches below handle both cases.
     let pcm_rx_arc: Option<Arc<std::sync::Mutex<mpsc::Receiver<Bytes>>>>;
     let flush_rx_arc: Option<Arc<std::sync::Mutex<watch::Receiver<u64>>>>;
+    // Phase 43 (D-03): OGG header buffer for /stream replay after drain (None when
+    // enable_connect is false).
+    let ogg_header_buf_arc: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>;
 
     // Reconnect infrastructure.
     let mixer_fn_opt: Option<librespot_playback::mixer::MixerFn>;
@@ -976,6 +1051,13 @@ pub async fn run_unified(
         pcm_rx_arc = Some(Arc::new(std::sync::Mutex::new(pcm_rx)));
         flush_rx_arc = Some(Arc::new(std::sync::Mutex::new(flush_rx)));
 
+        // Phase 43 (D-03): OGG header buffer — shared between the Connect sink (which
+        // fills it during header collection) and the /stream handler (which replays
+        // it after draining stale chunks on new connections).
+        let ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        ogg_header_buf_arc = Some(Arc::clone(&ogg_header_buf));
+
         // SoftMixer — required for Spirc volume control.
         let mixer_fn = librespot_playback::mixer::find(Some(SoftMixer::NAME))
             .ok_or("SoftMixer not found")?;
@@ -986,6 +1068,7 @@ pub async fn run_unified(
         let pcm_tx_clone = pcm_tx.clone();
         let flush_tx_for_sink = flush_tx.clone();
         let buffer_latency_ms_copy = buffer_latency_ms;
+        let ogg_buf_for_sink = Arc::clone(&ogg_header_buf);
         let session_for_player = {
             let s = session_shared.lock().await;
             s.clone()
@@ -1001,6 +1084,8 @@ pub async fn run_unified(
                     pcm_tx_clone,
                     flush_tx_for_sink,
                     buffer_latency_ms_copy,
+                    ogg_buf_for_sink,
+                    passthrough,
                 )
             },
         );
@@ -1187,6 +1272,7 @@ pub async fn run_unified(
             Arc::clone(&session_created_at),
             Arc::clone(&last_activity),
             passthrough,
+            ogg_header_buf_arc,
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1468,6 +1554,7 @@ pub async fn run_unified(
         // Session is live for Browse requests. Daemon runs until killed.
         pcm_rx_arc = None;
         flush_rx_arc = None;
+        ogg_header_buf_arc = None;
         mixer_fn_opt = None;
         lms_for_reconnect = None;
         connect_player_opt = None;
@@ -1492,6 +1579,7 @@ pub async fn run_unified(
             Arc::clone(&session_created_at),
             Arc::clone(&last_activity),
             passthrough,
+            None,  // ogg_header_buf
         ));
 
         // Pure Browse: wait for Ctrl+C or session reconnect.
