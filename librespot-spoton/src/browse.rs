@@ -24,7 +24,7 @@ use tokio::sync::mpsc;
 
 use librespot_core::{Session, SpotifyUri};
 use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot_playback::config::{AudioFormat, PlayerConfig};
+use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig};
 use librespot_playback::convert::Converter;
 use librespot_playback::decoder::AudioPacket;
 use librespot_playback::mixer::NoOpVolume;
@@ -167,13 +167,14 @@ pub async fn serve_track_request(
     pcm_tx: mpsc::Sender<Bytes>,
     start_position_ms: u32,
     passthrough: bool,
+    bitrate: Bitrate,
 ) -> StatusCode {
     // Create a per-request Player.
     // The factory closure captures a clone of pcm_tx for BrowseHttpSink.
     // Player::new() spawns its own std::thread with tokio Runtime for decoding.
     let pcm_tx_clone = pcm_tx.clone();
     let player = Player::new(
-        PlayerConfig { passthrough, ..PlayerConfig::default() },
+        PlayerConfig { passthrough, bitrate, ..PlayerConfig::default() },
         session,
         Box::new(NoOpVolume),
         move || BrowseHttpSink::open(None, AudioFormat::S16, pcm_tx_clone),

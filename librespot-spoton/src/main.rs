@@ -114,6 +114,9 @@ async fn main() {
     // Phase 42: OGG/Vorbis passthrough mode
     let mut passthrough = false;
 
+    // Issue #97: Spotify bitrate preference (96, 160, 320 kbps)
+    let mut bitrate: u32 = 320;
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -140,6 +143,20 @@ async fn main() {
             }
             "--passthrough" => {
                 passthrough = true;
+            }
+            "--bitrate" | "-b" => {
+                if i + 1 < args.len() {
+                    bitrate = match args[i + 1].as_str() {
+                        "96" => 96,
+                        "160" => 160,
+                        "320" => 320,
+                        _ => {
+                            eprintln!("Invalid bitrate '{}', using 320", args[i + 1]);
+                            320
+                        }
+                    };
+                    i += 1;
+                }
             }
             "--token" => {
                 if i + 1 < args.len() {
@@ -253,7 +270,7 @@ async fn main() {
                 "autoplay": true,
                 "browse": true,           // Phase 28: persistent Browse daemon capability
                 "discover-once": true,
-                "lms-auth": false,
+                "lms-auth": true,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
                 "token-login": true,
@@ -375,6 +392,7 @@ async fn main() {
                 initial_volume_u16,
                 &volume_ctrl_str,
                 passthrough,
+                bitrate,
             )
             .await
             {

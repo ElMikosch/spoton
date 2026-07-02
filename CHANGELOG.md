@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-07-02
+### Fixed
+- **Bitrate preference**: `--bitrate` flag is now wired to the librespot daemon, honoring the per-player bitrate preference (96/160/320 kbps). NowPlaying metadata shows the actual stream bitrate instead of always displaying "320k". Fixes #97.
+- **Metadata polling for third-party players**: `currentPlaylistUpdateTime()` is now called before `newmetadata` notifications in both Connect and Browse async metadata paths, ensuring polling clients (WiiM Ultra, web UI) detect metadata updates via `playlist_timestamp`. Follows the Podcast/RemoteLibrary plugin pattern.
+- **Exploded track item title format**: replaced em dash (U+2014) with standard dash in track `name` field for consistent `current_title` formatting across players.
+- **`--check` capability manifest**: `lms-auth` is now correctly reported as `true`.
+
 ## [2.3.0] - 2026-07-02
 ### Added
 - **OGG Vorbis Passthrough (Connect)**: Spotify Connect streams can now deliver raw OGG/Vorbis to players that support it, skipping CPU-intensive PCM decoding. Auto-detected via player format announcement; configurable per-player (`streamFormat` pref: auto/ogg/pcm).
