@@ -388,7 +388,7 @@ sub startHelper {
                 if ($helper && $helper->alive) {
                     require Plugins::SpotOn::Plugin;
                     my $wantBitrate = Plugins::SpotOn::Plugin->_bitrateConfigForClient($client);
-                    if (($helper->_bitrate // '') ne $wantBitrate) {
+                    if (($helper->_bitrate // 0) != $wantBitrate) {
                         main::INFOLOG && $log->is_info && $log->info(
                             "Bitrate changed for $clientId (was " . ($helper->_bitrate // '?') . ", now $wantBitrate) — restarting daemon"
                         );
