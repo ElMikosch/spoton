@@ -250,6 +250,10 @@ impl Sink for UnifiedHttpStreamSink {
                 // does NOT call stop()/start() between gapless tracks — the data
                 // flows continuously. When the serial changes, reset began_at and
                 // granule_offset so the new track is paced from its own beginning.
+                //
+                // Note: checks only the FIRST page's serial. If a multi-page chunk
+                // spans a track boundary, the change triggers on the next chunk.
+                // The .max(0) guard on relative_granule prevents hangs in between.
                 if chunk.len() >= 18 && &chunk[0..4] == b"OggS" {
                     let serial = u32::from_le_bytes(
                         chunk[14..18].try_into().expect("OGG serial is 4 bytes"),
@@ -315,7 +319,7 @@ impl Sink for UnifiedHttpStreamSink {
                         if self.granule_offset < 0 {
                             self.granule_offset = last_granule;
                         }
-                        let relative_granule = (last_granule - self.granule_offset) as u128;
+                        let relative_granule = (last_granule - self.granule_offset).max(0) as u128;
                         let expected_ns: u128 = relative_granule
                             * 1_000_000_000u128
                             / u128::from(SAMPLE_RATE)

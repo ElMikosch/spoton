@@ -475,6 +475,9 @@ impl Sink for HttpStreamSink {
 
                 // Phase 44 fix: detect gapless track transitions via OGG serial
                 // change. See UnifiedHttpStreamSink for full rationale.
+                // Note: no header buffer here (standalone sink has no /stream handler).
+                // .max(0) guard on relative_granule prevents hangs if serial change
+                // is missed in a multi-page chunk spanning a track boundary.
                 if chunk.len() >= 18 && &chunk[0..4] == b"OggS" {
                     let serial = u32::from_le_bytes(
                         chunk[14..18].try_into().expect("OGG serial is 4 bytes"),
@@ -523,7 +526,7 @@ impl Sink for HttpStreamSink {
                         if self.granule_offset < 0 {
                             self.granule_offset = last_granule;
                         }
-                        let relative_granule = (last_granule - self.granule_offset) as u128;
+                        let relative_granule = (last_granule - self.granule_offset).max(0) as u128;
                         let expected_ns: u128 = relative_granule
                             * 1_000_000_000u128
                             / u128::from(SAMPLE_RATE)
