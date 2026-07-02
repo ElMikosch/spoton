@@ -253,7 +253,7 @@ async fn main() {
                 "autoplay": true,
                 "browse": true,           // Phase 28: persistent Browse daemon capability
                 "discover-once": true,
-                "lms-auth": false,
+                "lms-auth": true,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
                 "token-login": true,
