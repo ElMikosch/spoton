@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-03T21:32:25.414Z",
+  "lastChecked": "2026-07-03T22:42:55.446Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -144,9 +144,11 @@
         "1827649",
         "1827675",
         "1827695",
-        "1827698"
+        "1827698",
+        "1827701",
+        "1827702"
       ],
-      "lastPostCount": 142
+      "lastPostCount": 144
     }
   },
   "pendingTriage": [
@@ -169,6 +171,16 @@
       "contentPreview": "Originally posted by Andy_NO \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tBut there is reboot after reboot. And I do not see Spotin in the list of plugins. I couldnt even de-inst",
       "draft": "Great advice from Andy_NO — a clean manual uninstall is usually the best fix when a plugin gets stuck in a broken state and won't appear in the list.\n\nJust to add a bit more detail on finding the right paths:\n\n[B]Common LMS Cache locations by OS:[/B]\n\n[CODE]\nWindows:   C:\\Users\\<username>\\AppData\\Local\\Squeezebox\\Cache\nLinux:     /var/lib/squeezeboxserver/cache  (or check LMS → Settings → Information)\nmacOS:     ~/Library/Application Support/Squeezebox/Cache\nDocker:    Depends on your volume mapping — check your container config\n[/CODE]\n\nOnce you've done the manual cleanup and LMS starts cleanly, you should see SpotOn available again in [B]Settings → Manage Plugins[/B] under the \"Available Plugins\" section.\n\n[B]A couple of things to check after reinstalling:[/B]\n[LIST]\n[*]Make sure you're on [B]2.3.5[/B] (the latest) — earlier 2.3.x versions had some installation issues\n[*]After install, a full LMS restart (not just a plugin reload) is recommended\n[*]Confirm SpotOn appears under [B]Settings → My Apps[/B] before trying to configure it\n[/LIST]\n\nIf it still won't install cleanly after following Andy's steps, it would be really helpful to know:\n[LIST]\n[*]Which OS / platform are you running LMS on?\n[*]Any relevant errors in the LMS server log ([B]Settings → Advanced → Logging[/B])?\n[/LIST]\n\nIf you're still stuck, please open a bug report at [URL]https://github.com/stiefenm/spoton/issues[/URL] and include your OS, LMS version, and any log output — that'll help us track down what's going wrong.",
       "scrapedAt": "2026-07-03T19:50:19.368Z"
+    },
+    {
+      "postId": "1827701",
+      "postNumber": 143,
+      "author": "plasticator2",
+      "timestamp": "2026-07-03T14:57:45-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "sti Thanks for the prompt reply! The story so far. Main listening room is the lounge, Pi 4B player/server, output through Hifiberry Digi2 pro SPDIF to external DAC. Squeezelite ALSA device name is hw:CARD=sndrpihifiberry,DEV=0. No replay gain. I already tried all permutations, but repeated today wit",
+      "draft": "plasticator2 That's a really interesting finding — thank you for the systematic testing! The fact that syncing the Pi to the Windows/Squeezelite-X player produces perfect audio is a valuable clue.\n\nThis strongly suggests the issue is specific to the [B]HifiBerry Digi2 Pro / SPDIF output path[/B] on the Pi, rather than SpotOn's audio pipeline itself. A few thoughts:\n\n[B]Most likely culprit: Sample rate or bit depth mismatch[/B]\nSPDIF is strict about clock rates. If SpotOn is sending a sample rate that the HifiBerry or your DAC isn't expecting (or can't negotiate cleanly), you'll get exactly the kind of loud/distorted output you're describing. This can happen even if the same setup works fine with local files.\n\nCan you check:\n[CODE]\ncat /proc/asound/sndrpihifiberry/pcm0p/sub0/hw_params\n[/CODE]\n...while audio is actively playing via SpotOn? This will show the actual sample rate and format being sent to the device.\n\n[B]Things worth trying:[/B]\n[LIST]\n[*]In SpotOn player settings, try forcing [B]PCM format at 44100Hz[/B] if there's a rate option — this gives the SPDIF chain least room to misbehave\n[*]Check if your DAC has a sample rate indicator — does it show a sane value during playback?\n[*]Try setting Squeezelite's [B]-r 44100[/B] flag to lock the output rate\n[/LIST]\n\n[B]The log file[/B] — could you paste the relevant section here or attach it? I want to look for any resampling or format negotiation errors around the point playback starts.\n\nIf this turns out to be a reproducible bug, please do open a report at [URL]https://github.com/stiefenm/spoton/issues[/URL] with the hw_params output and log — it'll help track it properly.",
+      "scrapedAt": "2026-07-03T22:42:55.445Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00"
