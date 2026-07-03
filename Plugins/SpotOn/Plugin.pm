@@ -75,6 +75,7 @@ sub _flushDeferredMeta {
                 duration => $p->{duration},
                 cover    => $p->{cover},
                 icon     => $p->{icon},
+                year     => $p->{year} // '',
                 bitrate  => $bitrate,
                 type     => $type,
                 %trackIds,
@@ -608,6 +609,13 @@ sub trackInfoMenu {
     my @items;
 
     if ($type eq 'track') {
+        if ($meta->{year}) {
+            push @items, {
+                name  => $meta->{year},
+                type  => 'text',
+                label => 'YEAR',
+            };
+        }
         if ($meta->{artistId}) {
             push @items, {
                 name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
@@ -902,6 +910,15 @@ sub _largestImage {
     return $largest->{url} || '';
 }
 
+# _releaseYear($release_date)
+# Extracts the 4-digit release year from a Spotify release_date string (YYYY, YYYY-MM, or YYYY-MM-DD).
+# Returns '' when the input is undef or does not begin with four digits.
+sub _releaseYear {
+    my ($release_date) = @_;
+    return '' unless $release_date && $release_date =~ /^(\d{4})/;
+    return $1;
+}
+
 # Regex pattern for Spotify-generated personal mix playlists (D-06).
 # Uses \s+ instead of literal spaces for whitespace variants.
 # Both call sites (_madeForYouFeed and _userPlaylistsFeed)
@@ -933,6 +950,7 @@ sub _trackItem {
     my $album    = $track->{album}{name} // '';
     my $image    = _largestImage($track->{album}{images});
     my $duration = ($track->{duration_ms} || 0) / 1000;
+    my $year     = _releaseYear($track->{album}{release_date});
 
     # D-07: Build context navigation items for artist and album drill-down.
     # Only add links when IDs are available (simplified track objects may lack album).
@@ -951,6 +969,13 @@ sub _trackItem {
             name  => $album,
             type  => 'text',
             label => 'ALBUM',
+        };
+    }
+    if ($year) {
+        push @contextItems, {
+            name  => $year,
+            type  => 'text',
+            label => 'YEAR',
         };
     }
     if ($track->{artists} && @{ $track->{artists} } && $track->{artists}[0]{id}) {
@@ -1002,6 +1027,7 @@ sub _trackItem {
             duration => $duration,
             cover    => $image,
             icon     => $image,
+            year     => $year,
             track    => $track,    # kept for _extractTrackIds (encode_json deferred to flush)
             client   => $client,
         };
@@ -1014,6 +1040,7 @@ sub _trackItem {
             duration  => $duration,
             cover     => $image,
             icon      => $image,
+            year      => $year,
             bitrate   => __PACKAGE__->_bitrateForClient($client) . 'k',
             type      => __PACKAGE__->_typeString($client, 'Browse'),
             %trackIds,
@@ -1060,7 +1087,7 @@ sub _albumItem {
     return {
         name          => $album->{name} // '',
         url           => \&_albumFeed,
-        passthrough   => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name} }],
+        passthrough   => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name}, albumReleaseDate => $releaseDate }],
         image         => _largestImage($album->{images}),
         line2         => $line2,
         favorites_url => $album_spoton,
@@ -2315,10 +2342,11 @@ sub _artistAlbumsFeed {
 sub _albumFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
-    my $albumId      = $passthrough->{albumId}      // '';
-    my $albumImages  = $passthrough->{albumImages};    # undef on first load
-    my $albumArtist  = $passthrough->{albumArtist}  // '';
-    my $albumName    = $passthrough->{albumName}    // '';    # WR-01: carried for metadata cache
+    my $albumId          = $passthrough->{albumId}          // '';
+    my $albumImages      = $passthrough->{albumImages};    # undef on first load
+    my $albumArtist      = $passthrough->{albumArtist}      // '';
+    my $albumName        = $passthrough->{albumName}        // '';    # WR-01: carried for metadata cache
+    my $albumReleaseDate = $passthrough->{albumReleaseDate} // '';    # carried for release year in track metadata
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
@@ -2341,12 +2369,13 @@ sub _albumFeed {
             my $total       = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
             my $seedTracks  = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
             my $albumNm     = $album->{name} // '';
+            my $albumRd     = $album->{release_date} // '';
 
             if ($total <= scalar(@{$seedTracks})) {
                 # All tracks already in getAlbum response — no further API calls needed
                 # FIX-01: defer metadata cache writes.
                 my @deferredMeta;
-                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @{$seedTracks};
+                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta, albumReleaseDate => $albumRd }) } @{$seedTracks};
                 if (!@items) {
                     push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                 }
@@ -2372,7 +2401,7 @@ sub _albumFeed {
                         undef $fetchPage;
                         # FIX-01: defer metadata cache writes.
                         my @deferredMeta;
-                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @accumulated;
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta, albumReleaseDate => $albumRd }) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
@@ -2390,7 +2419,7 @@ sub _albumFeed {
                         undef $fetchPage;
                         # FIX-01: defer metadata cache writes.
                         my @deferredMeta;
-                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta }) } @accumulated;
+                        my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta, albumReleaseDate => $albumRd }) } @accumulated;
                         if (!@items) {
                             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
                         }
@@ -2426,7 +2455,7 @@ sub _albumFeed {
             my $total    = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
             my $tracks   = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
 
-            my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}) } @{$tracks};
+            my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}, { albumReleaseDate => $album->{release_date} // '' }) } @{$tracks};
 
             if (!@items) {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -2446,7 +2475,7 @@ sub _albumFeed {
                 return;
             }
 
-            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist, $albumName) } @{ $data->{items} || [] };
+            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist, $albumName, { albumReleaseDate => $albumReleaseDate }) } @{ $data->{items} || [] };
 
             if (!@items) {
                 push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
@@ -2472,12 +2501,38 @@ sub _albumTrackItem {
     my $artists   = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
     my $image     = _largestImage($albumImages);
     my $duration  = ($track->{duration_ms} || 0) / 1000;
+    my $year      = (ref $opts eq 'HASH' && $opts->{albumReleaseDate})
+                        ? _releaseYear($opts->{albumReleaseDate})
+                        : '';
 
     # Show featuring artists in line2 only when they differ from album's primary artist.
     my $line2 = ($artists && $artists ne ($albumArtist // '')) ? $artists : '';
 
     # Context navigation: artist view (no album view — already in album context).
+    # UX-05: label-bearing text items MUST come first so XMLBrowser populates $details
+    # and enables Play/Queue/Favorites buttons in the Default skin info view.
     my @contextItems;
+    if ($artists) {
+        push @contextItems, {
+            name  => $artists,
+            type  => 'text',
+            label => 'ARTIST',
+        };
+    }
+    if ($albumName) {
+        push @contextItems, {
+            name  => $albumName,
+            type  => 'text',
+            label => 'ALBUM',
+        };
+    }
+    if ($year) {
+        push @contextItems, {
+            name  => $year,
+            type  => 'text',
+            label => 'YEAR',
+        };
+    }
     if ($track->{artists} && @{ $track->{artists} } && $track->{artists}[0]{id}) {
         push @contextItems, {
             name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
@@ -2508,6 +2563,7 @@ sub _albumTrackItem {
             duration => $duration,
             cover    => $image,
             icon     => $image,
+            year     => $year,
             track    => $track,
             client   => $client,
         };
@@ -2520,6 +2576,7 @@ sub _albumTrackItem {
             duration => $duration,
             cover    => $image,
             icon     => $image,
+            year     => $year,
             bitrate  => __PACKAGE__->_bitrateForClient($client) . 'k',
             type     => __PACKAGE__->_typeString($client, 'Browse'),
             %trackIds,

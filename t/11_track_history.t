@@ -580,7 +580,7 @@ subtest 'Async re-fetch populates cache and fires newmetadata' => sub {
     $Plugins::SpotOn::API::Client::mock_track = {
         name       => 'Async Track',
         artists    => [{ name => 'Async Artist' }],
-        album      => { name => 'Async Album', images => [{ url => 'https://example.com/img.jpg', width => 640 }] },
+        album      => { name => 'Async Album', images => [{ url => 'https://example.com/img.jpg', width => 640 }], release_date => '2021-03-19' },
         duration_ms => 210000,
     };
 
@@ -600,6 +600,7 @@ subtest 'Async re-fetch populates cache and fires newmetadata' => sub {
     ok(defined $cached, 'Cache populated after async re-fetch callback');
     is($cached->{title}, 'Async Track', 'Cached title matches API response');
     is($cached->{artist}, 'Async Artist', 'Cached artist matches API response');
+    is($cached->{year}, '2021', 'Cached year extracted from album.release_date');
     cmp_ok($Slim::Control::Request::notify_count, '>=', 1, 'notifyFromArray fired after re-fetch');
 
     # Clean up mock

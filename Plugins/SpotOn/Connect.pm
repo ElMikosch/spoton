@@ -1021,6 +1021,7 @@ sub _fetchTrackMetadata {
         my $album    = ($trackInfo->{album} || {})->{name} || '';
         my $duration = ($trackInfo->{duration_ms} || 0) / 1000;
         my $cover    = _largestImage(($trackInfo->{album} || {})->{images}) || IMG_TRACK;
+        my $year     = Plugins::SpotOn::Plugin::_releaseYear(($trackInfo->{album} || {})->{release_date});
 
         # Instant display update — set on both logical and stream URL so renderers
         # that key their display off the stream URL (e.g. UPnPBridge) also get the title
@@ -1053,6 +1054,7 @@ sub _fetchTrackMetadata {
             duration     => $duration,
             cover        => $cover,
             icon         => $cover,
+            year         => $year,
             url          => $logicalUrl,
             bitrate      => $bitrate . 'k',
             originalType => $type_str,
@@ -1073,6 +1075,7 @@ sub _fetchTrackMetadata {
                     duration   => $duration,
                     cover      => $cover,
                     icon       => $cover,
+                    year       => $year,
                     bitrate    => $bitrate . 'k',
                     type       => $type_str,
                     spotifyUri => $trackInfo->{uri},

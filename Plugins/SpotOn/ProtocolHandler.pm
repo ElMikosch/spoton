@@ -545,10 +545,11 @@ sub explodePlaylist {
                 return;
             }
 
-            my $albumName  = $album->{name} || '';
-            my $albumCover = _largestImage($album->{images}) || '/html/images/cover.png';
-            my $tracksData = $album->{tracks} || {};
-            my $total      = $tracksData->{total} || 0;
+            my $albumName        = $album->{name} || '';
+            my $albumCover       = _largestImage($album->{images}) || '/html/images/cover.png';
+            my $albumReleaseDate = $album->{release_date} // '';
+            my $tracksData       = $album->{tracks} || {};
+            my $total            = $tracksData->{total} || 0;
 
             # H5: pagination offsets and completion checks must count RAW page
             # items. @allItems is filtered (tracks without an id are skipped),
@@ -560,7 +561,7 @@ sub explodePlaylist {
                 next unless $track && $track->{id};
                 my $item = _buildExplodedTrackItem($track, $albumName, $albumCover);
                 push @allItems, $item;
-                _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId);
+                _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId, $albumReleaseDate);
             }
 
             if ($fetched >= $total) {
@@ -589,7 +590,7 @@ sub explodePlaylist {
                         next unless $track && $track->{id};
                         my $item = _buildExplodedTrackItem($track, $albumName, $albumCover);
                         push @allItems, $item;
-                        _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId);
+                        _cacheExplodedTrack($item->{url}, $track, $albumName, $albumCover, $albumId, $albumReleaseDate);
                     }
                     if ($fetched < $total && @{ $data->{items} }) {
                         $fetchPage->($fetched);
@@ -880,6 +881,9 @@ sub getMetadataFor {
                     : $meta->{title};
                 $track->title($display);
             }
+            if ($meta->{year} && $track->can('year') && !$track->year) {
+                $track->year($meta->{year});
+            }
         }
     }
 
@@ -958,10 +962,13 @@ sub _buildExplodedEpisodeItem {
 }
 
 sub _cacheExplodedTrack {
-    my ($trackUrl, $track, $albumName, $albumCover, $albumId) = @_;
+    my ($trackUrl, $track, $albumName, $albumCover, $albumId, $albumReleaseDate) = @_;
     require Plugins::SpotOn::Plugin;
     my %ids = Plugins::SpotOn::Plugin::_extractTrackIds($track);
     $ids{albumId} = $albumId if defined $albumId;    # explicit album context overrides
+    my $year = Plugins::SpotOn::Plugin::_releaseYear(
+        $albumReleaseDate // ($track->{album} || {})->{release_date}
+    );
     $cache->set('spoton_meta_' . md5_hex($trackUrl), {
         title     => $track->{name} || '',
         artist    => join(', ', map { $_->{name} } @{ $track->{artists} || [] }),
@@ -969,6 +976,7 @@ sub _cacheExplodedTrack {
         duration  => ($track->{duration_ms} || 0) / 1000,
         cover     => $albumCover || '/html/images/cover.png',
         icon      => $albumCover || '/html/images/cover.png',
+        year      => $year,
         %ids,
     }, 3600);
 }
@@ -1057,7 +1065,7 @@ sub _asyncRefetch {
 
         my $title    = $info->{name};
         my $duration = ($info->{duration_ms} || 0) / 1000;
-        my ($artist, $album, $cover);
+        my ($artist, $album, $cover, $year);
 
         if ($episodeId) {
             $artist = ($info->{show} || {})->{name} || '';
@@ -1065,11 +1073,14 @@ sub _asyncRefetch {
             $cover  = _largestImage($info->{images})
                    || _largestImage(($info->{show} || {})->{images})
                    || '/html/images/cover.png';
+            $year   = '';
         } else {
             $artist = join(', ', map { $_->{name} } @{ $info->{artists} || [] });
             $album  = ($info->{album} || {})->{name} || '';
             $cover  = _largestImage(($info->{album} || {})->{images})
                    || '/html/images/cover.png';
+            require Plugins::SpotOn::Plugin;
+            $year   = Plugins::SpotOn::Plugin::_releaseYear(($info->{album} || {})->{release_date});
         }
 
         my %new_meta = (
@@ -1079,6 +1090,7 @@ sub _asyncRefetch {
             duration => $duration,
             cover    => $cover,
             icon     => $cover,
+            year     => $year,
         );
 
         if ($episodeId) {
