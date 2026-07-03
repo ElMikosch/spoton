@@ -1039,7 +1039,6 @@ sub _fetchTrackMetadata {
             Slim::Music::Info::setCurrentTitle(
                 $streamUrl,
                 $displayTitle,
-                $client
             );
         }
 

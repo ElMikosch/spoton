@@ -866,7 +866,8 @@ sub getMetadataFor {
     # Set duration on RemoteTrack object so LMS songinfo (Titelinformationen)
     # displays it — infoDuration reads $track->secs, not $song->duration.
     if ($meta && $meta->{duration} && eval { require Slim::Schema::RemoteTrack; 1 }) {
-        my $track = Slim::Schema::RemoteTrack->fetch($canonical);
+        my $track = Slim::Schema::RemoteTrack->fetch($canonical)
+                 || Slim::Schema::RemoteTrack->fetch($url);
         if ($track && $track->can('secs') && !($track->secs && $track->secs > 0)) {
             $track->secs($meta->{duration});
         }
@@ -1090,7 +1091,8 @@ sub _asyncRefetch {
         $new_meta{url} ||= $cacheUrl;
         my $refetchSong;
         if ($client && $client->can('currentSongForUrl')) {
-            $refetchSong = $client->currentSongForUrl($cacheUrl);
+            $refetchSong = $client->currentSongForUrl($url)
+                        || $client->currentSongForUrl($cacheUrl);
         }
         _applyRuntimeMetadata($client, $refetchSong, $cacheUrl, \%new_meta);
 
