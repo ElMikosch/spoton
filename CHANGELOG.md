@@ -6,16 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ## [2.3.7] - 2026-07-03
-### Fixed
-- **DSTM regression**: Don't Stop The Music stopped advancing to queued tracks. Caused by `_applyRuntimeMetadata` calling `setCurrentTitle` on every `getMetadataFor` poll, which fired spurious `newsong` notifications that interfered with LMS's playlist advance logic. Fix: runtime metadata propagation now only fires from `_asyncRefetch` (one-shot after cache miss), not from the polled metadata path.
-
-## [2.3.6] - 2026-07-03
 ### Added
-- **Runtime metadata propagation**: `setCurrentTitle` is now called on both the logical (`spoton://`) and stream (HTTP) URL so renderers that key display metadata off the stream URL (e.g. UPnPBridge/WiiM) get correct titles. `_applyRuntimeMetadata` propagates duration and title to the playing song with a recursion guard. Based on PR #100 by @urknall.
-- **OPML item enrichment**: track, episode, and album item builders now include explicit `title`, `artist`, and `album` fields for richer metadata on third-party controllers.
+- **Runtime metadata propagation**: `setCurrentTitle` is now called on both the logical (`spoton://`) and stream (HTTP) URL so renderers that key display metadata off the stream URL (e.g. UPnPBridge/WiiM) get correct titles. `_applyRuntimeMetadata` propagates duration and title to the playing song with a recursion guard, gated to the actively playing song only. Based on PR #100 by @urknall.
+- **OPML item enrichment**: track, episode, and album item builders now include explicit `title`, `artist`, `album`, and `favorites_title` fields for richer metadata on third-party controllers and correct favorites naming.
+- **Songinfo duration**: track duration is now propagated to the `RemoteTrack` object so LMS songinfo (Titelinformationen / More menu) displays track length.
 
 ### Fixed
-- **Queue title regression**: `setCurrentTitle` is now gated to the actively playing song only — without the gate, LMS's playlist status query would set the title to the last enumerated queue item instead of the current track.
+- **Favorites naming**: saving a track to favorites from the songinfo page now shows "Title — Artist" instead of the raw `spoton://` URL.
+- **streamFormat labels**: removed confusing "(DirectStream)" suffix from OGG Passthrough and PCM option labels; replaced "DirectStream-capable" with "when supported" in descriptions. Suggested by @urknall.
 - **streamFormat description**: removed outdated "Connect always uses PCM DirectStream" reference; now points to Connect OGG Override.
 - **Streaming Mode description**: added "changes take effect on next track" hint to all 11 locales.
 
