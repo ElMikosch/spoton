@@ -49,7 +49,11 @@ sub _applyRuntimeMetadata {
         }
     }
 
-    return unless $client && $meta->{title};
+    # Only set title for the actively playing song — getMetadataFor is called
+    # for every queue entry, not just the current track
+    return unless $song && $client && $meta->{title};
+    my $playing = $client->playingSong || $client->streamingSong;
+    return unless $playing && $playing == $song;
     return if $_applyingCurrentTitle;
 
     local $_applyingCurrentTitle = 1;
