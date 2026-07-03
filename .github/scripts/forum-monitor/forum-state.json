@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-03T14:58:20.614Z",
+  "lastChecked": "2026-07-03T16:46:06.075Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -141,22 +141,12 @@
         "1827622",
         "1827626",
         "1827638",
-        "1827649"
+        "1827649",
+        "1827675"
       ],
-      "lastPostCount": 139
+      "lastPostCount": 140
     }
   },
-  "pendingTriage": [
-    {
-      "postId": "1827649",
-      "postNumber": 139,
-      "author": "tontze",
-      "timestamp": "2026-07-03T02:56:19-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Im using truenas docker for lyrion, and tried to use the Solution: Manual Credential Transfer in windows \"spoton --discover-once --name \"SpotOn Setup\" -c /tmp/spoton-auth\" my windows spotify client sees it but for example my phone does not. Selecting it in in windows doesnt produce any auth files, n",
-      "draft": "Hey tontze, thanks for including the diagnostic bundle — very helpful!\n\nI can see a couple of things straight away from it:\n\n[CODE]Client-ID: none\nActive account: none[/CODE]\n\nSo the credential capture hasn't completed yet, which lines up with what you're describing. Let's work through the likely causes.\n\n[B]Why your phone can't see the SpotOn Setup device[/B]\n\nThe `--discover-once` listener advertises itself over mDNS/Zeroconf on the local network. On a TrueNAS Docker setup the container is almost certainly on a bridged network, which means mDNS announcements [B]don't reach your phone[/B] unless you're using host networking or have an mDNS repeater (like Avahi) bridging between the Docker bridge and your LAN. Your Windows PC likely sees it because it's on the same broadcast domain as the Docker host, but phones on Wi-Fi often won't.\n\n[B]Why selecting it on Windows does nothing[/B]\n\nThis is almost certainly the same Docker networking issue — the auth handshake involves a callback to the container, and if the return path is broken the flow silently times out. This matches issue [URL=https://github.com/stiefenm/spoton/issues/60]#60[/URL] (stdout/port capture in Docker/s6 environments).\n\n[B]Things to try[/B]\n\n[LIST=1]\n[*]Switch the TrueNAS Docker container to [B]host networking[/B] if possible — this is the most reliable fix in Docker environments.\n[*]If you can't use host networking, try running the `spoton --discover-once` command [B]directly on your Windows machine[/B] (or any non-Docker machine on the same LAN) and point `-c` to a path you can then copy the credentials from.\n[*]Make sure no firewall is blocking the ephemeral port the daemon binds to.\n[/LIST]\n\nCould you share which Docker network mode you're currently using? That'll help narrow it down further.\n\nPlease also consider adding a comment to [URL=https://github.com/stiefenm/spoton/issues/60]GitHub issue #60[/URL] — your TrueNAS/Docker case is directly relevant there.",
-      "scrapedAt": "2026-07-03T10:19:23.982Z"
-    }
-  ],
+  "pendingTriage": [],
   "lastRun": "2026-07-02T19:12:36+02:00"
 }
