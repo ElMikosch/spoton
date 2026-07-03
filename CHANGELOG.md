@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.5] - 2026-07-03
+### Added
+- **Streaming Mode preference**: per-player Direct/Proxy toggle with a global server-wide default. Proxy mode forces LMS to relay the stream, preserving metadata for third-party players like WiiM via UPnPBridge. Configurable in Server Settings (global default) and Player Settings (per-player override). Addresses #96.
+- **URL canonicalization**: `getMetadataFor()` and `getIcon()` now map daemon HTTP URLs (`http://host:PORT/track/ID`) to `spoton://track:ID` cache keys, eliminating metadata cache misses when LMS calls `parseDirectHeaders()` with the direct-stream URL.
+
+## [2.3.4] - 2026-07-03
+### Fixed
+- **Token parse error on Keymaster 403**: when librespot exits 0 but outputs only stderr log noise (e.g. `[timestamp ERR ...]` from a Keymaster 403), the `[` was misinterpreted as a JSON array start, producing a confusing parse error. Now runs Keymaster diagnostics (HTTP status, error payload) and logs a clear message. Fixes #99.
+
 ## [2.3.3] - 2026-07-02
 ### Fixed
 - **Third-party player metadata**: exploded track items now include separate `title`, `artist`, and `album` fields that LMS maps onto the RemoteTrack object. This allows `standardTitle()` to compose the client's configured `titleFormat` (e.g. "Title by Artist from Album") instead of showing only the combined "Title - Artist" string. Fixes metadata display on WiiM Ultra and similar players that rely on `current_title`. Fixes #96.
