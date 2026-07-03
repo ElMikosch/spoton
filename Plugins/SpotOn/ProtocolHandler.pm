@@ -24,6 +24,39 @@ my $CRLF  = "\x0d\x0a";
 # D-05: debounce — one in-flight re-fetch per URL
 our %_pendingRefetch;
 
+# Guard against recursive setCurrentTitle -> getCurrentTitle -> getMetadataFor
+our $_applyingCurrentTitle = 0;
+
+sub _displayTitleFromMeta {
+    my ($meta) = @_;
+    return '' unless $meta && ref $meta eq 'HASH';
+    return '' unless $meta->{title};
+    return $meta->{artist}
+        ? "$meta->{artist} - $meta->{title}"
+        : $meta->{title};
+}
+
+sub _applyRuntimeMetadata {
+    my ($client, $song, $logicalUrl, $meta) = @_;
+    return unless $meta && ref $meta eq 'HASH';
+    return unless $logicalUrl;
+
+    $meta->{url} ||= $logicalUrl;
+
+    if ($song) {
+        if ($meta->{duration} && !($song->duration && $song->duration > 0)) {
+            $song->duration($meta->{duration});
+        }
+    }
+
+    return unless $client && $meta->{title};
+    return if $_applyingCurrentTitle;
+
+    local $_applyingCurrentTitle = 1;
+    require Slim::Music::Info;
+    Slim::Music::Info::setCurrentTitle($logicalUrl, _displayTitleFromMeta($meta), $client);
+}
+
 # Track Connect URLs translated to Browse by getNextTrack
 my %_translatedConnectUrls;
 
@@ -819,22 +852,18 @@ sub getMetadataFor {
         return _placeholderMeta($url);
     }
 
-    # Spotty pattern: propagate duration to $song object so LMS seek bar works.
-    # Guard: only set when not already set to >0 (prevents overwrite on repeated calls).
-    if ($song && $meta && $meta->{duration}
-        && !($song->duration && $song->duration > 0)) {
-        $song->duration($meta->{duration});
-    }
+    my %out = %$meta;
+    $out{url} ||= $canonical;
 
     if ($client) {
         require Plugins::SpotOn::Plugin;
-        return { %$meta,
-            type    => Plugins::SpotOn::Plugin->_typeString($client, 'Browse'),
-            bitrate => Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k',
-        };
+        $out{type}    = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
+        $out{bitrate} = Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k';
     }
 
-    return $meta;
+    _applyRuntimeMetadata($client, $song, $canonical, \%out);
+
+    return \%out;
 }
 
 sub getIcon {
@@ -887,6 +916,9 @@ sub _buildExplodedEpisodeItem {
     my $url   = 'spoton://episode:' . $ep->{id};
     return {
         name     => $title,
+        title    => $title,
+        artist   => $show->{name} || '',
+        album    => $show->{name} || '',
         line1    => $title,
         line2    => $show->{name} || '',
         url      => $url,
@@ -922,7 +954,7 @@ sub _cacheExplodedEpisode {
     $cache->set('spoton_meta_' . md5_hex($epUrl), {
         title    => $ep->{name} || '',
         artist   => $show->{name} || '',
-        album    => '',
+        album    => $show->{name} || '',
         duration => ($ep->{duration_ms} || 0) / 1000,
         cover    => $cover,
         icon     => $cover,
@@ -1001,7 +1033,7 @@ sub _asyncRefetch {
 
         if ($episodeId) {
             $artist = ($info->{show} || {})->{name} || '';
-            $album  = '';
+            $album  = ($info->{show} || {})->{name} || '';
             $cover  = _largestImage($info->{images})
                    || _largestImage(($info->{show} || {})->{images})
                    || '/html/images/cover.png';
@@ -1037,6 +1069,13 @@ sub _asyncRefetch {
             : $canonical;
 
         $cache->set('spoton_meta_' . md5_hex($cacheUrl), \%new_meta, 604800);
+
+        $new_meta{url} ||= $cacheUrl;
+        my $refetchSong;
+        if ($client && $client->can('currentSongForUrl')) {
+            $refetchSong = $client->currentSongForUrl($cacheUrl);
+        }
+        _applyRuntimeMetadata($client, $refetchSong, $cacheUrl, \%new_meta);
 
         # Notify LMS to refresh NowPlaying display
         if ($client) {

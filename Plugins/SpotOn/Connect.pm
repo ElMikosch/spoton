@@ -1022,12 +1022,26 @@ sub _fetchTrackMetadata {
         my $duration = ($trackInfo->{duration_ms} || 0) / 1000;
         my $cover    = _largestImage(($trackInfo->{album} || {})->{images}) || IMG_TRACK;
 
-        # Instant display update
+        # Instant display update — set on both logical and stream URL so renderers
+        # that key their display off the stream URL (e.g. UPnPBridge) also get the title
+        my $logicalUrl = ($song->track && $song->track->url)
+            ? $song->track->url
+            : $song->streamUrl;
+        my $streamUrl = $song->streamUrl;
+        my $displayTitle = "$artist - $title";
+
         Slim::Music::Info::setCurrentTitle(
-            $song->streamUrl,
-            "$artist - $title",
+            $logicalUrl,
+            $displayTitle,
             $client
         );
+        if ($streamUrl && $streamUrl ne $logicalUrl) {
+            Slim::Music::Info::setCurrentTitle(
+                $streamUrl,
+                $displayTitle,
+                $client
+            );
+        }
 
         # Full metadata for Now Playing display
         require Plugins::SpotOn::Plugin;
@@ -1039,7 +1053,8 @@ sub _fetchTrackMetadata {
             album        => $album,
             duration     => $duration,
             cover        => $cover,
-            url          => $song->streamUrl,
+            icon         => $cover,
+            url          => $logicalUrl,
             bitrate      => $bitrate . 'k',
             originalType => $type_str,
             type         => $type_str,
