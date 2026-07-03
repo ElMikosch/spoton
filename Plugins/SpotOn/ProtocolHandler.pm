@@ -858,21 +858,20 @@ sub getMetadataFor {
 
     # Spotty pattern: propagate duration to $song object so LMS seek bar works.
     # Guard: only set when not already set to >0 (prevents overwrite on repeated calls).
-    if ($song && $meta->{duration}
+    if ($song && $meta && $meta->{duration}
         && !($song->duration && $song->duration > 0)) {
         $song->duration($meta->{duration});
     }
 
-    my %out = %$meta;
-    $out{url} ||= $canonical;
-
     if ($client) {
         require Plugins::SpotOn::Plugin;
-        $out{type}    = Plugins::SpotOn::Plugin->_typeString($client, 'Browse');
-        $out{bitrate} = Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k';
+        return { %$meta,
+            type    => Plugins::SpotOn::Plugin->_typeString($client, 'Browse'),
+            bitrate => Plugins::SpotOn::Plugin->_bitrateForClient($client) . 'k',
+        };
     }
 
-    return \%out;
+    return $meta;
 }
 
 sub getIcon {
