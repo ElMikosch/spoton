@@ -863,6 +863,15 @@ sub getMetadataFor {
         $song->duration($meta->{duration});
     }
 
+    # Set duration on RemoteTrack object so LMS songinfo (Titelinformationen)
+    # displays it — infoDuration reads $track->secs, not $song->duration.
+    if ($meta && $meta->{duration} && eval { require Slim::Schema::RemoteTrack; 1 }) {
+        my $track = Slim::Schema::RemoteTrack->fetch($canonical);
+        if ($track && $track->can('secs') && !($track->secs && $track->secs > 0)) {
+            $track->secs($meta->{duration});
+        }
+    }
+
     if ($client) {
         require Plugins::SpotOn::Plugin;
         return { %$meta,

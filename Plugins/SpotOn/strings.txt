@@ -974,17 +974,17 @@ PLUGIN_SPOTON_STREAM_FORMAT
 	SV	Streamingformat
 
 PLUGIN_SPOTON_STREAM_FORMAT_DESC
-	CS	Ovlivňuje pouze Browse mód. Formát pro Connect se nastavuje zvlášť přes Connect OGG Override níže. Auto: OGG pro DirectStream, PCM jako záloha. OGG Passthrough: nejnižší zátěž CPU, ale ne všechny přehrávače podporují OGG. FLAC/MP3: vynucené překódování pro přehrávače bez podpory OGG/PCM.
-	DA	Påvirker kun Browse-tilstand. Connect-format indstilles separat via Connect OGG Override nedenfor. Auto: OGG til DirectStream, PCM som fallback. OGG Passthrough: laveste CPU-belastning, men ikke alle afspillere understøtter OGG. FLAC/MP3: tvungen omkodning til afspillere uden OGG/PCM-understøttelse.
-	DE	Gilt nur für den Browse-Modus. Das Connect-Format wird separat über Connect OGG Override eingestellt. Auto: OGG bei DirectStream-fähigen Playern, PCM als Fallback. OGG Passthrough: Geringste CPU-Last, aber nicht alle Player unterstützen OGG. FLAC/MP3: Erzwingt Transkodierung für Player ohne OGG/PCM-Unterstützung.
-	EN	Affects Browse mode only. Connect format is set separately via the Connect OGG Override below. Auto: OGG for DirectStream-capable players, PCM as fallback. OGG Passthrough: Lowest CPU load, but not all players support OGG natively. FLAC/MP3: Forces transcoding for players without OGG/PCM support.
-	ES	Solo afecta al modo Browse. El formato de Connect se configura por separado mediante Connect OGG Override. Auto: OGG para reproductores con DirectStream, PCM como alternativa. OGG Passthrough: menor carga de CPU, pero no todos los reproductores soportan OGG. FLAC/MP3: fuerza transcodificación para reproductores sin soporte OGG/PCM.
-	FR	Affecte uniquement le mode Browse. Le format Connect se configure séparément via Connect OGG Override ci-dessous. Auto : OGG pour les lecteurs DirectStream, PCM en secours. OGG Passthrough : charge CPU minimale, mais tous les lecteurs ne supportent pas l'OGG. FLAC/MP3 : force le transcodage pour les lecteurs sans support OGG/PCM.
-	IT	Riguarda solo la modalità Browse. Il formato Connect si imposta separatamente tramite Connect OGG Override qui sotto. Auto: OGG per lettori DirectStream, PCM come fallback. OGG Passthrough: carico CPU minimo, ma non tutti i lettori supportano OGG. FLAC/MP3: forza la transcodifica per lettori senza supporto OGG/PCM.
-	NL	Geldt alleen voor Browse-modus. Het Connect-formaat wordt apart ingesteld via Connect OGG Override hieronder. Auto: OGG voor DirectStream-spelers, PCM als terugval. OGG Passthrough: laagste CPU-belasting, maar niet alle spelers ondersteunen OGG. FLAC/MP3: forceert transcodering voor spelers zonder OGG/PCM-ondersteuning.
-	NO	Påvirker kun Browse-modus. Connect-format settes separat via Connect OGG Override nedenfor. Auto: OGG for DirectStream-spillere, PCM som reserve. OGG Passthrough: lavest CPU-belastning, men ikke alle spillere støtter OGG. FLAC/MP3: tvinger transkoding for spillere uten OGG/PCM-støtte.
-	PL	Dotyczy tylko trybu Browse. Format Connect ustawia się osobno przez Connect OGG Override poniżej. Auto: OGG dla odtwarzaczy DirectStream, PCM jako zapas. OGG Passthrough: najniższe obciążenie CPU, ale nie wszystkie odtwarzacze obsługują OGG. FLAC/MP3: wymusza transkodowanie dla odtwarzaczy bez obsługi OGG/PCM.
-	SV	Påverkar bara Browse-läget. Connect-format ställs in separat via Connect OGG Override nedan. Auto: OGG för DirectStream-spelare, PCM som reserv. OGG Passthrough: lägst CPU-belastning, men inte alla spelare stöder OGG. FLAC/MP3: tvingar transkodning för spelare utan OGG/PCM-stöd.
+	CS	Ovlivňuje pouze Browse mód. Formát pro Connect se nastavuje zvlášť přes Connect OGG Override níže. Auto: OGG pokud je podporováno, jinak PCM. OGG Passthrough: nejnižší zátěž CPU, ale ne všechny přehrávače podporují OGG. FLAC/MP3: vynucené překódování pro přehrávače bez podpory OGG/PCM.
+	DA	Påvirker kun Browse-tilstand. Connect-format indstilles separat via Connect OGG Override nedenfor. Auto: OGG hvis understøttet, ellers PCM. OGG Passthrough: laveste CPU-belastning, men ikke alle afspillere understøtter OGG. FLAC/MP3: tvungen omkodning til afspillere uden OGG/PCM-understøttelse.
+	DE	Gilt nur für den Browse-Modus. Das Connect-Format wird separat über Connect OGG Override eingestellt. Auto: OGG wenn unterstützt, sonst PCM. OGG Passthrough: Geringste CPU-Last, aber nicht alle Player unterstützen OGG. FLAC/MP3: Erzwingt Transkodierung für Player ohne OGG/PCM-Unterstützung.
+	EN	Affects Browse mode only. Connect format is set separately via the Connect OGG Override below. Auto: OGG when supported, PCM as fallback. OGG Passthrough: Lowest CPU load, but not all players support OGG natively. FLAC/MP3: Forces transcoding for players without OGG/PCM support.
+	ES	Solo afecta al modo Browse. El formato de Connect se configura por separado mediante Connect OGG Override. Auto: OGG si es compatible, PCM como alternativa. OGG Passthrough: menor carga de CPU, pero no todos los reproductores soportan OGG. FLAC/MP3: fuerza transcodificación para reproductores sin soporte OGG/PCM.
+	FR	Affecte uniquement le mode Browse. Le format Connect se configure séparément via Connect OGG Override ci-dessous. Auto : OGG si pris en charge, PCM en secours. OGG Passthrough : charge CPU minimale, mais tous les lecteurs ne supportent pas l'OGG. FLAC/MP3 : force le transcodage pour les lecteurs sans support OGG/PCM.
+	IT	Riguarda solo la modalità Browse. Il formato Connect si imposta separatamente tramite Connect OGG Override qui sotto. Auto: OGG se supportato, PCM come fallback. OGG Passthrough: carico CPU minimo, ma non tutti i lettori supportano OGG. FLAC/MP3: forza la transcodifica per lettori senza supporto OGG/PCM.
+	NL	Geldt alleen voor Browse-modus. Het Connect-formaat wordt apart ingesteld via Connect OGG Override hieronder. Auto: OGG indien ondersteund, PCM als terugval. OGG Passthrough: laagste CPU-belasting, maar niet alle spelers ondersteunen OGG. FLAC/MP3: forceert transcodering voor spelers zonder OGG/PCM-ondersteuning.
+	NO	Påvirker kun Browse-modus. Connect-format settes separat via Connect OGG Override nedenfor. Auto: OGG hvis støttet, PCM som reserve. OGG Passthrough: lavest CPU-belastning, men ikke alle spillere støtter OGG. FLAC/MP3: tvinger transkoding for spillere uten OGG/PCM-støtte.
+	PL	Dotyczy tylko trybu Browse. Format Connect ustawia się osobno przez Connect OGG Override poniżej. Auto: OGG jeśli obsługiwane, PCM jako zapas. OGG Passthrough: najniższe obciążenie CPU, ale nie wszystkie odtwarzacze obsługują OGG. FLAC/MP3: wymusza transkodowanie dla odtwarzaczy bez obsługi OGG/PCM.
+	SV	Påverkar bara Browse-läget. Connect-format ställs in separat via Connect OGG Override nedan. Auto: OGG om det stöds, PCM som reserv. OGG Passthrough: lägst CPU-belastning, men inte alla spelare stöder OGG. FLAC/MP3: tvingar transkodning för spelare utan OGG/PCM-stöd.
 
 PLUGIN_SPOTON_STREAM_FORMAT_AUTO
 	CS	Automaticky
@@ -1000,30 +1000,30 @@ PLUGIN_SPOTON_STREAM_FORMAT_AUTO
 	SV	Automatisk
 
 PLUGIN_SPOTON_STREAM_FORMAT_OGG
-	CS	OGG Passthrough (DirectStream)
-	DA	OGG Passthrough (DirectStream)
-	DE	OGG Passthrough (DirectStream)
-	EN	OGG Passthrough (DirectStream)
-	ES	OGG Passthrough (DirectStream)
-	FR	OGG Passthrough (DirectStream)
-	IT	OGG Passthrough (DirectStream)
-	NL	OGG Passthrough (DirectStream)
-	NO	OGG Passthrough (DirectStream)
-	PL	OGG Passthrough (DirectStream)
-	SV	OGG Passthrough (DirectStream)
+	CS	OGG Passthrough
+	DA	OGG Passthrough
+	DE	OGG Passthrough
+	EN	OGG Passthrough
+	ES	OGG Passthrough
+	FR	OGG Passthrough
+	IT	OGG Passthrough
+	NL	OGG Passthrough
+	NO	OGG Passthrough
+	PL	OGG Passthrough
+	SV	OGG Passthrough
 
 PLUGIN_SPOTON_STREAM_FORMAT_PCM
-	CS	PCM (DirectStream)
-	DA	PCM (DirectStream)
-	DE	PCM (DirectStream)
-	EN	PCM (DirectStream)
-	ES	PCM (DirectStream)
-	FR	PCM (DirectStream)
-	IT	PCM (DirectStream)
-	NL	PCM (DirectStream)
-	NO	PCM (DirectStream)
-	PL	PCM (DirectStream)
-	SV	PCM (DirectStream)
+	CS	PCM
+	DA	PCM
+	DE	PCM
+	EN	PCM
+	ES	PCM
+	FR	PCM
+	IT	PCM
+	NL	PCM
+	NO	PCM
+	PL	PCM
+	SV	PCM
 
 PLUGIN_SPOTON_STREAM_FORMAT_FLAC
 	CS	FLAC (transkódováno)
