@@ -863,13 +863,23 @@ sub getMetadataFor {
         $song->duration($meta->{duration});
     }
 
-    # Set duration on RemoteTrack object so LMS songinfo (Titelinformationen)
-    # displays it — infoDuration reads $track->secs, not $song->duration.
-    if ($meta && $meta->{duration} && eval { require Slim::Schema::RemoteTrack; 1 }) {
+    # Propagate metadata to RemoteTrack object for LMS songinfo and favorites:
+    # - secs: infoDuration reads $track->secs, not $song->duration
+    # - title: favorites uses $track->name (→ $track->title), falls back to URL
+    if ($meta && eval { require Slim::Schema::RemoteTrack; 1 }) {
         my $track = Slim::Schema::RemoteTrack->fetch($canonical)
                  || Slim::Schema::RemoteTrack->fetch($url);
-        if ($track && $track->can('secs') && !($track->secs && $track->secs > 0)) {
-            $track->secs($meta->{duration});
+        if ($track) {
+            if ($meta->{duration} && $track->can('secs')
+                && !($track->secs && $track->secs > 0)) {
+                $track->secs($meta->{duration});
+            }
+            if ($meta->{title} && $track->can('title') && !$track->title) {
+                my $display = $meta->{artist}
+                    ? "$meta->{title} \x{2014} $meta->{artist}"
+                    : $meta->{title};
+                $track->title($display);
+            }
         }
     }
 
