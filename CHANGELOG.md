@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.7] - 2026-07-03
+### Fixed
+- **DSTM regression**: Don't Stop The Music stopped advancing to queued tracks. Caused by `_applyRuntimeMetadata` calling `setCurrentTitle` on every `getMetadataFor` poll, which fired spurious `newsong` notifications that interfered with LMS's playlist advance logic. Fix: runtime metadata propagation now only fires from `_asyncRefetch` (one-shot after cache miss), not from the polled metadata path.
+
 ## [2.3.6] - 2026-07-03
 ### Added
 - **Runtime metadata propagation**: `setCurrentTitle` is now called on both the logical (`spoton://`) and stream (HTTP) URL so renderers that key display metadata off the stream URL (e.g. UPnPBridge/WiiM) get correct titles. `_applyRuntimeMetadata` propagates duration and title to the playing song with a recursion guard. Based on PR #100 by @urknall.
