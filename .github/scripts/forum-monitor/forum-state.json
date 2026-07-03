@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-03T18:04:03.027Z",
+  "lastChecked": "2026-07-03T19:50:19.368Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -142,11 +142,34 @@
         "1827626",
         "1827638",
         "1827649",
-        "1827675"
+        "1827675",
+        "1827695",
+        "1827698"
       ],
-      "lastPostCount": 140
+      "lastPostCount": 142
     }
   },
-  "pendingTriage": [],
+  "pendingTriage": [
+    {
+      "postId": "1827695",
+      "postNumber": 141,
+      "author": "Andy_NO",
+      "timestamp": "2026-07-03T11:34:14-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tThere was a problem with installation of version 2.3.1. Now version 2.3.2 is out and in my case that version",
+      "draft": "Hi Andy_NO,\n\nSorry to hear you're having trouble getting SpotOn to show up properly!\n\nA couple of things to try:\n\n[B]1. Check your LMS version[/B]\nSpotOn requires LMS 9.0 or later. If you're on an older version, the plugin may silently fail to register and could cause instability. You can check under [B]Settings → Information[/B].\n\n[B]2. Force a clean reinstall[/B]\nSince you're stuck in a reboot loop and can't uninstall through the UI, try removing the plugin files manually:\n\n[CODE]\n# Find and delete the SpotOn plugin folder, typically under:\n# <LMS data dir>/Cache/InstalledPlugins/Plugins/SpotOn/\n# or\n# <LMS install dir>/Plugins/SpotOn/\n[/CODE]\n\nThen restart LMS once manually and try reinstalling from the plugin repository.\n\n[B]3. Check the LMS server log[/B]\nThe reboot loop is the key symptom here — something is causing LMS to crash or restart repeatedly. Please check your LMS server log ([B]Settings → Information → Server Log[/B]) for any error messages around the time of the restarts. Look for lines mentioning SpotOn or any Perl errors.\n\n[B]4. Grab a diagnostic bundle[/B]\nIf SpotOn does manage to load even partially, go to [B]Settings → Advanced → SpotOn → Diagnostics[/B] and copy the bundle here — it'll give a clearer picture of what's happening.\n\nGiven the constant reboot behaviour, it would be very helpful to see the server log. Could you paste any relevant error lines here?\n\nAlso, please consider filing a bug report on GitHub with your log output so this can be tracked properly:\n[URL]https://github.com/stiefenm/spoton/issues[/URL]",
+      "scrapedAt": "2026-07-03T19:50:08.662Z"
+    },
+    {
+      "postId": "1827698",
+      "postNumber": 142,
+      "author": "CJS",
+      "timestamp": "2026-07-03T12:16:21-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by Andy_NO \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tBut there is reboot after reboot. And I do not see Spotin in the list of plugins. I couldnt even de-inst",
+      "draft": "Great advice from Andy_NO — a clean manual uninstall is usually the best fix when a plugin gets stuck in a broken state and won't appear in the list.\n\nJust to add a bit more detail on finding the right paths:\n\n[B]Common LMS Cache locations by OS:[/B]\n\n[CODE]\nWindows:   C:\\Users\\<username>\\AppData\\Local\\Squeezebox\\Cache\nLinux:     /var/lib/squeezeboxserver/cache  (or check LMS → Settings → Information)\nmacOS:     ~/Library/Application Support/Squeezebox/Cache\nDocker:    Depends on your volume mapping — check your container config\n[/CODE]\n\nOnce you've done the manual cleanup and LMS starts cleanly, you should see SpotOn available again in [B]Settings → Manage Plugins[/B] under the \"Available Plugins\" section.\n\n[B]A couple of things to check after reinstalling:[/B]\n[LIST]\n[*]Make sure you're on [B]2.3.5[/B] (the latest) — earlier 2.3.x versions had some installation issues\n[*]After install, a full LMS restart (not just a plugin reload) is recommended\n[*]Confirm SpotOn appears under [B]Settings → My Apps[/B] before trying to configure it\n[/LIST]\n\nIf it still won't install cleanly after following Andy's steps, it would be really helpful to know:\n[LIST]\n[*]Which OS / platform are you running LMS on?\n[*]Any relevant errors in the LMS server log ([B]Settings → Advanced → Logging[/B])?\n[/LIST]\n\nIf you're still stuck, please open a bug report at [URL]https://github.com/stiefenm/spoton/issues[/URL] and include your OS, LMS version, and any log output — that'll help us track down what's going wrong.",
+      "scrapedAt": "2026-07-03T19:50:19.368Z"
+    }
+  ],
   "lastRun": "2026-07-02T19:12:36+02:00"
 }
