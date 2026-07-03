@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.6] - 2026-07-03
+### Added
+- **Runtime metadata propagation**: `setCurrentTitle` is now called on both the logical (`spoton://`) and stream (HTTP) URL so renderers that key display metadata off the stream URL (e.g. UPnPBridge/WiiM) get correct titles. `_applyRuntimeMetadata` propagates duration and title to the playing song with a recursion guard. Based on PR #100 by @urknall.
+- **OPML item enrichment**: track, episode, and album item builders now include explicit `title`, `artist`, and `album` fields for richer metadata on third-party controllers.
+
+### Fixed
+- **Queue title regression**: `setCurrentTitle` is now gated to the actively playing song only — without the gate, LMS's playlist status query would set the title to the last enumerated queue item instead of the current track.
+- **streamFormat description**: removed outdated "Connect always uses PCM DirectStream" reference; now points to Connect OGG Override.
+- **Streaming Mode description**: added "changes take effect on next track" hint to all 11 locales.
+
 ## [2.3.5] - 2026-07-03
 ### Added
 - **Streaming Mode preference**: per-player Direct/Proxy toggle with a global server-wide default. Proxy mode forces LMS to relay the stream, preserving metadata for third-party players like WiiM via UPnPBridge. Configurable in Server Settings (global default) and Player Settings (per-player override). Addresses #96.
