@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-04T16:43:04.735Z",
+  "lastChecked": "2026-07-04T17:46:08.126Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -159,12 +159,26 @@
         "1827750",
         "1827771",
         "1827775",
-        "1827777"
+        "1827777",
+        "1827781",
+        "1827782",
+        "1827784"
       ],
-      "lastPostCount": 157
+      "lastPostCount": 160
     }
   },
-  "pendingTriage": [],
+  "pendingTriage": [
+    {
+      "postId": "1827782",
+      "postNumber": 159,
+      "author": "Chezza",
+      "timestamp": "2026-07-04T10:21:08-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Hi there, firstly thank you for finding an alternative to Spotty. That no longer worked on Lyrion MS for my Boom. I am in no way a techie, so please bear with me. I have added SpotOn and under settings it shows my account is active. I went to the music server on my Macbook and found it under My Apps",
+      "draft": "Hi Chezza, welcome, and thanks for the kind words — glad SpotOn has been useful as a replacement!\n\nYou've actually done a great job grabbing the right log. Two things are happening simultaneously, and together they explain the skipping behaviour:\n\n[B]1. \"Decoder does not support file format\" (code 103)[/B]\n\nYour Squeezebox Boom doesn't natively decode the audio format that SpotOn is streaming. This is the primary cause of the two-seconds-then-skip behaviour. The fix is to enable [B]transcoding[/B] in LMS so the audio gets converted to something the Boom can handle (typically MP3 or PCM/WAV).\n\nGo to [B]LMS Settings → Player → Audio[/B] (select your Boom) and check whether a suitable transcoding rule is in place. If you're not sure, also check [B]Settings → Advanced → File Types[/B] and make sure OGG/Vorbis → MP3 conversion is enabled.\n\n[B]2. Browse daemon 404 errors[/B]\n\nThe log also shows SpotOn's internal stream daemon returning 404s for track requests. This suggests the background daemon may not be starting up cleanly, which compounds the problem — no stream is ready to serve.\n\n[B]Steps to try:[/B]\n\n[CODE]\n1. LMS Settings → Plugins → SpotOn → restart the daemon\n2. Check Settings → Player → Audio for transcoding (Boom needs MP3 or WAV)\n3. Try playing again and grab a fresh log\n[/CODE]\n\nCould you also go to [B]SpotOn Settings → Diagnostics[/B] and download the diagnostic bundle? That will give us much more detail about the daemon state, the librespot process, and your platform setup — that's the best way for me to pinpoint what's going wrong.\n\nIf the problem persists after trying the above, please open a bug report at [URL]https://github.com/stiefenm/spoton/issues[/URL] and attach the diagnostic bundle there.\n\nYou're doing great for a non-techie — the log you grabbed is exactly what's needed! 👍",
+      "scrapedAt": "2026-07-04T17:46:08.126Z"
+    }
+  ],
   "lastRun": "2026-07-02T19:12:36+02:00",
   "knownPosts": [
     143,
