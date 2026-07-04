@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.8] - 2026-07-04
+### Added
+- **Release year metadata**: album release year is now propagated through all track metadata paths (browse items, connect updates, album tracks, deferred cache flushes, async refetch) and displayed in LMS track info via the native `infoYear` provider. PR #104 by @urknall.
+
+### Fixed
+- **Volume normalization was a no-op**: the "Volume Normalization" checkbox in SpotOn settings had no effect — the `--enable-volume-normalisation` flag was passed to the daemon but never parsed. Now wired through to both Browse and Connect PlayerConfig. Users switching from Spotty with normalization enabled may have experienced louder (potentially clipping) output. Note: normalization has no effect in OGG Passthrough mode (librespot only normalizes decoded PCM).
+- **Release year "0000" guard**: Spotify's placeholder date `"0000"` for tracks with unknown release dates is now filtered out instead of displaying year 0000.
+
 ## [2.3.7] - 2026-07-03
 ### Added
 - **Runtime metadata propagation**: `setCurrentTitle` is now called on both the logical (`spoton://`) and stream (HTTP) URL so renderers that key display metadata off the stream URL (e.g. UPnPBridge/WiiM) get correct titles. `_applyRuntimeMetadata` propagates duration and title to the playing song with a recursion guard, gated to the actively playing song only. Based on PR #100 by @urknall.
