@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.9] - 2026-07-04
+### Fixed
+- **Daemon restart on normalization toggle**: changing the "Volume Normalization" checkbox in Server Settings now immediately restarts the librespot daemon. Previously, `formatOverride()` would return the new format (OGG passthrough) while the daemon still output PCM, causing silence until LMS restart or the 60s watchdog caught up.
+
 ## [2.3.8] - 2026-07-04
 ### Added
 - **Release year metadata**: album release year is now propagated through all track metadata paths (browse items, connect updates, album tracks, deferred cache flushes, async refetch) and displayed in LMS track info via the native `infoYear` provider. PR #104 by @urknall.
