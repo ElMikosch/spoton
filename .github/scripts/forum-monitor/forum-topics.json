@@ -28,9 +28,15 @@
       "note": "repo.xml SHA was wrong for v2.3.1, fixed in v2.3.2+. CJS and Andy_NO affected."
     },
     "loud-distorted-playback": {
-      "status": "investigating",
+      "status": "fix-shipped",
       "keywords": ["louder", "distorted", "distortion", "volume normalization", "replay gain"],
-      "note": "plasticator2 reports SpotOn much louder+distorted vs Spotty on piCorePlayer. Awaiting clarification (post #137)."
+      "ghIssue": 105,
+      "note": "Volume normalization was a no-op. Fixed in v2.3.8. Awaiting confirmation from plasticator2 (post #148)."
+    },
+    "pcp-update-loop": {
+      "status": "community-self-help",
+      "keywords": ["reboot loop", "unchecked", "piCorePlayer", "update loop", "manage plugins"],
+      "note": "Andy_NO: pCP v11.1.0 update checkbox resets after restart. Likely overlay-FS persistence. CJS helping (posts #146-147)."
     },
     "shuffleindex-crash": {
       "status": "fixed",

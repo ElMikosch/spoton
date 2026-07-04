@@ -97,6 +97,11 @@ sub handler {
         my $norm = $paramRef->{'pref_normalization'} ? 1 : 0;
         $prefs->set('normalization', $norm);
 
+        # Normalization change flips passthrough mode (OGG↔PCM) — restart daemons
+        # immediately so formatOverride() and daemon output stay in sync.
+        require Plugins::SpotOn::Unified::DaemonManager;
+        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
         # Save Client-ID pref (D-02, T-04.4-01)
         # T-04.4-01: Input validation — alphanumeric only, max 32 chars.
         # Spotify Client-IDs are exactly 32 hex chars — regex + length check
