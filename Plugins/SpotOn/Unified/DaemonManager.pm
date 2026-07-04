@@ -79,7 +79,9 @@ sub resolvePassthroughForClient {
         return 1 if $fmt eq 'ogg';
         return 0 if $fmt =~ /^(?:pcm|flac|mp3)$/;
 
-        # auto (D-04): both conditions must be true
+        # auto (D-04): all conditions must be true
+        # 0. Normalization requires decoded PCM — passthrough would silently skip it
+        return 0 if $prefs->get('normalization');
         # 1. Binary has passthrough capability (passthrough-decoder feature compiled in)
         require Plugins::SpotOn::Helper;
         return 0 unless Plugins::SpotOn::Helper->getCapability('passthrough');

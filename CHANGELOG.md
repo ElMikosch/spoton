@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - **Volume normalization was a no-op**: the "Volume Normalization" checkbox in SpotOn settings had no effect — the `--enable-volume-normalisation` flag was passed to the daemon but never parsed. Now wired through to both Browse and Connect PlayerConfig. Users switching from Spotty with normalization enabled may have experienced louder (potentially clipping) output. Note: normalization has no effect in OGG Passthrough mode (librespot only normalizes decoded PCM).
+- **Auto format + normalization**: when streaming format is set to "Auto" and normalization is enabled, SpotOn now selects PCM instead of OGG Passthrough — otherwise normalization would silently do nothing.
 - **Release year "0000" guard**: Spotify's placeholder date `"0000"` for tracks with unknown release dates is now filtered out instead of displaying year 0000.
 
 ## [2.3.7] - 2026-07-03

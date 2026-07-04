@@ -571,17 +571,17 @@ PLUGIN_SPOTON_NORMALIZATION
 	SV	Volymsnormalisering
 
 PLUGIN_SPOTON_NORMALIZATION_DESC
-	CS	Aktivuje normalizaci hlasitosti (ReplayGain) pro konzistentní úroveň přehrávání
-	DA	Aktiverer lydstyrkenormalisering (ReplayGain) for ensartet afspilningsstyrke
-	DE	Aktiviert Lautstärkenormalisierung (ReplayGain) für gleichmäßige Lautstärke
-	EN	Enables volume normalization (ReplayGain) for consistent playback volume
-	ES	Activa la normalización de volumen (ReplayGain) para un volumen de reproducción uniforme
-	FR	Active la normalisation du volume (ReplayGain) pour un volume de lecture uniforme
-	IT	Abilita la normalizzazione del volume (ReplayGain) per un volume di riproduzione uniforme
-	NL	Activeert volumenormalisatie (ReplayGain) voor consistent afspeelvolume
-	NO	Aktiverer volumnormalisering (ReplayGain) for jevnt avspillingsvolum
-	PL	Włącza normalizację głośności (ReplayGain) dla jednolitego poziomu odtwarzania
-	SV	Aktiverar volymsnormalisering (ReplayGain) för jämn uppspelningsvolym
+	CS	Aktivuje normalizaci hlasitosti (ReplayGain) pro konzistentní úroveň přehrávání. Vyžaduje dekódování PCM — přehrávače nastavené na Auto přepnou z OGG passthrough na PCM.
+	DA	Aktiverer lydstyrkenormalisering (ReplayGain) for ensartet afspilningsstyrke. Kræver PCM-afkodning — afspillere sat til Auto skifter fra OGG passthrough til PCM.
+	DE	Aktiviert Lautstärkenormalisierung (ReplayGain) für gleichmäßige Lautstärke. Erfordert PCM-Dekodierung — Spieler auf Auto wechseln von OGG Passthrough zu PCM.
+	EN	Enables volume normalization (ReplayGain) for consistent playback volume. Requires PCM decoding — players set to Auto will switch from OGG passthrough to PCM.
+	ES	Activa la normalización de volumen (ReplayGain) para un volumen de reproducción uniforme. Requiere decodificación PCM — los reproductores en Auto cambiarán de OGG passthrough a PCM.
+	FR	Active la normalisation du volume (ReplayGain) pour un volume de lecture uniforme. Nécessite le décodage PCM — les lecteurs en Auto passeront de OGG passthrough à PCM.
+	IT	Abilita la normalizzazione del volume (ReplayGain) per un volume di riproduzione uniforme. Richiede decodifica PCM — i lettori impostati su Auto passeranno da OGG passthrough a PCM.
+	NL	Activeert volumenormalisatie (ReplayGain) voor consistent afspeelvolume. Vereist PCM-decodering — spelers op Auto schakelen van OGG passthrough naar PCM.
+	NO	Aktiverer volumnormalisering (ReplayGain) for jevnt avspillingsvolum. Krever PCM-dekoding — spillere satt til Auto bytter fra OGG passthrough til PCM.
+	PL	Włącza normalizację głośności (ReplayGain) dla jednolitego poziomu odtwarzania. Wymaga dekodowania PCM — odtwarzacze ustawione na Auto przełączą się z OGG passthrough na PCM.
+	SV	Aktiverar volymsnormalisering (ReplayGain) för jämn uppspelningsvolym. Kräver PCM-avkodning — spelare inställda på Auto växlar från OGG passthrough till PCM.
 
 PLUGIN_SPOTON_NORMALIZATION_LABEL
 	CS	Normalizovat hlasitost (ReplayGain)
