@@ -290,6 +290,13 @@ sub reset_calls {
 1;
 END
 
+# Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref save)
+write_stub($stub_dir, 'Plugins::SpotOn::Unified::DaemonManager', <<'END');
+package Plugins::SpotOn::Unified::DaemonManager;
+sub scheduleInit { }
+1;
+END
+
 # Stub: URI::Escape — not Perl core, bundled by LMS
 write_stub($stub_dir, 'URI::Escape', <<'END');
 package URI::Escape;
