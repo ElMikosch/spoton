@@ -265,6 +265,7 @@ sub _cacheAndExtractUris {
         my $artist = join(', ', map { $_->{name} } @{ $track->{artists} || [] });
         my $images = $track->{album}{images} || [];
         my $image  = @$images ? (sort { ($b->{width}||0) <=> ($a->{width}||0) } @$images)[0]->{url} : '';
+        my $year   = Plugins::SpotOn::Plugin::_releaseYear(($track->{album} || {})->{release_date});
 
         # D-02: 7-day TTL (604800s) so DSTM tracks survive in history for a week
         # WR-01: include artist/album IDs so trackInfoMenu can build navigation items.
@@ -276,6 +277,7 @@ sub _cacheAndExtractUris {
             duration => ($track->{duration_ms} || 0) / 1000,
             cover    => $image,
             icon     => $image,
+            year     => $year,
             bitrate  => Plugins::SpotOn::Plugin->_bitrateForClient(undef) . 'k',
             type     => $type_str,
             %trackIds,
