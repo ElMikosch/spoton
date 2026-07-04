@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-04T17:46:08.126Z",
+  "lastChecked": "2026-07-04T18:44:14.959Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -162,9 +162,12 @@
         "1827777",
         "1827781",
         "1827782",
-        "1827784"
+        "1827784",
+        "1827787",
+        "1827789",
+        "1827790"
       ],
-      "lastPostCount": 160
+      "lastPostCount": 163
     }
   },
   "pendingTriage": [
@@ -177,6 +180,26 @@
       "contentPreview": "Hi there, firstly thank you for finding an alternative to Spotty. That no longer worked on Lyrion MS for my Boom. I am in no way a techie, so please bear with me. I have added SpotOn and under settings it shows my account is active. I went to the music server on my Macbook and found it under My Apps",
       "draft": "Hi Chezza, welcome, and thanks for the kind words — glad SpotOn has been useful as a replacement!\n\nYou've actually done a great job grabbing the right log. Two things are happening simultaneously, and together they explain the skipping behaviour:\n\n[B]1. \"Decoder does not support file format\" (code 103)[/B]\n\nYour Squeezebox Boom doesn't natively decode the audio format that SpotOn is streaming. This is the primary cause of the two-seconds-then-skip behaviour. The fix is to enable [B]transcoding[/B] in LMS so the audio gets converted to something the Boom can handle (typically MP3 or PCM/WAV).\n\nGo to [B]LMS Settings → Player → Audio[/B] (select your Boom) and check whether a suitable transcoding rule is in place. If you're not sure, also check [B]Settings → Advanced → File Types[/B] and make sure OGG/Vorbis → MP3 conversion is enabled.\n\n[B]2. Browse daemon 404 errors[/B]\n\nThe log also shows SpotOn's internal stream daemon returning 404s for track requests. This suggests the background daemon may not be starting up cleanly, which compounds the problem — no stream is ready to serve.\n\n[B]Steps to try:[/B]\n\n[CODE]\n1. LMS Settings → Plugins → SpotOn → restart the daemon\n2. Check Settings → Player → Audio for transcoding (Boom needs MP3 or WAV)\n3. Try playing again and grab a fresh log\n[/CODE]\n\nCould you also go to [B]SpotOn Settings → Diagnostics[/B] and download the diagnostic bundle? That will give us much more detail about the daemon state, the librespot process, and your platform setup — that's the best way for me to pinpoint what's going wrong.\n\nIf the problem persists after trying the above, please open a bug report at [URL]https://github.com/stiefenm/spoton/issues[/URL] and attach the diagnostic bundle there.\n\nYou're doing great for a non-techie — the log you grabbed is exactly what's needed! 👍",
       "scrapedAt": "2026-07-04T17:46:08.126Z"
+    },
+    {
+      "postId": "1827789",
+      "postNumber": 162,
+      "author": "urknall",
+      "timestamp": "2026-07-04T11:31:16-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Chezza Did you authenticate via the spotify app? Do you see in the SpotOn Settings your Spotify account?",
+      "draft": "[QUOTE=urknall]Chezza Did you authenticate via the spotify app? Do you see in the SpotOn Settings your Spotify account?[/QUOTE]\n\nJumping in here — Chezza already confirmed their account shows as active in SpotOn Settings, so authentication looks good on that front.\n\nChezza, looking at the diagnostic log you posted, I can see the session is reconnecting mid-playback:\n\n[CODE]\n/track: waiting for session reconnect...\nEvent dispatcher respawned after reconnect\nSpirc reconnected\nWARN Browse-triggered session reconnect\n[/CODE]\n\nThat reconnect loop during track requests is almost certainly why you're getting ~2 seconds of silence before it skips — the track request arrives while the session is still recovering, so librespot never delivers the audio stream.\n\nA few things to try:\n\n[B]1. Check your network/firewall[/B]\nSpotOn needs a stable outbound connection to Spotify's servers. If you're on a stricter network (VPN, Pi-hole, custom DNS), something may be blocking or dropping the session.\n\n[B]2. Try a clean re-authentication[/B]\nGo to [B]SpotOn Settings → Account[/B], log out, then log back in. Sometimes a stale token can cause repeated reconnect cycles.\n\n[B]3. Check your LMS version[/B]\nWhat version of LMS are you running on your Mac? Also, is this a direct install or are you running LMS inside something like Docker?\n\n[B]4. Grab a fresh diagnostic bundle[/B]\nAfter the next skip-to-next-song event, go to [B]SpotOn Settings → Diagnostics[/B] and grab the full bundle — the snippet you posted is helpful but the full log may show what's triggering the reconnect.\n\nDon't worry about not being a techie — you're doing great and the logs you've shared are genuinely useful. We'll get this sorted! 🙂\n\nIf the issue persists after trying the above, please open a bug report at [URL=https://github.com/stiefenm/spoton/issues]https://github.com/stiefenm/spoton/issues[/URL] and attach the full diagnostic bundle.",
+      "scrapedAt": "2026-07-04T18:44:03.901Z"
+    },
+    {
+      "postId": "1827790",
+      "postNumber": 163,
+      "author": "urknall",
+      "timestamp": "2026-07-04T11:33:10-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Maybe remove the account, authenticate again via the spotify app and try to play a track in connect mode via the app after you select the spoton player",
+      "draft": "[QUOTE=urknall;163]Maybe remove the account, authenticate again via the spotify app and try to play a track in connect mode via the app after you select the spoton player[/QUOTE]\n\nGood suggestion from urknall — that's a solid first step. [B]Chezza[/B], looking at your diagnostic log I can see a few things worth noting:\n\n[CODE][spoton/unified] /track: waiting for session reconnect...\n[spoton/unified] Browse-triggered session reconnect[/CODE]\n\nThe session is reconnecting repeatedly when trying to play, which explains the 2-second skip behaviour — the stream never actually establishes before librespot reconnects.\n\nA few things to try in order:\n\n[B]1. Re-authenticate as urknall suggests:[/B]\n- Go to [B]SpotOn Settings → Account[/B] and remove the current account\n- Open the Spotify app on your phone or Mac, find the SpotOn player in the device list, and tap it to start playback from there (Connect mode)\n- This gives the session a clean start\n\n[B]2. Check your Spotify account tier:[/B]\nSpotOn requires a [B]Spotify Premium[/B] account — free accounts will silently fail to stream.\n\n[B]3. After re-authenticating, grab a fresh diagnostic:[/B]\nGo to [B]SpotOn Settings → Diagnostics[/B] and share the new log so we can see whether the reconnect loop resolves.\n\nThe repeated reconnect pattern in your log could also be related to a known session stability issue, so if re-authenticating doesn't help, please open a ticket at [URL]https://github.com/stiefenm/spoton/issues[/URL] and attach the fresh diagnostic — it will help narrow things down considerably.\n\nDon't worry about not being technical — you're doing great with the logs! 👍",
+      "scrapedAt": "2026-07-04T18:44:14.959Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
