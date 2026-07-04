@@ -609,13 +609,6 @@ sub trackInfoMenu {
     my @items;
 
     if ($type eq 'track') {
-        if ($meta->{year}) {
-            push @items, {
-                name  => $meta->{year},
-                type  => 'text',
-                label => 'YEAR',
-            };
-        }
         if ($meta->{artistId}) {
             push @items, {
                 name        => cstring($client, 'PLUGIN_SPOTON_ARTIST_VIEW'),
@@ -915,7 +908,7 @@ sub _largestImage {
 # Returns '' when the input is undef or does not begin with four digits.
 sub _releaseYear {
     my ($release_date) = @_;
-    return '' unless $release_date && $release_date =~ /^(\d{4})/;
+    return '' unless $release_date && $release_date =~ /^(\d{4})/ && $1 > 0;
     return $1;
 }
 

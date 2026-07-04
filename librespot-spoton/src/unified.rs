@@ -406,6 +406,7 @@ async fn unified_http_server(
     ogg_header_buf: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>,
     // Issue #97: bitrate for Browse Player creation
     bitrate: Bitrate,
+    enable_normalisation: bool,
 ) {
     let graceful = GracefulShutdown::new();
     let mut shutdown_rx = std::pin::pin!(shutdown_rx);
@@ -845,7 +846,7 @@ async fn unified_http_server(
                                     return;
                                 }
 
-                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms, passthrough, bitrate).await;
+                                let status = serve_track_request(&content_type_for_task, &track_id_for_task, session_snap, pcm_tx, start_position_ms, passthrough, bitrate, enable_normalisation).await;
 
                                 // T-30-05 (informational): post-load gen check.
                                 // serve_track_request drops pcm_tx when it returns, causing
@@ -1129,6 +1130,7 @@ pub async fn run_unified(
     volume_ctrl_str: &str,
     passthrough: bool,
     bitrate_kbps: u32,
+    enable_normalisation: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #97: convert kbps to librespot Bitrate enum once, reuse everywhere.
     let bitrate_enum = match bitrate_kbps {
@@ -1276,7 +1278,7 @@ pub async fn run_unified(
             s.clone()
         };
         let connect_player = Player::new(
-            PlayerConfig { passthrough, bitrate: bitrate_enum, ..PlayerConfig::default() },
+            PlayerConfig { passthrough, bitrate: bitrate_enum, normalisation: enable_normalisation, ..PlayerConfig::default() },
             session_for_player,
             soft_volume,
             move || {
@@ -1476,6 +1478,7 @@ pub async fn run_unified(
             passthrough,
             ogg_header_buf_arc,
             bitrate_enum,
+            enable_normalisation,
         ));
 
         // Main event loop — Spirc reconnect, ZeroConf, ctrl_c.
@@ -1784,6 +1787,7 @@ pub async fn run_unified(
             passthrough,
             None,  // ogg_header_buf
             bitrate_enum,
+            enable_normalisation,
         ));
 
         // Pure Browse: wait for Ctrl+C or session reconnect.

@@ -138,6 +138,8 @@ sub start {
 	$self->_bitrate($bitrate);
 	push @helperArgs, '--bitrate', $bitrate;
 
+	push @helperArgs, '--enable-volume-normalisation' if $prefs->get('normalization');
+
 	# D-07 / D-01: Connect is conditional on per-player toggle.
 	# The unified daemon always starts (credential-gated), but --enable-connect
 	# is only passed when Spotify Connect is enabled for this player.
@@ -160,8 +162,6 @@ sub start {
 		    || ($client && $prefs->client($client)->get('disableDiscovery'))
 		    || $prefs->get('disableDiscovery');
 		push @helperArgs, '--disable-discovery' if $disableDiscovery;
-
-		push @helperArgs, '--enable-volume-normalisation' if $prefs->get('normalization');
 
 		# CON-02 / P-50: Volume synchronization at Connect session start.
 		# --volume-ctrl linear: matches squeezelite's SoftMixer linear curve so LMS volume

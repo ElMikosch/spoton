@@ -117,6 +117,8 @@ async fn main() {
     // Issue #97: Spotify bitrate preference (96, 160, 320 kbps)
     let mut bitrate: u32 = 320;
 
+    let mut enable_normalisation = false;
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -143,6 +145,9 @@ async fn main() {
             }
             "--passthrough" => {
                 passthrough = true;
+            }
+            "--enable-volume-normalisation" => {
+                enable_normalisation = true;
             }
             "--bitrate" | "-b" => {
                 if i + 1 < args.len() {
@@ -403,6 +408,7 @@ async fn main() {
                 &volume_ctrl_str,
                 passthrough,
                 bitrate,
+                enable_normalisation,
             )
             .await
             {

@@ -396,9 +396,11 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
 }
 
 # ============================================================
-# Test 4: trackInfoMenu returns 5-item arrayref for a track URL
+# Test 4: trackInfoMenu returns 4-item arrayref for a track URL
 # with metadata containing artistId, albumId, and year.
-# Items: YEAR (text), ARTIST_VIEW, ALBUM_VIEW, MANAGE_LIKE, ADD_TO_PLAYLIST
+# Items: ARTIST_VIEW, ALBUM_VIEW, MANAGE_LIKE, ADD_TO_PLAYLIST
+# (YEAR is NOT a separate item — LMS's built-in infoYear provider
+# renders it automatically from remoteMeta->{year} / $track->year)
 # ============================================================
 {
     my $client  = MockClient->new('player-test4');
@@ -426,11 +428,10 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
     ok( defined $result && ref($result) eq 'ARRAY',
         'CTX-04: trackInfoMenu returns arrayref for track URL with artistId+albumId' );
 
-    is( scalar @$result, 5,
-        'CTX-04: trackInfoMenu returns exactly 5 items for track with artistId, albumId, and year' );
+    is( scalar @$result, 4,
+        'CTX-04: trackInfoMenu returns exactly 4 items for track with artistId and albumId' );
 
     my @names  = map { $_->{name}  } @$result;
-    my @labels = map { $_->{label} // '' } @$result;
     ok( (grep { $_ eq 'PLUGIN_SPOTON_ARTIST_VIEW' } @names),
         'CTX-04: item list includes PLUGIN_SPOTON_ARTIST_VIEW' );
     ok( (grep { $_ eq 'PLUGIN_SPOTON_ALBUM_VIEW' } @names),
@@ -439,13 +440,6 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
         'CTX-04: item list includes PLUGIN_SPOTON_MANAGE_LIKE' );
     ok( (grep { $_ eq 'PLUGIN_SPOTON_ADD_TO_PLAYLIST' } @names),
         'CTX-04: item list includes PLUGIN_SPOTON_ADD_TO_PLAYLIST' );
-    ok( (grep { $_ eq '2021' } @names),
-        'CTX-04: item list includes year value 2021' );
-    ok( (grep { $_ eq 'YEAR' } @labels),
-        'CTX-04: year item has label YEAR' );
-    is( $result->[0]{name},  '2021', 'CTX-04: year item is first in list' );
-    is( $result->[0]{label}, 'YEAR', 'CTX-04: first item label is YEAR' );
-    is( $result->[0]{type},  'text', 'CTX-04: year item type is text' );
 }
 
 # ============================================================
