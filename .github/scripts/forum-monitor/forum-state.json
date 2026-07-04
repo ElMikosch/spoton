@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-04T15:32:04.291Z",
+  "lastChecked": "2026-07-04T16:43:04.735Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -156,37 +156,20 @@
         "1827732",
         "1827748",
         "1827749",
-        "1827750"
+        "1827750",
+        "1827771",
+        "1827775",
+        "1827777"
       ],
-      "lastPostCount": 154
+      "lastPostCount": 157
     }
   },
-  "pendingTriage": [
-    {
-      "postId": "1827732",
-      "postNumber": 151,
-      "author": "Andy_NO",
-      "timestamp": "2026-07-04T06:31:54-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tI get the point, but have no idea why on your LMS updating to the latest SpotOn plugin version apparently do",
-      "draft": "Great detective work, [B]Andy_NO[/B]! 🎉\n\nThat's a classic one — LMS doesn't know which copy of a plugin is \"canonical\" when multiple folders matching the name exist inside the Plugins directory, so it can end up launching binaries from whichever it finds first. The [B].old[/B] suffix isn't enough to stop LMS from picking it up.\n\nGlad moving [CODE]SpotOn.old[/CODE] out of the Plugins directory sorted it, and that 2.3.9 is running cleanly now!\n\nFor anyone else who runs into a similar situation: if you're keeping a backup of a plugin folder, make sure it lives [B]outside[/B] the [CODE]Plugins[/CODE] directory entirely — somewhere like your home folder or a dedicated backups location. Otherwise LMS may load from the wrong copy.",
-      "scrapedAt": "2026-07-04T13:59:06.718Z"
-    },
-    {
-      "postId": "1827748",
-      "postNumber": 152,
-      "author": "CJS",
-      "timestamp": "2026-07-04T07:07:56-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by sti \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\t[*]Set your streaming format to Auto or PCM — with normalization enabled, Auto will now automatically choose",
-      "draft": "[QUOTE=CJS]As far as I know, replay gain is normally applied on the player, after the incoming audio format is decoded to PCM on the player. So I think that you can still stream Ogg Vorbis to the player when applying replay gain.[/QUOTE]\n\nCJS, that's a really important correction — thank you for digging into the squeezelite source!\n\nYou're absolutely right. For squeezelite-based players, replay gain is applied [I]after[/I] decoding, in the output stage, so the transport format (OGG vs PCM) is irrelevant to whether gain can be applied. The gain values are passed via the LMS streaming protocol, not baked into the audio data itself.\n\nI was overstating the constraint. The accurate picture is:\n\n[B]Where normalization actually happens depends on the client:[/B]\n[LIST]\n[*][B]squeezelite / pCP players:[/B] Gain is applied post-decode in [CODE]output.c[/CODE] as you've shown — OGG passthrough is fine.\n[*][B]Spotify Connect clients (librespot):[/B] Normalization is handled internally by librespot before SpotOn ever sees the audio — a separate concern entirely.\n[*][B]Other hardware players:[/B] Behaviour varies; some may not honour the LMS replay gain metadata at all.\n[/LIST]\n\nSo the note about switching to PCM was incorrect for the squeezelite case — I'll make sure that gets clarified in the release notes and documentation. OGG passthrough should work fine alongside replay gain on squeezelite players.\n\nThis also means the fix for issue [B]#105[/B] (normalization flag being silently ignored) is more contained than I thought — it's primarily about correctly passing the gain metadata from SpotOn to LMS, not about forcing a format change.\n\nThanks again for catching this — exactly the kind of review that keeps things accurate. If you want to track the normalization fix, the relevant issue is on GitHub:\n\n[URL=https://github.com/stiefenm/spoton/issues/105]https://github.com/stiefenm/spoton/issues/105[/URL]",
-      "scrapedAt": "2026-07-04T15:32:04.289Z"
-    }
-  ],
+  "pendingTriage": [],
   "lastRun": "2026-07-02T19:12:36+02:00",
   "knownPosts": [
     143,
     146,
     147
-  ]
+  ],
+  "knownPostCount": 156
 }
