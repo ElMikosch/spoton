@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-05T06:13:36.017Z",
+  "lastChecked": "2026-07-05T11:50:31.907Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -179,9 +179,11 @@
         "1827803",
         "1827804",
         "1827808",
-        "1827809"
+        "1827809",
+        "1827828",
+        "1827830"
       ],
-      "lastPostCount": 177
+      "lastPostCount": 179
     }
   },
   "pendingTriage": [
@@ -314,6 +316,16 @@
       "contentPreview": "sti That makes the direction much clearer. I think the revised architecture is strong, and the key change — PKCE-first for Web API + credential derivation, with ZeroConf retained for discovery/Connect behavior — makes sense given that SpotOn has a grandfathered Extended Quota Client ID.  I also chec",
       "draft": "urknall This is an exceptionally thorough analysis — the Keymaster service vs Keymaster client ID distinction in particular is exactly the kind of precision that has been missing from earlier discussions, and the four-bucket audit classification is the right framework.\n\nA few specific reactions:\n\n[B]On the Keymaster audit gate[/B]\n\nAgreed completely. The UAT gate must be:\n\n[CODE]hm://keymaster/token/authenticated[/CODE]\n\nappearing during normal operation — not a string grep for \"keymaster\". The old client ID [CODE]65b708073fc0480ea92a077233ca87bd[/CODE] appearing as a platform identity hint in Linux/default paths is a separate concern and not itself a regression. I'll make sure the audit tooling reflects that distinction precisely. Issue #91 is tracking the Keymaster removal — I'll add your four-bucket classification there.\n\n[B]On go-librespot as audio backend[/B]\n\nYour conclusion matches mine after looking at this more carefully. go-librespot's decoded-output model means it is not a drop-in for LMS audio today. The Rust-librespot [CODE]passthrough-decoder[/CODE] / [CODE]AudioPacket::Raw[/CODE] path is the right primitive for OGG passthrough into LMS streaming. go-librespot stays as an architecture reference, not a backend candidate, unless that changes upstream.\n\n[B]On PKCE edge cases[/B]\n\nYour points B (top-level navigation vs fetch) and C (strict redirect target validation — restrict host AND path) are being incorporated directly. The open-redirector risk on the GitHub Pages relay is real even with the nonce, and path restriction to [CODE]/plugins/SpotOn/auth/callback[/CODE] is the right constraint. The manual copy/paste fallback (point D) is non-negotiable given Docker/reverse-proxy reachability failures.\n\n[B]On guest ZeroConf credential isolation[/B]\n\nPoint F is important and easy to get wrong. Guest ZeroConf sessions will be treated as ephemeral in v3 — they must not write to the persistent credential store unless explicitly promoted.\n\nThis thread has produced the clearest architectural picture yet. I'll consolidate the decisions into a proper design note and link it from the relevant issues.",
       "scrapedAt": "2026-07-05T06:13:36.017Z"
+    },
+    {
+      "postId": "1827830",
+      "postNumber": 179,
+      "author": "CJS",
+      "timestamp": "2026-07-05T03:35:26-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "The (inexplicable) +20dB \"Default Adjustment for Remote Streams\" setting on your main listening room player for sure explains the very loud and distorted sound during SpotOn playback. Radio streams must have had the same problem on this player.",
+      "draft": "[QUOTE=CJS;179]The (inexplicable) +20dB \"Default Adjustment for Remote Streams\" setting on your main listening room player for sure explains the very loud and distorted sound during SpotOn playback. Radio streams must have had the same problem on this player.[/QUOTE]\n\nGood catch, CJS — a +20dB remote stream adjustment would definitely cause that kind of clipping/distortion regardless of which plugin is doing the streaming, so it's reassuring that there's a clear explanation there.\n\n[B]plasticator2[/B] — glad you got to the bottom of it! Just to summarise what was found in case it helps anyone else searching later:\n\n[LIST]\n[*]The [B]+20dB \"Default Adjustment for Remote Streams\"[/B] on the main listening room player was the primary culprit for loud/distorted output during SpotOn playback\n[*]The [B]-5dB adjustment[/B] on the kitchen player was also a factor\n[*]These player-level gain settings apply to all remote streams (SpotOn, radio, etc.), so they're easy to overlook when chasing a plugin-specific issue\n[/LIST]\n\nThat setting lives in [B]LMS → Player Settings → Audio → Default Volume Adjustment for Remote Streams[/B] if anyone needs to find it in future.\n\nWorth double-checking that both rooms now sound balanced at comparable volume levels. If you're still noticing any inconsistency specifically with SpotOn vs other sources after correcting those settings, feel free to report back and we can dig further — the diagnostics bundle ([B]SpotOn Settings → Diagnostics[/B]) would be the first port of call.\n\nThanks for following up with the resolution — always helpful to close the loop! 🎵",
+      "scrapedAt": "2026-07-05T11:50:31.907Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
