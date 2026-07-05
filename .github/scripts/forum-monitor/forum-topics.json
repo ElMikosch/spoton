@@ -130,7 +130,9 @@
       ],
       "ghIssue": 109,
       "firstPost": 183,
-      "participants": ["foxesden"],
+      "participants": [
+        "foxesden"
+      ],
       "note": "Proc::Background stdout redirect fails on Windows services. Token JSON lost, Browse/Library broken. Present since v2.3.2, fixed in v2.3.11 via SPOTON_TOKEN_FILE env var. Awaiting foxesden confirmation."
     },
     "loud-distorted-resolved": {
@@ -142,8 +144,29 @@
         "clipping"
       ],
       "firstPost": 178,
-      "participants": ["plasticator2", "CJS"],
+      "participants": [
+        "plasticator2",
+        "CJS"
+      ],
       "note": "plasticator2 confirmed v2.3.9 + normalization fix resolved distortion. Root cause was +20dB 'Default Adjustment for Remote Streams' on one player. CJS explained Spotty ignores that setting when ReplayGain enabled."
+    },
+    "ogg-normalization-passthrough": {
+      "status": "fix-shipped",
+      "keywords": [
+        "replay gain",
+        "normalization",
+        "ogg",
+        "passthrough",
+        "volume"
+      ],
+      "firstPost": 152,
+      "latestPost": 157,
+      "participants": [
+        "CJS",
+        "sti"
+      ],
+      "note": "trackGain() implemented in v2.3.12 \u2014 suppresses LMS Default Adjustment when SpotOn normalization active. GH #108.",
+      "ghIssue": 108
     }
   },
   "active": {
@@ -166,23 +189,6 @@
         "mherger"
       ],
       "note": "Multi-post architecture discussion. urknall confirmed PKCE-first (#176-177), added 4-bucket Keymaster audit classification + 7 PKCE edge cases. sti adopted all (#184). mherger confirmed newer accounts hit Keymaster 403 (#186). Next: Phase 49-00 Token Usage Audit."
-    },
-    "ogg-normalization-passthrough": {
-      "status": "active",
-      "keywords": [
-        "replay gain",
-        "normalization",
-        "ogg",
-        "passthrough",
-        "volume"
-      ],
-      "firstPost": 152,
-      "latestPost": 157,
-      "participants": [
-        "CJS",
-        "sti"
-      ],
-      "note": "CJS asked about OGG passthrough + replay gain. Explained Spotify proprietary format. Future fix via JSON-RPC gain passthrough on backlog."
     }
   }
 }
