@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-04T19:58:01.627Z",
+  "lastChecked": "2026-07-05T06:13:36.017Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -172,9 +172,16 @@
         "1827794",
         "1827795",
         "1827797",
-        "1827799"
+        "1827799",
+        "1827800",
+        "1827801",
+        "1827802",
+        "1827803",
+        "1827804",
+        "1827808",
+        "1827809"
       ],
-      "lastPostCount": 170
+      "lastPostCount": 177
     }
   },
   "pendingTriage": [
@@ -257,6 +264,56 @@
       "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tDo you have a relatively new Spotify account? It is known that new accounts (say october 2025 or newer) can ",
       "draft": "Thanks for confirming, Chezza!\n\nUnfortunately this is likely the root cause of your issues. Spotify has been rolling out changes to their backend (sometimes referred to as the Mercury endpoint sunset) that affect [B]librespot-based[/B] players like SpotOn for certain account cohorts — particularly accounts created around October 2025 or later. This is tracked in our GitHub as [URL=https://github.com/stiefenm/spoton/issues/91]issue #91[/URL].\n\nSadly this is largely an [B]upstream issue[/B] with Spotify's API changes, so there's limited we can do on the SpotOn side until librespot itself has a fix in place. The broader librespot and Spotty communities are aware and working on it.\n\nA few things worth trying in the meantime:\n\n[LIST=1]\n[*]Follow the links CJS posted — there may be workarounds or updated builds being tested by the community\n[*]If you haven't already, generate a [B]diagnostic bundle[/B] via [B]SpotOn Settings → Diagnostics[/B] and share it on the GitHub issue — the more data points we have from affected accounts, the better\n[*]Keep an eye on [URL=https://github.com/stiefenm/spoton/issues/91]GitHub issue #91[/URL] for updates as things progress\n[/LIST]\n\nI'm sorry I don't have a quick fix for you right now — this one is frustrating because it's outside our direct control. If the situation changes or a workaround is confirmed, we'll post an update in the GitHub issue and likely here on the forums too.",
       "scrapedAt": "2026-07-04T19:58:01.627Z"
+    },
+    {
+      "postId": "1827800",
+      "postNumber": 171,
+      "author": "Chezza",
+      "timestamp": "2026-07-04T13:02:59-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\t   In an earlier post you said:  Does this mean that Spotty has worked with your present Spotify account in ",
+      "draft": "Hi Chezza,\n\nThanks for the extra context — that's really helpful! So to summarise where things stand:\n\n[B]Your situation:[/B] You joined a family plan account opened around October 2025, and SpotOn doesn't appear as a playback device in the Spotify app.\n\nThe account age issue (post-October 2025 accounts having problems with librespot-based players like SpotOn and Spotty) is unfortunately an upstream Spotify change, and not something we can easily fix on our end. This is a known problem affecting multiple plugins.\n\nRegarding the CDN workaround CJS mentioned — I understand it can sound daunting, but it's actually a fairly simple text file edit. That said, given your situation involves a recently-created family account, the CDN issue may not even be the root cause here. The device not appearing at all in the Spotify app suggests the registration/discovery side may be the bigger problem.\n\n[B]A few things worth trying first:[/B]\n\n[LIST=1]\n[*]Make sure the SpotOn player is powered on in LMS before opening the Spotify app\n[*]Double-check that SpotOn is enabled under [B]LMS Settings → Plugins → SpotOn[/B]\n[*]Try on the same local network as your LMS server (avoid VPNs if possible)\n[/LIST]\n\nTo help diagnose further, it would be very useful to grab a [B]diagnostic bundle[/B] — go to [B]SpotOn Settings → Diagnostics[/B] and attach the output. That will show us whether librespot is starting correctly and registering with Spotify.\n\nIf you'd like to file a proper bug report so we can track this, please do so here:\n[URL]https://github.com/stiefenm/spoton/issues[/URL]\n\nHang in there — we'll get to the bottom of it!",
+      "scrapedAt": "2026-07-05T06:12:50.356Z"
+    },
+    {
+      "postId": "1827801",
+      "postNumber": 172,
+      "author": "Chezza",
+      "timestamp": "2026-07-04T13:07:21-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\t   In an earlier post you said:  Does this mean that Spotty has worked with your present Spotify account in ",
+      "draft": "Hi Chezza,\n\nNo worries — it can look a bit daunting if you haven't edited a hosts file before! Let me break it down simply.\n\nThe \"hosts file\" is a plain text file on your computer that can redirect or block certain addresses. Here's how to do it on a Mac (since you mentioned a MacBook):\n\n[B]Steps for macOS:[/B]\n\n1. Open [B]Terminal[/B] (search for it in Spotlight with ⌘+Space)\n2. Type the following command and press Enter:\n[CODE]sudo nano /etc/hosts[/CODE]\n3. Enter your Mac password when prompted\n4. Use the arrow keys to scroll to the bottom of the file\n5. Add these two lines:\n[CODE]0.0.0.0 audio-akp.spotify.com\n0.0.0.0 audio4.spotify.com[/CODE]\n6. Press [B]Ctrl+X[/B], then [B]Y[/B], then [B]Enter[/B] to save\n7. Finally, flush your DNS cache by running:\n[CODE]sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder[/CODE]\n\nThen try playing via SpotOn again and see if it makes a difference.\n\n[B]Important note:[/B] I should be clear that this workaround is specifically for the CDN issue that CJS described, and relates to [B]Spotty[/B] rather than SpotOn directly. However, since both use librespot under the hood, it may still help.\n\nThat said, given your account is from October 2025, the newer-account compatibility issue (tracked as [URL=https://github.com/stiefenm/spoton/issues/91]GitHub issue #91[/URL]) is still the more likely culprit. That's unfortunately an upstream Spotify change that we don't have a complete fix for yet.\n\nCan you let us know which LMS player you're using (e.g. a hardware device, a software player)? That might help narrow things down further.",
+      "scrapedAt": "2026-07-05T06:13:01.427Z"
+    },
+    {
+      "postId": "1827802",
+      "postNumber": 173,
+      "author": "CJS",
+      "timestamp": "2026-07-04T13:29:51-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by Chezza \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tI had my own account in the past and then a family member opened a family account and we have all joined ",
+      "draft": "Hi CJS,\n\n[QUOTE]I had my own account in the past and then a family member opened a family account and we have all joined that to reduce costs.[/QUOTE]\n\nThanks for the clarification — that's really helpful context. So just to summarise where things stand for your situation:\n\n[B]1. New Spotify account (joined October 2025 or later)[/B]\nThis is likely the root cause of your playback issues. There is a known problem affecting newer Spotify accounts with librespot-based players (which both SpotOn and Spotty use under the hood). This is unfortunately an upstream issue tied to changes Spotify have made on their end, and isn't something we can fix directly in SpotOn right now.\n\n[B]2. The CDN/hosts file workaround[/B]\nAs Chezza mentioned, this is unlikely to help in your case since your problems appear to be account-related rather than CDN-related. I wouldn't worry about trying to implement that fix.\n\n[B]What I'd suggest:[/B]\n- Keep an eye on the librespot project and the Spotty threads on this forum — fixes for new account compatibility do get rolled out as the community works around Spotify's changes\n- If you want to track SpotOn-specific progress on this, there is an open issue related to upstream Spotify endpoint changes: [URL=https://github.com/stiefenm/spoton/issues/91]GitHub Issue #91[/URL]\n\nUnfortunately there's no quick fix I can point you to right now, and I don't want to give you false hope. This one is largely in Spotify's hands. Sorry I can't be more helpful on this occasion — it's a frustrating situation for users with newer accounts.",
+      "scrapedAt": "2026-07-05T06:13:11.219Z"
+    },
+    {
+      "postId": "1827803",
+      "postNumber": 174,
+      "author": "Chezza",
+      "timestamp": "2026-07-04T13:39:22-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tWhen you have changed to a newer Spotify account recently, then I expect that modifying the hosts file will ",
+      "draft": "Sorry to hear that, CJS! Losing access to your old account is frustrating, especially when the new one is causing issues.\n\nJust to set expectations: the problems with newer Spotify accounts (October 2025 onwards) affecting librespot-based playback are an [B]upstream issue[/B] — it's not something SpotOn or Spotty can fix on our end, as it's tied to changes Spotify has made on their side. You're not alone in hitting this wall.\n\nA couple of things worth knowing:\n\n[B]1. It may resolve itself[/B] — Spotify has been rolling changes out in cohorts, and some users have reported that playback eventually started working without any changes on their part. It might be worth checking back periodically.\n\n[B]2. Check the Spotty forums[/B] — Michael (Spotty's developer) and the community there are tracking this closely. Any upstream fix that helps Spotty will likely benefit SpotOn too, since we share the same librespot core.\n\n[B]3. If you do want to keep troubleshooting[/B] — if you haven't already, it's worth generating a diagnostic bundle from [B]SpotOn Settings → Diagnostics[/B] and posting the relevant log snippets. There may be something more specific going on that's worth investigating.\n\nGood luck, and I hope Spotify sorts things out on their end soon. If you do find an alternative and later want to give SpotOn another try, you're always welcome back! 😊",
+      "scrapedAt": "2026-07-05T06:13:21.062Z"
+    },
+    {
+      "postId": "1827808",
+      "postNumber": 176,
+      "author": "urknall",
+      "timestamp": "2026-07-04T15:14:34-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "sti That makes the direction much clearer. I think the revised architecture is strong, and the key change — PKCE-first for Web API + credential derivation, with ZeroConf retained for discovery/Connect behavior — makes sense given that SpotOn has a grandfathered Extended Quota Client ID.  I also chec",
+      "draft": "urknall This is an exceptionally thorough analysis — the Keymaster service vs Keymaster client ID distinction in particular is exactly the kind of precision that has been missing from earlier discussions, and the four-bucket audit classification is the right framework.\n\nA few specific reactions:\n\n[B]On the Keymaster audit gate[/B]\n\nAgreed completely. The UAT gate must be:\n\n[CODE]hm://keymaster/token/authenticated[/CODE]\n\nappearing during normal operation — not a string grep for \"keymaster\". The old client ID [CODE]65b708073fc0480ea92a077233ca87bd[/CODE] appearing as a platform identity hint in Linux/default paths is a separate concern and not itself a regression. I'll make sure the audit tooling reflects that distinction precisely. Issue #91 is tracking the Keymaster removal — I'll add your four-bucket classification there.\n\n[B]On go-librespot as audio backend[/B]\n\nYour conclusion matches mine after looking at this more carefully. go-librespot's decoded-output model means it is not a drop-in for LMS audio today. The Rust-librespot [CODE]passthrough-decoder[/CODE] / [CODE]AudioPacket::Raw[/CODE] path is the right primitive for OGG passthrough into LMS streaming. go-librespot stays as an architecture reference, not a backend candidate, unless that changes upstream.\n\n[B]On PKCE edge cases[/B]\n\nYour points B (top-level navigation vs fetch) and C (strict redirect target validation — restrict host AND path) are being incorporated directly. The open-redirector risk on the GitHub Pages relay is real even with the nonce, and path restriction to [CODE]/plugins/SpotOn/auth/callback[/CODE] is the right constraint. The manual copy/paste fallback (point D) is non-negotiable given Docker/reverse-proxy reachability failures.\n\n[B]On guest ZeroConf credential isolation[/B]\n\nPoint F is important and easy to get wrong. Guest ZeroConf sessions will be treated as ephemeral in v3 — they must not write to the persistent credential store unless explicitly promoted.\n\nThis thread has produced the clearest architectural picture yet. I'll consolidate the decisions into a proper design note and link it from the relevant issues.",
+      "scrapedAt": "2026-07-05T06:13:36.017Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
