@@ -2,52 +2,160 @@
   "resolved": {
     "cdn-hosts-workaround": {
       "status": "community-self-help",
-      "keywords": ["/etc/hosts", "bootlocal", "audio-cf-del", "audio-fa-del", "spotifycdn", "0.0.0.0"],
+      "keywords": [
+        "/etc/hosts",
+        "bootlocal",
+        "audio-cf-del",
+        "audio-fa-del",
+        "spotifycdn",
+        "0.0.0.0"
+      ],
       "note": "Community handles CDN workaround via /etc/hosts, upstream fix in librespot #1722"
     },
     "squeezedsp-conflict": {
       "status": "waiting-upstream",
-      "keywords": ["SqueezeDSP", "removeNativeConversion", "soc pcm"],
+      "keywords": [
+        "SqueezeDSP",
+        "removeNativeConversion",
+        "soc pcm"
+      ],
       "ghIssue": 42,
       "note": "PR #19 at Foxenfurter/SqueezeDSP"
     },
     "picoreplayer-bootlocal": {
       "status": "community-self-help",
-      "keywords": ["bootlocal.sh", "pcp bu", "filetool.lst", "/opt/bootlocal"],
-      "note": "piCorePlayer persistence — community helps each other"
+      "keywords": [
+        "bootlocal.sh",
+        "pcp bu",
+        "filetool.lst",
+        "/opt/bootlocal"
+      ],
+      "note": "piCorePlayer persistence \u2014 community helps each other"
     },
     "connect-volume-difference": {
       "status": "fixed",
-      "keywords": ["volume", "Connect", "half as loud", "lower than", "browse mode"],
+      "keywords": [
+        "volume",
+        "Connect",
+        "half as loud",
+        "lower than",
+        "browse mode"
+      ],
       "ghIssue": 74,
       "note": "Confirmed fixed by alex-aust (2026-07-02), closed"
     },
     "sha-mismatch-install-loop": {
       "status": "fixed",
-      "keywords": ["digest does not match", "checksum", "will not be installed", "demands reboot"],
+      "keywords": [
+        "digest does not match",
+        "checksum",
+        "will not be installed",
+        "demands reboot"
+      ],
       "note": "repo.xml SHA was wrong for v2.3.1, fixed in v2.3.2+. CJS and Andy_NO affected."
     },
     "loud-distorted-playback": {
       "status": "fix-shipped",
-      "keywords": ["louder", "distorted", "distortion", "volume normalization", "replay gain"],
+      "keywords": [
+        "louder",
+        "distorted",
+        "distortion",
+        "volume normalization",
+        "replay gain"
+      ],
       "ghIssue": 105,
       "note": "Volume normalization was a no-op. Fixed in v2.3.8. Awaiting confirmation from plasticator2 (post #148)."
     },
     "pcp-update-loop": {
       "status": "community-self-help",
-      "keywords": ["reboot loop", "unchecked", "piCorePlayer", "update loop", "manage plugins"],
+      "keywords": [
+        "reboot loop",
+        "unchecked",
+        "piCorePlayer",
+        "update loop",
+        "manage plugins"
+      ],
       "note": "Andy_NO: pCP v11.1.0 update checkbox resets after restart. Likely overlay-FS persistence. CJS helping (posts #146-147)."
     },
     "shuffleindex-crash": {
       "status": "fixed",
-      "keywords": ["shuffleIndex", "Undefined subroutine", "ProtocolHandler.pm line 245"],
-      "note": "Fixed in v2.1.3 — streamingSongIndex replaces non-existent shuffleIndex"
+      "keywords": [
+        "shuffleIndex",
+        "Undefined subroutine",
+        "ProtocolHandler.pm line 245"
+      ],
+      "note": "Fixed in v2.1.3 \u2014 streamingSongIndex replaces non-existent shuffleIndex"
     },
     "docker-mdns-port-conflict": {
       "status": "investigating",
-      "keywords": ["docker", "truenas", "mdns", "Address in use", "os error 98", "port 5353", "discovery failed"],
+      "keywords": [
+        "docker",
+        "truenas",
+        "mdns",
+        "Address in use",
+        "os error 98",
+        "port 5353",
+        "discovery failed"
+      ],
       "ghIssue": 103,
       "note": "tontze: TrueNAS Docker, port 5353 EADDRINUSE blocks mDNS discovery. Related to #60."
+    },
+    "new-account-no-stored-credentials": {
+      "status": "community-self-help",
+      "keywords": [
+        "new account",
+        "NoStoredCredentials",
+        "code 103",
+        "Boom",
+        "Oct 2025"
+      ],
+      "firstPost": 159,
+      "latestPost": 174,
+      "participants": [
+        "Chezza",
+        "urknall",
+        "CJS"
+      ],
+      "note": "New Spotify account (Oct 2025) cannot play on Squeezebox Boom. Known librespot upstream issue with new accounts. Community (urknall + CJS) diagnosed correctly. No maintainer action needed. v3.0 PKCE will bypass ZeroConf bootstrap and may solve this class of issue."
+    }
+  },
+  "active": {
+    "auth-architecture-discussion": {
+      "status": "active",
+      "keywords": [
+        "pkce",
+        "keymaster",
+        "login5",
+        "zeroconf",
+        "pathfinder",
+        "sp_dc",
+        "daily mix",
+        "auth"
+      ],
+      "firstPost": 149,
+      "latestPost": 175,
+      "participants": [
+        "sti",
+        "urknall"
+      ],
+      "note": "Multi-post architecture discussion. urknall proposed staged hybrid approach (#153-155), sti replied with spike results (#156), urknall responded with go-librespot study guide + sp_dc warning (#158), sti posted final architecture decisions + go-librespot evaluation question (#175). Waiting for urknall response."
+    },
+    "ogg-normalization-passthrough": {
+      "status": "active",
+      "keywords": [
+        "replay gain",
+        "normalization",
+        "ogg",
+        "passthrough",
+        "volume"
+      ],
+      "firstPost": 152,
+      "latestPost": 157,
+      "participants": [
+        "CJS",
+        "sti"
+      ],
+      "note": "CJS asked about OGG passthrough + replay gain. Explained Spotify proprietary format. Future fix via JSON-RPC gain passthrough on backlog."
     }
   }
 }
