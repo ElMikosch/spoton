@@ -50,6 +50,7 @@ jobs:
         working-directory: .github/scripts/forum-monitor
         run: |
           git add forum-state.json
-          git diff --cached --quiet || \
-            git commit -m "chore: update forum monitor state [skip ci]" && \
-            git push
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update forum monitor state [skip ci]"
+          git pull --rebase
+          git push
