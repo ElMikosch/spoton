@@ -277,7 +277,7 @@ impl Sink for UnifiedHttpStreamSink {
                 }
             }
             AudioPacket::Raw(bytes) => {
-                let chunk = Bytes::copy_from_slice(&bytes);
+                let chunk = Bytes::from(bytes);
 
                 // Unified per-page OGG parsing: serial tracking, header
                 // buffering, and granule-based rate-limiting in one pass.
@@ -324,8 +324,9 @@ impl Sink for UnifiedHttpStreamSink {
                             self.ogg_serial, serial
                         );
                         self.ogg_serial = serial;
-                        self.ogg_track_base_frames = self.ogg_timeline_frames;
-                        self.granule_offset = -1;
+                        self.ogg_track_base_frames = last_timeline_frames
+                            .unwrap_or(self.ogg_timeline_frames);
+                        self.granule_offset = 0;
                         self.collecting_headers = true;
                         let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
                         buf.clear();
@@ -336,8 +337,8 @@ impl Sink for UnifiedHttpStreamSink {
                     // buffering individual pages (not whole chunks) ensures
                     // reconnecting clients get valid stream setup data.
                     if self.collecting_headers {
-                        if granule == 0 {
-                            let header_page = Bytes::copy_from_slice(&chunk[pos..pos + page_size]);
+                        if granule <= 0 {
+                            let header_page = chunk.slice(pos..pos + page_size);
                             let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
                             buf.push(header_page);
                         } else {
