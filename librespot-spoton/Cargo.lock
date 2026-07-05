@@ -2509,7 +2509,7 @@ dependencies = [
 
 [[package]]
 name = "spoton"
-version = "2.0.9"
+version = "2.0.10"
 dependencies = [
  "bytes",
  "env_logger",

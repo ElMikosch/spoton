@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.12] - 2026-07-05
+### Fixed
+- **ReplayGain double adjustment (GH #108)**: when SpotOn normalization is enabled, LMS no longer additionally applies its "Default Adjustment for Remote Streams." New `trackGain()` method in ProtocolHandler suppresses the LMS-side adjustment when librespot already handles gain. Reported by @CornelisJ.
+- **Connect OGG gapless timeline drift**: replaced per-track rate-limiter reset with a continuous cumulative OGG timeline across serial boundaries. Eliminates the buffer-latency gap between gapless tracks and prevents progressive timing drift in long playlists. Improvements from PR #107 by @urknall.
+- **Connect OGG rapid-skip header corruption**: OGG header pages are now buffered individually (per-page) instead of as whole decoder chunks. Fixes reconnecting clients receiving invalid stream setup data when a chunk spans a track boundary during rapid skipping.
+- **Connect OGG granule offset**: first audio page frames are now fully counted in the continuous timeline (granule_offset = 0 at serial change), preventing ~93ms per-track accumulation over long gapless sessions.
+- **Connect OGG header continuation pages**: header detection now accepts granule ≤ 0 (not just == 0), correctly handling Vorbis setup headers that span OGG page boundaries.
+
+### Changed
+- **Connect OGG zero-copy**: `Bytes::from()` for chunk ownership and `chunk.slice()` for header page references eliminate unnecessary memory copies on the audio hot path.
+- **Connect PCM gapless simplified**: removed explicit rate-limiter reset on PCM track transitions — gapless PCM audio is continuous, so `frames_consumed` and `began_at` naturally carry across track boundaries.
+
 ## [2.3.11] - 2026-07-05
 ### Fixed
 - **Windows: Browse/Library broken since v2.3.2**: `Proc::Background` stdout redirect silently fails on Windows services — the async token fetch (introduced in v2.3.2) never got the `ISWINDOWS` guard that `Daemon.pm` already had. Token JSON went nowhere, causing `--get-token` to always fail. Now uses `SPOTON_TOKEN_FILE` env var on Windows, matching the proven `SPOTON_PORT_FILE` pattern. Forum #183 by @foxesden.
