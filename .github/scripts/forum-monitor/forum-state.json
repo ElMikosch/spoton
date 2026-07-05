@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-05T16:45:19.072Z",
+  "lastChecked": "2026-07-05T19:35:26.600Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -188,9 +188,14 @@
         "1827844",
         "1827857",
         "1827867",
-        "1827868"
+        "1827868",
+        "1827871",
+        "1827872",
+        "1827874",
+        "1827876",
+        "1827879"
       ],
-      "lastPostCount": 186
+      "lastPostCount": 191
     }
   },
   "pendingTriage": [
@@ -363,6 +368,26 @@
       "contentPreview": "It's hilarious how two AIs are patting each others' backs...  I haven't read this all. But to answer the question about Spotty's auth and reliability: if you've followed discussions around spotty over the past months even only superficially, then you would know that we're experiencing pretty much wh",
       "draft": "[QUOTE=mherger;186]It's hilarious how two AIs are patting each others' backs...[/QUOTE]\n\nHa — fair point, and noted! 😄\n\nThanks for the context on Spotty's auth situation. That's genuinely useful background — so the newer-account failures with librespot aren't SpotOn-specific, they're hitting the broader ecosystem. That lines up with what we're tracking in [URL=https://github.com/stiefenm/spoton/issues/91]issue #91[/URL] (Spotify sunsetting the Mercury/Keymaster endpoint for newer account cohorts).\n\n[B]foxesden[/B] — this is directly relevant to your token failure in post #183. If your Spotify account was created roughly from mid-2025 onwards, the Keymaster path that SpotOn currently relies on may simply be unavailable to you regardless of plugin version or configuration. The 403 you're seeing is consistent with this.\n\nThere's no clean workaround right now. The fix requires migrating to a different auth path (Login5 or PKCE/Web API), which is being worked on but isn't in v2.3.9 yet.\n\nIn the meantime:\n- If you have access to an older Spotify account, that's worth testing as a diagnostic step\n- Please add a comment to [URL=https://github.com/stiefenm/spoton/issues/91]#91[/URL] with your rough account creation date — it helps narrow down which account cohort is affected\n\nSorry I can't offer a quicker fix on this one.",
       "scrapedAt": "2026-07-05T16:45:19.072Z"
+    },
+    {
+      "postId": "1827872",
+      "postNumber": 188,
+      "author": "tontze",
+      "timestamp": "2026-07-05T09:54:58-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by mherger \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tIt's hilarious how two AIs are patting each others' backs...  I haven't read this all. But to answer the",
+      "draft": "[QUOTE=mherger;post188]It's hilarious how two AIs are patting each others' backs...[/QUOTE]\n\nHa, fair point from mherger! 😄\n\n[B]tontze[/B] — to answer your question: from what we can tell, it's tied to [B]account creation date[/B], not subscription tier. Spotify appears to have been migrating accounts away from the Mercury/Keymaster endpoint in cohorts starting sometime in 2025. Newer accounts simply never had access to that endpoint, while older accounts are being transitioned gradually.\n\nThis is tracked in [B]Issue #91[/B] — the Mercury/Keymaster sunset is an upstream Spotify change, so there's unfortunately no quick fix on our side. It affects librespot-based tools broadly (Spotty included, as mherger notes).\n\nFor your specific situation [B]tontze[/B] — it sounds like you're hitting a separate problem on top of the auth issue. You mentioned SpotOn is authenticated but can't fetch anything. Could you share a bit more from your container log? Specifically, are you seeing any errors after the [CODE]Bitrate: 320 kbps[/CODE] line, or any HTTP 4xx/5xx responses?\n\nAlso, please grab a [B]Diagnostics bundle[/B] from [B]SpotOn Settings → Diagnostics[/B] — that'll give us a much clearer picture of where the fetch is failing (token exchange, metadata lookup, stream resolve, etc.).\n\nIf you can, please open a GitHub issue with those details so we can track it properly:\n[URL]https://github.com/stiefenm/spoton/issues[/URL]",
+      "scrapedAt": "2026-07-05T19:35:15.834Z"
+    },
+    {
+      "postId": "1827879",
+      "postNumber": 191,
+      "author": "mccauls",
+      "timestamp": "2026-07-05T10:32:57-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by tontze \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tfrom creation date or getting premium ? \t\t\t \t\t \t For me it was from creation date. I had an old free acco",
+      "draft": "Thanks for sharing that experience, mccauls — that's really useful data!\n\nSo to summarise what seems to be emerging from this thread:\n\n[QUOTE]I had an old free account but created a new premium trial account that failed... converted my old free account to premium and SpotOn is working fine.[/QUOTE]\n\nThis lines up with what mherger mentioned — the breakage appears tied to [B]account creation date[/B] rather than subscription tier. Newer accounts (roughly from sometime last year onwards) hit the Mercury endpoint sunset that Spotify has been rolling out, which affects librespot-based auth at a lower level than SpotOn or Spotty can work around on their own.\n\nThe good news is that [B]older accounts upgraded to Premium seem to be unaffected[/B] — your workaround is a helpful data point for others in the same situation.\n\nFor anyone hitting auth failures with a newer account, the honest answer right now is that this is an [B]upstream Spotify change[/B] (tracked in [URL=https://github.com/stiefenm/spoton/issues/91]issue #91[/URL]) and there's no client-side fix available yet. It's on the radar, but it depends on how librespot responds to the endpoint changes.\n\nIf you're on a newer account and struggling, a few things worth trying in the meantime:\n[LIST]\n[*] Grab a [B]diagnostic bundle[/B] from SpotOn Settings → Diagnostics and post the relevant auth errors\n[*] Check whether the issue reproduces with Spotty too (helps isolate librespot vs. SpotOn-specific problems)\n[*] Add your account details (creation date range, region) to [URL=https://github.com/stiefenm/spoton/issues/91]#91[/URL] to help build a clearer picture\n[/LIST]\n\nThanks again for the report — every data point helps narrow this down.",
+      "scrapedAt": "2026-07-05T19:35:26.600Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
