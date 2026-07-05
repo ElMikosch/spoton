@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.10] - 2026-07-05
+### Fixed
+- **Connect track transition rate limiting**: reset the Connect stream rate limiter on track changes without re-applying the 2s buffer latency as a pause. Prevents audio gaps on gapless transitions. PR #106 by @urknall, with additional fixes for buffer_latency_ns permanence and start()/dispatcher race guard.
+- **Connect OGG header race on skip**: the `/stream` relay now waits up to 3s for OGG header pages before starting delivery, fixing intermittent `vorbis_decode error: -132` when LMS reconnected before the new track's headers were buffered.
+- **Forum monitor CI**: fixed non-fast-forward push failure when concurrent runs landed between checkout and push.
+
 ## [2.3.9] - 2026-07-04
 ### Fixed
 - **Daemon restart on normalization toggle**: changing the "Volume Normalization" checkbox in Server Settings now immediately restarts the librespot daemon. Previously, `formatOverride()` would return the new format (OGG passthrough) while the daemon still output PCM, causing silence until LMS restart or the 60s watchdog caught up.
