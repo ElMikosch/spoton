@@ -85,6 +85,26 @@ enum ActiveMode {
     Browse(String), // String = track_id currently streaming
 }
 
+fn advance_connect_track_generation(
+    event: &PlayerEvent,
+    current_track: &mut Option<String>,
+    track_gen: &AtomicU64,
+) {
+    if let PlayerEvent::TrackChanged { audio_item } = event {
+        let new_id = audio_item.track_id.to_id();
+        if current_track.as_deref() != Some(new_id.as_str()) {
+            let prev = current_track.replace(new_id.clone());
+            let gen = track_gen.fetch_add(1, Ordering::AcqRel) + 1;
+            log::info!(
+                "[spoton/unified] Connect TrackChanged {:?} -> {} — track_gen={}",
+                prev.as_deref().unwrap_or("none"),
+                new_id,
+                gen
+            );
+        }
+    }
+}
+
 // -------------------------------------------------------------------------
 // UnifiedHttpStreamSink — rate-limited PCM sink for Connect path
 // -------------------------------------------------------------------------
@@ -99,6 +119,8 @@ struct UnifiedHttpStreamSink {
     pcm_tx: mpsc::Sender<Bytes>,
     #[allow(dead_code)]
     flush_tx: watch::Sender<u64>,
+    track_gen: Arc<AtomicU64>,
+    last_track_gen: u64,
     began_at: Instant,
     frames_consumed: u64,
     buffer_latency_ns: u128,
@@ -128,6 +150,7 @@ impl UnifiedHttpStreamSink {
         format: AudioFormat,
         pcm_tx: mpsc::Sender<Bytes>,
         flush_tx: watch::Sender<u64>,
+        track_gen: Arc<AtomicU64>,
         buffer_latency_ms: u64,
         ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
         passthrough: bool,
@@ -141,6 +164,8 @@ impl UnifiedHttpStreamSink {
         Box::new(Self {
             pcm_tx,
             flush_tx,
+            last_track_gen: track_gen.load(Ordering::Acquire),
+            track_gen,
             began_at: Instant::now(),
             frames_consumed: 0,
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
@@ -151,10 +176,20 @@ impl UnifiedHttpStreamSink {
             ogg_serial: 0,
         })
     }
+
+    fn reset_rate_limiter_for_track_transition(&mut self) {
+        // Pre-advance began_at so the pacing formula doesn't re-apply the
+        // buffer lead as a 2s pause — LMS is already connected and consuming.
+        self.began_at = Instant::now()
+            - Duration::from_nanos(self.buffer_latency_ns as u64);
+        self.frames_consumed = 0;
+        self.granule_offset = -1;
+    }
 }
 
 impl Sink for UnifiedHttpStreamSink {
     fn start(&mut self) -> SinkResult<()> {
+        self.last_track_gen = self.track_gen.load(Ordering::Acquire);
         self.began_at = Instant::now();
         self.frames_consumed = 0;
         self.granule_offset = -1; // Phase 44 fix: re-capture on first audio page
@@ -181,6 +216,29 @@ impl Sink for UnifiedHttpStreamSink {
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
+        let current_track_gen = self.track_gen.load(Ordering::Acquire);
+        if current_track_gen != self.last_track_gen {
+            log::info!(
+                "[spoton/unified] Connect track generation {} -> {}",
+                self.last_track_gen,
+                current_track_gen
+            );
+            self.last_track_gen = current_track_gen;
+            if self.passthrough {
+                log::debug!(
+                    "[spoton/unified] Connect TrackChanged observed in OGG passthrough; \
+                     waiting for OGG serial boundary before resetting stream headers"
+                );
+            } else if self.frames_consumed > 0 {
+                // Gapless mid-stream transition: start() was NOT called, audio
+                // is flowing. Reset pacing without re-applying buffer lead.
+                // Guard: skip when frames_consumed == 0 (start() just ran and
+                // already established the buffer lead — the gen mismatch is a
+                // benign race between the async dispatcher and the sync sink).
+                self.reset_rate_limiter_for_track_transition();
+            }
+        }
+
         match packet {
             AudioPacket::Samples(samples) => {
                 let samples_s16 = converter.f64_to_s16(&samples);
@@ -264,8 +322,7 @@ impl Sink for UnifiedHttpStreamSink {
                              (gapless track transition)",
                             self.ogg_serial, serial
                         );
-                        self.began_at = Instant::now();
-                        self.granule_offset = -1;
+                        self.reset_rate_limiter_for_track_transition();
                         self.collecting_headers = true;
                         // Re-buffer headers for the new track
                         let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
@@ -564,6 +621,31 @@ async fn unified_http_server(
 
                             // Reset browse_preempting flag for this new relay session.
                             browse_preempting.store(false, Ordering::Release);
+
+                            // Wait for OGG headers before draining — on track
+                            // transitions LMS reconnects before the sink has
+                            // buffered the new track's header pages.
+                            if passthrough {
+                                if let Some(ref buf) = ogg_header_buf {
+                                    let deadline = tokio::time::Instant::now()
+                                        + Duration::from_secs(3);
+                                    loop {
+                                        let n = buf.lock()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .len();
+                                        if n >= 3 { break; }
+                                        if tokio::time::Instant::now() >= deadline {
+                                            log::warn!(
+                                                "[spoton/unified] /stream: OGG headers \
+                                                 incomplete ({}/3) after 3s timeout",
+                                                n
+                                            );
+                                            break;
+                                        }
+                                        tokio::time::sleep(Duration::from_millis(20)).await;
+                                    }
+                                }
+                            }
 
                             // Drain stale pre-seek audio from the channel.
                             {
@@ -1251,6 +1333,7 @@ pub async fn run_unified(
         let (pcm_tx, pcm_rx) = mpsc::channel::<Bytes>(256);
         let (flush_tx, flush_rx) = watch::channel::<u64>(0);
         let flush_tx_for_lms = flush_tx.clone();
+        let connect_track_gen = Arc::new(AtomicU64::new(0));
 
         pcm_rx_arc = Some(Arc::new(std::sync::Mutex::new(pcm_rx)));
         flush_rx_arc = Some(Arc::new(std::sync::Mutex::new(flush_rx)));
@@ -1271,6 +1354,7 @@ pub async fn run_unified(
         // Connect Player with rate-limited UnifiedHttpStreamSink.
         let pcm_tx_clone = pcm_tx.clone();
         let flush_tx_for_sink = flush_tx.clone();
+        let track_gen_for_sink = Arc::clone(&connect_track_gen);
         let buffer_latency_ms_copy = buffer_latency_ms;
         let ogg_buf_for_sink = Arc::clone(&ogg_header_buf);
         let session_for_player = {
@@ -1287,6 +1371,7 @@ pub async fn run_unified(
                     AudioFormat::S16,
                     pcm_tx_clone,
                     flush_tx_for_sink,
+                    Arc::clone(&track_gen_for_sink),
                     buffer_latency_ms_copy,
                     ogg_buf_for_sink,
                     passthrough,
@@ -1322,9 +1407,13 @@ pub async fn run_unified(
             let mode_state_lms = Arc::clone(&mode_state);
             let sa = Arc::clone(&spirc_active);
             let browse_cancel_lms = Arc::clone(&browse_cancel);
+            let track_gen_lms = Arc::clone(&connect_track_gen);
             event_dispatcher_handle = Some(tokio::spawn(async move {
                 let mut current_track: Option<String> = None;
+                let mut current_sink_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
+                    advance_connect_track_generation(&event, &mut current_sink_track, &track_gen_lms);
+
                     // Track spirc_active for SessionConnected/Playing/TrackChanged
                     if matches!(event,
                         PlayerEvent::SessionConnected { .. } |
@@ -1366,8 +1455,12 @@ pub async fn run_unified(
             let sa = Arc::clone(&spirc_active);
             let mode_state_w = Arc::clone(&mode_state);
             let browse_cancel_w = Arc::clone(&browse_cancel);
+            let track_gen_w = Arc::clone(&connect_track_gen);
             event_dispatcher_handle = Some(tokio::spawn(async move {
+                let mut current_sink_track: Option<String> = None;
                 while let Some(event) = event_chan.recv().await {
+                    advance_connect_track_generation(&event, &mut current_sink_track, &track_gen_w);
+
                     if matches!(event,
                         PlayerEvent::SessionConnected { .. } |
                         PlayerEvent::Playing { .. } |
@@ -1577,9 +1670,13 @@ pub async fn run_unified(
                                     let mode_state_d = Arc::clone(&mode_state);
                                     let sa_d = Arc::clone(&spirc_active);
                                     let browse_cancel_d = Arc::clone(&browse_cancel);
+                                    let track_gen_d = Arc::clone(&connect_track_gen);
                                     event_dispatcher_handle = Some(tokio::spawn(async move {
                                         let mut current_track: Option<String> = None;
+                                        let mut current_sink_track: Option<String> = None;
                                         while let Some(event) = event_chan.recv().await {
+                                            advance_connect_track_generation(&event, &mut current_sink_track, &track_gen_d);
+
                                             if matches!(event,
                                                 PlayerEvent::SessionConnected { .. } |
                                                 PlayerEvent::Playing { .. } |
@@ -1610,8 +1707,12 @@ pub async fn run_unified(
                                     let sa_d = Arc::clone(&spirc_active);
                                     let mode_state_d = Arc::clone(&mode_state);
                                     let browse_cancel_d = Arc::clone(&browse_cancel);
+                                    let track_gen_d = Arc::clone(&connect_track_gen);
                                     event_dispatcher_handle = Some(tokio::spawn(async move {
+                                        let mut current_sink_track: Option<String> = None;
                                         while let Some(event) = event_chan.recv().await {
+                                            advance_connect_track_generation(&event, &mut current_sink_track, &track_gen_d);
+
                                             if matches!(event,
                                                 PlayerEvent::SessionConnected { .. } |
                                                 PlayerEvent::Playing { .. } |
@@ -1860,4 +1961,3 @@ pub async fn run_unified(
 
     Ok(())
 }
-
