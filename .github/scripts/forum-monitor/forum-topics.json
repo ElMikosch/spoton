@@ -64,7 +64,7 @@
         "replay gain"
       ],
       "ghIssue": 105,
-      "note": "Volume normalization was a no-op. Fixed in v2.3.8. Awaiting confirmation from plasticator2 (post #148)."
+      "note": "Volume normalization was a no-op. Fixed in v2.3.8. plasticator2 confirmed resolved (#178). Root cause was also +20dB 'Default Adjustment for Remote Streams' setting."
     },
     "pcp-update-loop": {
       "status": "community-self-help",
@@ -117,6 +117,33 @@
         "CJS"
       ],
       "note": "New Spotify account (Oct 2025) cannot play on Squeezebox Boom. Known librespot upstream issue with new accounts. Community (urknall + CJS) diagnosed correctly. No maintainer action needed. v3.0 PKCE will bypass ZeroConf bootstrap and may solve this class of issue."
+    },
+    "windows-token-capture-broken": {
+      "status": "fix-shipped",
+      "keywords": [
+        "windows",
+        "get-token failed",
+        "token sources exhausted",
+        "Proc::Background",
+        "lost access",
+        "library"
+      ],
+      "ghIssue": 109,
+      "firstPost": 183,
+      "participants": ["foxesden"],
+      "note": "Proc::Background stdout redirect fails on Windows services. Token JSON lost, Browse/Library broken. Present since v2.3.2, fixed in v2.3.11 via SPOTON_TOKEN_FILE env var. Awaiting foxesden confirmation."
+    },
+    "loud-distorted-resolved": {
+      "status": "resolved",
+      "keywords": [
+        "Default Adjustment",
+        "Remote Streams",
+        "+20dB",
+        "clipping"
+      ],
+      "firstPost": 178,
+      "participants": ["plasticator2", "CJS"],
+      "note": "plasticator2 confirmed v2.3.9 + normalization fix resolved distortion. Root cause was +20dB 'Default Adjustment for Remote Streams' on one player. CJS explained Spotty ignores that setting when ReplayGain enabled."
     }
   },
   "active": {
@@ -127,18 +154,18 @@
         "keymaster",
         "login5",
         "zeroconf",
-        "pathfinder",
-        "sp_dc",
-        "daily mix",
-        "auth"
+        "auth",
+        "go-librespot",
+        "token"
       ],
       "firstPost": 149,
-      "latestPost": 175,
+      "latestPost": 184,
       "participants": [
         "sti",
-        "urknall"
+        "urknall",
+        "mherger"
       ],
-      "note": "Multi-post architecture discussion. urknall proposed staged hybrid approach (#153-155), sti replied with spike results (#156), urknall responded with go-librespot study guide + sp_dc warning (#158), sti posted final architecture decisions + go-librespot evaluation question (#175). Waiting for urknall response."
+      "note": "Multi-post architecture discussion. urknall confirmed PKCE-first (#176-177), added 4-bucket Keymaster audit classification + 7 PKCE edge cases. sti adopted all (#184). mherger confirmed newer accounts hit Keymaster 403 (#186). Next: Phase 49-00 Token Usage Audit."
     },
     "ogg-normalization-passthrough": {
       "status": "active",
