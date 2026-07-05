@@ -216,18 +216,18 @@ impl Sink for UnifiedHttpStreamSink {
         let current_track_gen = self.track_gen.load(Ordering::Acquire);
         if current_track_gen != self.last_track_gen {
             log::info!(
-                "[spoton/unified] Connect track generation {} -> {} — resetting rate-limiter",
+                "[spoton/unified] Connect track generation {} -> {}",
                 self.last_track_gen,
                 current_track_gen
             );
             self.last_track_gen = current_track_gen;
-            self.reset_rate_limiter_for_track_transition();
-            self.ogg_serial = 0;
             if self.passthrough {
-                let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
-                buf.clear();
-                drop(buf);
-                self.collecting_headers = true;
+                log::debug!(
+                    "[spoton/unified] Connect TrackChanged observed in OGG passthrough; \
+                     waiting for OGG serial boundary before resetting stream headers"
+                );
+            } else {
+                self.reset_rate_limiter_for_track_transition();
             }
         }
 
