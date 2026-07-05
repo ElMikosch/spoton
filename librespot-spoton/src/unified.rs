@@ -178,7 +178,10 @@ impl UnifiedHttpStreamSink {
     }
 
     fn reset_rate_limiter_for_track_transition(&mut self) {
-        self.began_at = Instant::now();
+        // Pre-advance began_at so the pacing formula doesn't re-apply the
+        // buffer lead as a 2s pause — LMS is already connected and consuming.
+        self.began_at = Instant::now()
+            - Duration::from_nanos(self.buffer_latency_ns as u64);
         self.frames_consumed = 0;
         self.granule_offset = -1;
     }
@@ -226,7 +229,12 @@ impl Sink for UnifiedHttpStreamSink {
                     "[spoton/unified] Connect TrackChanged observed in OGG passthrough; \
                      waiting for OGG serial boundary before resetting stream headers"
                 );
-            } else {
+            } else if self.frames_consumed > 0 {
+                // Gapless mid-stream transition: start() was NOT called, audio
+                // is flowing. Reset pacing without re-applying buffer lead.
+                // Guard: skip when frames_consumed == 0 (start() just ran and
+                // already established the buffer lead — the gen mismatch is a
+                // benign race between the async dispatcher and the sync sink).
                 self.reset_rate_limiter_for_track_transition();
             }
         }
