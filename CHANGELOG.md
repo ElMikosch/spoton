@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.11] - 2026-07-05
+### Fixed
+- **Windows: Browse/Library broken since v2.3.2**: `Proc::Background` stdout redirect silently fails on Windows services — the async token fetch (introduced in v2.3.2) never got the `ISWINDOWS` guard that `Daemon.pm` already had. Token JSON went nowhere, causing `--get-token` to always fail. Now uses `SPOTON_TOKEN_FILE` env var on Windows, matching the proven `SPOTON_PORT_FILE` pattern. Forum #183 by @foxesden.
+
 ## [2.3.10] - 2026-07-05
 ### Fixed
 - **Connect track transition rate limiting**: reset the Connect stream rate limiter on track changes without re-applying the 2s buffer latency as a pause. Prevents audio gaps on gapless transitions. PR #106 by @urknall, with additional fixes for buffer_latency_ns permanence and start()/dispatcher race guard.
