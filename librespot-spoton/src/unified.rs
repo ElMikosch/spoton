@@ -622,6 +622,31 @@ async fn unified_http_server(
                             // Reset browse_preempting flag for this new relay session.
                             browse_preempting.store(false, Ordering::Release);
 
+                            // Wait for OGG headers before draining — on track
+                            // transitions LMS reconnects before the sink has
+                            // buffered the new track's header pages.
+                            if passthrough {
+                                if let Some(ref buf) = ogg_header_buf {
+                                    let deadline = tokio::time::Instant::now()
+                                        + Duration::from_secs(3);
+                                    loop {
+                                        let n = buf.lock()
+                                            .unwrap_or_else(|e| e.into_inner())
+                                            .len();
+                                        if n >= 3 { break; }
+                                        if tokio::time::Instant::now() >= deadline {
+                                            log::warn!(
+                                                "[spoton/unified] /stream: OGG headers \
+                                                 incomplete ({}/3) after 3s timeout",
+                                                n
+                                            );
+                                            break;
+                                        }
+                                        tokio::time::sleep(Duration::from_millis(20)).await;
+                                    }
+                                }
+                            }
+
                             // Drain stale pre-seek audio from the channel.
                             {
                                 let mut rx = pcm_rx.lock().unwrap_or_else(|e| e.into_inner());
