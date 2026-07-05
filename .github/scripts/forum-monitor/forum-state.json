@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-05T12:05:40.545Z",
+  "lastChecked": "2026-07-05T14:10:35.061Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -181,9 +181,13 @@
         "1827808",
         "1827809",
         "1827828",
-        "1827830"
+        "1827830",
+        "1827833",
+        "1827840",
+        "1827842",
+        "1827844"
       ],
-      "lastPostCount": 179
+      "lastPostCount": 183
     }
   },
   "pendingTriage": [
@@ -326,6 +330,26 @@
       "contentPreview": "The (inexplicable) +20dB \"Default Adjustment for Remote Streams\" setting on your main listening room player for sure explains the very loud and distorted sound during SpotOn playback. Radio streams must have had the same problem on this player.",
       "draft": "[QUOTE=CJS;179]The (inexplicable) +20dB \"Default Adjustment for Remote Streams\" setting on your main listening room player for sure explains the very loud and distorted sound during SpotOn playback. Radio streams must have had the same problem on this player.[/QUOTE]\n\nGood catch, CJS — a +20dB remote stream adjustment would definitely cause that kind of clipping/distortion regardless of which plugin is doing the streaming, so it's reassuring that there's a clear explanation there.\n\n[B]plasticator2[/B] — glad you got to the bottom of it! Just to summarise what was found in case it helps anyone else searching later:\n\n[LIST]\n[*]The [B]+20dB \"Default Adjustment for Remote Streams\"[/B] on the main listening room player was the primary culprit for loud/distorted output during SpotOn playback\n[*]The [B]-5dB adjustment[/B] on the kitchen player was also a factor\n[*]These player-level gain settings apply to all remote streams (SpotOn, radio, etc.), so they're easy to overlook when chasing a plugin-specific issue\n[/LIST]\n\nThat setting lives in [B]LMS → Player Settings → Audio → Default Volume Adjustment for Remote Streams[/B] if anyone needs to find it in future.\n\nWorth double-checking that both rooms now sound balanced at comparable volume levels. If you're still noticing any inconsistency specifically with SpotOn vs other sources after correcting those settings, feel free to report back and we can dig further — the diagnostics bundle ([B]SpotOn Settings → Diagnostics[/B]) would be the first port of call.\n\nThanks for following up with the resolution — always helpful to close the loop! 🎵",
       "scrapedAt": "2026-07-05T11:50:31.907Z"
+    },
+    {
+      "postId": "1827833",
+      "postNumber": 180,
+      "author": "plasticator2",
+      "timestamp": "2026-07-05T05:10:52-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "CJS Strangely not. I had been playing Qobuz and Sounds streams with no clipping or distortion at all. Spotty was fine too...this was the first occurrence. Also, it was inconsistent so at times SpotOn played normally, and then very different indeed. But thankfully resolved",
+      "draft": "Glad to hear it's resolved, [B]plasticator2[/B]! \n\nThe inconsistency you described is interesting — if the [B]+20dB remote streams adjustment[/B] was the culprit, you'd normally expect it to affect all remote streams equally, including Qobuz and Sounds. The fact that those were fine suggests there may have been something else contributing alongside it (perhaps SpotOn's own volume handling interacting differently depending on track/session state).\n\nThat said, if the problem doesn't recur, no need to dig further. But if you do see it again, it would be worth grabbing a [B]diagnostic bundle[/B] at the moment it happens ([I]SpotOn Settings → Diagnostics[/I]) — that would help pin down whether SpotOn's normalization flag or gain staging is behaving unexpectedly, which is actually a known area of investigation (GitHub issue [URL=https://github.com/stiefenm/spoton/issues/105]#105[/URL]).\n\nThanks for following up with the outcome — it's genuinely useful for others who might hit similar symptoms!",
+      "scrapedAt": "2026-07-05T14:10:23.531Z"
+    },
+    {
+      "postId": "1827844",
+      "postNumber": 183,
+      "author": "foxesden",
+      "timestamp": "2026-07-05T06:48:02-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Hi - I have revised my SqueezeDSP plugin to work with SpotOn and added the settings for soc flc that sti kindly suggested. However now I have packaged up my release and pushed it out to my test server and upgraded spoton to v 2.3.9 on windows I have again lost access to my library.  \tCode: \t[26-07-0",
+      "draft": "Hi foxesden,\n\nThanks for the detailed logs — really helpful!\n\nWhat you're seeing is the known [B]Keymaster token failure[/B] issue (GitHub #91). The log pattern is very recognisable:\n\n[CODE]--get-token failed [...] (exit 0)\nall token sources exhausted for me/albums — own and bundled both failed[/CODE]\n\nBoth [B]own[/B] and [B]bundled[/B] client_id paths are failing, which points to Spotify having sunset the Mercury/Keymaster endpoint for your account cohort — this is an upstream Spotify change rather than anything you've done wrong with your SqueezeDSP packaging or the v2.3.9 upgrade.\n\nA couple of things worth checking:\n\n[B]1. Re-authenticate[/B] — Go to [B]SpotOn Settings → Accounts[/B] and remove then re-add your Spotify account. Sometimes a fresh OAuth flow picks up a working token path.\n\n[B]2. Diagnostics bundle[/B] — If re-auth doesn't help, grab a diagnostics bundle from [B]SpotOn Settings → Diagnostics[/B] and attach it to the existing GitHub issue so we can see the full keymaster exchange.\n\n[B]3. Confirm it's not the upgrade[/B] — Does rolling back to your previous SpotOn version restore library access? That would help narrow down whether v2.3.9 introduced a regression vs. this being purely the Spotify-side cohort issue.\n\nOn the SqueezeDSP side — glad to hear the soc flc settings worked out! That part shouldn't have any bearing on token retrieval, so the timing of the upgrade and the library loss is likely coincidental.\n\nPlease add your findings to the existing issue:\n[URL]https://github.com/stiefenm/spoton/issues/91[/URL]\n\nThe more accounts we can confirm are affected and in what pattern, the better chance of finding a fix or workaround.",
+      "scrapedAt": "2026-07-05T14:10:35.061Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
