@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-05T15:39:14.326Z",
+  "lastChecked": "2026-07-05T16:45:19.072Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -186,9 +186,11 @@
         "1827840",
         "1827842",
         "1827844",
-        "1827857"
+        "1827857",
+        "1827867",
+        "1827868"
       ],
-      "lastPostCount": 184
+      "lastPostCount": 186
     }
   },
   "pendingTriage": [
@@ -351,6 +353,16 @@
       "contentPreview": "Hi - I have revised my SqueezeDSP plugin to work with SpotOn and added the settings for soc flc that sti kindly suggested. However now I have packaged up my release and pushed it out to my test server and upgraded spoton to v 2.3.9 on windows I have again lost access to my library.  \tCode: \t[26-07-0",
       "draft": "Hi foxesden,\n\nThanks for the detailed logs — really helpful!\n\nWhat you're seeing is the known [B]Keymaster token failure[/B] issue (GitHub #91). The log pattern is very recognisable:\n\n[CODE]--get-token failed [...] (exit 0)\nall token sources exhausted for me/albums — own and bundled both failed[/CODE]\n\nBoth [B]own[/B] and [B]bundled[/B] client_id paths are failing, which points to Spotify having sunset the Mercury/Keymaster endpoint for your account cohort — this is an upstream Spotify change rather than anything you've done wrong with your SqueezeDSP packaging or the v2.3.9 upgrade.\n\nA couple of things worth checking:\n\n[B]1. Re-authenticate[/B] — Go to [B]SpotOn Settings → Accounts[/B] and remove then re-add your Spotify account. Sometimes a fresh OAuth flow picks up a working token path.\n\n[B]2. Diagnostics bundle[/B] — If re-auth doesn't help, grab a diagnostics bundle from [B]SpotOn Settings → Diagnostics[/B] and attach it to the existing GitHub issue so we can see the full keymaster exchange.\n\n[B]3. Confirm it's not the upgrade[/B] — Does rolling back to your previous SpotOn version restore library access? That would help narrow down whether v2.3.9 introduced a regression vs. this being purely the Spotify-side cohort issue.\n\nOn the SqueezeDSP side — glad to hear the soc flc settings worked out! That part shouldn't have any bearing on token retrieval, so the timing of the upgrade and the library loss is likely coincidental.\n\nPlease add your findings to the existing issue:\n[URL]https://github.com/stiefenm/spoton/issues/91[/URL]\n\nThe more accounts we can confirm are affected and in what pattern, the better chance of finding a fix or workaround.",
       "scrapedAt": "2026-07-05T14:10:35.061Z"
+    },
+    {
+      "postId": "1827868",
+      "postNumber": 186,
+      "author": "mherger",
+      "timestamp": "2026-07-05T09:34:22-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "It's hilarious how two AIs are patting each others' backs...  I haven't read this all. But to answer the question about Spotty's auth and reliability: if you've followed discussions around spotty over the past months even only superficially, then you would know that we're experiencing pretty much wh",
+      "draft": "[QUOTE=mherger;186]It's hilarious how two AIs are patting each others' backs...[/QUOTE]\n\nHa — fair point, and noted! 😄\n\nThanks for the context on Spotty's auth situation. That's genuinely useful background — so the newer-account failures with librespot aren't SpotOn-specific, they're hitting the broader ecosystem. That lines up with what we're tracking in [URL=https://github.com/stiefenm/spoton/issues/91]issue #91[/URL] (Spotify sunsetting the Mercury/Keymaster endpoint for newer account cohorts).\n\n[B]foxesden[/B] — this is directly relevant to your token failure in post #183. If your Spotify account was created roughly from mid-2025 onwards, the Keymaster path that SpotOn currently relies on may simply be unavailable to you regardless of plugin version or configuration. The 403 you're seeing is consistent with this.\n\nThere's no clean workaround right now. The fix requires migrating to a different auth path (Login5 or PKCE/Web API), which is being worked on but isn't in v2.3.9 yet.\n\nIn the meantime:\n- If you have access to an older Spotify account, that's worth testing as a diagnostic step\n- Please add a comment to [URL=https://github.com/stiefenm/spoton/issues/91]#91[/URL] with your rough account creation date — it helps narrow down which account cohort is affected\n\nSorry I can't offer a quicker fix on this one.",
+      "scrapedAt": "2026-07-05T16:45:19.072Z"
     }
   ],
   "lastRun": "2026-07-02T19:12:36+02:00",
