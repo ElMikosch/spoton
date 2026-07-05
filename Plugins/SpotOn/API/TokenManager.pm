@@ -491,15 +491,24 @@ sub _fetchKeymasterToken {
     my $had_stderr_tie = defined tied(*STDERR);
     untie *STDERR if $had_stderr_tie;
 
+    # Windows service: Proc::Background stdout redirect fails (same as
+    # Daemon.pm Pitfall). Use SPOTON_TOKEN_FILE env var instead — the
+    # binary writes the token JSON directly to that file.
+    if (main::ISWINDOWS) {
+        $ENV{SPOTON_TOKEN_FILE} = $out_tmpfile;
+    }
+
     my $proc;
     eval {
         $proc = Proc::Background->new(
             { 'die_upon_destroy' => 1,
-              stdout => $out_tmpfile,
-              stderr => $out_tmpfile },
+              (main::ISWINDOWS ? () : (stdout => $out_tmpfile)),
+              (main::ISWINDOWS ? () : (stderr => $out_tmpfile)) },
             @args,
         );
     };
+
+    delete $ENV{SPOTON_TOKEN_FILE} if main::ISWINDOWS;
 
     tie *STDERR, 'Slim::Utils::Log::Trapper' if $had_stderr_tie;
 

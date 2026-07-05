@@ -533,6 +533,15 @@ async fn run_get_token(
     });
     println!("{}", json);
 
+    // SPOTON_TOKEN_FILE: Windows services have broken stdout piping in
+    // Proc::Background. When set, write the token JSON to a file directly.
+    if let Ok(token_file) = std::env::var("SPOTON_TOKEN_FILE") {
+        if let Ok(mut f) = std::fs::File::create(&token_file) {
+            use std::io::Write;
+            let _ = writeln!(f, "{}", json);
+        }
+    }
+
     Ok(())
 }
 
