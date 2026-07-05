@@ -178,9 +178,7 @@ impl UnifiedHttpStreamSink {
     }
 
     fn reset_rate_limiter_for_track_transition(&mut self) {
-        let latency_ns = self.buffer_latency_ns.min(u128::from(u64::MAX)) as u64;
-        let latency = Duration::from_nanos(latency_ns);
-        self.began_at = Instant::now().checked_sub(latency).unwrap_or_else(Instant::now);
+        self.began_at = Instant::now();
         self.frames_consumed = 0;
         self.granule_offset = -1;
     }
