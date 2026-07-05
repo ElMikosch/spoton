@@ -5,6 +5,7 @@ use warnings;
 
 use base qw(Slim::Formats::RemoteStream);
 
+use Scalar::Util qw(blessed);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(cstring);
@@ -16,6 +17,7 @@ use Time::HiRes;
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
+my $serverPrefs = preferences('server');
 # M5: cache version lives in Plugin.pm (single source of truth). Plugin.pm is
 # always compiled first in production (this module is runtime-require'd).
 my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
@@ -72,6 +74,19 @@ my %_browse404Retries;  # "$clientId|$trackUrl" => attempt_count
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
+
+sub trackGain {
+    my ($class, $client, $url) = @_;
+
+    return unless $client && blessed $client;
+
+    # librespot handles normalization — suppress LMS "Default Adjustment for
+    # Remote Streams" so the two do not stack (GH #108).
+    return if $prefs->get('normalization');
+
+    my $cprefs = $serverPrefs->client($client);
+    return $cprefs->get('replayGainMode') && $cprefs->get('remoteReplayGain');
+}
 
 # getFormatForURL($class, $url)
 # Returns content type for a given URL:
