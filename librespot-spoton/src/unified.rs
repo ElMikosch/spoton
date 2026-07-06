@@ -129,6 +129,7 @@ struct UnifiedHttpStreamSink {
     // from the main channel on each new connection.
     ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
     ogg_header_serial: Arc<AtomicU32>,
+    ogg_headers_complete: Arc<AtomicBool>,
     // True while we are still buffering header pages for the current track.
     // Only meaningful when `passthrough` is true; cleared on the first audio page.
     collecting_headers: bool,
@@ -161,6 +162,7 @@ impl UnifiedHttpStreamSink {
         buffer_latency_ms: u64,
         ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
         ogg_header_serial: Arc<AtomicU32>,
+        ogg_headers_complete: Arc<AtomicBool>,
         passthrough: bool,
     ) -> Box<dyn Sink> {
         if format != AudioFormat::S16 {
@@ -179,6 +181,7 @@ impl UnifiedHttpStreamSink {
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
             ogg_header_buf,
             ogg_header_serial,
+            ogg_headers_complete,
             collecting_headers: passthrough,
             passthrough,
             granule_offset: -1,
@@ -201,6 +204,7 @@ impl Sink for UnifiedHttpStreamSink {
         // Phase 43 (D-03): clear the header buffer on every track start so the
         // /stream handler always replays THIS track's headers, not a stale track's.
         if self.passthrough {
+            self.ogg_headers_complete.store(false, Ordering::Release);
             let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
             buf.clear();
             drop(buf);
@@ -330,6 +334,7 @@ impl Sink for UnifiedHttpStreamSink {
                         );
                         self.ogg_serial = serial;
                         self.ogg_header_serial.store(serial, Ordering::Release);
+                        self.ogg_headers_complete.store(false, Ordering::Release);
                         self.ogg_track_base_frames = last_timeline_frames
                             .unwrap_or(self.ogg_timeline_frames);
                         self.granule_offset = 0;
@@ -349,6 +354,7 @@ impl Sink for UnifiedHttpStreamSink {
                             buf.push(header_page);
                         } else {
                             self.collecting_headers = false;
+                            self.ogg_headers_complete.store(true, Ordering::Release);
                         }
                     }
 
@@ -453,6 +459,7 @@ async fn unified_http_server(
     // enable_connect is true, None in Browse-only mode.
     ogg_header_buf: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>,
     ogg_header_serial: Option<Arc<AtomicU32>>,
+    ogg_headers_complete: Option<Arc<AtomicBool>>,
     // Issue #97: bitrate for Browse Player creation
     bitrate: Bitrate,
     enable_normalisation: bool,
@@ -496,6 +503,7 @@ async fn unified_http_server(
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
                 let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
                 let ogg_header_serial = ogg_header_serial.as_ref().map(Arc::clone);
+                let ogg_headers_complete = ogg_headers_complete.as_ref().map(Arc::clone);
 
                 let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let session = Arc::clone(&session);
@@ -517,6 +525,7 @@ async fn unified_http_server(
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
                     let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
                     let ogg_header_serial = ogg_header_serial.as_ref().map(Arc::clone);
+                    let ogg_headers_complete = ogg_headers_complete.as_ref().map(Arc::clone);
 
                     async move {
                         let path = req.uri().path().to_owned();
@@ -618,19 +627,22 @@ async fn unified_http_server(
 
                             // Wait for OGG headers before draining — on track
                             // transitions LMS reconnects before the sink has
-                            // buffered the new track's header pages. Also verify
-                            // the headers belong to the current track's serial to
-                            // avoid replaying stale headers during rapid skips.
-                            let mut headers_valid = false;
+                            // buffered the new track's header pages. Wait for
+                            // the sink's completion signal rather than a fixed
+                            // page count (Vorbis Comment+Setup may share a page).
+                            let mut header_snapshot: Vec<Bytes> = Vec::new();
                             if passthrough {
                                 if let Some(ref buf) = ogg_header_buf {
                                     let deadline = tokio::time::Instant::now()
                                         + Duration::from_secs(3);
                                     loop {
+                                        let headers_done = ogg_headers_complete.as_ref()
+                                            .map(|b| b.load(Ordering::Acquire))
+                                            .unwrap_or(false);
                                         let expected_serial = ogg_header_serial.as_ref()
                                             .map(|s| s.load(Ordering::Acquire))
                                             .unwrap_or(0);
-                                        let (n, buf_serial) = {
+                                        let (n, buf_serial, snapshot) = {
                                             let guard = buf.lock()
                                                 .unwrap_or_else(|e| e.into_inner());
                                             let s = guard.first()
@@ -639,22 +651,24 @@ async fn unified_http_server(
                                                     p[14..18].try_into().unwrap_or([0; 4])
                                                 ))
                                                 .unwrap_or(0);
-                                            (guard.len(), s)
+                                            (guard.len(), s, guard.clone())
                                         };
                                         let serial_ok = expected_serial == 0
                                             || buf_serial == expected_serial;
-                                        if n >= 3 && serial_ok {
-                                            headers_valid = true;
+                                        if headers_done && n >= 2 && serial_ok {
+                                            header_snapshot = snapshot;
                                             break;
                                         }
                                         if tokio::time::Instant::now() >= deadline {
+                                            if n >= 2 && serial_ok {
+                                                header_snapshot = snapshot;
+                                            }
                                             log::warn!(
-                                                "[spoton/unified] /stream: OGG headers \
-                                                 incomplete ({}/3, serial match={}) \
-                                                 after 3s timeout",
-                                                n, serial_ok
+                                                "[spoton/unified] /stream: OGG header wait \
+                                                 timeout (pages={}, done={}, serial match={}){}",
+                                                n, headers_done, serial_ok,
+                                                if header_snapshot.is_empty() { " — skipping replay" } else { "" }
                                             );
-                                            headers_valid = n >= 3 && serial_ok;
                                             break;
                                         }
                                         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -673,34 +687,26 @@ async fn unified_http_server(
                             // Per-connection relay channel (64 frames capacity).
                             let (conn_tx, conn_rx) = mpsc::channel::<Bytes>(64);
 
-                            // Phase 43 (D-03): replay buffered OGG headers (BOS + Vorbis
-                            // headers) before the relay begins. The drain above removed them
-                            // from the main channel; the decoder needs them to parse the stream.
-                            // Skip replay when the headers failed serial validation — stale
-                            // headers would corrupt the decoder setup for the new track.
-                            if passthrough && headers_valid {
-                                if let Some(ref buf) = ogg_header_buf {
-                                    let headers = {
-                                        let guard = buf.lock().unwrap_or_else(|e| e.into_inner());
-                                        guard.clone()
-                                    };
-                                    let mut replayed = 0u64;
-                                    'replay: for header_chunk in headers {
-                                        loop {
-                                            match conn_tx.try_send(header_chunk.clone()) {
-                                                Ok(()) => { replayed += 1; break; }
-                                                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                                                    tokio::time::sleep(Duration::from_millis(1)).await;
-                                                }
-                                                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                                                    log::warn!("[spoton/unified] /stream: conn_tx closed during header replay");
-                                                    break 'replay;
-                                                }
+                            // Replay snapshotted OGG headers (BOS + Vorbis setup)
+                            // before the relay begins. The drain above removed them
+                            // from the main channel; the decoder needs them.
+                            if passthrough && !header_snapshot.is_empty() {
+                                let mut replayed = 0u64;
+                                'replay: for header_chunk in &header_snapshot {
+                                    loop {
+                                        match conn_tx.try_send(header_chunk.clone()) {
+                                            Ok(()) => { replayed += 1; break; }
+                                            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                                                tokio::time::sleep(Duration::from_millis(1)).await;
+                                            }
+                                            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                                log::warn!("[spoton/unified] /stream: conn_tx closed during header replay");
+                                                break 'replay;
                                             }
                                         }
                                     }
-                                    log::debug!("[spoton/unified] /stream: replayed {} OGG header chunks", replayed);
                                 }
+                                log::debug!("[spoton/unified] /stream: replayed {} OGG header pages", replayed);
                             }
 
                             let pcm_rx_clone = Arc::clone(&pcm_rx);
@@ -1339,6 +1345,7 @@ pub async fn run_unified(
     // enable_connect is false).
     let ogg_header_buf_arc: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>;
     let ogg_header_serial_arc: Option<Arc<AtomicU32>>;
+    let ogg_headers_complete_arc: Option<Arc<AtomicBool>>;
 
     // Reconnect infrastructure.
     let mixer_fn_opt: Option<librespot_playback::mixer::MixerFn>;
@@ -1362,8 +1369,10 @@ pub async fn run_unified(
         let ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>> =
             Arc::new(std::sync::Mutex::new(Vec::new()));
         let ogg_header_serial: Arc<AtomicU32> = Arc::new(AtomicU32::new(0));
+        let ogg_headers_complete: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
         ogg_header_buf_arc = Some(Arc::clone(&ogg_header_buf));
         ogg_header_serial_arc = Some(Arc::clone(&ogg_header_serial));
+        ogg_headers_complete_arc = Some(Arc::clone(&ogg_headers_complete));
 
         // SoftMixer — required for Spirc volume control.
         let mixer_fn = librespot_playback::mixer::find(Some(SoftMixer::NAME))
@@ -1378,6 +1387,7 @@ pub async fn run_unified(
         let buffer_latency_ms_copy = buffer_latency_ms;
         let ogg_buf_for_sink = Arc::clone(&ogg_header_buf);
         let ogg_serial_for_sink = Arc::clone(&ogg_header_serial);
+        let ogg_complete_for_sink = Arc::clone(&ogg_headers_complete);
         let session_for_player = {
             let s = session_shared.lock().await;
             s.clone()
@@ -1396,6 +1406,7 @@ pub async fn run_unified(
                     buffer_latency_ms_copy,
                     ogg_buf_for_sink,
                     ogg_serial_for_sink,
+                    ogg_complete_for_sink,
                     passthrough,
                 )
             },
@@ -1593,6 +1604,7 @@ pub async fn run_unified(
             passthrough,
             ogg_header_buf_arc,
             ogg_header_serial_arc,
+            ogg_headers_complete_arc,
             bitrate_enum,
             enable_normalisation,
         ));
@@ -1886,6 +1898,7 @@ pub async fn run_unified(
         flush_rx_arc = None;
         ogg_header_buf_arc = None;
         ogg_header_serial_arc = None;
+        ogg_headers_complete_arc = None;
         mixer_fn_opt = None;
         lms_for_reconnect = None;
         connect_player_opt = None;
@@ -1912,6 +1925,7 @@ pub async fn run_unified(
             passthrough,
             None,  // ogg_header_buf
             None,  // ogg_header_serial
+            None,  // ogg_headers_complete
             bitrate_enum,
             enable_normalisation,
         ));
