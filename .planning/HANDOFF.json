@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-06T18:31:51.373Z",
+  "phase": "triage",
+  "phase_name": "Triage + v2.3.15 Release",
+  "phase_dir": ".planning",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Resume from previous HANDOFF.json", "status": "done"},
+    {"id": 2, "name": "GitHub Issues triage — all 7 open issues reviewed", "status": "done"},
+    {"id": 3, "name": "Code fix: ProtocolHandler::new() Browse path return undef when daemon not running", "status": "done", "commit": "1b1fd9f"},
+    {"id": 4, "name": "v2.3.15 released (CHANGELOG, version bump, tag, CI, repo.xml SHA)", "status": "done", "commit": "4648205"},
+    {"id": 5, "name": "GH #112 reply posted (jmhunter: crash-loop analysis + v2.3.15 fix + SqueezeDSP diagnosis questions)", "status": "done"},
+    {"id": 6, "name": "GH #60 bug label added", "status": "done"}
+  ],
+  "remaining_tasks": [
+    {"id": 7, "name": "v3.0 Phase 49-00 Token Usage Audit — plan phase", "status": "not_started"},
+    {"id": 8, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 9, "name": "Issue #112 — waiting for jmhunter response (SqueezeDSP isolation, custom-convert.conf)", "status": "waiting_user"},
+    {"id": 10, "name": "Issue #109 — waiting for foxesden to confirm Windows fix", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #103 — waiting-user (mDNS solved, Keymaster → #91)", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #60 — waiting for warminskimarcin (holiday, cache clearing)", "status": "waiting_user"},
+    {"id": 13, "name": "TROUBLESHOOTING.md / README.md review for v2.3.15", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "ProtocolHandler::new() Browse path must return undef when daemon not running", "rationale": "Matches existing Connect path behavior, prevents confusing DNS resolution error", "phase": "triage"},
+    {"decision": "#112 crash-loop likely Docker resource contention on simultaneous 5-daemon start", "rationale": "All daemons timeout on port announcement but succeed after cooldown reset — burst is the problem", "phase": "triage"},
+    {"decision": "SqueezeDSP without PR #19 templates may conflict with SpotOn transcoding", "rationale": "SqueezeDSP modifies custom-convert.conf, SpotOn templates not yet merged upstream", "phase": "triage"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Create v3.0-auth branch from main, then /gsd-plan-phase 49-00 (Token Usage Audit + Backend Evaluation)",
+  "context_notes": "Triage + hotfix session. v2.3.15 released with Browse daemon-not-running fix (GH #112 partial). Reply posted to jmhunter with analysis of 3 separate issues (crash-loop, DNS error fix, SqueezeDSP jump-to-end). All issues correctly labeled. v3.0 Auth Overhaul is next major work."
+}
