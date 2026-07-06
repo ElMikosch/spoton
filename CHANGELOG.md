@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.15] - 2026-07-06
+### Fixed
+- **Browse playback error when daemon not running**: `ProtocolHandler::new()` now returns `undef` when the unified daemon is not running for a Browse URL, matching the existing Connect URL behavior. Previously, the raw `spoton://track:...` URL fell through to LMS's generic HTTP handler, causing a confusing `Couldn't resolve IP address for: track` DNS error instead of a clean stream-open failure. Reported by @jmhunter in GH #112.
+
 ## [2.3.14] - 2026-07-06
 ### Fixed
 - **Connect OGG no audio on first track**: the `/stream` handler hardcoded a 3-page OGG header count, but Vorbis Comment and Setup headers can share a single page (2 pages total). When only 2 arrived, the 3-second timeout fired, headers were skipped, and squeezelite received an undecodable stream — progress bar looping at 0–1s with no audio. Replaced the fixed count with an `AtomicBool` completion signal from the sink, snapshotted headers inside the wait loop to eliminate a TOCTOU race, and added a `>= 2` fallback at timeout for the audio-key throttle scenario. Reported by @urknall on Raspberry Pi.
