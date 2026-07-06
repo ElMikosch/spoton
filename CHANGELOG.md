@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.14] - 2026-07-06
+### Fixed
+- **Connect OGG no audio on first track**: the `/stream` handler hardcoded a 3-page OGG header count, but Vorbis Comment and Setup headers can share a single page (2 pages total). When only 2 arrived, the 3-second timeout fired, headers were skipped, and squeezelite received an undecodable stream — progress bar looping at 0–1s with no audio. Replaced the fixed count with an `AtomicBool` completion signal from the sink, snapshotted headers inside the wait loop to eliminate a TOCTOU race, and added a `>= 2` fallback at timeout for the audio-key throttle scenario. Reported by @urknall on Raspberry Pi.
+
 ## [2.3.13] - 2026-07-06
 ### Fixed
 - **Connect OGG stale header replay on rapid skip**: the `/stream` handler now verifies that buffered OGG headers match the current track's serial before replaying them. Previously, a rapid skip could cause LMS to receive headers from the previous track before the sink had processed the new serial, corrupting the Vorbis decoder setup. Shared `ogg_header_serial` atomic between sink and handler, with serial validation in the header-wait loop and replay skip on mismatch. Reported by @urknall via Telegram.
