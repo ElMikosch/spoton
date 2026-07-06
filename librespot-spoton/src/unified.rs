@@ -201,10 +201,10 @@ impl Sink for UnifiedHttpStreamSink {
         // Phase 43 (D-03): clear the header buffer on every track start so the
         // /stream handler always replays THIS track's headers, not a stale track's.
         if self.passthrough {
-            self.ogg_header_serial.store(0, Ordering::Release);
             let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
             buf.clear();
             drop(buf);
+            self.ogg_header_serial.store(0, Ordering::Release);
             self.collecting_headers = true;
         }
         Ok(())
@@ -621,14 +621,15 @@ async fn unified_http_server(
                             // buffered the new track's header pages. Also verify
                             // the headers belong to the current track's serial to
                             // avoid replaying stale headers during rapid skips.
+                            let mut headers_valid = false;
                             if passthrough {
                                 if let Some(ref buf) = ogg_header_buf {
                                     let deadline = tokio::time::Instant::now()
                                         + Duration::from_secs(3);
-                                    let expected_serial = ogg_header_serial.as_ref()
-                                        .map(|s| s.load(Ordering::Acquire))
-                                        .unwrap_or(0);
                                     loop {
+                                        let expected_serial = ogg_header_serial.as_ref()
+                                            .map(|s| s.load(Ordering::Acquire))
+                                            .unwrap_or(0);
                                         let (n, buf_serial) = {
                                             let guard = buf.lock()
                                                 .unwrap_or_else(|e| e.into_inner());
@@ -642,7 +643,10 @@ async fn unified_http_server(
                                         };
                                         let serial_ok = expected_serial == 0
                                             || buf_serial == expected_serial;
-                                        if n >= 3 && serial_ok { break; }
+                                        if n >= 3 && serial_ok {
+                                            headers_valid = true;
+                                            break;
+                                        }
                                         if tokio::time::Instant::now() >= deadline {
                                             log::warn!(
                                                 "[spoton/unified] /stream: OGG headers \
@@ -650,6 +654,7 @@ async fn unified_http_server(
                                                  after 3s timeout",
                                                 n, serial_ok
                                             );
+                                            headers_valid = n >= 3 && serial_ok;
                                             break;
                                         }
                                         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -671,7 +676,9 @@ async fn unified_http_server(
                             // Phase 43 (D-03): replay buffered OGG headers (BOS + Vorbis
                             // headers) before the relay begins. The drain above removed them
                             // from the main channel; the decoder needs them to parse the stream.
-                            if passthrough {
+                            // Skip replay when the headers failed serial validation — stale
+                            // headers would corrupt the decoder setup for the new track.
+                            if passthrough && headers_valid {
                                 if let Some(ref buf) = ogg_header_buf {
                                     let headers = {
                                         let guard = buf.lock().unwrap_or_else(|e| e.into_inner());
