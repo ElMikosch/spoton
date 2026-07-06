@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.13] - 2026-07-06
+### Fixed
+- **Connect OGG stale header replay on rapid skip**: the `/stream` handler now verifies that buffered OGG headers match the current track's serial before replaying them. Previously, a rapid skip could cause LMS to receive headers from the previous track before the sink had processed the new serial, corrupting the Vorbis decoder setup. Shared `ogg_header_serial` atomic between sink and handler, with serial validation in the header-wait loop and replay skip on mismatch. Reported by @urknall via Telegram.
+
 ## [2.3.12] - 2026-07-05
 ### Fixed
 - **ReplayGain double adjustment (GH #108)**: when SpotOn normalization is enabled, LMS no longer additionally applies its "Default Adjustment for Remote Streams." New `trackGain()` method in ProtocolHandler suppresses the LMS-side adjustment when librespot already handles gain. Reported by @CornelisJ.
