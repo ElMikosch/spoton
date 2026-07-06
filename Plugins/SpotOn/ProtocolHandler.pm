@@ -430,6 +430,11 @@ sub new {
                 }
                 $log->warn("[DIAG] unified_browse_sync_proxy: mac=" . $client->id . " http_url=$httpUrl") if $prefs->get('diagnosticMode');
                 $args = { %$args, url => $httpUrl };
+            } else {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "Browse URL but no active unified daemon for " . ($client ? $client->id : '?') . " — returning undef"
+                );
+                return undef;
             }
         }
     }
