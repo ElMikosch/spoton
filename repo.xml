@@ -21,7 +21,7 @@
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="PENDING-CI-BUILD"
+            sha="21331bdd199305e88bdf74da3e5585a526091f28"
             url="https://github.com/stiefenm/spoton/releases/download/v2.3.13/SpotOn-v2.3.13.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
