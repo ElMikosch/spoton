@@ -110,13 +110,16 @@
         "Oct 2025"
       ],
       "firstPost": 159,
-      "latestPost": 174,
+      "latestPost": 191,
       "participants": [
-        "Chezza",
+        "mccauls",
         "urknall",
-        "CJS"
+        "mherger",
+        "Chezza",
+        "CJS",
+        "tontze"
       ],
-      "note": "New Spotify account (Oct 2025) cannot play on Squeezebox Boom. Known librespot upstream issue with new accounts. Community (urknall + CJS) diagnosed correctly. No maintainer action needed. v3.0 PKCE will bypass ZeroConf bootstrap and may solve this class of issue."
+      "note": "New accounts (post ~2024 creation date) fail with audio key error. mherger confirms same for Spotty. mccauls: old free->premium works, new premium trial fails. PlayPlay cohort confirmed."
     },
     "windows-token-capture-broken": {
       "status": "fix-shipped",
@@ -133,7 +136,8 @@
       "participants": [
         "foxesden"
       ],
-      "note": "Proc::Background stdout redirect fails on Windows services. Token JSON lost, Browse/Library broken. Present since v2.3.2, fixed in v2.3.11 via SPOTON_TOKEN_FILE env var. Awaiting foxesden confirmation."
+      "note": "Proc::Background stdout redirect fails on Windows services. Token JSON lost, Browse/Library broken. Present since v2.3.2, fixed in v2.3.11 via SPOTON_TOKEN_FILE env var. Awaiting foxesden confirmation.",
+      "latestPost": 183
     },
     "loud-distorted-resolved": {
       "status": "resolved",
@@ -167,6 +171,37 @@
       ],
       "note": "trackGain() implemented in v2.3.12 \u2014 suppresses LMS Default Adjustment when SpotOn normalization active. GH #108.",
       "ghIssue": 108
+    },
+    "mherger-ai-auth-comment": {
+      "status": "community-self-help",
+      "keywords": [
+        "mherger",
+        "spotty",
+        "auth",
+        "AI"
+      ],
+      "firstPost": 186,
+      "latestPost": 186,
+      "participants": [
+        "mherger"
+      ],
+      "note": "mherger comments on AI usage and confirms PlayPlay/auth issues affect Spotty equally. No action needed."
+    },
+    "playplay-account-age-confirmation": {
+      "status": "community-self-help",
+      "keywords": [
+        "account age",
+        "creation date",
+        "premium trial",
+        "old account"
+      ],
+      "firstPost": 188,
+      "latestPost": 191,
+      "participants": [
+        "tontze",
+        "mccauls"
+      ],
+      "note": "mccauls confirms: new premium trial fails, old free->premium works. Account creation date is the criterion, not premium status."
     }
   },
   "active": {
