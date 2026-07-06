@@ -128,6 +128,7 @@ struct UnifiedHttpStreamSink {
     // Vorbis header pages can be replayed after the handler drains stale chunks
     // from the main channel on each new connection.
     ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
+    ogg_header_serial: Arc<AtomicU32>,
     // True while we are still buffering header pages for the current track.
     // Only meaningful when `passthrough` is true; cleared on the first audio page.
     collecting_headers: bool,
@@ -159,6 +160,7 @@ impl UnifiedHttpStreamSink {
         track_gen: Arc<AtomicU64>,
         buffer_latency_ms: u64,
         ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
+        ogg_header_serial: Arc<AtomicU32>,
         passthrough: bool,
     ) -> Box<dyn Sink> {
         if format != AudioFormat::S16 {
@@ -176,6 +178,7 @@ impl UnifiedHttpStreamSink {
             frames_consumed: 0,
             buffer_latency_ns: u128::from(buffer_latency_ms) * 1_000_000u128,
             ogg_header_buf,
+            ogg_header_serial,
             collecting_headers: passthrough,
             passthrough,
             granule_offset: -1,
@@ -198,6 +201,7 @@ impl Sink for UnifiedHttpStreamSink {
         // Phase 43 (D-03): clear the header buffer on every track start so the
         // /stream handler always replays THIS track's headers, not a stale track's.
         if self.passthrough {
+            self.ogg_header_serial.store(0, Ordering::Release);
             let mut buf = self.ogg_header_buf.lock().unwrap_or_else(|e| e.into_inner());
             buf.clear();
             drop(buf);
@@ -317,6 +321,7 @@ impl Sink for UnifiedHttpStreamSink {
                     // rate-limiter does not re-apply buffer latency as a gap.
                     if self.ogg_serial == 0 {
                         self.ogg_serial = serial;
+                        self.ogg_header_serial.store(serial, Ordering::Release);
                     } else if serial != self.ogg_serial {
                         log::info!(
                             "[spoton/unified] OGG serial change: {} -> {} — \
@@ -324,6 +329,7 @@ impl Sink for UnifiedHttpStreamSink {
                             self.ogg_serial, serial
                         );
                         self.ogg_serial = serial;
+                        self.ogg_header_serial.store(serial, Ordering::Release);
                         self.ogg_track_base_frames = last_timeline_frames
                             .unwrap_or(self.ogg_timeline_frames);
                         self.granule_offset = 0;
@@ -446,6 +452,7 @@ async fn unified_http_server(
     // Phase 43 (D-03): OGG header buffer for /stream replay after drain. Some when
     // enable_connect is true, None in Browse-only mode.
     ogg_header_buf: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>,
+    ogg_header_serial: Option<Arc<AtomicU32>>,
     // Issue #97: bitrate for Browse Player creation
     bitrate: Bitrate,
     enable_normalisation: bool,
@@ -488,6 +495,7 @@ async fn unified_http_server(
                 let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                 let flush_rx = flush_rx.as_ref().map(Arc::clone);
                 let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
+                let ogg_header_serial = ogg_header_serial.as_ref().map(Arc::clone);
 
                 let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let session = Arc::clone(&session);
@@ -508,6 +516,7 @@ async fn unified_http_server(
                     let pcm_rx = pcm_rx.as_ref().map(Arc::clone);
                     let flush_rx = flush_rx.as_ref().map(Arc::clone);
                     let ogg_header_buf = ogg_header_buf.as_ref().map(Arc::clone);
+                    let ogg_header_serial = ogg_header_serial.as_ref().map(Arc::clone);
 
                     async move {
                         let path = req.uri().path().to_owned();
@@ -609,21 +618,37 @@ async fn unified_http_server(
 
                             // Wait for OGG headers before draining — on track
                             // transitions LMS reconnects before the sink has
-                            // buffered the new track's header pages.
+                            // buffered the new track's header pages. Also verify
+                            // the headers belong to the current track's serial to
+                            // avoid replaying stale headers during rapid skips.
                             if passthrough {
                                 if let Some(ref buf) = ogg_header_buf {
                                     let deadline = tokio::time::Instant::now()
                                         + Duration::from_secs(3);
+                                    let expected_serial = ogg_header_serial.as_ref()
+                                        .map(|s| s.load(Ordering::Acquire))
+                                        .unwrap_or(0);
                                     loop {
-                                        let n = buf.lock()
-                                            .unwrap_or_else(|e| e.into_inner())
-                                            .len();
-                                        if n >= 3 { break; }
+                                        let (n, buf_serial) = {
+                                            let guard = buf.lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            let s = guard.first()
+                                                .filter(|p| p.len() >= 18)
+                                                .map(|p| u32::from_le_bytes(
+                                                    p[14..18].try_into().unwrap_or([0; 4])
+                                                ))
+                                                .unwrap_or(0);
+                                            (guard.len(), s)
+                                        };
+                                        let serial_ok = expected_serial == 0
+                                            || buf_serial == expected_serial;
+                                        if n >= 3 && serial_ok { break; }
                                         if tokio::time::Instant::now() >= deadline {
                                             log::warn!(
                                                 "[spoton/unified] /stream: OGG headers \
-                                                 incomplete ({}/3) after 3s timeout",
-                                                n
+                                                 incomplete ({}/3, serial match={}) \
+                                                 after 3s timeout",
+                                                n, serial_ok
                                             );
                                             break;
                                         }
@@ -1306,6 +1331,7 @@ pub async fn run_unified(
     // Phase 43 (D-03): OGG header buffer for /stream replay after drain (None when
     // enable_connect is false).
     let ogg_header_buf_arc: Option<Arc<std::sync::Mutex<Vec<Bytes>>>>;
+    let ogg_header_serial_arc: Option<Arc<AtomicU32>>;
 
     // Reconnect infrastructure.
     let mixer_fn_opt: Option<librespot_playback::mixer::MixerFn>;
@@ -1328,7 +1354,9 @@ pub async fn run_unified(
         // it after draining stale chunks on new connections).
         let ogg_header_buf: Arc<std::sync::Mutex<Vec<Bytes>>> =
             Arc::new(std::sync::Mutex::new(Vec::new()));
+        let ogg_header_serial: Arc<AtomicU32> = Arc::new(AtomicU32::new(0));
         ogg_header_buf_arc = Some(Arc::clone(&ogg_header_buf));
+        ogg_header_serial_arc = Some(Arc::clone(&ogg_header_serial));
 
         // SoftMixer — required for Spirc volume control.
         let mixer_fn = librespot_playback::mixer::find(Some(SoftMixer::NAME))
@@ -1342,6 +1370,7 @@ pub async fn run_unified(
         let track_gen_for_sink = Arc::clone(&connect_track_gen);
         let buffer_latency_ms_copy = buffer_latency_ms;
         let ogg_buf_for_sink = Arc::clone(&ogg_header_buf);
+        let ogg_serial_for_sink = Arc::clone(&ogg_header_serial);
         let session_for_player = {
             let s = session_shared.lock().await;
             s.clone()
@@ -1359,6 +1388,7 @@ pub async fn run_unified(
                     Arc::clone(&track_gen_for_sink),
                     buffer_latency_ms_copy,
                     ogg_buf_for_sink,
+                    ogg_serial_for_sink,
                     passthrough,
                 )
             },
@@ -1555,6 +1585,7 @@ pub async fn run_unified(
             Arc::clone(&last_activity),
             passthrough,
             ogg_header_buf_arc,
+            ogg_header_serial_arc,
             bitrate_enum,
             enable_normalisation,
         ));
@@ -1847,6 +1878,7 @@ pub async fn run_unified(
         pcm_rx_arc = None;
         flush_rx_arc = None;
         ogg_header_buf_arc = None;
+        ogg_header_serial_arc = None;
         mixer_fn_opt = None;
         lms_for_reconnect = None;
         connect_player_opt = None;
@@ -1872,6 +1904,7 @@ pub async fn run_unified(
             Arc::clone(&last_activity),
             passthrough,
             None,  // ogg_header_buf
+            None,  // ogg_header_serial
             bitrate_enum,
             enable_normalisation,
         ));
