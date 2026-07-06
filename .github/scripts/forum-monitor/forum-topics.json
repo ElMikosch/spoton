@@ -87,7 +87,7 @@
       "note": "Fixed in v2.1.3 \u2014 streamingSongIndex replaces non-existent shuffleIndex"
     },
     "docker-mdns-port-conflict": {
-      "status": "investigating",
+      "status": "workaround-applied",
       "keywords": [
         "docker",
         "truenas",
@@ -98,7 +98,9 @@
         "discovery failed"
       ],
       "ghIssue": 103,
-      "note": "tontze: TrueNAS Docker, port 5353 EADDRINUSE blocks mDNS discovery. Related to #60."
+      "latestPost": 194,
+      "participants": ["tontze"],
+      "note": "tontze: TrueNAS Docker, port 5353 EADDRINUSE blocks mDNS discovery. Workaround from TROUBLESHOOTING applied successfully. Now blocked by Keymaster 403 (new account cohort, tracked in #91)."
     },
     "new-account-no-stored-credentials": {
       "status": "community-self-help",
@@ -155,7 +157,7 @@
       "note": "plasticator2 confirmed v2.3.9 + normalization fix resolved distortion. Root cause was +20dB 'Default Adjustment for Remote Streams' on one player. CJS explained Spotty ignores that setting when ReplayGain enabled."
     },
     "ogg-normalization-passthrough": {
-      "status": "fix-shipped",
+      "status": "resolved",
       "keywords": [
         "replay gain",
         "normalization",
@@ -169,7 +171,7 @@
         "CJS",
         "sti"
       ],
-      "note": "trackGain() implemented in v2.3.12 \u2014 suppresses LMS Default Adjustment when SpotOn normalization active. GH #108.",
+      "note": "trackGain() implemented in v2.3.12 \u2014 suppresses LMS Default Adjustment when SpotOn normalization active. GH #108. CJS confirmed fix in post #193.",
       "ghIssue": 108
     },
     "mherger-ai-auth-comment": {
