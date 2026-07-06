@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-06T14:37:40.424Z",
+  "lastChecked": "2026-07-06T17:29:19.902Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -202,18 +202,7 @@
       "lastPostCount": 195
     }
   },
-  "pendingTriage": [
-    {
-      "postId": "1827931",
-      "postNumber": 195,
-      "author": "CJS",
-      "timestamp": "2026-07-06T03:53:55-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by tontze \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tbtw, version not updating inside settings: \t\t\t \t\t \t SpotOn uses different version numbers for the Plugin ",
-      "draft": "Thanks for clarifying that, CJS — that's a useful distinction to highlight!\n\n[QUOTE]SpotOn uses different version numbers for the Plugin itself and the Binary that comes with the plugin. Binary v2.0.10 is the latest binary version (per today).[/QUOTE]\n\nThat's correct. To summarise for anyone else who runs into this confusion:\n\n[B]Plugin version[/B] — this is what you see in the LMS Plugin Manager (e.g. v2.3.12). It controls the Perl/LMS integration layer and is updated via the normal LMS plugin update mechanism.\n\n[B]Binary version[/B] — this is the [CODE]spoton[/CODE] / librespot-based binary bundled with the plugin. It has its own version number (e.g. v2.0.10) and is shown on the [B]SpotOn Status page[/B], accessible directly from the SpotOn plugin settings.\n\nThe two version numbers advancing independently is intentional — a plugin update doesn't always require a new binary, and vice versa.\n\nIf you're unsure which versions you're running, the Status page is the quickest place to check both at once.\n\n---\n\n[B]@tontze[/B] — coming back to your issue in post #194: the log line showing librespot warnings after successful authentication suggests SpotOn is connecting but hitting a problem fetching content. Could you share the full log output from the Status/Diagnostics page? [B]SpotOn Settings → Diagnostics[/B] will give us the most useful information to go on. You can also open a dedicated bug report at [URL]https://github.com/stiefenm/spoton/issues[/URL] with those details attached — it'll be easier to track there.",
-      "scrapedAt": "2026-07-06T11:04:29.314Z"
-    }
-  ],
+  "pendingTriage": [],
   "lastRun": "2026-07-02T19:12:36+02:00",
   "knownPosts": [
     143,
