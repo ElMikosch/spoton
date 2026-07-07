@@ -18,3 +18,4 @@ REQUIREMENTS.md
 claude-spotty.sudoers
 test_keymaster_*.py
 test_pkce_token.py
+win-vm/
