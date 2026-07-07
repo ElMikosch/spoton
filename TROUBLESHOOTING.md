@@ -66,6 +66,39 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 
 **Background:** SpotOn uses three token sources from a single ZeroConf authentication: a **Keymaster token** for Connect, a **bundled Client ID** for API access out of the box, and an optional **custom Client ID** for users with Extended Quota. Only older/grandfathered Client IDs work with Keymaster — creating a new Developer App will not help.
 
+### Keymaster 403 after Docker issues or daemon crashes
+
+**Symptoms:** Log shows `error 403 for uri hm://keymaster/token/authenticated`, Browse/Search return "No results" or fail silently. Spotify Connect may still work.
+
+**Cause:** There are two different causes for this error:
+
+1. **Corrupted session** — network instability (Docker port conflicts, daemon crashes, mDNS failures) can corrupt the Mercury session that librespot uses internally. This is fixable by clearing the cache and re-authenticating.
+2. **Account cohort** — Spotify is gradually disabling Keymaster for newer accounts. This is permanent and tracked in [#91](https://github.com/stiefenm/spoton/issues/91). Browse/Search still work via the bundled fallback token.
+
+If the 403 started after Docker networking changes, daemon crash loops, or mDNS issues, it's likely case 1.
+
+**Solution for corrupted sessions:**
+
+```bash
+# 1. Stop LMS
+
+# 2. Clear SpotOn's credential and token cache:
+#    Linux (typical path — adjust for your setup):
+rm -rf /var/lib/squeezeboxserver/cache/spoton/*/
+rm -f /var/lib/squeezeboxserver/cache/spoton.db
+
+#    Docker (typical paths):
+rm -rf /config/cache/spoton/*/
+rm -f /config/cache/spoton.db
+
+# 3. Start LMS
+
+# 4. Re-authenticate via ZeroConf:
+#    Open the Spotify app → device list → tap your player name
+```
+
+If the 403 persists after a fresh authentication, it's case 2 (account cohort). In that case, Browse and Search work via the bundled fallback token, and Connect playback works normally. A permanent fix (PKCE OAuth) is planned for v3.0.
+
 ### Tracks skip or fail with "404" in logs (CDN errors)
 
 **Symptoms:** Tracks skip to the next song after a few seconds, or playback fails entirely. The LMS log shows `Browse daemon 404` or `attempts exhausted, skipping to next track`.
