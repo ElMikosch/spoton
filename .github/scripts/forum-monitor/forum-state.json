@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-07T19:26:45.910Z",
+  "lastChecked": "2026-07-07T21:11:03.008Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -198,17 +198,11 @@
         "1827893",
         "1827925",
         "1827931",
-        "1828024"
+        "1828024",
+        "1828129"
       ],
-      "lastPostCount": 196
+      "lastPostCount": 197
     }
   },
-  "pendingTriage": [],
-  "lastRun": "2026-07-02T19:12:36+02:00",
-  "knownPosts": [
-    143,
-    146,
-    147
-  ],
-  "knownPostCount": 156
+  "pendingTriage": []
 }
