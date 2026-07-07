@@ -226,6 +226,24 @@
         "mherger"
       ],
       "note": "Multi-post architecture discussion. urknall confirmed PKCE-first (#176-177), added 4-bucket Keymaster audit classification + 7 PKCE edge cases. sti adopted all (#184). mherger confirmed newer accounts hit Keymaster 403 (#186). Next: Phase 49-00 Token Usage Audit."
+    },
+    "ubuntu-browse-empty-pete7874": {
+      "status": "waiting-user",
+      "keywords": [
+        "browse",
+        "library",
+        "empty",
+        "ubuntu",
+        "squeezebox touch",
+        "nothing"
+      ],
+      "ghIssue": 116,
+      "firstPost": 196,
+      "latestPost": 196,
+      "participants": [
+        "Pete7874"
+      ],
+      "note": "Pete7874: Browse/Library empty on Ubuntu + Squeezebox Touch. Awaiting diagnostic report on GH #116."
     }
   }
 }
