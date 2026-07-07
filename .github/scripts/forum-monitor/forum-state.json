@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-07T21:11:03.008Z",
+  "lastChecked": "2026-07-07T22:32:18.060Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -199,10 +199,22 @@
         "1827925",
         "1827931",
         "1828024",
-        "1828129"
+        "1828129",
+        "1828131"
       ],
-      "lastPostCount": 197
+      "lastPostCount": 198
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1828131",
+      "postNumber": 198,
+      "author": "Pete7874",
+      "timestamp": "2026-07-07T14:54:56-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Thanks for the reply.  I uploaded the log to GitHub, however, it did not find any errors, as far as I could see.  My Spotify account is fairly old; however, I only upgraded to Premium yesterday, since Spotify offered me 3 months of Premium for free.",
+      "draft": "[QUOTE=Pete7874;198]My Spotify account is fairly old; however, I only upgraded to Premium yesterday, since Spotify offered me 3 months of Premium for free.[/QUOTE]\n\nThanks for the update, Pete — and that's actually a really useful clue!\n\nThere's a known issue ([URL=https://github.com/stiefenm/spoton/issues/91]GitHub #91[/URL]) where Spotify is gradually sunsetting an older authentication endpoint (Mercury), and some accounts — particularly older ones — are being migrated in waves. This can cause token retrieval to fail silently, which would explain an empty Browse/Library even though authentication appears to succeed.\n\nA freshly upgraded account on an older Spotify profile fits that pattern.\n\nA couple of things to check:\n\n[B]1. Re-authenticate from scratch[/B]\nGo to [B]Settings → Manage Plugins → SpotOn[/B], log out / remove your credentials, then re-authenticate. A fresh auth flow after upgrading to Premium sometimes resolves stale session issues.\n\n[B]2. Check the Diagnostics bundle[/B]\nIn the SpotOn settings page, open the [B]Diagnostics[/B] section and download the full diagnostic bundle. Look specifically for any [CODE]403[/CODE] responses in the output — that's the tell-tale sign of the Mercury endpoint issue.\n\n[B]3. Check your Spotify account status[/B]\nLog into [URL=https://www.spotify.com/account]spotify.com/account[/URL] and confirm Premium is fully active (not just a trial pending confirmation).\n\nCould you post the relevant section of the diagnostic output on the GitHub issue ([URL=https://github.com/stiefenm/spoton/issues/116]#116[/URL])? Even if no errors are obvious at first glance, a 403 buried in the auth flow can be easy to miss. That will help narrow this down significantly.",
+      "scrapedAt": "2026-07-07T22:32:18.060Z"
+    }
+  ]
 }
