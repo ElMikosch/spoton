@@ -614,6 +614,7 @@ sub shutdown {
     unless ($mode && $mode eq 'inactive-only') {
         Slim::Utils::Timers::killTimers($class, \&initHelpers);
         Slim::Utils::Timers::killTimers($class, \&_streamAlivePoll);
+        Slim::Utils::Timers::killTimers($class, \&_staggeredStart);
 
         # M10: unregister the event subscriptions added in init() — otherwise
         # they accumulate across plugin shutdown/re-init cycles.

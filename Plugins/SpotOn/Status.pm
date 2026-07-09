@@ -188,7 +188,7 @@ sub _errorHistory {
 }
 
 sub getErrorHistory {
-    return [ reverse @_errorHistory ];
+    return _errorHistory();
 }
 
 sub _systemInfo {

@@ -439,7 +439,7 @@ sub _diagnosticBundleHandler {
         }
     };
     if ($@) {
-        push @tokenStatus, '--- Token & API Status ---';
+        @tokenStatus = ('--- Token & API Status ---');
         push @tokenStatus, "  (could not collect: $@)";
     }
     $header .= join("\n", @tokenStatus) . "\n\n";
