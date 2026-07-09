@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.16] - 2026-07-09
+### Fixed
+- **Daemon crash-loop on multi-player systems (GH #113)**: daemon starts are now staggered with a 3-second delay between players, preventing simultaneous mDNS port contention. With 6 players, daemons start over ~15 seconds instead of all at once. Delay scales down automatically for 20+ players to fit within the watchdog window.
+- **Port-capture timeout too short**: increased the async port-announcement timeout from 5 seconds to 10 seconds, reducing false-positive timeout aborts on slower systems.
+- **Stagger timers survive plugin shutdown**: pending stagger timers are now properly cancelled during plugin shutdown, preventing orphaned daemon processes.
+
+### Changed
+- **Diagnostic report: Token & API Status section**: the downloadable diagnostic report now includes account display name, API request/429 counters, rate-limit status, and recent token error history — making Keymaster 403 issues immediately visible without requiring server.log analysis.
+- **Diagnostic report: removed dead browse-errors.log section**: the "Browse Errors" section referenced a log file that was never written. Removed from the diagnostic bundle, log size calculation, and clear-logs handler.
+
 ## [2.3.15] - 2026-07-06
 ### Fixed
 - **Browse playback error when daemon not running**: `ProtocolHandler::new()` now returns `undef` when the unified daemon is not running for a Browse URL, matching the existing Connect URL behavior. Previously, the raw `spoton://track:...` URL fell through to LMS's generic HTTP handler, causing a confusing `Couldn't resolve IP address for: track` DNS error instead of a clean stream-open failure. Reported by @jmhunter in GH #112.

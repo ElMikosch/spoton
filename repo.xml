@@ -17,7 +17,7 @@
     <plugins>
         <plugin
             name="SpotOn"
-            version="2.3.15"
+            version="2.3.16"
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
