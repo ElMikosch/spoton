@@ -24,10 +24,10 @@ use constant MAX_INTERVAL_BEFORE_DISABLE_DISCOVERY => 5 * 60;
 # Cooldown duration before re-enabling discovery after crash-loop (D-02: 30 minutes)
 use constant DISCOVERY_COOLDOWN_SECONDS => 1800;
 
-# M12: async port-announcement poll — 0.1s interval, 50 attempts (5s cap).
+# M12: async port-announcement poll — 0.1s interval, 100 attempts (10s cap).
 # Replaces the old synchronous usleep loop that blocked the LMS event loop.
 use constant PORT_POLL_INTERVAL     => 0.1;
-use constant PORT_POLL_MAX_ATTEMPTS => 50;
+use constant PORT_POLL_MAX_ATTEMPTS => 100;
 
 __PACKAGE__->mk_accessor( rw => qw(
 	id

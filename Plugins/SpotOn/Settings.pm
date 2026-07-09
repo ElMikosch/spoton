@@ -221,7 +221,7 @@ sub handler {
 
     my $logTotal = 0;
     my $spotonDir = catdir($serverPrefs->get('cachedir'), 'spoton');
-    for my $pattern ('*-connect.log', '*-unified.log', 'browse-errors.log') {
+    for my $pattern ('*-connect.log', '*-unified.log') {
         for my $f (bsd_glob(catfile($spotonDir, $pattern))) {
             $logTotal += -s $f || 0;
         }
@@ -405,6 +405,45 @@ sub _diagnosticBundleHandler {
         '',
     );
 
+    # --- Token & API Status ---
+    my @tokenStatus;
+    eval {
+        require Plugins::SpotOn::API::Client;
+        my $snapshot = Plugins::SpotOn::API::Client->statusSnapshot() || {};
+        push @tokenStatus, '--- Token & API Status ---';
+
+        my $accounts = $prefs->get('accounts') || {};
+        my $displayName = 'unknown';
+        if ($activeId && $accounts->{$activeId}) {
+            $displayName = $accounts->{$activeId}{displayName} || $accounts->{$activeId}{spotifyUserId} || 'unknown';
+        }
+        push @tokenStatus, "  Display name: $displayName";
+        push @tokenStatus, "  API requests: " . ($snapshot->{apiRequestCount} || 0);
+        push @tokenStatus, "  429 responses: " . ($snapshot->{api429Count} || 0);
+        push @tokenStatus, "  Rate limited (own): " . ($snapshot->{rateLimitedOwn} ? 'YES' : 'no');
+        push @tokenStatus, "  Rate limited (bundled): " . ($snapshot->{rateLimitedBundled} ? 'YES' : 'no');
+
+        if ($INC{'Plugins/SpotOn/Status.pm'}) {
+            my $errors = Plugins::SpotOn::Status->getErrorHistory() || [];
+            my @tokenErrors = grep { $_->{module} && $_->{module} eq 'Token' } @$errors;
+            if (@tokenErrors) {
+                push @tokenStatus, '';
+                push @tokenStatus, '  Recent token errors (' . scalar(@tokenErrors) . '):';
+                for my $err (@tokenErrors[0 .. ($#tokenErrors > 9 ? 9 : $#tokenErrors)]) {
+                    my $ts = POSIX::strftime('%Y-%m-%d %H:%M:%S', localtime($err->{ts}));
+                    push @tokenStatus, "    [$ts] $err->{message}";
+                }
+            } else {
+                push @tokenStatus, '  Recent token errors: (none)';
+            }
+        }
+    };
+    if ($@) {
+        push @tokenStatus, '--- Token & API Status ---';
+        push @tokenStatus, "  (could not collect: $@)";
+    }
+    $header .= join("\n", @tokenStatus) . "\n\n";
+
     # Append each log file (cap at 500KB per file)
     my $maxBytes = 500 * 1024;
     my $logs = '';
@@ -418,15 +457,6 @@ sub _diagnosticBundleHandler {
     if (!@logFiles) {
         $logs = "--- No daemon log files found ---\n";
     }
-
-    $logs .= "--- Browse Errors ---\n";
-    my $browseErrLog = catfile($spotonDir, 'browse-errors.log');
-    if (-f $browseErrLog && -s $browseErrLog) {
-        $logs .= _readLogTail($browseErrLog, $maxBytes);
-    } else {
-        $logs .= "(no browse error log found)\n";
-    }
-    $logs .= "\n";
 
     # Extract SpotOn-related lines from LMS server.log
     my $logdir = $serverPrefs->get('logdir');
@@ -482,16 +512,6 @@ sub _clearLogsHandler {
             $deleted++;
         } else {
             $log->warn("clearLogs: failed to delete $logFile: $!");
-        }
-    }
-
-    # Also delete browse-errors.log if present
-    my $browseErrLog = catfile($spotonDir, 'browse-errors.log');
-    if (-f $browseErrLog) {
-        if (unlink $browseErrLog) {
-            $deleted++;
-        } else {
-            $log->warn("clearLogs: failed to delete browse-errors.log: $!");
         }
     }
 

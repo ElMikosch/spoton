@@ -29,6 +29,10 @@ use constant STREAM_WATCHDOG_INTERVAL => 5;
 # Gives players time to reconnect after LMS restart before their logs are deleted.
 use constant ORPHAN_LOG_CLEANUP_DELAY => 30;
 
+# Stagger delay between daemon starts to prevent simultaneous mDNS port contention.
+# With 6 players at 3s each, all daemons start within ~15s instead of simultaneously.
+use constant STAGGER_DELAY => 3;
+
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
@@ -219,6 +223,10 @@ sub initHelpers {
     # %handled: MAC => 'started' | 'seen'
     # 'started' = daemon started for this MAC; 'seen' = processed, no daemon needed
     my %handled;
+    my @pendingStarts;
+
+    # Cancel any pending staggered starts from a previous initHelpers cycle
+    Slim::Utils::Timers::killTimers($class, \&_staggeredStart);
 
     for my $client (@clients) {
         next if $handled{$client->id};
@@ -242,19 +250,37 @@ sub initHelpers {
                     main::DEBUGLOG && $log->is_debug && $log->debug(
                         "Evaluating Unified daemon for sync group master: $syncMasterId"
                     );
-                    $class->startHelper($delegateClient);
+                    push @pendingStarts, $delegateClient;
                     $handled{$syncMasterId} = 'started';
                 }
             }
         }
         else {
-            # Standalone player or sync master — start directly (credential-gated in startHelper)
+            # Standalone player or sync master — collect for staggered start
             main::DEBUGLOG && $log->is_debug && $log->debug(
                 "Evaluating Unified daemon for player: " . $client->id
             );
-            $class->startHelper($client);
+            push @pendingStarts, $client;
             $handled{$client->id} = 'started';
         }
+    }
+
+    # Stagger daemon starts: first immediately, rest with STAGGER_DELAY intervals.
+    # Prevents simultaneous mDNS port contention on multi-player systems (#113).
+    # Already-running daemons are no-ops inside startHelper().
+    my $staggerIdx = 0;
+    for my $pendingClient (@pendingStarts) {
+        if ($staggerIdx == 0) {
+            $class->startHelper($pendingClient);
+        } else {
+            Slim::Utils::Timers::setTimer(
+                $class,
+                Time::HiRes::time() + ($staggerIdx * STAGGER_DELAY),
+                \&_staggeredStart,
+                $pendingClient,
+            );
+        }
+        $staggerIdx++;
     }
 
     # Ensure DSTM provider is set for players that never opened SpotOn settings.
@@ -343,6 +369,11 @@ sub _cleanupOrphanedLogs {
             }
         }
     }
+}
+
+sub _staggeredStart {
+    my ($class, $client) = @_;
+    $class->startHelper($client);
 }
 
 sub startHelper {

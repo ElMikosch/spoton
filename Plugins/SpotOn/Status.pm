@@ -187,6 +187,10 @@ sub _errorHistory {
     return [ reverse @_errorHistory ];
 }
 
+sub getErrorHistory {
+    return [ reverse @_errorHistory ];
+}
+
 sub _systemInfo {
     return $_systemInfo if $_systemInfo;
 
