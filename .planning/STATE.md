@@ -127,11 +127,11 @@ Items carried forward from previous milestones:
 ## Session Continuity
 
 **Last session:** 2026-07-09
-**Stopped at:** v2.3.16 released + deployed, e2m2 reply posted on #116
+**Stopped at:** v2.3.16 released + deployed, triage complete, #113 commented
 **Next action (in order):**
-1. Comment on GH #113 (staggered start shipped in v2.3.16)
-2. Create v3.0-auth branch from main, then `/gsd-plan-phase 49-00` (Token Usage Audit)
+1. Create v3.0-auth branch from main
+2. `/gsd-plan-phase 49-00` (Token Usage Audit)
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-09 — v2.3.16 released (diagnostics + stagger), e2m2 #116 replied, Pi deployed*
+*Last updated: 2026-07-09 — v2.3.16 released, triage complete, #113 + #116 commented*

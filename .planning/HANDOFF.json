@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-09T09:20:00.000Z",
+  "timestamp": "2026-07-09T09:30:00.000Z",
   "phase": "triage+quick+release",
   "phase_name": "Issue Triage + Quick Task + Release v2.3.16",
   "phase_dir": ".planning",
@@ -9,35 +9,33 @@
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "GH #116 e2m2 reply — analyzed server log, confirmed Keymaster 403, posted reply", "status": "done"},
-    {"id": 2, "name": "Quick task 260709-bsx: browse-errors.log dead code removed", "status": "done"},
-    {"id": 3, "name": "Quick task 260709-bsx: Token & API Status in diagnostic report", "status": "done"},
-    {"id": 4, "name": "Quick task 260709-bsx: PORT_POLL_MAX_ATTEMPTS 50→100 (10s timeout)", "status": "done"},
-    {"id": 5, "name": "Quick task 260709-bsx: Staggered daemon start (3s delay, auto-scale 20+ players)", "status": "done"},
-    {"id": 6, "name": "Code review: 3 findings fixed (CR-01 shutdown timer, WR-01 header, WR-02 delegate)", "status": "done"},
-    {"id": 7, "name": "WR-03 fix: dynamic stagger delay scaling for large player counts", "status": "done"},
-    {"id": 8, "name": "Release v2.3.16: tagged, CI green, repo.xml SHA updated, Pi deployed", "status": "done"}
+    {"id": 1, "name": "GH #116 e2m2 reply — Keymaster 403 confirmed, reply posted", "status": "done"},
+    {"id": 2, "name": "Quick task 260709-bsx: diagnostics + daemon stability (4 changes + 4 review fixes)", "status": "done"},
+    {"id": 3, "name": "Release v2.3.16: tagged, CI green, repo.xml SHA updated", "status": "done"},
+    {"id": 4, "name": "Pi deployed v2.3.16 (double-restart workaround for PluginDownloader)", "status": "done"},
+    {"id": 5, "name": "GH #113 commented: staggered start shipped in v2.3.16", "status": "done"},
+    {"id": 6, "name": "Final triage sweep: all 11 open issues reviewed, no new user responses", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 9, "name": "GH #113 comment: staggered start shipped in v2.3.16", "status": "not_started"},
-    {"id": 10, "name": "Issue #116 — waiting for e2m2 (Connect re-test after stable daemons)", "status": "waiting_user"},
-    {"id": 11, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
-    {"id": 12, "name": "Issue #109 — waiting for foxesden (Windows fix confirmation)", "status": "waiting_user"},
-    {"id": 13, "name": "Issue #103 — waiting for Tontze (cache-clear test)", "status": "waiting_user"},
-    {"id": 14, "name": "Issue #91 — waiting for woorszt (Premium account test)", "status": "waiting_user"},
-    {"id": 15, "name": "Issue #60 — waiting for warminskimarcin", "status": "waiting_user"},
-    {"id": 16, "name": "Librespot upstream — watch for new release (PR #1722 merged)", "status": "not_started"},
-    {"id": 17, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 18, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
+    {"id": 7, "name": "Issue #116 — waiting for e2m2 (Connect re-test)", "status": "waiting_user"},
+    {"id": 8, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
+    {"id": 9, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
+    {"id": 10, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
+    {"id": 13, "name": "Issue #60 — waiting for warminskimarcin (Urlaub)", "status": "waiting_user"},
+    {"id": 14, "name": "Librespot upstream — watch for new release", "status": "not_started"},
+    {"id": 15, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 16, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "e2m2 #116 confirmed as Keymaster 403 — same root cause as #91", "rationale": "Server log shows --get-token JSON parse error for both own and bundled flavors. Recently activated Premium = new Spotify infra without Keymaster.", "phase": "triage"},
-    {"decision": "Pi update loop: LMS PluginDownloader extract runs at boot, download runs after", "rationale": "If zip deleted and restarted, need TWO restarts: first to re-download, second to extract+install", "phase": "release"}
+    {"decision": "e2m2 #116 = Keymaster 403, same as #91", "rationale": "Recently activated Premium lands on new Spotify infra without Keymaster support", "phase": "triage"},
+    {"decision": "#113 stays open until multi-player user confirms", "rationale": "Code fix shipped but no field confirmation yet", "phase": "triage"}
   ],
   "uncommitted_files": [],
-  "next_action": "Comment on GH #113 (staggered start shipped), then v3.0-auth branch + Phase 49-00 planning",
-  "context_notes": "v2.3.16 released with diagnostics + stagger improvements. e2m2 reply posted on #116. Pi successfully updated after double-restart workaround for PluginDownloader boot-order issue."
+  "next_action": "Create v3.0-auth branch from main, then /gsd-plan-phase 49-00 (Token Usage Audit)",
+  "context_notes": "v2.3.16 released and deployed. All triage complete, all issues reviewed. Next milestone work: v3.0 Auth Overhaul starting with Phase 49-00."
 }
