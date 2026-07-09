@@ -1,41 +1,44 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-09T09:30:00.000Z",
-  "phase": "triage+quick+release",
-  "phase_name": "Issue Triage + Quick Task + Release v2.3.16",
+  "timestamp": "2026-07-09T16:21:25.271Z",
+  "phase": "triage+release",
+  "phase_name": "Issue Triage + Release v2.3.17",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "GH #116 e2m2 reply — Keymaster 403 confirmed, reply posted", "status": "done"},
-    {"id": 2, "name": "Quick task 260709-bsx: diagnostics + daemon stability (4 changes + 4 review fixes)", "status": "done"},
-    {"id": 3, "name": "Release v2.3.16: tagged, CI green, repo.xml SHA updated", "status": "done"},
-    {"id": 4, "name": "Pi deployed v2.3.16 (double-restart workaround for PluginDownloader)", "status": "done"},
-    {"id": 5, "name": "GH #113 commented: staggered start shipped in v2.3.16", "status": "done"},
-    {"id": 6, "name": "Final triage sweep: all 11 open issues reviewed, no new user responses", "status": "done"}
+    {"id": 1, "name": "Fix #99: Keymaster 403 diagnostics in parse-failure path", "status": "done", "commit": "e5d3b88"},
+    {"id": 2, "name": "Unit test for #99 parse-failure-with-Keymaster path", "status": "done", "commit": "e5d3b88"},
+    {"id": 3, "name": "Reply to #116 e2m2 — OGG passthrough hypothesis + streaming format check", "status": "done"},
+    {"id": 4, "name": "Reopen #99, reply to woorszt with fix description", "status": "done"},
+    {"id": 5, "name": "Release v2.3.17: tagged, CI green, repo.xml SHA updated", "status": "done", "commit": "8a1d2fd"},
+    {"id": 6, "name": "Memory: feedback_reply_tone_hedging.md — don't be overconfident in replies", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 7, "name": "Issue #116 — waiting for e2m2 (Connect re-test)", "status": "waiting_user"},
-    {"id": 8, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
-    {"id": 9, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
-    {"id": 10, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
-    {"id": 11, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
-    {"id": 12, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
-    {"id": 13, "name": "Issue #60 — waiting for warminskimarcin (Urlaub)", "status": "waiting_user"},
-    {"id": 14, "name": "Librespot upstream — watch for new release", "status": "not_started"},
-    {"id": 15, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 16, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
+    {"id": 7, "name": "Issue #99 — waiting for woorszt to confirm fix in v2.3.17", "status": "waiting_user"},
+    {"id": 8, "name": "Issue #116 — waiting for e2m2 (streaming format test + other players Connect test)", "status": "waiting_user"},
+    {"id": 9, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
+    {"id": 10, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
+    {"id": 13, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
+    {"id": 14, "name": "Issue #60 — waiting for warminskimarcin (Urlaub)", "status": "waiting_user"},
+    {"id": 15, "name": "Librespot upstream — watch for new release", "status": "not_started"},
+    {"id": 16, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 17, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
+    {"id": 18, "name": "Perl Tests CI: 5.36 rerun triggered (transient 504)", "status": "waiting_ci"}
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "e2m2 #116 = Keymaster 403, same as #91", "rationale": "Recently activated Premium lands on new Spotify infra without Keymaster support", "phase": "triage"},
-    {"decision": "#113 stays open until multi-player user confirms", "rationale": "Code fix shipped but no field confirmation yet", "phase": "triage"}
+    {"decision": "#99 fix: run Keymaster diagnostics in exit-zero parse-failure path too", "rationale": "librespot exits 0 on Keymaster 403 but writes only stderr log lines — from_json misparsed timestamp as JSON array", "phase": "triage"},
+    {"decision": "#116 OGG passthrough hypothesis — not confirmed, asked e2m2 to test PCM", "rationale": "Touch reports OGG support so auto mode enables passthrough, but Spotify OGG has non-standard headers that may fail on hardware decoders", "phase": "triage"},
+    {"decision": "Reply tone: hedge when speculating, only be confident with confirmed causes", "rationale": "User feedback — overconfident replies erode trust when wrong", "phase": "feedback"}
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": ["librespot-spoton/Cargo.lock"],
   "next_action": "Create v3.0-auth branch from main, then /gsd-plan-phase 49-00 (Token Usage Audit)",
-  "context_notes": "v2.3.16 released and deployed. All triage complete, all issues reviewed. Next milestone work: v3.0 Auth Overhaul starting with Phase 49-00."
+  "context_notes": "v2.3.17 released (fix #99 error message). All issues waiting on users. Next milestone work: v3.0 Auth Overhaul. Cargo.lock has 1-line diff from local build — not release-relevant."
 }

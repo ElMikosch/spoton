@@ -127,11 +127,11 @@ Items carried forward from previous milestones:
 ## Session Continuity
 
 **Last session:** 2026-07-09
-**Stopped at:** v2.3.16 released + deployed, triage complete, #113 commented
+**Stopped at:** v2.3.17 released, #99 reopened + fix shipped, #116 OGG hypothesis replied
 **Next action (in order):**
 1. Create v3.0-auth branch from main
 2. `/gsd-plan-phase 49-00` (Token Usage Audit)
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-09 — v2.3.16 released, triage complete, #113 + #116 commented*
+*Last updated: 2026-07-09 — v2.3.17 released (#99 fix), #116 + #99 replied*
