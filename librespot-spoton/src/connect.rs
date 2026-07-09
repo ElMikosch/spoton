@@ -312,6 +312,7 @@ impl LMS {
              Host: {host_port}\r\n\
              Content-Type: application/json\r\n\
              Content-Length: {len}\r\n\
+             X-Scanner: 1\r\n\
              {auth_header}\
              \r\n\
              {body}",
