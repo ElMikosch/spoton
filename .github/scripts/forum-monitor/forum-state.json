@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-09T15:32:22.916Z",
+  "lastChecked": "2026-07-09T16:46:33.333Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -200,10 +200,23 @@
         "1827931",
         "1828024",
         "1828129",
-        "1828131"
+        "1828131",
+        "1828292",
+        "1828293"
       ],
-      "lastPostCount": 198
+      "lastPostCount": 200
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1828293",
+      "postNumber": 200,
+      "author": "CJS",
+      "timestamp": "2026-07-09T09:17:11-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by nelder \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tI have a new account (created a month ago) that im trying to get to work with SpotOn, with this new accou",
+      "draft": "[QUOTE=CJS;post200]You can browse your Spotify library, but playback of Spotify tracks does not work?\n\nThat is a known problem with \"Librespot\" based Spotify clients, when using a recent Spotify account.[/QUOTE]\n\nThanks CJS for jumping in with that context — that's exactly right.\n\n[B]nelder[/B] — to expand on what CJS said: this is an upstream issue with [B]librespot[/B] (the open-source library SpotOn uses for playback). Spotify has been progressively restricting access for newer accounts, and unfortunately there is currently [B]no known fix[/B] on our end. This is not something SpotOn can work around independently — it depends on the librespot project (and ultimately Spotify's decisions about third-party client access).\n\nA few things worth noting:\n\n[LIST]\n[*]This is tracked in our GitHub as issue [URL=https://github.com/stiefenm/spoton/issues/91]#91[/URL], related to Spotify sunsetting certain endpoints for newer account cohorts.\n[*]The librespot community is aware and actively investigating, but no solution has been released yet.\n[*]Accounts created more recently appear to be more affected than older accounts.\n[/LIST]\n\nUnfortunately there's not much you can do on the SpotOn side right now. I'd suggest:\n\n[LIST=1]\n[*]Keep an eye on the [URL=https://github.com/stiefenm/spoton/issues/91]GitHub issue #91[/URL] for updates as the situation develops.\n[*]Follow the librespot project for any upstream fixes.\n[/LIST]\n\nSorry I don't have better news — this one is genuinely out of our hands for now. I'll update the GitHub issue if anything changes.",
+      "scrapedAt": "2026-07-09T16:46:33.332Z"
+    }
+  ]
 }
