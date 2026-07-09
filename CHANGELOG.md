@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.18] - 2026-07-09
+### Fixed
+- **Connect silent failure with LMS password protection (GH #116)**: when LMS password protection is enabled, the Connect daemon's JSON-RPC notify to LMS was silently rejected with HTTP 401. SpotOn sent the stored SHA1 password hash via Basic Auth, but LMS re-hashed it (double hash), causing a mismatch on every request. Added the `X-Scanner` header that LMS accepts for backend processes authenticating with the stored hash directly — matching Spotty's original implementation. Connect now works with password protection enabled.
+
 ## [2.3.17] - 2026-07-09
 ### Fixed
 - **Keymaster 403 shows as confusing JSON parse error (GH #99)**: when librespot exits with code 0 but Keymaster returns HTTP 403, the output contains only stderr log lines. The JSON parser misinterpreted the timestamp `[` as a JSON array start, producing `JSON parse error on --get-token` instead of the actual cause. The parse-failure path now runs the same Keymaster diagnostics (HTTP status code, error payload) as the exit-nonzero path, showing `keymaster_status: HTTP 403` and `no valid token in --get-token output` instead.
