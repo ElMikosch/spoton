@@ -1,40 +1,43 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-08T17:45:00.000Z",
-  "phase": "triage",
-  "phase_name": "Forum & Issues Triage",
+  "timestamp": "2026-07-09T09:20:00.000Z",
+  "phase": "triage+quick+release",
+  "phase_name": "Issue Triage + Quick Task + Release v2.3.16",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Forum #198 (Pete7874) triaged — follow-up to GH #116", "status": "done"},
-    {"id": 2, "name": "GH #116 deep diagnostic analysis — cross-referenced with all issues + code", "status": "done"},
-    {"id": 3, "name": "GH #116 reply posted — targeted questions for server.log, Status page, Connect test", "status": "done"},
-    {"id": 4, "name": "forum-topics.json updated, pendingTriage cleared, committed + pushed", "status": "done"},
-    {"id": 5, "name": "Final sweep — all 11 open issue labels verified correct", "status": "done"}
+    {"id": 1, "name": "GH #116 e2m2 reply — analyzed server log, confirmed Keymaster 403, posted reply", "status": "done"},
+    {"id": 2, "name": "Quick task 260709-bsx: browse-errors.log dead code removed", "status": "done"},
+    {"id": 3, "name": "Quick task 260709-bsx: Token & API Status in diagnostic report", "status": "done"},
+    {"id": 4, "name": "Quick task 260709-bsx: PORT_POLL_MAX_ATTEMPTS 50→100 (10s timeout)", "status": "done"},
+    {"id": 5, "name": "Quick task 260709-bsx: Staggered daemon start (3s delay, auto-scale 20+ players)", "status": "done"},
+    {"id": 6, "name": "Code review: 3 findings fixed (CR-01 shutdown timer, WR-01 header, WR-02 delegate)", "status": "done"},
+    {"id": 7, "name": "WR-03 fix: dynamic stagger delay scaling for large player counts", "status": "done"},
+    {"id": 8, "name": "Release v2.3.16: tagged, CI green, repo.xml SHA updated, Pi deployed", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 6, "name": "/gsd-quick: Diagnostic report improvements — remove dead browse-errors.log ref, add token status + account details + error counter", "status": "not_started"},
-    {"id": 7, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 8, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
-    {"id": 9, "name": "Issue #116 — waiting for Pete7874 (server.log, Status page, Connect test)", "status": "waiting_user"},
-    {"id": 10, "name": "Issue #112 — waiting for jmhunter (hardware issue)", "status": "waiting_user"},
-    {"id": 11, "name": "Issue #109 — waiting for foxesden (Windows fix confirmation)", "status": "waiting_user"},
-    {"id": 12, "name": "Issue #103 — waiting for Tontze (cache-clear test)", "status": "waiting_user"},
-    {"id": 13, "name": "Issue #91 — waiting for woorszt (Premium account test)", "status": "waiting_user"},
-    {"id": 14, "name": "Issue #60 — waiting for warminskimarcin (holiday, cache clearing)", "status": "waiting_user"},
-    {"id": 15, "name": "Librespot PR #1722 merged — watch for new release, rebuild binaries", "status": "not_started"}
+    {"id": 9, "name": "GH #113 comment: staggered start shipped in v2.3.16", "status": "not_started"},
+    {"id": 10, "name": "Issue #116 — waiting for e2m2 (Connect re-test after stable daemons)", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #109 — waiting for foxesden (Windows fix confirmation)", "status": "waiting_user"},
+    {"id": 13, "name": "Issue #103 — waiting for Tontze (cache-clear test)", "status": "waiting_user"},
+    {"id": 14, "name": "Issue #91 — waiting for woorszt (Premium account test)", "status": "waiting_user"},
+    {"id": 15, "name": "Issue #60 — waiting for warminskimarcin", "status": "waiting_user"},
+    {"id": 16, "name": "Librespot upstream — watch for new release (PR #1722 merged)", "status": "not_started"},
+    {"id": 17, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 18, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "GH #116 root cause likely Keymaster 403 — diagnostic report insufficient for Browse debugging", "rationale": "Deep code analysis: browse-errors.log is dead code, diagnostic only captures daemon logs not Perl-side token/API errors. Server.log is the missing piece.", "phase": "triage"},
-    {"decision": "Diagnostic report improvements planned as /gsd-quick", "rationale": "Three concrete gaps found: dead browse-errors.log ref, missing token status, no persistent Browse error tracking", "phase": "triage"}
+    {"decision": "e2m2 #116 confirmed as Keymaster 403 — same root cause as #91", "rationale": "Server log shows --get-token JSON parse error for both own and bundled flavors. Recently activated Premium = new Spotify infra without Keymaster.", "phase": "triage"},
+    {"decision": "Pi update loop: LMS PluginDownloader extract runs at boot, download runs after", "rationale": "If zip deleted and restarted, need TWO restarts: first to re-download, second to extract+install", "phase": "release"}
   ],
-  "uncommitted_files": [".planning/STATE.md", ".planning/HANDOFF.json"],
-  "next_action": "/gsd-quick: Diagnostic report improvements, then v3.0-auth branch + Phase 49-00 planning",
-  "context_notes": "Triage session focused on Pete7874 (#116). Deep diagnostic analysis revealed the diagnostic report has structural gaps — daemon logs can't show Browse failures (token retrieval + API errors happen Perl-side). browse-errors.log is dead code (never written, only read by diagnostic). Planned as /gsd-quick improvement before v3.0 auth work."
+  "uncommitted_files": [],
+  "next_action": "Comment on GH #113 (staggered start shipped), then v3.0-auth branch + Phase 49-00 planning",
+  "context_notes": "v2.3.16 released with diagnostics + stagger improvements. e2m2 reply posted on #116. Pi successfully updated after double-restart workaround for PluginDownloader boot-order issue."
 }
