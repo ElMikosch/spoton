@@ -268,6 +268,13 @@ sub initHelpers {
     # Stagger daemon starts: first immediately, rest with STAGGER_DELAY intervals.
     # Prevents simultaneous mDNS port contention on multi-player systems (#113).
     # Already-running daemons are no-ops inside startHelper().
+    # Scale delay down for large player counts so all fit within the watchdog window.
+    my $count = scalar @pendingStarts;
+    my $maxWindow = DAEMON_WATCHDOG_INTERVAL - STAGGER_DELAY;
+    my $effectiveDelay = ($count > 1 && ($count - 1) * STAGGER_DELAY > $maxWindow)
+        ? $maxWindow / ($count - 1)
+        : STAGGER_DELAY;
+
     my $staggerIdx = 0;
     for my $pendingClient (@pendingStarts) {
         if ($staggerIdx == 0) {
@@ -275,7 +282,7 @@ sub initHelpers {
         } else {
             Slim::Utils::Timers::setTimer(
                 $class,
-                Time::HiRes::time() + ($staggerIdx * STAGGER_DELAY),
+                Time::HiRes::time() + ($staggerIdx * $effectiveDelay),
                 \&_staggeredStart,
                 $pendingClient,
             );
