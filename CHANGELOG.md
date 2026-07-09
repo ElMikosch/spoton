@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.17] - 2026-07-09
+### Fixed
+- **Keymaster 403 shows as confusing JSON parse error (GH #99)**: when librespot exits with code 0 but Keymaster returns HTTP 403, the output contains only stderr log lines. The JSON parser misinterpreted the timestamp `[` as a JSON array start, producing `JSON parse error on --get-token` instead of the actual cause. The parse-failure path now runs the same Keymaster diagnostics (HTTP status code, error payload) as the exit-nonzero path, showing `keymaster_status: HTTP 403` and `no valid token in --get-token output` instead.
+
 ## [2.3.16] - 2026-07-09
 ### Fixed
 - **Daemon crash-loop on multi-player systems (GH #113)**: daemon starts are now staggered with a 3-second delay between players, preventing simultaneous mDNS port contention. With 6 players, daemons start over ~15 seconds instead of all at once. Delay scales down automatically for 20+ players to fit within the watchdog window.
