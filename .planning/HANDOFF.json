@@ -1,46 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-07T20:33:34.610Z",
+  "timestamp": "2026-07-08T17:45:00.000Z",
   "phase": "triage",
-  "phase_name": "Forum & Issues Triage + Housekeeping",
+  "phase_name": "Forum & Issues Triage",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Forum Monitor: legacy fields cleanup (knownPosts, knownPostCount, lastRun)", "status": "done"},
-    {"id": 2, "name": "Triage skill fix: SKILL.md referenced wrong field (knownPosts → threads[url].knownPostIds)", "status": "done"},
-    {"id": 3, "name": "win-vm/ added to .gitignore", "status": "done", "commit": "cf01c31"},
-    {"id": 4, "name": "Issues triage: #91 label updated to waiting-user", "status": "done"},
-    {"id": 5, "name": "Forum triage: all 196 posts reviewed, no pending items", "status": "done"},
-    {"id": 6, "name": "GH #116 created for Pete7874 (Browse/Library empty on Ubuntu)", "status": "done"},
-    {"id": 7, "name": "Forum reply #196 drafted and written to ~/SynologyDrive/forum-reply-196.txt", "status": "done"},
-    {"id": 8, "name": "forum-topics.json updated with Pete7874 topic, committed and pushed", "status": "done", "commit": "861d7e5"}
+    {"id": 1, "name": "Forum #198 (Pete7874) triaged — follow-up to GH #116", "status": "done"},
+    {"id": 2, "name": "GH #116 deep diagnostic analysis — cross-referenced with all issues + code", "status": "done"},
+    {"id": 3, "name": "GH #116 reply posted — targeted questions for server.log, Status page, Connect test", "status": "done"},
+    {"id": 4, "name": "forum-topics.json updated, pendingTriage cleared, committed + pushed", "status": "done"},
+    {"id": 5, "name": "Final sweep — all 11 open issue labels verified correct", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 9, "name": "Forum reply #196 — user must post manually", "status": "waiting_user"},
-    {"id": 10, "name": "v3.0 Phase 49-00 Token Usage Audit — plan phase", "status": "not_started"},
-    {"id": 11, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 12, "name": "Issue #91 update (session corruption as second 403 cause) — post when #114/#115 implemented", "status": "deferred"},
-    {"id": 13, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
-    {"id": 14, "name": "Issue #109 — waiting for foxesden (Windows fix confirmation)", "status": "waiting_user"},
-    {"id": 15, "name": "Issue #103 — waiting for Tontze (cache-clear test)", "status": "waiting_user"},
-    {"id": 16, "name": "Issue #60 — waiting for warminskimarcin (holiday, cache clearing)", "status": "waiting_user"},
-    {"id": 17, "name": "Issue #116 — waiting for Pete7874 (diagnostic report)", "status": "waiting_user"},
-    {"id": 18, "name": "Librespot PR #1722 merged — watch for new release, rebuild binaries", "status": "not_started"}
+    {"id": 6, "name": "/gsd-quick: Diagnostic report improvements — remove dead browse-errors.log ref, add token status + account details + error counter", "status": "not_started"},
+    {"id": 7, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 8, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
+    {"id": 9, "name": "Issue #116 — waiting for Pete7874 (server.log, Status page, Connect test)", "status": "waiting_user"},
+    {"id": 10, "name": "Issue #112 — waiting for jmhunter (hardware issue)", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #109 — waiting for foxesden (Windows fix confirmation)", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #103 — waiting for Tontze (cache-clear test)", "status": "waiting_user"},
+    {"id": 13, "name": "Issue #91 — waiting for woorszt (Premium account test)", "status": "waiting_user"},
+    {"id": 14, "name": "Issue #60 — waiting for warminskimarcin (holiday, cache clearing)", "status": "waiting_user"},
+    {"id": 15, "name": "Librespot PR #1722 merged — watch for new release, rebuild binaries", "status": "not_started"}
   ],
   "blockers": [],
   "async_jobs": [],
-  "human_actions_pending": [
-    {"action": "Post forum-reply-196.txt to Lyrion Forum", "context": "Reply to Pete7874 about empty Browse/Library, links to GH #116", "blocking": false}
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {"decision": "Forum Monitor legacy fields (knownPosts, knownPostCount, lastRun) removed from state file", "rationale": "Current code uses threads[url].knownPostIds exclusively, legacy fields caused confusion", "phase": "triage"},
-    {"decision": "#91 labeled waiting-user (woorszt 5 days silent)", "rationale": "woorszt said would test Premium account, no response since Jul 2", "phase": "triage"},
-    {"decision": "Pete7874 issue tracked as GH #116 with forum reply", "rationale": "New user with empty Browse/Library on Ubuntu, needs diagnostic info", "phase": "triage"}
+    {"decision": "GH #116 root cause likely Keymaster 403 — diagnostic report insufficient for Browse debugging", "rationale": "Deep code analysis: browse-errors.log is dead code, diagnostic only captures daemon logs not Perl-side token/API errors. Server.log is the missing piece.", "phase": "triage"},
+    {"decision": "Diagnostic report improvements planned as /gsd-quick", "rationale": "Three concrete gaps found: dead browse-errors.log ref, missing token status, no persistent Browse error tracking", "phase": "triage"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Post forum-reply-196.txt, then create v3.0-auth branch from main and /gsd-plan-phase 49-00 (Token Usage Audit)",
-  "context_notes": "Clean triage session. Forum Monitor state file had legacy fields causing confusion — cleaned up. Skill reference fixed. Pete7874 is a new user needing help. All 11 open issues verified with correct labels. Librespot PR #1722 (CDN fix) is merged but no new release yet (still v0.8.0). SqueezeDSP PR #19 still waiting on Foxenfurter."
+  "uncommitted_files": [".planning/STATE.md", ".planning/HANDOFF.json"],
+  "next_action": "/gsd-quick: Diagnostic report improvements, then v3.0-auth branch + Phase 49-00 planning",
+  "context_notes": "Triage session focused on Pete7874 (#116). Deep diagnostic analysis revealed the diagnostic report has structural gaps — daemon logs can't show Browse failures (token retrieval + API errors happen Perl-side). browse-errors.log is dead code (never written, only read by diagnostic). Planned as /gsd-quick improvement before v3.0 auth work."
 }
