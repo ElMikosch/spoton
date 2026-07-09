@@ -588,8 +588,34 @@ sub _fetchKeymasterToken {
             }
         }
         if (!$result || !$result->{accessToken}) {
-            $log->error("TokenManager: JSON parse error on --get-token for $accountId ($flavor): $@");
+            # Run Keymaster diagnostics on the raw output — same as the exit-nonzero path.
+            # When Keymaster returns 403, librespot exits 0 but writes only stderr log lines
+            # (format: [timestamp ERR ...]), so from_json sees '[' and misparses as JSON array.
+            my $hasKeymasterDiag = 0;
+            if ($output =~ /status_code:\s*(\d+)/) {
+                $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
+                $hasKeymasterDiag = 1;
+            }
+            if ($output =~ /payload:\s*\[\[([0-9,\s]+)\]\]/) {
+                my $payloadJson = join('', map { chr($_) } split(/,\s*/, $1));
+                my $payload = eval { from_json($payloadJson) };
+                if ($payload && $payload->{errorDescription}) {
+                    $log->error("TokenManager: keymaster_error: code=" . ($payload->{code} // '?')
+                        . " message=\"$payload->{errorDescription}\" (client_id=$maskedId)");
+                    $hasKeymasterDiag = 1;
+                }
+            }
+
+            if ($hasKeymasterDiag) {
+                $log->error("TokenManager: no valid token in --get-token output for $accountId ($flavor, client_id=$maskedId) — see keymaster errors above");
+            } else {
+                $log->error("TokenManager: no valid token in --get-token output for $accountId ($flavor): $@");
+            }
             $log->warn("[DIAG] token_parse_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor") if $prefs->get('diagnosticMode');
+
+            if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                Plugins::SpotOn::Status->recordError('error', 'Token', "get-token failed for $accountId ($flavor)");
+            }
             $resolve->(undef);
             return;
         }

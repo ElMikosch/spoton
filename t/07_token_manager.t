@@ -562,6 +562,29 @@ SKIP: {
     }
 
     # --------------------------------------------------------
+    # Parse failure with Keymaster 403 stderr (exit 0, no valid JSON)
+    # When librespot exits 0 but Keymaster returns 403, the output contains
+    # only stderr log lines — from_json misparses the timestamp '[' as JSON array.
+    # The fix (#99) runs Keymaster diagnostics in this branch too.
+    # --------------------------------------------------------
+    {
+        reset_state();
+        Proc::Background::reset_spawns();
+        $Proc::Background::mock_output = "[2026-07-09T12:59:35Z ERR librespot_core::mercury] MercuryResponse { status_code: 403, payload: [[123, 34, 99, 111, 100, 101, 34, 58, 52, 125]] }";
+        $Proc::Background::mock_exit = 0;
+
+        my $got_token;
+        Plugins::SpotOn::API::TokenManager->_fetchKeymasterToken('km403_acct', 'own', sub {
+            $got_token = shift;
+        });
+
+        Slim::Utils::Timers::run_deferred();
+
+        ok(!defined $got_token,
+            '#99: Keymaster 403 with exit 0 returns undef (no token)');
+    }
+
+    # --------------------------------------------------------
     # _getLmsServerName returns a string <= 60 chars
     # --------------------------------------------------------
     {
