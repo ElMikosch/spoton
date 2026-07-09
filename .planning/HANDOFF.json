@@ -1,44 +1,43 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-09T16:21:25.271Z",
+  "timestamp": "2026-07-09T20:15:00.000Z",
   "phase": "triage+release",
-  "phase_name": "Issue Triage + Release v2.3.17",
+  "phase_name": "Issue Triage + Release v2.3.18",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Fix #99: Keymaster 403 diagnostics in parse-failure path", "status": "done", "commit": "e5d3b88"},
-    {"id": 2, "name": "Unit test for #99 parse-failure-with-Keymaster path", "status": "done", "commit": "e5d3b88"},
-    {"id": 3, "name": "Reply to #116 e2m2 — OGG passthrough hypothesis + streaming format check", "status": "done"},
-    {"id": 4, "name": "Reopen #99, reply to woorszt with fix description", "status": "done"},
-    {"id": 5, "name": "Release v2.3.17: tagged, CI green, repo.xml SHA updated", "status": "done", "commit": "8a1d2fd"},
-    {"id": 6, "name": "Memory: feedback_reply_tone_hedging.md — don't be overconfident in replies", "status": "done"}
+    {"id": 1, "name": "Analyse #116: Connect silent 401 with LMS password protection", "status": "done"},
+    {"id": 2, "name": "Fable5 code review of CLI-port fix approach — rejected, X-Scanner identified", "status": "done"},
+    {"id": 3, "name": "Fix: X-Scanner header in connect.rs notify()", "status": "done", "commit": "c9800af"},
+    {"id": 4, "name": "UAT: Connect with password protection enabled — audio confirmed", "status": "done"},
+    {"id": 5, "name": "Release v2.3.18 (binary 2.0.12)", "status": "done", "commit": "0702562"},
+    {"id": 6, "name": "repo.xml SHA updated", "status": "done", "commit": "0f578dd"},
+    {"id": 7, "name": "Reply to #116 — asked about password protection + posted v2.3.18 follow-up", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 7, "name": "Issue #99 — waiting for woorszt to confirm fix in v2.3.17", "status": "waiting_user"},
-    {"id": 8, "name": "Issue #116 — waiting for e2m2 (streaming format test + other players Connect test)", "status": "waiting_user"},
-    {"id": 9, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
-    {"id": 10, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
-    {"id": 11, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
-    {"id": 12, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
-    {"id": 13, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
-    {"id": 14, "name": "Issue #60 — waiting for warminskimarcin (Urlaub)", "status": "waiting_user"},
-    {"id": 15, "name": "Librespot upstream — watch for new release", "status": "not_started"},
-    {"id": 16, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 17, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
-    {"id": 18, "name": "Perl Tests CI: 5.36 rerun triggered (transient 504)", "status": "waiting_ci"}
+    {"id": 8, "name": "Issue #116 — waiting for e2m2 to confirm password protection was the cause", "status": "waiting_user"},
+    {"id": 9, "name": "Issue #99 — waiting for woorszt to confirm fix in v2.3.17", "status": "waiting_user"},
+    {"id": 10, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
+    {"id": 11, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
+    {"id": 12, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
+    {"id": 13, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
+    {"id": 14, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
+    {"id": 15, "name": "Issue #60 — waiting for warminskimarcin", "status": "waiting_user"},
+    {"id": 16, "name": "Librespot upstream — PR #1722 merged, watch for next release → rebuild binaries", "status": "not_started"},
+    {"id": 17, "name": "Create v3.0-auth branch from main", "status": "not_started"},
+    {"id": 18, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "#99 fix: run Keymaster diagnostics in exit-zero parse-failure path too", "rationale": "librespot exits 0 on Keymaster 403 but writes only stderr log lines — from_json misparsed timestamp as JSON array", "phase": "triage"},
-    {"decision": "#116 OGG passthrough hypothesis — not confirmed, asked e2m2 to test PCM", "rationale": "Touch reports OGG support so auto mode enables passthrough, but Spotify OGG has non-standard headers that may fail on hardware decoders", "phase": "triage"},
-    {"decision": "Reply tone: hedge when speculating, only be confident with confirmed causes", "rationale": "User feedback — overconfident replies erode trust when wrong", "phase": "feedback"}
+    {"decision": "X-Scanner header fixes Connect auth — CLI-port approach rejected by Fable5 review", "rationale": "CLI port also requires auth when password protection enabled; echo response masks failures. X-Scanner is LMS's official backend-process auth mechanism, used by Spotty and the LMS scanner.", "phase": "triage"},
+    {"decision": "The missing X-Scanner header was a regression from the Spotty→SpotOn port", "rationale": "Spotty's lms.rs:104 had X-Scanner unconditionally; SpotOn's connect.rs lost it during rewrite", "phase": "triage"}
   ],
-  "uncommitted_files": ["librespot-spoton/Cargo.lock"],
+  "uncommitted_files": [],
   "next_action": "Create v3.0-auth branch from main, then /gsd-plan-phase 49-00 (Token Usage Audit)",
-  "context_notes": "v2.3.17 released (fix #99 error message). All issues waiting on users. Next milestone work: v3.0 Auth Overhaul. Cargo.lock has 1-line diff from local build — not release-relevant."
+  "context_notes": "v2.3.18 released — fixes Connect with LMS password protection (X-Scanner header). All issues waiting on users. Librespot PR #1722 (CDN fallback) merged upstream — rebuild binaries when next release drops."
 }
