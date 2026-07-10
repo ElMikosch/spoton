@@ -1,43 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-09T20:15:00.000Z",
-  "phase": "triage+release",
-  "phase_name": "Issue Triage + Release v2.3.18",
+  "timestamp": "2026-07-10T04:59:43.795Z",
+  "phase": "triage+vault",
+  "phase_name": "Auth Triage + 2nd Brain Setup",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Analyse #116: Connect silent 401 with LMS password protection", "status": "done"},
-    {"id": 2, "name": "Fable5 code review of CLI-port fix approach — rejected, X-Scanner identified", "status": "done"},
-    {"id": 3, "name": "Fix: X-Scanner header in connect.rs notify()", "status": "done", "commit": "c9800af"},
-    {"id": 4, "name": "UAT: Connect with password protection enabled — audio confirmed", "status": "done"},
-    {"id": 5, "name": "Release v2.3.18 (binary 2.0.12)", "status": "done", "commit": "0702562"},
-    {"id": 6, "name": "repo.xml SHA updated", "status": "done", "commit": "0f578dd"},
-    {"id": 7, "name": "Reply to #116 — asked about password protection + posted v2.3.18 follow-up", "status": "done"}
+    {"id": 1, "name": "Resume: full project context restored", "status": "done"},
+    {"id": 2, "name": "Verified: #115 'bundled fallback' claim is FALSE for account-cohort-blocked users", "status": "done"},
+    {"id": 3, "name": "Re-ran PKCE Spike 001+002 with new account (Client ID b370d733...) — 21/24 endpoints pass", "status": "done"},
+    {"id": 4, "name": "Verified: Audio Key Retrieval FAILS with new account — error audio key 0 1", "status": "done"},
+    {"id": 5, "name": "Obsidian vault created at vault/ — 72 files, Fable 5 populated, gitignored", "status": "done"},
+    {"id": 6, "name": "/obsidian-sync skill created, integrated into /gsd-pause-work", "status": "done"},
+    {"id": 7, "name": "#91 updated as master issue (Keymaster Sunset + Audio Key Wall)", "status": "done"},
+    {"id": 8, "name": "#114 closed (superseded by #91)", "status": "done"},
+    {"id": 9, "name": "#115 updated (corrected false bundled fallback claim, kept open for UX feedback)", "status": "done"},
+    {"id": 10, "name": "#116 updated (honest assessment to e2m2)", "status": "done"},
+    {"id": 11, "name": "#99 updated (linked to #91 as symptom)", "status": "done"},
+    {"id": 12, "name": "Labels updated: upstream added to #99/#115/#116, waiting-user removed from #91/#116", "status": "done"},
+    {"id": 13, "name": ".gitignore updated: vault/ protected", "status": "done"},
+    {"id": 14, "name": "Spike 001 Client ID changed to b370d733... for test (revert needed)", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 8, "name": "Issue #116 — waiting for e2m2 to confirm password protection was the cause", "status": "waiting_user"},
-    {"id": 9, "name": "Issue #99 — waiting for woorszt to confirm fix in v2.3.17", "status": "waiting_user"},
-    {"id": 10, "name": "Issue #113 — waiting for multi-player user confirmation", "status": "waiting_user"},
-    {"id": 11, "name": "Issue #112 — waiting for jmhunter", "status": "waiting_user"},
-    {"id": 12, "name": "Issue #109 — waiting for foxesden", "status": "waiting_user"},
-    {"id": 13, "name": "Issue #103 — waiting for Tontze", "status": "waiting_user"},
-    {"id": 14, "name": "Issue #91 — waiting for woorszt", "status": "waiting_user"},
-    {"id": 15, "name": "Issue #60 — waiting for warminskimarcin", "status": "waiting_user"},
-    {"id": 16, "name": "Librespot upstream — PR #1722 merged, watch for next release → rebuild binaries", "status": "not_started"},
+    {"id": 15, "name": "Revert spike 001 Client ID back to original (56bcbd90...)", "status": "not_started"},
+    {"id": 16, "name": "Clean up test artifacts (credentials, tokens in scratchpad)", "status": "not_started"},
     {"id": 17, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 18, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"}
+    {"id": 18, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
+    {"id": 19, "name": "Librespot upstream: watch for next release (PR #1722 merged) → rebuild binaries", "status": "not_started"}
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "X-Scanner header fixes Connect auth — CLI-port approach rejected by Fable5 review", "rationale": "CLI port also requires auth when password protection enabled; echo response masks failures. X-Scanner is LMS's official backend-process auth mechanism, used by Spotty and the LMS scanner.", "phase": "triage"},
-    {"decision": "The missing X-Scanner header was a regression from the Spotty→SpotOn port", "rationale": "Spotty's lms.rs:104 had X-Scanner unconditionally; SpotOn's connect.rs lost it during rewrite", "phase": "triage"}
+    {"decision": "Audio Key Retrieval fails for new-cohort accounts (error audio key 0 1) — PKCE fixes Browse but NOT playback", "rationale": "Verified 2026-07-09 with real new account: PKCE token → API works, credential derivation → works, audio key → denied", "phase": "triage"},
+    {"decision": "#91 is the master tracking issue for Keymaster sunset + Audio Key wall", "rationale": "Consolidates #99, #114, #115, #116 under one umbrella", "phase": "triage"},
+    {"decision": "#114 closed (Self-Heal superseded by v3.0), #115 kept open (UX feedback still valid)", "rationale": "#115 message corrected: no longer claims 'bundled fallback works'", "phase": "triage"},
+    {"decision": "Obsidian vault at vault/ as 2nd Brain — never public", "rationale": "Central knowledge base synthesizing public project + private research, gitignored", "phase": "triage"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Create v3.0-auth branch from main, then /gsd-plan-phase 49-00 (Token Usage Audit)",
-  "context_notes": "v2.3.18 released — fixes Connect with LMS password protection (X-Scanner header). All issues waiting on users. Librespot PR #1722 (CDN fallback) merged upstream — rebuild binaries when next release drops."
+  "uncommitted_files": [".gitignore", ".planning/spikes/001-pkce-auth-flow/pkce_spike.pl"],
+  "next_action": "Revert spike Client ID, then create v3.0-auth branch and plan Phase 49-00",
+  "context_notes": "Major session: discovered the Audio Key wall — the missing piece in the v3.0 auth story. PKCE solves tokens but not audio decryption for new-cohort accounts. This reframes private audio-backend research from optional to existential. Vault built by Fable 5, 72 substantive files. All auth-related issues triaged and updated with honest assessment."
 }

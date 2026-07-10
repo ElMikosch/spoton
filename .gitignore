@@ -10,6 +10,9 @@ Plugins/SpotOn/Bin/
 # Release ZIP archives (built locally, distributed via GitHub Releases)
 SpotOn-v*.zip
 
+# Private Obsidian vault (NEVER commit — contains sensitive research + auth analysis)
+vault/
+
 # Internal development files (not part of the plugin)
 .planning/
 .claude/

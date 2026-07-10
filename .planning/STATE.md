@@ -126,12 +126,13 @@ Items carried forward from previous milestones:
 
 ## Session Continuity
 
-**Last session:** 2026-07-09
-**Stopped at:** v2.3.18 released — Connect auth fix (X-Scanner header), #116 replied
+**Last session:** 2026-07-10
+**Stopped at:** Auth triage + 2nd Brain setup — Audio Key wall verified, issues updated, Obsidian vault built
+**Key finding:** PKCE fixes Browse/Search/Library but NOT audio playback (error audio key 0 1 for new-cohort accounts)
 **Next action (in order):**
 1. Create v3.0-auth branch from main
 2. `/gsd-plan-phase 49-00` (Token Usage Audit)
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-09 — v2.3.18 released (Connect auth fix), waiting for e2m2 confirmation*
+*Last updated: 2026-07-10 — Audio Key wall verified, #91 master issue updated, Obsidian vault (72 files) created*
