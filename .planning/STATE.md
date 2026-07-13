@@ -108,6 +108,7 @@ Items carried forward from previous milestones:
 - [v3.0]: sp_dc/Pathfinder as "best effort" — TOTP rotation, graceful degradation, re-scrape on failure
 - [v3.0]: urknall's 11 success criteria as UAT gates (central: no hm://keymaster/token/authenticated in normal logs)
 - [v3.0]: Audit phase (49-00) before implementation — classify every Keymaster reference into the 4 buckets
+- [v3.0]: **AUDIO KEY DEAD END (2026-07-13):** PKCE fixes Browse/Search/Library but NOT audio playback for cohort-migrated accounts. `error audio key 0 1` is a server-side per-account block independent of auth method. Confirmed with automated test (spoton-pkce-audiokey-test.sh). Awaiting woorszt confirmation (#115). librespot's Shannon/AP audio-key path is dying — same cohort migration as Keymaster sunset.
 
 ### Blockers/Concerns
 
@@ -128,12 +129,13 @@ Items carried forward from previous milestones:
 ## Session Continuity
 
 **Last session:** 2026-07-13
-**Stopped at:** Account check script created, #60 + #115 replied, script tested locally
-**Key finding:** PKCE fixes Browse/Search/Library but NOT audio playback (error audio key 0 1 for new-cohort accounts)
-**Next action (in order):**
-1. Check #60/#115 for user feedback on script results
-2. Create v3.0-auth branch from main
-3. `/gsd-plan-phase 49-00` (Token Usage Audit)
+**Stopped at:** PKCE Audio Key test confirmed dead end — both new AND migrated accounts blocked
+**Key finding (CONFIRMED):** Audio key denial is per-account-cohort, independent of auth method. Unaffected accounts don't even use AudioKeyManager (pure spclient path). Affected accounts hit `error audio key 0 1`. v3.0 PKCE fixes API/Browse/Control but NOT playback.
+**Awaiting:** woorszt #115 confirmation with his affected account
+**Next action:**
+1. Wait for woorszt's test result
+2. If confirmed: document dead end, reassess v3.0 scope (Browse/Library-only value? Audio backend research priority?)
+3. warminskimarcin #60 still hasn't responded to account check script
 
 ---
 *State initialized: 2026-05-26*

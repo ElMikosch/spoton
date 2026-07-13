@@ -1,36 +1,44 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-13T06:32:35.801Z",
-  "phase": "triage",
-  "phase_name": "Account Check Script + Issue Triage",
+  "timestamp": "2026-07-13T16:05:26.478Z",
+  "phase": "research",
+  "phase_name": "PKCE Audio Key Dead End Confirmation",
   "phase_dir": ".planning",
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Created tools/spoton-account-check.sh diagnostic script", "status": "done", "commit": "9aef195"},
-    {"id": 2, "name": "Tested script locally (auto-detection, binary check, credential handling)", "status": "done"},
-    {"id": 3, "name": "Posted reply on #60 (warminskimarcin) — Keymaster 403 diagnosis + script + search answer", "status": "done"},
-    {"id": 4, "name": "Posted reply on #115 (woorszt) — old account also affected, script link", "status": "done"},
-    {"id": 5, "name": "Added sudo permission note to #60 (credentials dir is chmod 0700)", "status": "done"},
-    {"id": 6, "name": "User tested script successfully — both accounts NOT AFFECTED on dev machine", "status": "done"},
-    {"id": 7, "name": "Pushed all commits to origin/main (rebase required due to remote changes)", "status": "done"}
+    {"id": 1, "name": "Built spoton-pkce-audiokey-test.sh diagnostic script", "status": "done", "commit": "9687167"},
+    {"id": 2, "name": "Tested with unaffected account — full playback works (spclient path, no audio key needed)", "status": "done"},
+    {"id": 3, "name": "Tested with new test account (affected cohort) — audio key denied (error audio key 0 1)", "status": "done"},
+    {"id": 4, "name": "Posted PKCE test request to woorszt on #115", "status": "done"},
+    {"id": 5, "name": "Acked woorszt's account-check script result on #115", "status": "done"},
+    {"id": 6, "name": "Closed #99 (TokenManager JSON parse — woorszt confirmed fixed)", "status": "done"},
+    {"id": 7, "name": "Updated vault/auth/Audio Key Problem.md with confirmed results", "status": "done"},
+    {"id": 8, "name": "Updated forum-topics.json (dead-end status)", "status": "done"},
+    {"id": 9, "name": "Full triage pass — forum clean, issues reviewed", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": 8, "name": "Wait for warminskimarcin (#60) and woorszt (#115) script results", "status": "not_started"},
-    {"id": 9, "name": "Create v3.0-auth branch from main", "status": "not_started"},
-    {"id": 10, "name": "/gsd-plan-phase 49-00 (Token Usage Audit)", "status": "not_started"},
-    {"id": 11, "name": "Librespot upstream: watch for next release (PR #1722 merged) → rebuild binaries", "status": "not_started"}
+    {"id": 10, "name": "Wait for woorszt #115 to run PKCE audio key test and report results", "status": "not_started"},
+    {"id": 11, "name": "If confirmed: post definitive dead-end update on #91 (main Keymaster tracker)", "status": "not_started"},
+    {"id": 12, "name": "Reassess v3.0 scope — Browse/Library-only value vs audio backend research priority", "status": "not_started"},
+    {"id": 13, "name": "warminskimarcin #60 still hasn't responded to account check script", "status": "not_started"},
+    {"id": 14, "name": "Mojibake encoding in TokenManager logs (from closed #99) — backlog", "status": "not_started"}
   ],
-  "blockers": [],
+  "blockers": [
+    {"description": "Audio key dead end: librespot cannot decrypt audio for cohort-migrated accounts. No workaround exists within the current architecture.", "severity": "blocking"}
+  ],
   "async_jobs": [],
-  "human_actions_pending": [],
-  "decisions": [
-    {"decision": "Diagnostic script as standalone shell script in tools/, not integrated into plugin", "rationale": "Quickest path to help affected users; no LMS dependency for running the check", "phase": "triage"},
-    {"decision": "Script uses sudo -u squeezeboxserver for credential access", "rationale": "Credential cache dirs are chmod 0700 for the LMS service user", "phase": "triage"}
+  "human_actions_pending": [
+    {"description": "Wait for woorszt to run spoton-pkce-audiokey-test.sh and report results on #115"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Wait for user feedback on #60/#115, then create v3.0-auth branch and plan Phase 49-00",
-  "context_notes": "Short session: created account check script for Keymaster 403 diagnosis, replied to two issues. Dev machine account confirmed NOT affected. Script works correctly — auto-detects LMS paths, binary, credentials, interprets --get-token output."
+  "decisions": [
+    {"decision": "Audio key block confirmed independent of auth method", "rationale": "Automated PKCE test: unaffected account plays fine (spclient path), affected account gets error audio key 0 1 despite successful PKCE auth + credential derivation + Spirc registration", "phase": "research"},
+    {"decision": "v3.0 PKCE fixes Browse/Search/Library/Connect-control but NOT audio playback for migrated accounts", "rationale": "The audio file downloads (storage-resolve works) but decryption key is denied server-side per account cohort", "phase": "research"},
+    {"decision": "Affects both new AND old migrated accounts", "rationale": "woorszt's older account is confirmed affected, not just newly created accounts", "phase": "research"}
+  ],
+  "uncommitted_files": [".planning/STATE.md"],
+  "next_action": "Wait for woorszt's test result on #115. If confirmed dead end, update #91 and reassess project direction.",
+  "context_notes": "Key discovery: unaffected accounts use a pure spclient/storage-resolve path that doesn't invoke AudioKeyManager at all. Affected accounts hit AudioKeyManager which returns error 0 1. This suggests Spotify routes audio differently per cohort — affected accounts need a key that librespot cannot obtain."
 }
