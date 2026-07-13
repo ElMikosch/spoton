@@ -128,13 +128,13 @@ Items carried forward from previous milestones:
 ## Session Continuity
 
 **Last session:** 2026-07-13
-**Stopped at:** Quick task: Keymaster 403 account check script created
+**Stopped at:** Account check script created, #60 + #115 replied, script tested locally
 **Key finding:** PKCE fixes Browse/Search/Library but NOT audio playback (error audio key 0 1 for new-cohort accounts)
 **Next action (in order):**
-1. Reply to #60 (warminskimarcin token failures) with link to script + #91
+1. Check #60/#115 for user feedback on script results
 2. Create v3.0-auth branch from main
 3. `/gsd-plan-phase 49-00` (Token Usage Audit)
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-13 — Keymaster 403 account check script created*
+*Last updated: 2026-07-13 — Account check script, issue replies (#60, #115)*
