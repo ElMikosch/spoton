@@ -103,13 +103,15 @@
       "note": "tontze: TrueNAS Docker, port 5353 EADDRINUSE blocks mDNS discovery. Workaround from TROUBLESHOOTING applied successfully. Now blocked by Keymaster 403 (new account cohort, tracked in #91)."
     },
     "new-account-no-stored-credentials": {
-      "status": "community-self-help",
+      "status": "dead-end",
       "keywords": [
         "new account",
         "NoStoredCredentials",
         "code 103",
         "Boom",
-        "Oct 2025"
+        "Oct 2025",
+        "audio key",
+        "error audio key 0 1"
       ],
       "firstPost": 159,
       "latestPost": 191,
@@ -121,7 +123,7 @@
         "CJS",
         "tontze"
       ],
-      "note": "New accounts (post ~2024 creation date) fail with audio key error. mherger confirms same for Spotty. mccauls: old free->premium works, new premium trial fails. PlayPlay cohort confirmed."
+      "note": "CONFIRMED DEAD END (2026-07-13): Audio key denial is per-account cohort, independent of auth method. PKCE fixes Browse/Search/Library but NOT playback. Affects both new accounts AND old migrated accounts. librespot cannot obtain decryption keys for these accounts. No workaround exists."
     },
     "windows-token-capture-broken": {
       "status": "fix-shipped",
@@ -216,7 +218,9 @@
         "zeroconf",
         "auth",
         "go-librespot",
-        "token"
+        "token",
+        "audio key",
+        "dead end"
       ],
       "firstPost": 149,
       "latestPost": 184,
@@ -225,7 +229,7 @@
         "urknall",
         "mherger"
       ],
-      "note": "Multi-post architecture discussion. urknall confirmed PKCE-first (#176-177), added 4-bucket Keymaster audit classification + 7 PKCE edge cases. sti adopted all (#184). mherger confirmed newer accounts hit Keymaster 403 (#186). Next: Phase 49-00 Token Usage Audit."
+      "note": "Multi-post architecture discussion. PKCE confirmed correct for API access. AUDIO KEY DEAD END confirmed 2026-07-13: PKCE-derived credentials cannot decrypt audio for cohort-migrated accounts. v3.0 scope reduced to Browse/Search/Library/Connect-control only. Audio backend research is now existential."
     },
     "ubuntu-browse-empty-pete7874": {
       "status": "waiting-user",
