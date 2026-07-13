@@ -5,7 +5,7 @@ milestone_name: Library Integration
 status: ready_to_plan
 stopped_at: v2.3.14 released, auth research done
 last_updated: 2026-07-09
-last_activity: 2026-07-09 -- Quick task: diagnostics + daemon stability (browse-errors.log cleanup, token status in diag, port timeout 10s, staggered start)
+last_activity: 2026-07-13 -- Quick task: Keymaster 403 account check script for affected users
 progress:
   total_phases: 5
   completed_phases: 0
@@ -123,16 +123,18 @@ Items carried forward from previous milestones:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260709-bsx | Diagnostik + Daemon-Stabilität Verbesserungen | 2026-07-09 | e714019 | [260709-bsx](./quick/260709-bsx-diagnostik-daemon-stabilitaet-verbesseru/) |
+| 260713-bg4 | Keymaster 403 account check script for affected users | 2026-07-13 | 9aef195 | [260713-bg4](./quick/260713-bg4-keymaster-403-account-check-script-for-a/) |
 
 ## Session Continuity
 
-**Last session:** 2026-07-10
-**Stopped at:** Auth triage + 2nd Brain setup — Audio Key wall verified, issues updated, Obsidian vault built
+**Last session:** 2026-07-13
+**Stopped at:** Quick task: Keymaster 403 account check script created
 **Key finding:** PKCE fixes Browse/Search/Library but NOT audio playback (error audio key 0 1 for new-cohort accounts)
 **Next action (in order):**
-1. Create v3.0-auth branch from main
-2. `/gsd-plan-phase 49-00` (Token Usage Audit)
+1. Reply to #60 (warminskimarcin token failures) with link to script + #91
+2. Create v3.0-auth branch from main
+3. `/gsd-plan-phase 49-00` (Token Usage Audit)
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-10 — Audio Key wall verified, #91 master issue updated, Obsidian vault (72 files) created*
+*Last updated: 2026-07-13 — Keymaster 403 account check script created*
