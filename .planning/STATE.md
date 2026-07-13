@@ -4,8 +4,8 @@ milestone: v2.3
 milestone_name: Library Integration
 status: ready_to_plan
 stopped_at: v2.3.14 released, auth research done
-last_updated: 2026-07-09
-last_activity: 2026-07-13 -- Quick task: Keymaster 403 account check script for affected users
+last_updated: 2026-07-13
+last_activity: 2026-07-13 -- woorszt confirms PKCE restores full playback, dead-end retracted
 progress:
   total_phases: 5
   completed_phases: 0
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** v3.0 Auth Overhaul — spike session complete, urknall #176 feedback incorporated, ready for Phase 49-00
+**Current Focus:** v3.0 Auth Overhaul — PKCE validated (woorszt confirms full playback), ready for Phase 49-00 (slim audit) then Phase 49
 
 ## Current Position
 
 Phase: 48 SUPERSEDED → v3.0 planned (Phases 49-53)
 Plan: Spike findings packaged, phases defined, branch pending
-Status: Ready to create v3.0-auth branch and plan Phase 49-00 (Token Usage Audit)
-Last activity: 2026-07-05
+Status: Ready to create v3.0-auth branch, slim audit (49-00), then Phase 49 PKCE
+Last activity: 2026-07-13
 
 ## Progress Bar
 
@@ -108,7 +108,10 @@ Items carried forward from previous milestones:
 - [v3.0]: sp_dc/Pathfinder as "best effort" — TOTP rotation, graceful degradation, re-scrape on failure
 - [v3.0]: urknall's 11 success criteria as UAT gates (central: no hm://keymaster/token/authenticated in normal logs)
 - [v3.0]: Audit phase (49-00) before implementation — classify every Keymaster reference into the 4 buckets
-- [v3.0]: **AUDIO KEY DEAD END (2026-07-13):** PKCE fixes Browse/Search/Library but NOT audio playback for cohort-migrated accounts. `error audio key 0 1` is a server-side per-account block independent of auth method. Confirmed with automated test (spoton-pkce-audiokey-test.sh). Awaiting woorszt confirmation (#115). librespot's Shannon/AP audio-key path is dying — same cohort migration as Keymaster sunset.
+- [v3.0]: ~~AUDIO KEY DEAD END (2026-07-13)~~ **RETRACTED (2026-07-13):** woorszt (#115) confirms PKCE restores full audio playback on his Keymaster-403-affected account. Dead end was specific to newest-cohort test accounts only. Three-tier model: (1) unaffected = spclient path, (2) mid-cohort (Keymaster 403, audio keys work via PKCE) = v3.0 fixes everything, (3) newest-cohort (Keymaster 403 + audio key denied) = needs future audio backend research. Mid-cohort is the relevant target population.
+- [v3.0]: Phase 49-00 Audit slim — Grep+Klassifikation der 4 Keymaster-Buckets, kein Research. Direkt danach Phase 49 PKCE.
+- [v3.0]: Audio key denial (newest cohort) tracked in #91, kein eigenes Issue — Population noch unklar
+- [v3.0]: **librespot Audio Pipeline analysiert (2026-07-13):** Kein Branching — BEIDE Pfade (CDN storage-resolve + AudioKeyManager RequestKey 0x0c) werden IMMER für jeden Track aufgerufen. CDN liefert AES-128-CTR-verschlüsselte Bytes, Audio Key ist der Entschlüsselungsschlüssel. Kein client-seitiger Workaround möglich — AP entscheidet serverseitig ob Key rausgegeben wird. Newest-cohort-Fix erfordert komplett anderes Audio-Backend (v4.0/spoton-private).
 
 ### Blockers/Concerns
 
@@ -129,14 +132,20 @@ Items carried forward from previous milestones:
 ## Session Continuity
 
 **Last session:** 2026-07-13
-**Stopped at:** PKCE Audio Key test confirmed dead end — both new AND migrated accounts blocked
-**Key finding (CONFIRMED):** Audio key denial is per-account-cohort, independent of auth method. Unaffected accounts don't even use AudioKeyManager (pure spclient path). Affected accounts hit `error audio key 0 1`. v3.0 PKCE fixes API/Browse/Control but NOT playback.
-**Awaiting:** woorszt #115 confirmation with his affected account
+**Stopped at:** Dead-end retracted — woorszt confirms PKCE restores full playback for mid-cohort accounts
+**Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
+**Completed this session:**
+- Posted #115 reply (woorszt confirmation, 3-cohort model)
+- Posted #91 correction (retracted dead-end, updated assessment)
+- Fixed #60 label (waiting-user re-set, warminskimarcin hasn't run script)
+- Updated STATE.md decisions
 **Next action:**
-1. Wait for woorszt's test result
-2. If confirmed: document dead end, reassess v3.0 scope (Browse/Library-only value? Audio backend research priority?)
-3. warminskimarcin #60 still hasn't responded to account check script
+1. Create v3.0-auth branch from main
+2. Slim Phase 49-00 audit (Grep + 4-bucket classification)
+3. Plan Phase 49 PKCE OAuth
+4. Fix python3 dependency in spoton-pkce-audiokey-test.sh (woorszt feedback)
+5. warminskimarcin #60 still hasn't run account check script
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-13 — Account check script, issue replies (#60, #115)*
+*Last updated: 2026-07-13 — Dead-end retracted, #91 + #115 updated, v3.0 validated*
