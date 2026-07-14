@@ -1121,8 +1121,17 @@ sub _playlistItem {
 # ============================================================
 
 # _homeFeed($client, $callback, $args)
-# Returns three navigation items: Recently Played, Made For You, Top Tracks.
+# Returns navigation items: Recently Played, (conditional) Made For You, Top Tracks.
 # Per D-02: each item opens its own sub-feed.
+#
+# Phase 52 (D-03/D-04/D-05): the Made For You item's visibility is gated on
+# Plugins::SpotOn::API::WebPlayer->state($accountId), the OPML degradation
+# channel (third of the three D-04 channels -- Settings/Status are Plan 03):
+#   empty        (D-03, no sp_dc)        -> item hidden entirely, distinct INFO log
+#   secrets_down (D-05, xyloflake down)  -> item hidden entirely, distinct INFO log
+#   expired      (D-04, sp_dc expired)   -> item shown, drills into an "sp_dc
+#                                            expired" hint instead of fetching
+#   valid                                -> item shown, drills into the normal feed
 sub _homeFeed {
     my ($client, $callback, $args) = @_;
 
@@ -1132,19 +1141,63 @@ sub _homeFeed {
             url  => \&_recentlyPlayedFeed,
             type => 'link',
         },
-        {
+    );
+
+    require Plugins::SpotOn::API::WebPlayer;
+    my $accountId = _getAccountId($client);
+    my $mfyState  = Plugins::SpotOn::API::WebPlayer->state($accountId);
+
+    if ($mfyState eq 'empty') {
+        main::INFOLOG && $log->is_info && $log->info(
+            'Plugin: Made For You hidden -- no sp_dc configured for account '
+            . _mfyMaskAccount($accountId) . ' (D-03)');
+    } elsif ($mfyState eq 'secrets_down') {
+        main::INFOLOG && $log->is_info && $log->info(
+            'Plugin: Made For You hidden -- TOTP secrets unavailable for account '
+            . _mfyMaskAccount($accountId) . ' (D-05)');
+    } elsif ($mfyState eq 'expired') {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
+            url  => \&_madeForYouExpiredFeed,
+            type => 'link',
+        };
+    } else {
+        push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
             url  => \&_madeForYouFeed,
             type => 'link',
-        },
-        {
-            name => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
-            url  => \&_topTracksFeed,
-            type => 'link',
-        },
-    );
+        };
+    }
+
+    push @items, {
+        name => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
+        url  => \&_topTracksFeed,
+        type => 'link',
+    };
 
     $callback->({ items => \@items });
+}
+
+# _mfyMaskAccount($accountId)
+# T-29-07 masking convention for the two Made For You D-03/D-05 log lines
+# above -- mirrors API::WebPlayer::_mask / API::TokenManager::_mask.
+sub _mfyMaskAccount {
+    my ($accountId) = @_;
+    return 'unknown' unless defined $accountId && length $accountId;
+    return substr($accountId, 0, 4) . '****';
+}
+
+# _madeForYouExpiredFeed($client, $callback, $args)
+# D-04 OPML channel: sp_dc has expired. Renders a fixed hint instead of
+# attempting a Pathfinder fetch that would only fail -- Settings.pm and
+# Status.pm carry the other two D-04 channels (Plan 03). Never reflects any
+# raw error/reason into the menu (Security V7/T-52-02).
+sub _madeForYouExpiredFeed {
+    my ($client, $callback, $args) = @_;
+    $callback->({ items => [{
+        name => cstring($client, 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT'),
+        type => 'textarea',
+    }] });
 }
 
 # _recentlyPlayedFeed($client, $callback, $args)

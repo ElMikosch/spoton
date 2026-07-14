@@ -312,6 +312,57 @@ sub uri_escape {
 1;
 END
 
+# Stub: Plugins::SpotOn::API::WebPlayer (Phase 52 Plan 04 -- state() gates
+# Made For You visibility in _homeFeed; controllable via $next_state so
+# every degradation branch (empty/secrets_down/expired/valid) can be driven
+# from the test without depending on WebPlayer's real internals (Plan 01,
+# out of this plan's scope).
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+our $next_state = 'valid';
+sub state { return $next_state }
+1;
+END
+
+# Stub: Plugins::SpotOn::API::Client (Phase 52 Plan 04 -- pathfinderHome()/
+# getWebPlayerPlaylistItems() drive the rewritten _madeForYouFeed and the
+# webPlayer-flagged _playlistFeed drill-down; controllable via
+# $next_pathfinder_ids/$next_pathfinder_err/$next_wp_items so success,
+# empty-discovery, and error paths can all be exercised without a real
+# Client.pm (Plan 02, out of this plan's scope).
+write_stub($stub_dir, 'Plugins::SpotOn::API::Client', <<'END');
+package Plugins::SpotOn::API::Client;
+our $next_pathfinder_ids   = [];
+our $next_pathfinder_err   = undef;
+our $next_wp_items         = { items => [], total => 0 };
+our @pathfinder_home_calls = ();
+our @wp_items_calls        = ();
+sub pathfinderHome {
+    my ($class, $accountId, $params, $cb) = @_;
+    push @pathfinder_home_calls, [$accountId, $params];
+    $cb->($next_pathfinder_ids, $next_pathfinder_err);
+}
+sub getWebPlayerPlaylistItems {
+    my ($class, $accountId, $playlistId, $params, $cb) = @_;
+    push @wp_items_calls, [$accountId, $playlistId, $params];
+    $cb->($next_wp_items);
+}
+sub getPlaylistItems {
+    # Should NEVER be called for a Made For You (37i9...) playlist drill-down
+    # (Pitfall 3) -- present only so a regression would fail loudly rather
+    # than autoloading into nothing.
+    die 'getPlaylistItems must not be called for a webPlayer-flagged playlist (Pitfall 3)';
+}
+sub reset_calls {
+    $next_pathfinder_ids   = [];
+    $next_pathfinder_err   = undef;
+    $next_wp_items         = { items => [], total => 0 };
+    @pathfinder_home_calls = ();
+    @wp_items_calls        = ();
+}
+1;
+END
+
 # ============================================================
 # main:: constants (LMS constants needed by ProtocolHandler/Plugin)
 # ============================================================
@@ -332,6 +383,19 @@ unshift @INC, $stub_dir, $project_dir;
 
 # Pre-load the Helper stub so lazy 'require Plugins::SpotOn::Helper' finds the stub.
 require Plugins::SpotOn::Helper;
+
+# Pre-load the Client stub (Phase 52 Plan 04) -- Plugin.pm's _madeForYouFeed
+# and _playlistFeed call Plugins::SpotOn::API::Client->... directly without a
+# require in their own body (mirrors production, where initPlugin loads it
+# once at startup).
+require Plugins::SpotOn::API::Client;
+
+# Pre-load the WebPlayer stub too (Phase 52 Plan 04) -- _homeFeed does its own
+# lazy 'require ...::WebPlayer' on every call, but require only executes a
+# module's top-level code (including its `our $next_state = 'valid'` default)
+# on the FIRST load. Pre-loading here, before any test sets $next_state,
+# avoids that first-call reset silently clobbering a value set beforehand.
+require Plugins::SpotOn::API::WebPlayer;
 
 # ============================================================
 # Load Plugin.pm and ProtocolHandler.pm
@@ -479,6 +543,79 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
         'CTX-05: item list includes PLUGIN_SPOTON_MANAGE_FOLLOW' );
     ok( (grep { $_ eq 'PLUGIN_SPOTON_ADD_TO_PLAYLIST' } @names),
         'CTX-05: item list includes PLUGIN_SPOTON_ADD_TO_PLAYLIST' );
+}
+
+# ============================================================
+# Phase 52 Plan 04, Task 1 -- _homeFeed Made For You visibility gating
+# (D-03/D-04/D-05, the OPML degradation channel)
+# ============================================================
+{
+    my $client = MockClient->new('player-mfy');
+    Slim::Utils::Prefs::preferences('plugin.spoton')->set('activeAccount', 'mfy-account-id');
+
+    # Test 6: state=empty (D-03) -- Made For You item hidden entirely.
+    $Plugins::SpotOn::API::WebPlayer::next_state = 'empty';
+    my $result;
+    Plugins::SpotOn::Plugin::_homeFeed($client, sub { $result = shift }, {});
+    my @names = map { $_->{name} } @{ $result->{items} };
+    ok( !(grep { $_ eq 'PLUGIN_SPOTON_MADE_FOR_YOU' } @names),
+        'CTX-06: _homeFeed hides Made For You when WebPlayer state is empty (D-03)' );
+
+    # Test 7: state=secrets_down (D-05) -- also hidden entirely, distinct cause.
+    $Plugins::SpotOn::API::WebPlayer::next_state = 'secrets_down';
+    undef $result;
+    Plugins::SpotOn::Plugin::_homeFeed($client, sub { $result = shift }, {});
+    @names = map { $_->{name} } @{ $result->{items} };
+    ok( !(grep { $_ eq 'PLUGIN_SPOTON_MADE_FOR_YOU' } @names),
+        'CTX-07: _homeFeed hides Made For You when WebPlayer state is secrets_down (D-05)' );
+
+    # Test 8: state=expired (D-04) -- item shown, drills into the expired-hint feed.
+    $Plugins::SpotOn::API::WebPlayer::next_state = 'expired';
+    undef $result;
+    Plugins::SpotOn::Plugin::_homeFeed($client, sub { $result = shift }, {});
+    my ($mfyItem) = grep { $_->{name} eq 'PLUGIN_SPOTON_MADE_FOR_YOU' } @{ $result->{items} };
+    ok( defined $mfyItem, 'CTX-08: _homeFeed shows Made For You when WebPlayer state is expired (D-04)' );
+    is( $mfyItem->{type}, 'link', 'CTX-08: expired-state Made For You item is a link item' );
+    is( $mfyItem->{url}, \&Plugins::SpotOn::Plugin::_madeForYouExpiredFeed,
+        'CTX-08: expired-state Made For You item drills into _madeForYouExpiredFeed' );
+
+    my $expiredResult;
+    $mfyItem->{url}->($client, sub { $expiredResult = shift }, {});
+    is( scalar @{ $expiredResult->{items} }, 1,
+        'CTX-08: expired hint feed returns exactly one item' );
+    is( $expiredResult->{items}[0]{name}, 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT',
+        'CTX-08: expired hint feed renders PLUGIN_SPOTON_SP_DC_EXPIRED_HINT' );
+    is( $expiredResult->{items}[0]{type}, 'textarea',
+        'CTX-08: expired hint item type is textarea' );
+
+    # Test 9: state=valid -- normal link item pointing at _madeForYouFeed.
+    $Plugins::SpotOn::API::WebPlayer::next_state = 'valid';
+    undef $result;
+    Plugins::SpotOn::Plugin::_homeFeed($client, sub { $result = shift }, {});
+    ($mfyItem) = grep { $_->{name} eq 'PLUGIN_SPOTON_MADE_FOR_YOU' } @{ $result->{items} };
+    ok( defined $mfyItem, 'CTX-09: _homeFeed shows Made For You when WebPlayer state is valid' );
+    is( $mfyItem->{type}, 'link', 'CTX-09: valid-state Made For You item is a link item' );
+    is( $mfyItem->{url}, \&Plugins::SpotOn::Plugin::_madeForYouFeed,
+        'CTX-09: valid-state Made For You item drills into _madeForYouFeed' );
+}
+
+# ============================================================
+# Phase 52 Plan 04, Task 1 -- source assertions (distinct log lines,
+# WebPlayer->state gate presence)
+# ============================================================
+{
+    my $plugin_module = "$project_dir/Plugins/SpotOn/Plugin.pm";
+    open(my $fh, '<', $plugin_module) or die $!;
+    my $src = do { local $/; <$fh> };
+    close($fh);
+
+    my $state_calls = () = $src =~ /WebPlayer->state\(/g;
+    ok( $state_calls >= 1, 'Plugin.pm: _homeFeed gates on WebPlayer->state' );
+
+    ok( $src =~ /Made For You hidden.*no sp_dc.*D-03/s,
+        'Plugin.pm: distinct D-03 (empty) log line present' );
+    ok( $src =~ /Made For You hidden.*TOTP secrets unavailable.*D-05/s,
+        'Plugin.pm: distinct D-05 (secrets_down) log line present' );
 }
 
 done_testing();
