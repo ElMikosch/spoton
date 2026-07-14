@@ -11,6 +11,23 @@ use Cwd qw(abs_path);
 my $test_dir    = dirname(abs_path($0));
 my $project_dir = dirname($test_dir);
 
+# ============================================================
+# FakeSettingsResponse — minimal Slim::Web response double for exercising
+# _pkceStoreAccount directly (Plan 51-03 Task 2): supports the header/code/
+# content_type accessor calls made by _jsonResponse and _renderPkceResultPage.
+# ============================================================
+package FakeSettingsResponse;
+sub new { return bless { headers => {} }, shift }
+sub header {
+    my $self = shift;
+    if (@_ == 2) { $self->{headers}{ $_[0] } = $_[1]; return $_[1]; }
+    return $self->{headers}{ $_[0] };
+}
+sub code         { my $self = shift; $self->{code}         = $_[0] if @_; return $self->{code}; }
+sub content_type { my $self = shift; $self->{content_type} = $_[0] if @_; return $self->{content_type}; }
+
+package main;
+
 # Create a temporary directory for LMS stubs
 my $stub_dir = tempdir(CLEANUP => 1);
 my $cache_dir = tempdir(CLEANUP => 1);
@@ -289,14 +306,50 @@ write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
 our %needs_reauth;
 our @clear_reauth_calls = ();
+our @store_account_prefs_calls = ();
 sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
 sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
 sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
 sub getAccountIds     { return () }
+# _storeAccountPrefs — minimal re-implementation of the real TokenManager
+# behavior (Plan 51-03 Task 2): stores the account, sets activeAccount only
+# if none is set yet (mirrors the $needsDaemonStart first-account-only
+# conditional that Pitfall 6 documents), then invokes the no-arg callback.
+sub _storeAccountPrefs {
+    my ($class, $accountId, $spotifyUserId, $displayName, $cb) = @_;
+    push @store_account_prefs_calls, $accountId;
+    my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    my $accounts = $prefs->get('accounts') || {};
+    $accounts->{$accountId} = { displayName => $displayName, spotifyUserId => $spotifyUserId };
+    $prefs->set('accounts', $accounts);
+    $prefs->set('activeAccount', $accountId) unless $prefs->get('activeAccount');
+    $cb->();
+}
 sub reset_calls {
     %needs_reauth = ();
     @clear_reauth_calls = ();
+    @store_account_prefs_calls = ();
+}
+1;
+END
+
+# Stub: Plugins::SpotOn::API::Credentials (D-01 eager derivation call site — Plan 51-03)
+write_stub($stub_dir, 'Plugins::SpotOn::API::Credentials', <<'END');
+package Plugins::SpotOn::API::Credentials;
+our $next_derive_ok = 1;
+our $derive_call_count = 0;
+our $last_derive_account;
+sub deriveCredentials {
+    my ($class, $accountId, $cb) = @_;
+    $derive_call_count++;
+    $last_derive_account = $accountId;
+    $cb->($next_derive_ok, $next_derive_ok ? undef : 'derivation_failed');
+}
+sub reset_calls {
+    $next_derive_ok = 1;
+    $derive_call_count = 0;
+    $last_derive_account = undef;
 }
 1;
 END
@@ -304,7 +357,9 @@ END
 # Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref save)
 write_stub($stub_dir, 'Plugins::SpotOn::Unified::DaemonManager', <<'END');
 package Plugins::SpotOn::Unified::DaemonManager;
-sub scheduleInit { }
+our $schedule_init_calls = 0;
+sub scheduleInit { $schedule_init_calls++ }
+sub reset_calls { $schedule_init_calls = 0 }
 1;
 END
 
@@ -432,6 +487,19 @@ SKIP: {
     ok($src =~ /paramRef->\{'warning'\}/,     q{Settings.pm: $paramRef->{'warning'} assignment present});
     ok($src =~ /clearNeedsReauth/,            'Settings.pm: clearNeedsReauth called on successful PKCE auth');
 
+    # Plan 51-03: D-01 eager derivation call site
+    ok($src =~ /deriveCredentials/,           'Settings.pm: deriveCredentials called in _pkceStoreAccount');
+
+    # Plan 51-03 D-02: the failure branch must reference the new warning
+    # i18n key. Scoped to _pkceStoreAccount's own body (rather than the
+    # whole file) since the JSON/HTML output itself can't be inspected for
+    # the real translated string under the shared Slim::Utils::Strings stub
+    # (single-arg string() calls resolve to '' -- see D-08 Channel 2 note
+    # above).
+    my ($pkce_store_body) = $src =~ /(sub _pkceStoreAccount\b.*?)(?=\nsub \w|\z)/s;
+    ok(defined $pkce_store_body && $pkce_store_body =~ /PLUGIN_SPOTON_CONNECT_DERIVE_FAILED/,
+        'Settings.pm: _pkceStoreAccount failure branch references PLUGIN_SPOTON_CONNECT_DERIVE_FAILED');
+
     # prefs() should NOT include clientId
     ok($src =~ /sub prefs[^}]+return[^}]+(?!clientId)[^}]+}/s,
         'Settings.pm: prefs() method exists');
@@ -472,6 +540,86 @@ SKIP: {
         my $active = $prefs->get('activeAccount');
         is($active, 'abc12345',
             'AUTH-06: Account switch via handler updates activeAccount preference to new ID');
+    }
+}
+
+# ============================================================
+# Plan 51-03: D-01 eager derivation + D-06 unconditional daemon start
+# Exercises the real _pkceStoreAccount directly against stubbed
+# Credentials/DaemonManager/TokenManager collaborators. Runs after AUTH-06
+# (which depends on a pristine 'accounts'/'activeAccount' prefs state via
+# its own init() call) since this block deliberately mutates both keys.
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for eager derivation test", 6
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::Credentials;
+    require Plugins::SpotOn::API::TokenManager;
+    require Plugins::SpotOn::Unified::DaemonManager;
+    require Slim::Web::HTTP;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+
+    # (a) + (b): a successful derivation calls deriveCredentials exactly
+    # once and triggers scheduleInit unconditionally (Pitfall 6 regression
+    # guard) -- even though activeAccount is ALREADY set before the flow,
+    # which means _storeAccountPrefs's own $needsDaemonStart conditional
+    # would NOT have fired on its own.
+    {
+        $spotonPrefs->set('accounts', {});
+        $spotonPrefs->set('activeAccount', 'existingacct');
+
+        $Plugins::SpotOn::API::Credentials::derive_call_count            = 0;
+        $Plugins::SpotOn::API::Credentials::next_derive_ok                = 1;
+        $Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls     = 0;
+        @Plugins::SpotOn::API::TokenManager::store_account_prefs_calls    = ();
+        @Slim::Web::HTTP::http_responses                                  = ();
+
+        my $response = FakeSettingsResponse->new;
+        Plugins::SpotOn::Settings::_pkceStoreAccount(
+            'http_client_a', $response,
+            { access_token => 'tok1', refresh_token => 'rtok1', expires_in => 3600, scope => 'x' },
+            'client123', 'spotifyUserA', 'Test User A', 1,
+        );
+
+        is($Plugins::SpotOn::API::Credentials::derive_call_count, 1,
+            'Plan51-03: _pkceStoreAccount calls deriveCredentials exactly once on success');
+        is($Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls, 1,
+            'Plan51-03 Pitfall 6: scheduleInit fires unconditionally even though activeAccount was already set');
+
+        my $storedAccountId = $Plugins::SpotOn::API::Credentials::last_derive_account;
+        ok($storedAccountId && exists $spotonPrefs->get('accounts')->{$storedAccountId},
+            'Plan51-03: account creation completed alongside successful derivation');
+        is(scalar(@Plugins::SpotOn::API::TokenManager::store_account_prefs_calls), 1,
+            'Plan51-03: _storeAccountPrefs invoked exactly once for the flow');
+    }
+
+    # (c): derivation failure does not roll back account creation, and does
+    # NOT trigger scheduleInit (content of the rendered warning string is
+    # covered by the structure assertion above, not output capture -- see
+    # that assertion's comment for why).
+    {
+        $spotonPrefs->set('accounts', {});
+        $spotonPrefs->set('activeAccount', '');
+
+        $Plugins::SpotOn::API::Credentials::derive_call_count        = 0;
+        $Plugins::SpotOn::API::Credentials::next_derive_ok            = 0;
+        $Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls = 0;
+        @Slim::Web::HTTP::http_responses                              = ();
+
+        my $response = FakeSettingsResponse->new;
+        Plugins::SpotOn::Settings::_pkceStoreAccount(
+            'http_client_b', $response,
+            { access_token => 'tok2', refresh_token => 'rtok2', expires_in => 3600, scope => 'x' },
+            'client123', 'spotifyUserB', 'Test User B', 1,
+        );
+
+        my $storedAccountId = $Plugins::SpotOn::API::Credentials::last_derive_account;
+        ok($storedAccountId && exists $spotonPrefs->get('accounts')->{$storedAccountId},
+            'Plan51-03 D-02: account creation NOT rolled back when derivation fails');
+        is($Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls, 0,
+            'Plan51-03 D-06: scheduleInit NOT called when derivation fails');
     }
 }
 
