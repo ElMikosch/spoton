@@ -220,7 +220,7 @@ my $fake_helper_path = "$cache_dir/fake-spoton";
 write_stub($stub_dir, 'Plugins::SpotOn::Helper', <<"END");
 package Plugins::SpotOn::Helper;
 our \$fake_path = '$fake_helper_path';
-our \%caps = ('token-login' => 1);
+our \%caps = ('token-login' => 1, 'token-env' => 1);
 
 sub get { return \$fake_path }
 sub getCapability {
@@ -229,7 +229,7 @@ sub getCapability {
 }
 sub reset_stub {
     \$fake_path = '$fake_helper_path';
-    \%caps = ('token-login' => 1);
+    \%caps = ('token-login' => 1, 'token-env' => 1);
 }
 1;
 END
@@ -613,6 +613,8 @@ require JSON::PP;
 
 # ============================================================
 # Test 11: invocation contract -- recorded spawn args
+# CR-01: when token-env capability is present, the token goes via env var
+# (SPOTON_TOKEN), NOT as --token argv.
 # ============================================================
 {
     reset_all();
@@ -624,11 +626,28 @@ require JSON::PP;
     is(scalar(@Proc::Background::spawns), 1, 'Test 11: exactly one spawn recorded');
     my @args = @{ $Proc::Background::spawns[0] };
     ok((grep { $_ eq '--token-login' } @args), 'Test 11: spawn args contain --token-login');
-    ok((grep { $_ eq '--token' } @args), 'Test 11: spawn args contain --token');
-    ok((grep { $_ eq 'tok-fresh' } @args), 'Test 11: spawn args contain the fresh token value');
+    # CR-01: with token-env capability, --token and the token value must NOT
+    # appear in argv (world-readable via /proc/<pid>/cmdline).
+    ok(!(grep { $_ eq '--token' } @args), 'Test 11: spawn args do NOT contain --token (token-env capability)');
+    ok(!(grep { $_ eq 'tok-fresh' } @args), 'Test 11: spawn args do NOT contain the token value (CR-01 env var path)');
     ok((grep { $_ eq '--cache' } @args), 'Test 11: spawn args contain --cache');
     my $expectedDir = catdir($cache_dir, 'spoton', $accountId);
     ok((grep { $_ eq $expectedDir } @args), 'Test 11: spawn args contain the account-scoped cache dir');
+}
+# Test 11b: fallback -- without token-env capability, --token argv is used
+{
+    reset_all();
+    $Plugins::SpotOn::Helper::caps{'token-env'} = 0;
+    my $accountId = 'acct_invocation_fallback';
+    seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+
+    Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub { });
+
+    is(scalar(@Proc::Background::spawns), 1, 'Test 11b: exactly one spawn recorded');
+    my @args = @{ $Proc::Background::spawns[0] };
+    ok((grep { $_ eq '--token-login' } @args), 'Test 11b: spawn args contain --token-login');
+    ok((grep { $_ eq '--token' } @args), 'Test 11b: spawn args contain --token (no token-env capability)');
+    ok((grep { $_ eq 'tok-fresh' } @args), 'Test 11b: spawn args contain the token value (fallback path)');
 }
 
 # ============================================================

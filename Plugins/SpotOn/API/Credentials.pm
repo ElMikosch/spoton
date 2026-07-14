@@ -124,14 +124,26 @@ sub deriveCredentials {
         }
 
         require Proc::Background;
+
+        # CR-01 / H10: prefer SPOTON_TOKEN env var over --token argv when
+        # the binary supports it (capability 'token-env'). argv is world-
+        # readable via /proc/<pid>/cmdline and `ps`; the env var is set just
+        # for the spawn and deleted immediately after (same pattern as
+        # SPOTON_LMS_AUTH in Daemon.pm lines 186-189). --token argv is
+        # retained as fallback for older binaries.
+        my $useTokenEnv = Plugins::SpotOn::Helper->getCapability('token-env');
+        my @tokenArgs = $useTokenEnv ? () : ('--token', $token);
+        $ENV{SPOTON_TOKEN} = $token if $useTokenEnv;
+
         my $proc = eval {
             Proc::Background->new(
                 { 'die_upon_destroy' => 1 },
                 $helperPath, '-n', 'SpotOn',
-                '--token-login', '--token', $token,
+                '--token-login', @tokenArgs,
                 '--cache', $accountDir,
             );
         };
+        delete $ENV{SPOTON_TOKEN} if $useTokenEnv;  # immediately after spawn
         if ($@ || !$proc) {
             # CRITICAL (T-29-07/T-51-05): never log the spawn command line or
             # the token value -- log only the masked accountId and cache dir.

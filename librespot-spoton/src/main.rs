@@ -288,6 +288,7 @@ async fn main() {
                 "lms-auth": true,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
+                "token-env": true,        // Phase 51 CR-01: SPOTON_TOKEN env var support
                 "token-login": true,
                 "unified": true,          // Phase 29: unified Browse+Connect daemon capability
             });
@@ -343,9 +344,23 @@ async fn main() {
         }
 
         Mode::TokenLogin => {
+            // CR-01 / H10: prefer SPOTON_TOKEN env var over --token argv.
+            // argv is world-readable via /proc/<pid>/cmdline and `ps`; the env
+            // var is set by Credentials.pm just for the spawn and deleted
+            // immediately after (same pattern as SPOTON_LMS_AUTH in Daemon.pm).
+            // --token argv is retained as fallback for older Perl layers or
+            // manual testing.
             if token_str.is_empty() {
-                eprintln!("Error: --token is required for --token-login");
+                if let Ok(env_token) = std::env::var("SPOTON_TOKEN") {
+                    if !env_token.is_empty() {
+                        token_str = env_token;
+                    }
+                }
+            }
+            if token_str.is_empty() {
+                eprintln!("Error: --token or SPOTON_TOKEN env var is required for --token-login");
                 eprintln!("Usage: spoton -n 'SpotOn' --token-login --token <access_token> --cache <dir>");
+                eprintln!("   or: SPOTON_TOKEN=<access_token> spoton --token-login --cache <dir>");
                 process::exit(1);
             }
             if cache_dir.is_empty() {
