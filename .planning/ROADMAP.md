@@ -158,9 +158,9 @@
 
   Plans:
 
-  - [ ] 50-01-PLAN.md — TokenManager.pm PKCE rewrite + PKCE.pm error extension + test rewrite
-  - [ ] 50-02-PLAN.md — Client.pm flavor system removal + test update
-  - [ ] 50-03-PLAN.md — Integration wiring (Plugin.pm + Settings.pm + basic.html + i18n)
+  - [ ] 50-01-PLAN.md — TokenManager.pm PKCE rewrite + PKCE.pm error extension + test rewrite (review: M-1/M-4/M-5/M-6/L-1/L-4/L-6)
+  - [ ] 50-02-PLAN.md — Client.pm flavor removal + Status.pm/status.html fix + test updates (review: H-1/H-2/L-2/L-5)
+  - [ ] 50-03-PLAN.md — Integration wiring: Plugin.pm + Settings.pm + basic.html + i18n (review: M-2/M-3/M-7)
 
 ### Phase 51: Credential Derivation + Connect
 
