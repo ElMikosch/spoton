@@ -179,7 +179,15 @@
 
 - [ ] **Phase 52: sp_dc + Pathfinder Integration**
   **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
+  **Plans:** 4 plans (3 waves)
   Depends on: Phase 50
+
+  Plans:
+
+  - [ ] 52-01-PLAN.md — WebPlayer.pm token lifecycle (SecretSource, TOTP, mint, client-token, state enum) + Wave 0 tests (D-01/D-02/D-05/D-06/D-09/D-10)
+  - [ ] 52-02-PLAN.md — Client.pm Pathfinder discovery + Web-Player 37i9 track fetch + separate rate pool (D-07)
+  - [ ] 52-03-PLAN.md — Settings sp_dc section + Status channel + i18n strings + template (D-04/D-08/D-09)
+  - [ ] 52-04-PLAN.md — Plugin.pm OPML Made for You feed gating + Pathfinder wiring (D-03/D-04/D-05/D-07)
 
 ### Phase 53: Keymaster Removal + Migration
 
