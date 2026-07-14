@@ -177,11 +177,6 @@ sub initPlugin {
         require Plugins::SpotOn::Status;
         Plugins::SpotOn::Status->new();
 
-        # D-01: Auto-start ZeroConf Discovery if no credentials exist.
-        # Deferred via timer to not block initPlugin.
-        Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);
-        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 2, \&_autoStartDiscovery);
-
         # Start Unified daemon manager for all players.
         # 4s delay: allows player list to populate after LMS start.
         Slim::Utils::Timers::killTimers($class, \&_startUnifiedDaemons);
@@ -295,13 +290,6 @@ sub _refreshAllTokens {
     Plugins::SpotOn::API::TokenManager->refreshAllTokens();
 }
 
-# _autoStartDiscovery()
-# D-01: Timer callback — auto-starts ZeroConf discovery if no credentials exist.
-sub _autoStartDiscovery {
-    require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->autoStartDiscoveryIfNeeded();
-}
-
 # _startUnifiedDaemons()
 # Phase 29: Timer callback — starts Unified daemon manager at LMS boot.
 # 4s delay: after Connect and Browse timers to ensure player list populated.
@@ -349,13 +337,6 @@ sub _killOrphanedProcesses {
     unless ($isBusy) {
         my ($helper) = Plugins::SpotOn::Helper->get();
         if ($helper) {
-            # W2: The ZeroConf discovery process runs the same helper binary —
-            # exclude its PID from orphan cleanup so a running discovery is
-            # not killed mid-flow.
-            my $discoveryPid;
-            if ($INC{'Plugins/SpotOn/API/TokenManager.pm'}) {
-                $discoveryPid = Plugins::SpotOn::API::TokenManager->discoveryPid;
-            }
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
@@ -371,7 +352,6 @@ sub _killOrphanedProcesses {
                         for my $pid (@pids) {
                             next if $activePids{$pid};
                             next if $unifiedPids{$pid};
-                            next if $discoveryPid && $pid == $discoveryPid;   # W2
                             kill 'KILL', $pid;
                             main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid (Windows)");
                         }
@@ -395,7 +375,6 @@ sub _killOrphanedProcesses {
                     for my $pid (@pids) {
                         next if $activePids{$pid};
                         next if $unifiedPids{$pid};    # CON-09: protect Unified daemon PIDs
-                        next if $discoveryPid && $pid == $discoveryPid;   # W2
                         kill 'TERM', $pid;
                         main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
                     }
@@ -428,8 +407,17 @@ sub handleFeed {
 
     my @items;
 
-    # Rate-limit hint (D-12): show when either token flavor is throttled
-    if ( $cache->get('spoton_rate_limit_own') || $cache->get('spoton_rate_limit_bundled') ) {
+    # D-08 Channel 1: OPML re-auth warning — show when any account needs re-authentication.
+    require Plugins::SpotOn::API::TokenManager;
+    if (Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth()) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_REAUTH_REQUIRED'),
+            type => 'textarea',
+        };
+    }
+
+    # Rate-limit hint (D-12): show when the API is throttled
+    if ( $cache->get('spoton_rate_limit') ) {
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_RATE_LIMIT_HINT'),
             type => 'textarea',
