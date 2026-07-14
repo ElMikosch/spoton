@@ -128,6 +128,7 @@ Items carried forward from previous milestones:
 |---|-------------|------|--------|-----------|
 | 260709-bsx | Diagnostik + Daemon-Stabilität Verbesserungen | 2026-07-09 | e714019 | [260709-bsx](./quick/260709-bsx-diagnostik-daemon-stabilitaet-verbesseru/) |
 | 260713-bg4 | Keymaster 403 account check script for affected users | 2026-07-13 | 9aef195 | [260713-bg4](./quick/260713-bg4-keymaster-403-account-check-script-for-a/) |
+| 3 | Keymaster Token Usage Audit (4-bucket classification) | 2026-07-13 | e50fc26 | — |
 
 ## Session Continuity
 
