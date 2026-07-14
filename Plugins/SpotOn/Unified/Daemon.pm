@@ -42,6 +42,7 @@ __PACKAGE__->mk_accessor( rw => qw(
 	_startTimes
 	_streamPort
 	_stderrFh
+	_stderrStartOffset
 	_healthCheckCount
 	_lastHealthSession
 	_portTmpfile
@@ -275,6 +276,12 @@ sub start {
 	# Store stderr file handle as accessor to prevent premature GC (Pitfall 3)
 	$self->_stderrFh($stderr_fh) if $stderr_fh;
 	$self->_stderrFile($stderrFile);
+
+	# WR-03: record file size at spawn time so stderrTail() only reads bytes
+	# from the current run. In append mode (diagnosticMode ON), the file
+	# accumulates across daemon runs; without this offset, stderrTail would
+	# misclassify unrelated crashes by reading error text from earlier runs.
+	$self->_stderrStartOffset($stderrFile && -f $stderrFile ? (-s $stderrFile || 0) : 0);
 
 	main::INFOLOG && $log->is_info && $stderrFile && $log->info(
 		"SpotOn Unified daemon stderr logged to $stderrFile"
@@ -524,7 +531,13 @@ sub stderrTail {
 	my $text = eval {
 		open(my $fh, '<', $file) or die "open failed: $!";
 		my $size = -s $fh;
-		seek($fh, ($size > $maxBytes ? $size - $maxBytes : 0), 0);
+		# WR-03: only read bytes from the current run — the start offset
+		# recorded at spawn time is the lower bound. In append mode
+		# (diagnosticMode ON) without this, stderr text from earlier runs
+		# could misclassify an unrelated crash as a credential error.
+		my $start = $self->_stderrStartOffset || 0;
+		my $from  = ($size - $maxBytes > $start) ? $size - $maxBytes : $start;
+		seek($fh, $from, 0);
 		local $/;
 		my $data = <$fh>;
 		close($fh);
