@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
 current_phase: 51
-current_phase_name: Credential Derivation + Connect
+current_phase_name: credential-derivation-connect
 status: executing
 stopped_at: Phase 51 context gathered
-last_updated: "2026-07-14T14:22:04.115Z"
+last_updated: "2026-07-14T14:36:56.174Z"
 last_activity: 2026-07-14
-last_activity_desc: Phase 50 complete, transitioned to Phase 51
+last_activity_desc: Phase 51 execution started
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 40
 ---
 
@@ -29,14 +29,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** Phase 50 — perl-tokenmanager-rewrite
+**Current Focus:** Phase 51 — credential-derivation-connect
 
 ## Current Position
 
-Phase: 51 — Credential Derivation + Connect
-Plan: Not started
+Phase: 51 (credential-derivation-connect) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-14 — Phase 50 complete, transitioned to Phase 51
+Last activity: 2026-07-14 — Phase 51 execution started
 
 ## Progress Bar
 
@@ -86,6 +86,7 @@ Items carried forward from previous milestones:
 | Phase 50 P01 | 25min | 2 tasks | 3 files |
 | Phase 50 P02 | 12min | 2 tasks | 5 files |
 | Phase 50 P03 | 20min | 2 tasks | 6 files |
+| Phase 51 P01 | 8min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,8 @@ Items carried forward from previous milestones:
 - [Phase 50]: [Phase 50-02]: D-04 completion -- Client.pm flavor system deleted entirely (single PKCE token per account, single spoton_rate_limit cache key, 2-arg getToken call site)
 - [Phase 50]: [Phase 50-02]: M-7 (Settings.pm still reads old rateLimitedOwn/rateLimitedBundled keys) intentionally deferred to Plan 03, not fixed here
 - [Phase 50]: [Phase 50-03]: D-08 completion -- OPML (Channel 1) + Settings (Channel 2) re-auth warnings wired via anyAccountNeedsReauth(); all ZeroConf discovery-as-auth code removed from Plugin.pm/Settings.pm/basic.html (D-01), including _autoSetupAccount + __DISCOVER__ fallback (M-3); Add Another Account repointed to spotonPkceStart() XHR (M-2)
+- [Phase 51]: [51-01] D-05 rate-limit counter only counts real derivation-attempt failures (spawn_failed/derivation_failed), not pre-flight gate skips (no_token/no_binary/binary_too_old)
+- [Phase 51]: [51-01] accountMismatch reads credentials.json via a raw parse independent of verifyCredentials's auth_type==1 validation
 
 ### Blockers/Concerns
 
@@ -152,7 +155,7 @@ Items carried forward from previous milestones:
 
 **Resume file:** .planning/phases/51-credential-derivation-connect/51-CONTEXT.md
 
-**Last session:** 2026-07-14T13:45:29.262Z
+**Last session:** 2026-07-14T14:36:22.371Z
 **Stopped at:** Phase 51 context gathered
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
