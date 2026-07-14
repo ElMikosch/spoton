@@ -228,7 +228,7 @@ sub start {
 	my $had_stderr_tie = defined tied(*STDERR);
 	untie *STDERR if $had_stderr_tie;
 
-	$ENV{RUST_LOG} = $diagMode ? 'spoton=debug,librespot=info' : 'spoton=info,librespot=warn';
+	$ENV{RUST_LOG} = $diagMode ? 'spoton=debug,librespot_connect=debug,librespot_core=debug,librespot=info' : 'spoton=info,librespot=warn';
 
 	close($port_fh);
 
