@@ -79,7 +79,7 @@ sub info  { push @logged, $_[1] if defined $_[1]; }
 sub warn  { push @logged, $_[1] if defined $_[1]; }
 sub error { push @logged, $_[1] if defined $_[1]; }
 sub debug { push @logged, $_[1] if defined $_[1]; }
-sub is_info  { 0 }
+sub is_info  { 1 }   # IN-04: enable so info-level log lines execute for token-leak test
 sub is_debug { 0 }
 sub AUTOLOAD { }
 sub can { 1 }
@@ -289,7 +289,11 @@ BEGIN {
     *main::TRANSCODING = sub () { 0 };
     *main::WEBUI       = sub () { 0 };
     *main::SCANNER     = sub () { 0 };
-    *main::INFOLOG     = sub () { 0 };
+    # IN-04: INFOLOG=1 so info-level log lines execute and are captured
+    # by the token-leak assertion (Test 12, T-29-07). With INFOLOG=0,
+    # every main::INFOLOG && $log->info(...) was short-circuited, and a
+    # token leak in an info-level line would pass silently.
+    *main::INFOLOG     = sub () { 1 };
     *main::ISWINDOWS   = sub () { 0 };
     *main::ISMAC       = sub () { 0 };
     *main::PERFMON     = sub () { 0 };
