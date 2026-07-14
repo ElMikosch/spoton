@@ -68,6 +68,7 @@
   **Plans:** 1 plan
 
   Plans:
+
   - [x] 22-01-PLAN.md — Fix seek bar duration + favorites URL scheme + explodePlaylist
 
 - [ ] **Phase 23: Forum Monitor + Draft Generation**
@@ -81,6 +82,7 @@
   **Plans:** 1/1 plans complete
 
   Plans:
+
   - [x] 25-01-PLAN.md — Reusable _fetchAllPages helper + integration in all four feeds + ProtocolHandler show-explode fix
 
 - [x] **Phase 26: Browse Error Recovery + Diagnostics** — completed 2026-06-21
@@ -88,6 +90,7 @@
   **Plans:** 2/2 plans complete
 
   Plans:
+
   - [x] 26-01-PLAN.md — Unavailable track detection + auto-skip
   - [x] 26-02-PLAN.md — Browse stderr capture for diagnostics
 
@@ -96,6 +99,7 @@
   **Plans:** 1/1 plans complete
 
   Plans:
+
   - [x] 27-01-PLAN.md — Prefetch watchdog + skip cache
 
 ### v2.0 Browse Daemon Migration
@@ -106,6 +110,7 @@
   Canonical refs: `.planning/notes/browse-daemon-architecture-decision.md`
 
   Plans:
+
   - [x] 28-01-PLAN.md — Browse daemon Rust implementation (HTTP server + track endpoint)
   - [x] 28-02-PLAN.md — Browse daemon lifecycle modules (DaemonManager + Daemon Perl)
   - [x] 28-03-PLAN.md — Browse-HTTP pipeline integration (ProtocolHandler + Plugin wiring)
@@ -116,6 +121,7 @@
   Canonical refs: `.planning/notes/browse-daemon-architecture-decision.md`, `.planning/seeds/evaluate-phase2-unified-daemon.md`
 
   Plans:
+
   - [x] 29-01-PLAN.md — Unified Rust daemon (unified.rs + main.rs CLI dispatch)
   - [x] 29-02-PLAN.md — Unified Perl DaemonManager + Daemon lifecycle modules
   - [x] 29-03-PLAN.md — Integration (ProtocolHandler + Plugin.pm + daemonMode pref)
@@ -125,37 +131,44 @@
   **Plans:** 2 plans
 
   Plans:
+
   - [x] 30-01-PLAN.md — Delete legacy Perl modules + simplify Plugin.pm/ProtocolHandler.pm/Connect.pm + remove son-* from custom-convert.conf + remove dead Rust modes
   - [ ] 30-02-PLAN.md — Add browse_abort_gen rapid-skip debounce to unified.rs + final verification
 
 ### v3.0 Auth Overhaul
 
 ### Phase 49: PKCE OAuth Flow
-- [ ] **Phase 49: PKCE OAuth Flow**
+
+- [x] **Phase 49: PKCE OAuth Flow** (completed 2026-07-14)
   **Goal**: Implement PKCE OAuth authorization flow — GitHub Pages static relay, LMS Settings handler for code_verifier, token exchange, refresh token storage. AUTH-01, AUTH-02.
-  **Plans:** 2 plans
+  **Plans:** 2/2 plans complete
   Depends on: Keymaster audit (.planning/notes/keymaster-audit.md), spike findings (spike-findings-spoton skill), urknall edge cases (#176)
 
   Plans:
-  - [ ] 49-01-PLAN.md — PKCE core module (crypto, token exchange, persistence) + GitHub Pages relay page
-  - [ ] 49-02-PLAN.md — Settings integration (PKCE handlers, auth UI, copy-paste fallback, i18n strings)
+
+  - [x] 49-01-PLAN.md — PKCE core module (crypto, token exchange, persistence) + GitHub Pages relay page
+  - [x] 49-02-PLAN.md — Settings integration (PKCE handlers, auth UI, copy-paste fallback, i18n strings)
 
 ### Phase 50: Perl TokenManager Rewrite
+
 - [ ] **Phase 50: Perl TokenManager Rewrite**
-  **Goal**: Replace Keymaster-based TokenManager with PKCE token management — refresh flow, expiry handling, per-player token isolation. AUTH-03.
+  **Goal**: Replace Keymaster-based TokenManager with PKCE token management — refresh flow, expiry handling, per-player token isolation. AUTH-05.
   Depends on: Phase 49
 
 ### Phase 51: Credential Derivation + Connect
+
 - [ ] **Phase 51: Credential Derivation + Connect**
-  **Goal**: Convert PKCE access tokens to stored credentials for librespot Connect sessions. Ensure Connect registration and audio playback work with PKCE-derived credentials. AUTH-04, AUTH-05.
+  **Goal**: Convert PKCE access tokens to stored credentials for librespot Connect sessions. Ensure Connect registration and audio playback work with PKCE-derived credentials. AUTH-03, AUTH-04.
   Depends on: Phase 50
 
 ### Phase 52: sp_dc + Pathfinder Integration
+
 - [ ] **Phase 52: sp_dc + Pathfinder Integration**
   **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
   Depends on: Phase 50
 
 ### Phase 53: Keymaster Removal + Migration
+
 - [ ] **Phase 53: Keymaster Removal + Migration**
   **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
   Depends on: Phase 49, Phase 50, Phase 51
