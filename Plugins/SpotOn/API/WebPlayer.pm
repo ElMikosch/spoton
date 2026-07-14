@@ -542,4 +542,60 @@ sub _setState {
     }
 }
 
+# ============================================================
+# Degradation state query (D-03/D-04/D-05, Open Question 3)
+# ============================================================
+
+# state($class, $accountId)
+# Public pull-based query, modelled on TokenManager::needsReauth --
+# cache-first, "innocent until proven guilty" default (a fresh sp_dc with
+# no cached negative state reads as 'valid', matching needsReauth's
+# default-to-fine semantics). Consumed by Plugin.pm (OPML, D-03/D-04),
+# Settings.pm (D-04/D-08 status indicator), and Status.pm (D-04).
+# Always returns exactly one of: empty | valid | expired | secrets_down.
+#
+# Derivation:
+#   1. no sp_dc                                -> empty (D-03)
+#   2. a token is cached                       -> valid (trumps any stale
+#                                                  negative state below)
+#   3. cached state says expired               -> expired (D-04)
+#   4. cached state says secrets_down          -> secrets_down (D-05)
+#   5. sp_dc present, nothing negative cached  -> valid (default)
+sub state {
+    my ($class, $accountId) = @_;
+    return STATE_EMPTY unless $accountId;
+
+    unless (_loadSpDc($accountId)) {
+        _setState($accountId, STATE_EMPTY);
+        return STATE_EMPTY;
+    }
+
+    if ($cache->get("spoton_wp_token_${accountId}")) {
+        return STATE_VALID;
+    }
+
+    my $cachedState = $cache->get("spoton_wp_state_${accountId}") || '';
+    return $cachedState if $cachedState eq STATE_EXPIRED || $cachedState eq STATE_SECRETS_DOWN;
+
+    return STATE_VALID;
+}
+
+# statusSnapshot($class, $accountId)
+# Plain hashref with NO token/secret/cookie values -- modelled on
+# Client::statusSnapshot. Feeds Settings.pm (D-08) and Status.pm (D-04).
+# Defaults to the active account when $accountId is omitted.
+sub statusSnapshot {
+    my ($class, $accountId) = @_;
+    $accountId ||= $prefs->get('activeAccount');
+
+    return { state => STATE_EMPTY, spDcPresent => 0, spDcMasked => '' } unless $accountId;
+
+    my $spdc = _loadSpDc($accountId);
+    return {
+        state       => $class->state($accountId),
+        spDcPresent => ($spdc && length $spdc) ? 1 : 0,
+        spDcMasked  => ($spdc && length $spdc) ? _mask($spdc) : '',
+    };
+}
+
 1;

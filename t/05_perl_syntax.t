@@ -19,6 +19,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/API/TokenManager.pm",
     "$project_dir/Plugins/SpotOn/API/Client.pm",
     "$project_dir/Plugins/SpotOn/API/PKCE.pm",
+    "$project_dir/Plugins/SpotOn/API/WebPlayer.pm",
     "$project_dir/Plugins/SpotOn/API/Credentials.pm",
     "$project_dir/Plugins/SpotOn/Settings/Callback.pm",
     "$project_dir/Plugins/SpotOn/Connect.pm",
