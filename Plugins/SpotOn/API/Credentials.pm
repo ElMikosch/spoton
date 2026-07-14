@@ -123,6 +123,14 @@ sub deriveCredentials {
             File::Path::make_path($accountDir);
         }
 
+        # WR-04: unlink any pre-existing credentials.json before spawning
+        # so verifyCredentials after exit can only succeed against a file
+        # the subprocess actually wrote. Without this, the eager Settings
+        # path (re-auth of an existing account) could detect the OLD file
+        # as a successful derivation even when the subprocess wrote nothing.
+        my $credFile = $class->credentialsPathFor($accountId);
+        unlink $credFile if -f $credFile;
+
         require Proc::Background;
 
         # CR-01 / H10: prefer SPOTON_TOKEN env var over --token argv when

@@ -190,6 +190,7 @@ package Proc::Background;
 our @spawns = ();
 our $next_alive = 0;
 our $new_dies = 0;   # when true, new() throws (spawn_failed simulation)
+our $on_new;         # WR-04: optional coderef called with @args after spawn
 
 sub new {
     my $class = shift;
@@ -197,6 +198,10 @@ sub new {
     my @args  = @_;
     die "simulated spawn failure\n" if $new_dies;
     push @spawns, [@args];
+    # WR-04: run side-effect callback (e.g. write credentials.json) to simulate
+    # the subprocess's output — needed because deriveCredentials now unlinks
+    # the pre-existing file before spawning.
+    $on_new->(@args) if $on_new;
     return bless { alive => $next_alive }, $class;
 }
 sub alive { return $_[0]->{alive} }
@@ -206,6 +211,7 @@ sub reset_stub {
     @spawns     = ();
     $next_alive = 0;
     $new_dies   = 0;
+    $on_new     = undef;
 }
 1;
 END
@@ -350,11 +356,18 @@ require JSON::PP;
 
 # ============================================================
 # Test 1: Happy path -- fresh token + subprocess exit + valid credentials.json
+# WR-04: deriveCredentials now unlinks pre-existing credentials.json before
+# spawning, so we use the Proc::Background on_new callback to simulate the
+# subprocess writing the file (instead of pre-seeding before the call).
 # ============================================================
 {
     reset_all();
     my $accountId = 'acct_happy';
-    seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+    my $creds_data = { username => 'userA', auth_type => 1, auth_data => 'QUJD' };
+    # Ensure account dir exists
+    make_path(catdir($cache_dir, 'spoton', $accountId));
+    # Subprocess writes credentials.json on spawn
+    $Proc::Background::on_new = sub { seed_credentials($accountId, $creds_data) };
 
     my ($ok, $reason);
     Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub {
@@ -463,7 +476,11 @@ require JSON::PP;
 {
     reset_all();
     my $accountId = 'acct_coalesce';
-    seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+    # WR-04: use on_new callback to simulate subprocess writing credentials.json
+    make_path(catdir($cache_dir, 'spoton', $accountId));
+    $Proc::Background::on_new = sub {
+        seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+    };
     $Plugins::SpotOn::API::TokenManager::defer_getToken = 1;
 
     my @results;
@@ -523,14 +540,16 @@ require JSON::PP;
         Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub { });
     }
 
-    # A success clears the failure counter
-    seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+    # A success clears the failure counter — WR-04: use on_new callback
+    $Proc::Background::on_new = sub {
+        seed_credentials($accountId, { username => 'userA', auth_type => 1, auth_data => 'QUJD' });
+    };
     my ($okSuccess);
     Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub { $okSuccess = shift });
     is($okSuccess, 1, 'Test 7 reset: 3rd attempt (after seeding valid creds) succeeds');
 
-    # remove the seeded file so the next attempt fails again
-    unlink catfile($cache_dir, 'spoton', $accountId, 'credentials.json');
+    # Clear the on_new callback so the next attempt fails (no credentials written)
+    $Proc::Background::on_new = undef;
 
     my ($ok, $reason);
     Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub { ($ok, $reason) = @_ });
