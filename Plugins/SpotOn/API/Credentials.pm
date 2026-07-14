@@ -120,7 +120,11 @@ sub deriveCredentials {
         my $accountDir = _accountDir($accountId);
         unless (-d $accountDir) {
             require File::Path;
-            File::Path::make_path($accountDir);
+            # IN-02: restrict directory permissions to owner-only (0700) for
+            # defense-in-depth. mode param is advisory on Windows (silently
+            # ignored), which is fine. Mirrors the chmod(0700) in
+            # Settings.pm _pkceStoreAccount (T-04.3-07 pattern).
+            File::Path::make_path($accountDir, { mode => 0700 });
         }
 
         # WR-04: unlink any pre-existing credentials.json before spawning
