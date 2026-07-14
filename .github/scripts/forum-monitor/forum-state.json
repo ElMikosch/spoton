@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-14T06:53:00.314Z",
+  "lastChecked": "2026-07-14T08:28:50.398Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -202,10 +202,22 @@
         "1828129",
         "1828131",
         "1828292",
-        "1828293"
+        "1828293",
+        "1828655"
       ],
-      "lastPostCount": 200
+      "lastPostCount": 201
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1828655",
+      "postNumber": 201,
+      "author": "fanshawe",
+      "timestamp": "2026-07-14T00:24:20-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Hi,  I have been using SpotOn for Spotify Connect for the past few weeks and it has been great so far. Thanks for your work on this.  I do have a minor niggle, as follows:  Since installing SpotOn, the player option for \"Don't Stop The Music\" will not stay on \"Disabled\". Instead it switches to \"Spot",
+      "draft": "Hi Peter,\n\nThanks for the kind words — glad SpotOn has been working well for you overall!\n\nThat's an interesting bug report. To be transparent: I'm not immediately certain what's causing \"Don't Stop The Music\" to revert to \"SpotOn Recommendations\" — this isn't something I've seen reported before, so I want to make sure I understand it correctly before suggesting a fix.\n\nA couple of questions to help narrow it down:\n\n[B]1.[/B] When does the revert happen? Is it immediately after you change it, after a player reconnect, or after an LMS restart?\n\n[B]2.[/B] Does it affect all your players, or just specific ones?\n\n[B]3.[/B] Which version of SpotOn and LMS are you running? You can find both in [B]Settings → Manage Plugins → SpotOn[/B].\n\nIn the meantime, it would be really helpful if you could grab a diagnostic bundle — go to [B]Settings → Manage Plugins → SpotOn → Diagnostics[/B] and download the bundle. This will give me context on how SpotOn is registering itself with LMS's DSTM framework.\n\nMy initial suspicion is that SpotOn is registering as a DSTM provider and something in that registration is inadvertently overriding your player preference — but I don't want to guess without more data.\n\nCould you please open a GitHub issue for this so it doesn't get lost in the forum thread? You can do that here:\n\n[URL]https://github.com/stiefenm/spoton/issues[/URL]\n\nInclude the diagnostic bundle and answers to the questions above if possible. That way I can track it properly and push a fix if it turns out to be a genuine bug.\n\nThanks for taking the time to report it — these subtle integration issues are easy to miss!",
+      "scrapedAt": "2026-07-14T08:28:50.397Z"
+    }
+  ]
 }
