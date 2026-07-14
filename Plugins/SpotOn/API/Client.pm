@@ -26,6 +26,31 @@ use constant PERSONAL_MIX_CATEGORY      => '0JQ5DAt0tbjZptfcdMSKl3';
 
 use constant SPOTON_DEFAULT_CLIENT_ID => 'd420a117a32841c2b3474932e49fb54b';
 
+# ------------------------------------------------------------
+# Web-Player-scoped request constants (Phase 52, D-07)
+# ------------------------------------------------------------
+# pathfinderHome() and getWebPlayerPlaylistItems() route traffic through the
+# Web-Player token (Plugins::SpotOn::API::WebPlayer->getToken), NEVER
+# TokenManager->getToken, and isolate their rate-limit state under a
+# distinct cache key so a Pathfinder/37i9 429 never sets the Browse
+# spoton_rate_limit flag (Pitfall 5, T-52-04).
+use constant WP_RATE_LIMIT_KEY     => 'spoton_wp_rate_limit';
+use constant WP_GQL_HASH_CACHE_KEY => 'spoton_wp_gql_hash';
+use constant PATHFINDER_URL        => 'https://api-partner.spotify.com/pathfinder/v2/query';
+
+# PATHFINDER_HOME_HASH_DEFAULT: persisted-query sha256Hash for the Pathfinder
+# "home" GraphQL operation. UNVERIFIED PLACEHOLDER -- RESEARCH Open Question 1 /
+# Assumption A4 (LOW confidence): no reliable public feed for this hash was
+# found during this phase's research (rotates with every web-player release).
+# Must be captured from a live web-player session (DevTools Network tab ->
+# pathfinder/v2/query request -> extensions.persistedQuery.sha256Hash) during
+# the phase-level manual UAT pass and seeded into the spoton_wp_gql_hash
+# cache override (or this constant updated directly). Until replaced, a real
+# pathfinderHome() call will most likely receive a PersistedQueryNotFound
+# errors[] response and degrade to an empty result -- the designed fail-safe
+# (Pitfall 4), not a bug.
+use constant PATHFINDER_HOME_HASH_DEFAULT => 'REPLACE_WITH_LIVE_CAPTURED_HOME_PERSISTED_QUERY_HASH';
+
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
 # M5: cache version lives in Plugin.pm (single source of truth). Plugin.pm is
@@ -444,6 +469,336 @@ sub getPlaylistItems {
         offset     => $params->{offset} // 0,
         limit      => $params->{limit}  // 100,
     }, $cb);
+}
+
+# ============================================================
+# Web-Player-scoped methods (Phase 52, D-07) -- Pathfinder discovery +
+# 37i9... playlist access. Route through WebPlayer->getToken, NEVER
+# TokenManager->getToken, and isolate rate-limit state under
+# WP_RATE_LIMIT_KEY (Pitfall 5, T-52-04). Dev-Mode PKCE tokens 404 on ALL
+# Spotify-owned (37i9...) playlists regardless of ID validity (Pitfall 3).
+# ============================================================
+
+# pathfinderHome($class, $accountId, $params, $cb)
+# Discovers algorithmic ("Made for You") playlist IDs -- Daily Mix, Discover
+# Weekly, Release Radar, Daylist, genre mixes -- via the Pathfinder "home"
+# GraphQL query (POST api-partner.spotify.com/pathfinder/v2/query). Uses
+# ONLY the Web-Player token from WebPlayer->getToken (D-07).
+# $cb->(\@ids, undef) on success (possibly an empty arrayref).
+# $cb->(undef, { error => $reason }) on hard failure: no_spdc / no_secrets /
+# expired / mint_failed (propagated from WebPlayer->getToken), or an HTTP/
+# rate_limited/parse error from this request itself.
+# A PersistedQueryNotFound / top-level errors[] response is NOT a hard
+# failure -- it degrades to $cb->([], undef) with a distinct log line
+# (Pitfall 4) so Browse is never affected by GraphQL hash rotation.
+sub pathfinderHome {
+    my ($class, $accountId, $params, $cb) = @_;
+    $params ||= {};
+
+    # Isolated Web-Player rate pool (Pitfall 5, T-52-04) -- never the shared
+    # 'spoton_rate_limit' key checked by _request().
+    if ($cache->get(WP_RATE_LIMIT_KEY)) {
+        $cb->(undef, { error => 'rate_limited', code => 429 });
+        return;
+    }
+
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer->getToken($accountId, sub {
+        my ($tokenHash, $reason) = @_;
+        unless ($tokenHash && $tokenHash->{access_token}) {
+            main::INFOLOG && $log->info('Client: pathfinderHome no Web-Player token (reason='
+                . ($reason || 'unknown') . ')');
+            $cb->(undef, { error => $reason || 'no_token' });
+            return;
+        }
+
+        # GraphQL persisted-query hash is refreshable config (Pitfall 4):
+        # prefer a cached override over the shipped placeholder default.
+        my $hash = $cache->get(WP_GQL_HASH_CACHE_KEY) || PATHFINDER_HOME_HASH_DEFAULT;
+
+        my $body = eval { to_json({
+            operationName => 'home',
+            variables     => {
+                homeEndUserIntegration => 'INTEGRATION_WEB_PLAYER',
+                timeZone               => $params->{timeZone} || 'UTC',
+                sp_t                   => '',
+                facet                  => undef,
+                sectionItemsLimit      => 10,
+            },
+            extensions => {
+                persistedQuery => {
+                    version    => 1,
+                    sha256Hash => $hash,
+                },
+            },
+        }) };
+        unless (defined $body) {
+            $log->error("Client: pathfinderHome request body build failed: $@");
+            $cb->(undef, { error => 'internal_error' });
+            return;
+        }
+
+        my $http = Slim::Networking::SimpleAsyncHTTP->new(
+            sub {
+                # Success callback -- parse JSON, defensively extract 37i9 IDs
+                my $http    = shift;
+                my $content = $http->content // '';
+                my $result  = eval { from_json($content) };
+                if ($@ || ref($result) ne 'HASH') {
+                    $log->error("Client: pathfinderHome JSON parse error: $@");
+                    $cb->(undef, { error => 'parse_error' });
+                    return;
+                }
+
+                my ($ids, $degraded) = $class->_extractPathfinderIds($result);
+                if ($degraded) {
+                    main::INFOLOG && $log->info('Client: pathfinderHome degraded -- '
+                        . 'errors[] in response (persisted-query hash rotation? Pitfall 4)');
+                }
+
+                # Per-user stable IDs (RESEARCH Specifics) -- only cache a
+                # non-empty discovery so a transient degrade doesn't clobber
+                # a previously known-good list.
+                $cache->set("spoton_wp_mfy_ids_${accountId}", $ids, 3600)
+                    if $accountId && @$ids;
+
+                $cb->($ids, undef);
+            },
+            sub {
+                # Error callback -- 429 (isolated WP pool), 401, generic
+                my ($http, $error, $response) = @_;
+
+                my $code = ($response && ref $response && $response->can('code'))
+                    ? ($response->code || 0) : 0;
+
+                if ($code == 429) {
+                    my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
+                    if ($response && ref $response && $response->can('header')) {
+                        my $headerVal = $response->header('Retry-After');
+                        $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
+                    }
+                    $retryAfter = 1   if $retryAfter < 1;
+                    $retryAfter = 300 if $retryAfter > 300;
+
+                    # Isolated Web-Player rate-limit key -- MUST NOT be
+                    # 'spoton_rate_limit' (Pitfall 5, T-52-04).
+                    $cache->set(WP_RATE_LIMIT_KEY, 1, $retryAfter);
+                    $api429Count++;
+                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                        Plugins::SpotOn::Status->recordError('warn', 'API', '429 on pathfinder/v2/query');
+                    }
+                    $log->warn("Client: pathfinderHome 429 rate limited for ${retryAfter}s (Web-Player pool)");
+                    $cb->(undef, { error => 'rate_limited', code => 429 });
+                    return;
+                }
+
+                if ($code == 401) {
+                    $cache->remove("spoton_wp_token_${accountId}") if $accountId;
+                    $log->warn('Client: pathfinderHome 401 unauthorized (Web-Player token invalidated)');
+                    $cb->(undef, { error => 'unauthorized', code => 401 });
+                    return;
+                }
+
+                # T-52-08: never log Authorization/client-token header values
+                $log->error("Client: pathfinderHome HTTP $code error: $error");
+                if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for pathfinder/v2/query");
+                }
+                $cb->(undef, { error => $error, code => $code });
+            },
+            { timeout => REQUEST_TIMEOUT, cache => 0 }
+        );
+
+        # T-52-08: Authorization/client-token values are passed as headers
+        # only -- never interpolated into a log line.
+        $http->post(
+            PATHFINDER_URL,
+            'Authorization' => "Bearer $tokenHash->{access_token}",
+            'client-token'  => ($tokenHash->{client_token} // ''),
+            'Content-Type'  => 'application/json',
+            'App-Platform'  => 'WebPlayer',
+            $body,
+        );
+    });
+}
+
+# _extractPathfinderIds($class, $result)
+# Defensive multi-level parse of a Pathfinder "home" GraphQL response body
+# (A1, RESEARCH MEDIUM confidence -- the exact path was not verified against
+# a live response in this phase; verify/refine with a captured fixture
+# during UAT). Walks data.home.sectionContainer.sections.items[] ->
+# sectionItems.items[] -> playlist URIs, keeps only spotify:playlist:37i9...,
+# strips to the bare ID, and validates each ID against the same
+# ^[A-Za-z0-9]{1,40}$ guard used throughout Client.pm (T-52-05, Security V5).
+# Returns ($idsArrayRef, $degraded) in list context -- $degraded is true
+# only when the response carries a top-level non-empty errors[] array
+# (PersistedQueryNotFound-style failure, Pitfall 4). NEVER dies -- any shape
+# mismatch at any level degrades to an empty list.
+sub _extractPathfinderIds {
+    my ($class, $result) = @_;
+    my @ids;
+
+    return (\@ids, 0) unless $result && ref($result) eq 'HASH';
+
+    if (ref($result->{errors}) eq 'ARRAY' && @{$result->{errors}}) {
+        return (\@ids, 1);
+    }
+
+    my $home = ($result->{data} && ref($result->{data}) eq 'HASH')
+        ? $result->{data}->{home} : undef;
+    return (\@ids, 0) unless $home && ref($home) eq 'HASH';
+
+    my $sectionContainer = $home->{sectionContainer};
+    return (\@ids, 0) unless $sectionContainer && ref($sectionContainer) eq 'HASH';
+
+    my $sections = $sectionContainer->{sections};
+    return (\@ids, 0) unless $sections && ref($sections) eq 'HASH';
+
+    my $sectionList = $sections->{items};
+    return (\@ids, 0) unless ref($sectionList) eq 'ARRAY';
+
+    for my $section (@$sectionList) {
+        next unless $section && ref($section) eq 'HASH';
+        my $itemsWrapper = $section->{sectionItems};
+        next unless $itemsWrapper && ref($itemsWrapper) eq 'HASH';
+        my $items = $itemsWrapper->{items};
+        next unless ref($items) eq 'ARRAY';
+
+        for my $item (@$items) {
+            next unless $item && ref($item) eq 'HASH';
+            my $uri = _pathfinderItemUri($item);
+            next unless defined $uri && !ref($uri);
+            next unless $uri =~ /^spotify:playlist:(37i9[A-Za-z0-9]*)$/;
+            my $id = $1;
+            # T-52-05/Security V5: strict validation before the ID is ever
+            # used to build a URL (copied guard from getPlaylistItems above).
+            next unless $id =~ /^[A-Za-z0-9]{1,40}$/;
+            push @ids, $id;
+        }
+    }
+
+    return (\@ids, 0);
+}
+
+# _pathfinderItemUri($item)
+# A1 (MEDIUM confidence): the exact nesting of the playlist URI within a
+# sectionItems entry is unverified against a live response. Checks the most
+# plausible shapes defensively; returns undef (never dies) on anything
+# unexpected.
+sub _pathfinderItemUri {
+    my ($item) = @_;
+    return $item->{uri} if defined $item->{uri} && !ref($item->{uri});
+    for my $key (qw(content data)) {
+        my $nested = $item->{$key};
+        next unless $nested && ref($nested) eq 'HASH';
+        return $nested->{uri} if defined $nested->{uri} && !ref($nested->{uri});
+    }
+    return undef;
+}
+
+# getWebPlayerPlaylistItems($class, $accountId, $playlistId, $params, $cb)
+# Fetches paginated items for a Spotify-owned (37i9...) playlist
+# (/playlists/{playlistId}/items) using the Web-Player bearer token instead
+# of the PKCE token (D-07, Pitfall 3) -- Dev Mode returns 404 for ALL
+# 37i9... playlists on the normal PKCE-token pipeline, even with a known
+# valid ID. Mirrors getPlaylistItems above but:
+#   - validates $playlistId up front (same ^[A-Za-z0-9]{1,40}$ guard, T-52-05)
+#   - sources the bearer token from WebPlayer->getToken, NOT
+#     TokenManager->getToken (D-07)
+#   - uses the isolated WP_RATE_LIMIT_KEY pool so a Web-Player 429 never
+#     sets the Browse spoton_rate_limit flag (Pitfall 5, T-52-04)
+# Same pagination $params (offset/limit) shape as getPlaylistItems so the
+# existing _fetchAllPages play-all helper can drive it unchanged.
+sub getWebPlayerPlaylistItems {
+    my ($class, $accountId, $playlistId, $params, $cb) = @_;
+    $params ||= {};
+
+    return $cb->(undef, { error => 'invalid_id' })
+        unless $playlistId && $playlistId =~ /^[A-Za-z0-9]{1,40}$/;
+
+    if ($cache->get(WP_RATE_LIMIT_KEY)) {
+        $cb->(undef, { error => 'rate_limited', code => 429 });
+        return;
+    }
+
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer->getToken($accountId, sub {
+        my ($tokenHash, $reason) = @_;
+        unless ($tokenHash && $tokenHash->{access_token}) {
+            main::INFOLOG && $log->info('Client: getWebPlayerPlaylistItems no Web-Player token (reason='
+                . ($reason || 'unknown') . ')');
+            $cb->(undef, { error => $reason || 'no_token' });
+            return;
+        }
+
+        my $offset = $params->{offset} // 0;
+        my $limit  = $params->{limit}  // 100;
+        my $url    = API_BASE . "/playlists/$playlistId/items?offset=$offset&limit=$limit";
+
+        my $http = Slim::Networking::SimpleAsyncHTTP->new(
+            sub {
+                my $http    = shift;
+                my $content = $http->content // '';
+                my $result;
+                if ($content =~ /\S/) {
+                    $result = eval { from_json($content) };
+                    if ($@) {
+                        $log->error("Client: getWebPlayerPlaylistItems JSON parse error: $@");
+                        $cb->(undef, { error => 'parse_error' });
+                        return;
+                    }
+                }
+                $cb->($result);
+            },
+            sub {
+                my ($http, $error, $response) = @_;
+
+                my $code = ($response && ref $response && $response->can('code'))
+                    ? ($response->code || 0) : 0;
+
+                if ($code == 429) {
+                    my $retryAfter = RATE_LIMIT_DEFAULT_BACKOFF;
+                    if ($response && ref $response && $response->can('header')) {
+                        my $headerVal = $response->header('Retry-After');
+                        $retryAfter = $headerVal if defined $headerVal && $headerVal =~ /^\d+$/;
+                    }
+                    $retryAfter = 1   if $retryAfter < 1;
+                    $retryAfter = 300 if $retryAfter > 300;
+
+                    # Isolated Web-Player rate-limit key -- MUST NOT be
+                    # 'spoton_rate_limit' (Pitfall 5, T-52-04).
+                    $cache->set(WP_RATE_LIMIT_KEY, 1, $retryAfter);
+                    $api429Count++;
+                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                        Plugins::SpotOn::Status->recordError('warn', 'API', "429 on WP playlists/$playlistId/items");
+                    }
+                    $log->warn("Client: getWebPlayerPlaylistItems 429 rate limited for ${retryAfter}s (Web-Player pool)");
+                    $cb->(undef, { error => 'rate_limited', code => 429 });
+                    return;
+                }
+
+                if ($code == 401) {
+                    $cache->remove("spoton_wp_token_${accountId}") if $accountId;
+                    $log->warn('Client: getWebPlayerPlaylistItems 401 unauthorized (Web-Player token invalidated)');
+                    $cb->(undef, { error => 'unauthorized', code => 401 });
+                    return;
+                }
+
+                $log->error("Client: getWebPlayerPlaylistItems HTTP $code error: $error");
+                if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for WP playlists/$playlistId/items");
+                }
+                $cb->(undef, { error => $error, code => $code });
+            },
+            { timeout => REQUEST_TIMEOUT, cache => 0 }
+        );
+
+        $http->get(
+            $url,
+            'Authorization' => "Bearer $tokenHash->{access_token}",
+            'Accept'        => 'application/json',
+        );
+    });
 }
 
 # getTrack($class, $accountId, $trackId, $cb)
