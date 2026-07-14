@@ -261,6 +261,13 @@ sub shutdownPlugin {
     Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
     Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
     Slim::Utils::Timers::killTimers($class, \&_startUnifiedDaemons);
+
+    # WR-02: TokenManager's refreshAllTokens re-arms itself with its own class
+    # as invocant, not Plugin — kill that timer too to prevent background refresh
+    # loops surviving plugin disable.
+    require Plugins::SpotOn::API::TokenManager;
+    Slim::Utils::Timers::killTimers('Plugins::SpotOn::API::TokenManager',
+        \&Plugins::SpotOn::API::TokenManager::refreshAllTokens);
 }
 
 # Material Skin resolves app icons via /material/svg/{tag} from its own
