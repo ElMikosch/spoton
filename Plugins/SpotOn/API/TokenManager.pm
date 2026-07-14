@@ -180,6 +180,19 @@ sub clearNeedsReauth {
     $cache->remove(REAUTH_FLAG_PREFIX . $accountId);
 }
 
+# markNeedsReauth($class, $accountId, $reason)
+# PUBLIC method (no underscore prefix) -- cross-module API, mirrors the
+# clearNeedsReauth convention above. Thin delegating wrapper around the
+# private _markNeedsReauth implementation (Phase 50 D-08 4-channel
+# escalation) -- called by DaemonManager's D-03/D-04 crash-recovery flow
+# (_handleCredentialCrash) when a credential re-derivation permanently
+# fails. Never duplicates the notification plumbing; the private method
+# remains the single implementation.
+sub markNeedsReauth {
+    my ($class, $accountId, $reason) = @_;
+    $class->_markNeedsReauth($accountId, $reason);
+}
+
 # refreshAllTokens($class)
 # M-5: Calls _refreshToken() DIRECTLY (bypassing getToken's cache check) so
 # the proactive refresh cycle always exchanges a fresh token, not a cache

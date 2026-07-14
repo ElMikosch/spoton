@@ -33,6 +33,10 @@ use constant ORPHAN_LOG_CLEANUP_DELAY => 30;
 # With 6 players at 3s each, all daemons start within ~15s instead of simultaneously.
 use constant STAGGER_DELAY => 3;
 
+# D-03: bytes of stderr tail read for credential-error classification on
+# daemon crash. Mirrors Credentials.pm's own bounded-read discipline.
+use constant STDERR_TAIL_BYTES => 8192;
+
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
@@ -331,10 +335,20 @@ sub _streamAlivePoll {
 
     for my $helper (values %helperInstances) {
         if (!$helper->alive) {
-            main::INFOLOG && $log->is_info && $log->info(
-                "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting via startHelper"
-            );
-            $class->startHelper($helper->mac);
+            # D-03: classify the crash BEFORE the generic restart -- a
+            # credential-rejection error gets the delete->re-derive->restart
+            # treatment (self-healing); anything else falls through to the
+            # existing plain restart path, unchanged.
+            require Plugins::SpotOn::API::Credentials;
+            my $tail = $helper->stderrTail(STDERR_TAIL_BYTES);
+            if (Plugins::SpotOn::API::Credentials->isCredentialError($tail)) {
+                $class->_handleCredentialCrash($helper);
+            } else {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting via startHelper"
+                );
+                $class->startHelper($helper->mac);
+            }
         }
         elsif (main::DEBUGLOG && $log->is_debug) {
             $log->debug("SpotOn Unified daemon alive: " . $helper->mac . " pid=" . ($helper->pid || '?'));
@@ -359,6 +373,90 @@ sub _streamAlivePoll {
         Time::HiRes::time() + STREAM_WATCHDOG_INTERVAL,
         \&_streamAlivePoll
     );
+}
+
+# D-09 division of responsibility (verified, not rebuilt in Perl): the Rust
+# binary already guarantees a LAN guest authenticating via ZeroConf discovery
+# can never overwrite the on-disk credentials.json for the active PKCE
+# account -- librespot-spoton/src/unified.rs constructs every post-startup
+# reconnect_cache WITHOUT a credentials_location ("Phase 14 (Credential
+# Isolation)", verified present at unified.rs L1261), making
+# Cache::save_credentials() a no-op for guest ZeroConf sessions. Perl-side
+# repair below only ever touches the account-scoped credentials.json for the
+# active PKCE account -- it never re-implements or interacts with that
+# guest-isolation guard.
+#
+# _handleCredentialCrash($class, $helper) (D-03/D-04)
+# Called when _streamAlivePoll's crash branch classifies the daemon's stderr
+# tail as a credential error (Credentials->isCredentialError). Deletes the
+# single credentials.json for the active PKCE account and re-derives from
+# fresh PKCE tokens, restarting the daemon transparently on success. A
+# permanent derivation failure (fresh token rejected by the AP) escalates to
+# the Phase 50 4-channel re-auth warning via TokenManager's PUBLIC
+# markNeedsReauth wrapper -- never the underscore-prefixed private method.
+sub _handleCredentialCrash {
+    my ($class, $helper) = @_;
+
+    my $activeAccountId = $prefs->get('activeAccount') || '';
+
+    # Pitfall 4 / legacy flat-dir setup: credential repair requires a PKCE
+    # account. Phase 53 owns the broader legacy-migration UX (D-10) -- do
+    # not delete or derive anything here.
+    unless ($activeAccountId) {
+        $log->warn(
+            "SpotOn Unified daemon for " . $helper->mac . " crashed with a credential "
+            . "error, but no active PKCE account is configured -- skipping auto-repair "
+            . "(legacy flat-dir credential setups are not self-healed; see Phase 53)"
+        );
+        return;
+    }
+
+    $log->warn(
+        "SpotOn Unified daemon for " . $helper->mac . " crashed with a credential error "
+        . "(account " . _maskAccountId($activeAccountId) . ") -- deleting credentials.json "
+        . "and re-deriving from PKCE tokens"
+    );
+
+    require Plugins::SpotOn::API::Credentials;
+    my $credFile = Plugins::SpotOn::API::Credentials->credentialsPathFor($activeAccountId);
+    unlink $credFile if -f $credFile;
+
+    Plugins::SpotOn::API::Credentials->deriveCredentials($activeAccountId, sub {
+        my ($ok, $reason) = @_;
+
+        if ($ok) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Credential re-derivation succeeded for account " . _maskAccountId($activeAccountId)
+                . " -- restarting daemon for " . $helper->mac
+            );
+            $class->startHelper($helper->mac);
+        }
+        elsif (($reason // '') eq 'derivation_failed') {
+            # The PKCE token was fresh but the AP rejected the exchange --
+            # permanent failure. Escalate via the PUBLIC wrapper (D-04);
+            # the daemon stays stopped because startHelper's pre-check finds
+            # no credentials.json and getToken short-circuits on needsReauth.
+            require Plugins::SpotOn::API::TokenManager;
+            Plugins::SpotOn::API::TokenManager->markNeedsReauth($activeAccountId, $reason);
+        }
+        elsif (($reason // '') eq 'no_token') {
+            # TokenManager already flagged needsReauth internally during its
+            # own refresh failure -- nothing more to do here than log.
+            $log->warn(
+                "Credential re-derivation for account " . _maskAccountId($activeAccountId)
+                . " could not obtain a token (already flagged for re-auth)"
+            );
+        }
+        else {
+            # rate_limited / spawn_failed / no_binary / binary_too_old --
+            # D-05's cooldown inside Credentials.pm prevents crash-loop
+            # hammering; the 60s watchdog owns any later retry.
+            $log->warn(
+                "Credential re-derivation for account " . _maskAccountId($activeAccountId)
+                . " failed ($reason) -- will retry via the next watchdog cycle"
+            );
+        }
+    });
 }
 
 sub _cleanupOrphanedLogs {
