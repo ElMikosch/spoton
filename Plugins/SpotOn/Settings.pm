@@ -510,12 +510,57 @@ sub _pkceStoreAccount {
         # refresh timer cycle.
         Plugins::SpotOn::API::TokenManager->clearNeedsReauth($accountId);
 
-        if ($isJson) {
-            _jsonResponse($httpClient, $response, { status => 'ok', accountId => $accountId });
-        } else {
-            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_SUCCESS'),
-                string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
-        }
+        # D-01: eagerly derive librespot credentials right here, while the
+        # PKCE access token is guaranteed fresh (it was exchanged seconds
+        # ago) -- this is the primary, user-facing trigger for AUTH-03
+        # credential derivation (RESEARCH Pitfall 6 / Open Question 2).
+        require Plugins::SpotOn::API::Credentials;
+        Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub {
+            my ($ok, $reason) = @_;
+
+            if ($ok) {
+                # D-06: trigger the daemon start unconditionally on
+                # derivation success -- do NOT rely on
+                # _storeAccountPrefs's $needsDaemonStart conditional above,
+                # which only fires for the very first account ever
+                # configured. Without this, "Add Another Account" and
+                # re-auth flows would otherwise wait up to 60s for the
+                # watchdog to notice the new credentials (Pitfall 6). This
+                # also covers D-07: DaemonManager's existing account-change
+                # detection in initHelpers/startHelper restarts any daemon
+                # already running with stale credentials.
+                require Plugins::SpotOn::Unified::DaemonManager;
+                Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'ok', accountId => $accountId, connectReady => 1 });
+                } else {
+                    _renderPkceResultPage($httpClient, $response,
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
+                }
+            } else {
+                # D-02: a derivation failure is a warning, not a blocking
+                # error -- tokens are already stored and Browse/Search work
+                # via the PKCE access token (Phase 50). Never reflect the
+                # raw $reason into the user-facing page (T-51-10); log only
+                # a masked accountId.
+                my $maskedAccount = substr($accountId, 0, 4) . '****';
+                $log->warn("Settings: PKCE credential derivation failed for account "
+                    . "$maskedAccount ($reason) -- Connect unavailable, account creation not blocked");
+
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'ok', accountId => $accountId, connectReady => 0,
+                          warning => string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED') });
+                } else {
+                    _renderPkceResultPage($httpClient, $response,
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                        string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED'), 1);
+                }
+            }
+        });
     });
 }
 
