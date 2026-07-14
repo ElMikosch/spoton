@@ -515,6 +515,11 @@ sub _pkceStoreAccount {
         # ago) -- this is the primary, user-facing trigger for AUTH-03
         # credential derivation (RESEARCH Pitfall 6 / Open Question 2).
         require Plugins::SpotOn::API::Credentials;
+        # WR-02: clear D-05 rate-limit cooldown before deriving -- a fresh
+        # user-initiated PKCE exchange is exactly the event the cooldown
+        # should yield to. Without this, 3 prior derivation failures would
+        # block the re-auth's eager derivation for up to 30 minutes.
+        Plugins::SpotOn::API::Credentials->clearRateLimit($accountId);
         Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub {
             my ($ok, $reason) = @_;
 

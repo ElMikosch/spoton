@@ -346,6 +346,8 @@ sub deriveCredentials {
     $last_derive_account = $accountId;
     $cb->($next_derive_ok, $next_derive_ok ? undef : 'derivation_failed');
 }
+# WR-02: clearRateLimit stub (called by _pkceStoreAccount before deriveCredentials)
+sub clearRateLimit { }
 sub reset_calls {
     $next_derive_ok = 1;
     $derive_call_count = 0;

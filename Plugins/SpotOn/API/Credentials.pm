@@ -170,6 +170,17 @@ sub deriveCredentials {
     });
 }
 
+# clearRateLimit($class, $accountId)
+# WR-02: public reset for the D-05 rate-limit cooldown. Called by
+# Settings.pm's _pkceStoreAccount immediately before deriveCredentials on
+# a fresh (re-)auth -- a user-initiated PKCE exchange is exactly the event
+# the AP-hammering protection should yield to (one attempt with new tokens,
+# not zero).
+sub clearRateLimit {
+    my ($class, $accountId) = @_;
+    _clearFailures($accountId);
+}
+
 # credentialsPathFor($class, $accountId)
 # Single source of truth for the credentials.json path -- always account-
 # scoped (Pitfall 4: new code must never touch the legacy flat spoton dir).
