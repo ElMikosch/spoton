@@ -2377,3 +2377,120 @@ PLUGIN_SPOTON_SETUP_PKCE_DESC
 	PL	Kliknij poniżej „Połącz konto Spotify”, aby autoryzować SpotOn za pomocą swojego konta Spotify Premium.
 	SV	Klicka på "Anslut Spotify-konto" nedan för att auktorisera SpotOn med ditt Spotify Premium-konto.
 
+PLUGIN_SPOTON_MADE_FOR_YOU_SECTION
+	CS	Nastavení Vytvořeno pro vás
+	DA	Opsætning af Lavet til dig
+	DE	Für dich gemacht – Einrichtung
+	EN	Made For You Setup
+	ES	Configuración de Hecho para ti
+	FR	Configuration de Fait pour vous
+	IT	Configurazione di Fatto per te
+	NL	Instellingen voor Gemaakt voor jou
+	NO	Oppsett av Laget for deg
+	PL	Konfiguracja Stworzone dla Ciebie
+	SV	Inställningar för Gjort för dig
+
+PLUGIN_SPOTON_SP_DC
+	CS	Cookie Spotify sp_dc
+	DA	Spotify sp_dc-cookie
+	DE	Spotify sp_dc-Cookie
+	EN	Spotify sp_dc Cookie
+	ES	Cookie sp_dc de Spotify
+	FR	Cookie sp_dc Spotify
+	IT	Cookie sp_dc di Spotify
+	NL	Spotify sp_dc-cookie
+	NO	Spotify sp_dc-informasjonskapsel
+	PL	Ciasteczko sp_dc Spotify
+	SV	Spotify sp_dc-cookie
+
+PLUGIN_SPOTON_SP_DC_DESC
+	CS	Vložte sem svůj Spotify sp_dc cookie a odemkněte personalizovaný obsah Vytvořeno pro vás (Daily Mix, Discover Weekly, Release Radar, Daylist). Ukládá se bezpečně a nikdy se nezobrazuje celý.
+	DA	Indsæt din Spotify sp_dc-cookie her for at låse op for personligt indhold under Lavet til dig (Daily Mix, Discover Weekly, Release Radar, Daylist). Gemmes sikkert og vises aldrig i sin helhed.
+	DE	Füge hier deinen Spotify sp_dc-Cookie ein, um personalisierte „Für dich gemacht“-Inhalte freizuschalten (Daily Mix, Discover Weekly, Release Radar, Daylist). Wird sicher gespeichert und nie vollständig angezeigt.
+	EN	Paste your Spotify sp_dc cookie here to unlock personalized Made For You content (Daily Mix, Discover Weekly, Release Radar, Daylist). Stored securely and never displayed in full.
+	ES	Pega aquí tu cookie sp_dc de Spotify para desbloquear el contenido personalizado de Hecho para ti (Daily Mix, Discover Weekly, Release Radar, Daylist). Se almacena de forma segura y nunca se muestra completa.
+	FR	Collez ici votre cookie sp_dc Spotify pour débloquer le contenu personnalisé Fait pour vous (Daily Mix, Discover Weekly, Release Radar, Daylist). Stocké en toute sécurité et jamais affiché en entier.
+	IT	Incolla qui il tuo cookie sp_dc di Spotify per sbloccare i contenuti personalizzati di Fatto per te (Daily Mix, Discover Weekly, Release Radar, Daylist). Memorizzato in modo sicuro e mai mostrato per intero.
+	NL	Plak hier uw Spotify sp_dc-cookie om gepersonaliseerde Gemaakt voor jou-inhoud te ontgrendelen (Daily Mix, Discover Weekly, Release Radar, Daylist). Wordt veilig opgeslagen en nooit volledig weergegeven.
+	NO	Lim inn Spotify sp_dc-informasjonskapselen din her for å låse opp personlig innhold under Laget for deg (Daily Mix, Discover Weekly, Release Radar, Daylist). Lagres sikkert og vises aldri i sin helhet.
+	PL	Wklej tutaj swoje ciasteczko sp_dc Spotify, aby odblokować spersonalizowaną zawartość Stworzone dla Ciebie (Daily Mix, Discover Weekly, Release Radar, Daylist). Przechowywane bezpiecznie i nigdy nie wyświetlane w całości.
+	SV	Klistra in din Spotify sp_dc-cookie här för att låsa upp personligt innehåll under Gjort för dig (Daily Mix, Discover Weekly, Release Radar, Daylist). Lagras säkert och visas aldrig i sin helhet.
+
+PLUGIN_SPOTON_SP_DC_HOWTO
+	CS	Jak najít cookie sp_dc: 1) Otevřete open.spotify.com v prohlížeči a přihlaste se. 2) Otevřete nástroje pro vývojáře (F12) a přejděte na Application → Cookies → https://open.spotify.com. 3) Najděte cookie s názvem „sp_dc“ a zkopírujte jeho hodnotu. 4) Vložte ji do pole výše.
+	DA	Sådan finder du din sp_dc-cookie: 1) Åbn open.spotify.com i din browser, og log ind. 2) Åbn udviklerværktøjer (F12), og gå til Application → Cookies → https://open.spotify.com. 3) Find cookien med navnet "sp_dc", og kopiér dens værdi. 4) Indsæt den i feltet ovenfor.
+	DE	So findest du deinen sp_dc-Cookie: 1) Öffne open.spotify.com in deinem Browser und melde dich an. 2) Öffne die Entwicklertools (F12) und gehe zu Application → Cookies → https://open.spotify.com. 3) Suche den Cookie mit dem Namen „sp_dc“ und kopiere seinen Wert. 4) Füge ihn oben in das Feld ein.
+	EN	How to find your sp_dc cookie: 1) Open open.spotify.com in your browser and log in. 2) Open Developer Tools (F12), then go to Application → Cookies → https://open.spotify.com. 3) Find the cookie named "sp_dc" and copy its value. 4) Paste it into the field above.
+	ES	Cómo encontrar tu cookie sp_dc: 1) Abre open.spotify.com en tu navegador e inicia sesión. 2) Abre las herramientas de desarrollador (F12) y ve a Application → Cookies → https://open.spotify.com. 3) Busca la cookie llamada "sp_dc" y copia su valor. 4) Pégalo en el campo de arriba.
+	FR	Comment trouver votre cookie sp_dc : 1) Ouvrez open.spotify.com dans votre navigateur et connectez-vous. 2) Ouvrez les outils de développement (F12), puis allez dans Application → Cookies → https://open.spotify.com. 3) Trouvez le cookie nommé « sp_dc » et copiez sa valeur. 4) Collez-la dans le champ ci-dessus.
+	IT	Come trovare il tuo cookie sp_dc: 1) Apri open.spotify.com nel browser ed esegui l'accesso. 2) Apri gli strumenti per sviluppatori (F12), poi vai su Application → Cookies → https://open.spotify.com. 3) Trova il cookie chiamato "sp_dc" e copiane il valore. 4) Incollalo nel campo qui sopra.
+	NL	Zo vindt u uw sp_dc-cookie: 1) Open open.spotify.com in uw browser en log in. 2) Open de ontwikkelaarstools (F12) en ga naar Application → Cookies → https://open.spotify.com. 3) Zoek de cookie met de naam "sp_dc" en kopieer de waarde. 4) Plak deze in het veld hierboven.
+	NO	Slik finner du sp_dc-informasjonskapselen din: 1) Åpne open.spotify.com i nettleseren og logg inn. 2) Åpne utviklerverktøyene (F12), og gå til Application → Cookies → https://open.spotify.com. 3) Finn informasjonskapselen med navnet «sp_dc», og kopier verdien. 4) Lim den inn i feltet ovenfor.
+	PL	Jak znaleźć ciasteczko sp_dc: 1) Otwórz open.spotify.com w przeglądarce i zaloguj się. 2) Otwórz narzędzia deweloperskie (F12) i przejdź do Application → Cookies → https://open.spotify.com. 3) Znajdź ciasteczko o nazwie „sp_dc” i skopiuj jego wartość. 4) Wklej je w pole powyżej.
+	SV	Så hittar du din sp_dc-cookie: 1) Öppna open.spotify.com i webbläsaren och logga in. 2) Öppna utvecklarverktygen (F12) och gå till Application → Cookies → https://open.spotify.com. 3) Hitta cookien som heter "sp_dc" och kopiera dess värde. 4) Klistra in den i fältet ovan.
+
+PLUGIN_SPOTON_SP_DC_STATUS_VALID
+	CS	Platné
+	DA	Gyldig
+	DE	Gültig
+	EN	Valid
+	ES	Válida
+	FR	Valide
+	IT	Valido
+	NL	Geldig
+	NO	Gyldig
+	PL	Ważne
+	SV	Giltig
+
+PLUGIN_SPOTON_SP_DC_STATUS_EXPIRED
+	CS	Vypršelo
+	DA	Udløbet
+	DE	Abgelaufen
+	EN	Expired
+	ES	Caducada
+	FR	Expiré
+	IT	Scaduto
+	NL	Verlopen
+	NO	Utløpt
+	PL	Wygasłe
+	SV	Utgången
+
+PLUGIN_SPOTON_SP_DC_STATUS_EMPTY
+	CS	Nenakonfigurováno
+	DA	Ikke konfigureret
+	DE	Nicht konfiguriert
+	EN	Not configured
+	ES	No configurada
+	FR	Non configuré
+	IT	Non configurato
+	NL	Niet geconfigureerd
+	NO	Ikke konfigurert
+	PL	Nieskonfigurowane
+	SV	Inte konfigurerad
+
+PLUGIN_SPOTON_SP_DC_EXPIRED_HINT
+	CS	Vytvořeno pro vás: platnost cookie sp_dc vypršela — zadejte ji znovu v nastavení.
+	DA	Lavet til dig: sp_dc-cookien er udløbet — indtast den igen under Indstillinger.
+	DE	Für dich gemacht: sp_dc-Cookie abgelaufen — bitte in den Einstellungen neu eingeben.
+	EN	Made For You: sp_dc cookie expired — re-enter it in Settings.
+	ES	Hecho para ti: la cookie sp_dc ha caducado — vuelve a introducirla en Configuración.
+	FR	Fait pour vous : le cookie sp_dc a expiré — ressaisissez-le dans les Paramètres.
+	IT	Fatto per te: il cookie sp_dc è scaduto — reinseriscilo nelle Impostazioni.
+	NL	Gemaakt voor jou: sp_dc-cookie verlopen — voer deze opnieuw in bij Instellingen.
+	NO	Laget for deg: sp_dc-informasjonskapselen er utløpt — skriv den inn på nytt under Innstillinger.
+	PL	Stworzone dla Ciebie: ciasteczko sp_dc wygasło — wprowadź je ponownie w Ustawieniach.
+	SV	Gjort för dig: sp_dc-cookien har gått ut — ange den igen under Inställningar.
+
+PLUGIN_SPOTON_MFY_SECRETS_DOWN
+	CS	Vytvořeno pro vás je dočasně nedostupné (zdroj TOTP tajemství není dostupný).
+	DA	Lavet til dig er midlertidigt utilgængelig (TOTP-hemmelighedskilden er utilgængelig).
+	DE	„Für dich gemacht“ ist vorübergehend nicht verfügbar (TOTP-Quelle nicht erreichbar).
+	EN	Made For You is temporarily unavailable (TOTP secret source unreachable).
+	ES	Hecho para ti no está disponible temporalmente (fuente del secreto TOTP inaccesible).
+	FR	Fait pour vous est temporairement indisponible (source du secret TOTP inaccessible).
+	IT	Fatto per te non è temporaneamente disponibile (fonte del segreto TOTP non raggiungibile).
+	NL	Gemaakt voor jou is tijdelijk niet beschikbaar (TOTP-geheimbron niet bereikbaar).
+	NO	Laget for deg er midlertidig utilgjengelig (TOTP-hemmelighetskilden er utilgjengelig).
+	PL	Stworzone dla Ciebie jest tymczasowo niedostępne (źródło sekretu TOTP niedostępne).
+	SV	Gjort för dig är tillfälligt otillgängligt (TOTP-hemlighetskällan går inte att nå).
+

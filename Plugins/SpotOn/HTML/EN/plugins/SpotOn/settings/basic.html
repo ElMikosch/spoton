@@ -130,6 +130,40 @@
 		</div>
 	[% END %]
 
+	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
+	<h2>[% 'PLUGIN_SPOTON_MADE_FOR_YOU_SECTION' | string %]</h2>
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_SP_DC" desc="PLUGIN_SPOTON_SP_DC_DESC" %]
+		[% IF madeForYouState == 'expired' %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT' | string %]
+		</div>
+		[% ELSIF madeForYouState == 'secrets_down' %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_MFY_SECRETS_DOWN' | string %]
+		</div>
+		[% END %]
+
+		<input type="text" class="stdedit" name="pref_spDc" id="pref_spDc"
+		       value="[% spDcMasked | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_SP_DC' | string | html %]"/>
+
+		<div style="margin-top:6px; font-size:0.9em">
+			[% IF madeForYouState == 'valid' %]
+			<span style="color: green">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_VALID' | string %]</span>
+			[% ELSIF madeForYouState == 'expired' %]
+			<span style="color: orange">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EXPIRED' | string %]</span>
+			[% ELSE %]
+			<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EMPTY' | string %]</span>
+			[% END %]
+		</div>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">How to find your sp_dc cookie</summary>
+			<p style="margin:8px 0 0 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_SP_DC_HOWTO' | string | html %]</p>
+		</details>
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
 			<table style="width:100%">
