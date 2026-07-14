@@ -155,7 +155,8 @@
 			</table>
 
 			<p>
-				<button type="button" class="submit" onclick="spotonPkceStart()">
+				<button type="button" class="submit" onclick="spotonPkceStart()"
+					[% IF degradedMode %]disabled title="[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string | html %]"[% END %]>
 					[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]
 				</button>
 			</p>

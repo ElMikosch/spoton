@@ -245,9 +245,16 @@ sub _pkceStartHandler {
 
     return unless _csrfCheck($httpClient, $response);
 
-    require Plugins::SpotOn::API::PKCE;
+    # WR-05: reject PKCE start when no Client-ID is configured — the bundled
+    # default cannot have the user's relay redirect URI registered, so the
+    # flow would end with a Spotify error page.
+    my $clientId = $prefs->get('clientId');
+    unless ($clientId) {
+        return _jsonResponse($httpClient, $response,
+            { error => 'no_client_id', message => 'A custom Spotify Client-ID is required for PKCE authentication.' });
+    }
 
-    my $clientId  = _pkceClientId();
+    require Plugins::SpotOn::API::PKCE;
     my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
     my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
 
