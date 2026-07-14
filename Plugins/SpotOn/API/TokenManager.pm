@@ -93,10 +93,17 @@ sub removeAccount {
         my $acctDir = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
         if (-d $acctDir && $acctDir =~ m{[/\\]\Q$accountId\E$}) {
             require File::Path;
-            if (eval { File::Path::remove_tree($acctDir); 1 }) {
-                main::INFOLOG && $log->info("TokenManager: removed credentials dir for account " . _mask($accountId));
+            # WR-07: remove_tree does not die on failure by default — it carps
+            # and returns the count. Use the { error => \$errs } form and fall
+            # back to a directory-existence check for full coverage (M2).
+            File::Path::remove_tree($acctDir, { error => \my $errs });
+            if ($errs && @$errs) {
+                $log->warn("TokenManager: failed to fully remove credentials dir for "
+                    . _mask($accountId) . ": " . join('; ', map { join(': ', %$_) } @$errs));
+            } elsif (-d $acctDir) {
+                $log->warn("TokenManager: credentials dir for " . _mask($accountId) . " still present after removal");
             } else {
-                $log->warn("TokenManager: failed to remove credentials dir for " . _mask($accountId) . ": $@");
+                main::INFOLOG && $log->info("TokenManager: removed credentials dir for account " . _mask($accountId));
             }
         }
     }
