@@ -2169,3 +2169,172 @@ PLUGIN_SPOTON_ADD_TO_PLAYLIST_ERROR
 	PL	Nie można dodać do playlisty
 	SV	Kunde inte lägga till i spellista
 
+PLUGIN_SPOTON_PKCE_AUTH
+	CS	Autorizace účtu Spotify
+	DA	Spotify-kontogodkendelse
+	DE	Spotify-Konto-Autorisierung
+	EN	Spotify Account Authorization
+	ES	Autorización de cuenta de Spotify
+	FR	Autorisation du compte Spotify
+	IT	Autorizzazione account Spotify
+	NL	Spotify-accountautorisatie
+	NO	Spotify-kontoautorisasjon
+	PL	Autoryzacja konta Spotify
+	SV	Spotify-kontoauktorisering
+
+PLUGIN_SPOTON_PKCE_AUTH_DESC
+	CS	Autorizujte SpotOn k přístupu k vašemu účtu Spotify pomocí zabezpečeného přihlášení OAuth. Nahrazuje způsob připojení přes aplikaci Spotify pro přístup k API.
+	DA	Giv SpotOn adgang til din Spotify-konto via sikker OAuth-login. Dette erstatter tilslutning via Spotify-appen for API-adgang.
+	DE	Autorisiere SpotOn für den Zugriff auf dein Spotify-Konto per sicherem OAuth-Login. Dies ersetzt die Verbindung über die Spotify App für den API-Zugriff.
+	EN	Authorize SpotOn to access your Spotify account via secure OAuth login. This replaces the Spotify App connection method for API access.
+	ES	Autoriza a SpotOn para acceder a tu cuenta de Spotify mediante un inicio de sesión OAuth seguro. Esto sustituye el método de conexión mediante la App de Spotify para el acceso a la API.
+	FR	Autorisez SpotOn à accéder à votre compte Spotify via une connexion OAuth sécurisée. Cela remplace la méthode de connexion par l'application Spotify pour l'accès à l'API.
+	IT	Autorizza SpotOn ad accedere al tuo account Spotify tramite login OAuth sicuro. Sostituisce il metodo di connessione tramite l'app Spotify per l'accesso alle API.
+	NL	Autoriseer SpotOn om toegang te krijgen tot uw Spotify-account via veilige OAuth-login. Dit vervangt de verbindingsmethode via de Spotify-app voor API-toegang.
+	NO	Autoriser SpotOn til å få tilgang til Spotify-kontoen din via sikker OAuth-pålogging. Dette erstatter tilkobling via Spotify-appen for API-tilgang.
+	PL	Autoryzuj SpotOn do dostępu do Twojego konta Spotify za pomocą bezpiecznego logowania OAuth. Zastępuje to metodę łączenia przez aplikację Spotify w dostępie do API.
+	SV	Auktorisera SpotOn att komma åt ditt Spotify-konto via säker OAuth-inloggning. Detta ersätter anslutning via Spotify-appen för API-åtkomst.
+
+PLUGIN_SPOTON_PKCE_CONNECT_BTN
+	CS	Připojit účet Spotify
+	DA	Tilslut Spotify-konto
+	DE	Spotify-Konto verbinden
+	EN	Connect Spotify Account
+	ES	Conectar cuenta de Spotify
+	FR	Connecter le compte Spotify
+	IT	Connetti account Spotify
+	NL	Spotify-account verbinden
+	NO	Koble til Spotify-konto
+	PL	Połącz konto Spotify
+	SV	Anslut Spotify-konto
+
+PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID
+	CS	Pro autorizaci účtu je vyžadováno Spotify Client ID. Nejprve zadejte své Client ID výše.
+	DA	Der kræves et Spotify Client-ID til kontogodkendelse. Indtast dit Client-ID ovenfor først.
+	DE	Für die Konto-Autorisierung wird eine Spotify Client-ID benötigt. Gib zuerst oben deine Client-ID ein.
+	EN	A Spotify Client ID is required for account authorization. Enter your Client ID above first.
+	ES	Se requiere un Client ID de Spotify para autorizar la cuenta. Introduce primero tu Client ID arriba.
+	FR	Un Client ID Spotify est requis pour autoriser le compte. Saisissez d'abord votre Client ID ci-dessus.
+	IT	È necessario un Client ID Spotify per l'autorizzazione dell'account. Inserisci prima il tuo Client ID sopra.
+	NL	Er is een Spotify Client-ID vereist voor accountautorisatie. Voer eerst uw Client-ID hierboven in.
+	NO	Det kreves en Spotify Client-ID for kontoautorisasjon. Skriv inn Client-ID-en din ovenfor først.
+	PL	Do autoryzacji konta wymagane jest Client ID Spotify. Najpierw wpisz powyżej swoje Client ID.
+	SV	Ett Spotify Client-ID krävs för kontoauktorisering. Ange ditt Client-ID ovan först.
+
+PLUGIN_SPOTON_PKCE_OPENING
+	CS	Otevírání autorizace Spotify...
+	DA	Åbner Spotify-godkendelse...
+	DE	Spotify-Autorisierung wird geöffnet...
+	EN	Opening Spotify authorization...
+	ES	Abriendo autorización de Spotify...
+	FR	Ouverture de l'autorisation Spotify...
+	IT	Apertura autorizzazione Spotify...
+	NL	Spotify-autorisatie wordt geopend...
+	NO	Åpner Spotify-autorisasjon...
+	PL	Otwieranie autoryzacji Spotify...
+	SV	Öppnar Spotify-auktorisering...
+
+PLUGIN_SPOTON_PKCE_SUCCESS
+	CS	Účet Spotify byl úspěšně připojen!
+	DA	Spotify-konto tilsluttet!
+	DE	Spotify-Konto erfolgreich verbunden!
+	EN	Spotify account connected successfully!
+	ES	¡Cuenta de Spotify conectada correctamente!
+	FR	Compte Spotify connecté avec succès !
+	IT	Account Spotify connesso con successo!
+	NL	Spotify-account succesvol verbonden!
+	NO	Spotify-kontoen ble koblet til!
+	PL	Konto Spotify zostało pomyślnie połączone!
+	SV	Spotify-kontot anslöts!
+
+PLUGIN_SPOTON_PKCE_ERROR
+	CS	Autorizace se nezdařila. Zkuste to prosím znovu.
+	DA	Godkendelse mislykkedes. Prøv igen.
+	DE	Autorisierung fehlgeschlagen. Bitte versuche es erneut.
+	EN	Authorization failed. Please try again.
+	ES	Error de autorización. Inténtalo de nuevo.
+	FR	Échec de l'autorisation. Veuillez réessayer.
+	IT	Autorizzazione non riuscita. Riprova.
+	NL	Autorisatie mislukt. Probeer het opnieuw.
+	NO	Autorisasjon mislyktes. Prøv igjen.
+	PL	Autoryzacja nie powiodła się. Spróbuj ponownie.
+	SV	Auktoriseringen misslyckades. Försök igen.
+
+PLUGIN_SPOTON_PKCE_MANUAL_TITLE
+	CS	Ruční autorizace
+	DA	Manuel godkendelse
+	DE	Manuelle Autorisierung
+	EN	Manual Authorization
+	ES	Autorización manual
+	FR	Autorisation manuelle
+	IT	Autorizzazione manuale
+	NL	Handmatige autorisatie
+	NO	Manuell autorisasjon
+	PL	Autoryzacja ręczna
+	SV	Manuell auktorisering
+
+PLUGIN_SPOTON_PKCE_MANUAL_DESC
+	CS	Pokud automatické přesměrování nefungovalo, vložte sem celou zpětnou (callback) URL adresu z prohlížeče:
+	DA	Hvis den automatiske omdirigering ikke virkede, så indsæt hele callback-URL'en fra din browser her:
+	DE	Falls die automatische Weiterleitung nicht funktioniert hat, füge hier die vollständige Callback-URL aus deinem Browser ein:
+	EN	If the automatic redirect did not work, paste the full callback URL from your browser here:
+	ES	Si la redirección automática no funcionó, pega aquí la URL de retorno completa de tu navegador:
+	FR	Si la redirection automatique n'a pas fonctionné, collez ici l'URL de rappel complète de votre navigateur :
+	IT	Se il reindirizzamento automatico non ha funzionato, incolla qui l'URL di callback completo dal tuo browser:
+	NL	Als de automatische doorverwijzing niet werkte, plak dan hier de volledige callback-URL uit uw browser:
+	NO	Hvis den automatiske omdirigeringen ikke fungerte, lim inn hele callback-URL-en fra nettleseren din her:
+	PL	Jeśli automatyczne przekierowanie nie zadziałało, wklej tutaj pełny adres URL zwrotny z przeglądarki:
+	SV	Om den automatiska omdirigeringen inte fungerade, klistra in hela callback-URL:en från din webbläsare här:
+
+PLUGIN_SPOTON_PKCE_MANUAL_BTN
+	CS	Odeslat callback URL
+	DA	Indsend callback-URL
+	DE	Callback-URL senden
+	EN	Submit Callback URL
+	ES	Enviar URL de retorno
+	FR	Envoyer l'URL de rappel
+	IT	Invia URL di callback
+	NL	Callback-URL verzenden
+	NO	Send inn callback-URL
+	PL	Wyślij adres URL zwrotny
+	SV	Skicka callback-URL
+
+PLUGIN_SPOTON_PKCE_REDIRECT_NOTE
+	CS	Důležité: Přidejte https://stiefenm.github.io/spoton/auth/ jako Redirect URI v nastavení vaší Spotify Developer App.
+	DA	Vigtigt: Tilføj https://stiefenm.github.io/spoton/auth/ som Redirect URI i indstillingerne for din Spotify Developer App.
+	DE	Wichtig: Füge https://stiefenm.github.io/spoton/auth/ als Redirect-URI in den Einstellungen deiner Spotify Developer App hinzu.
+	EN	Important: Add https://stiefenm.github.io/spoton/auth/ as a Redirect URI in your Spotify Developer App settings.
+	ES	Importante: añade https://stiefenm.github.io/spoton/auth/ como Redirect URI en la configuración de tu App de Desarrollador de Spotify.
+	FR	Important : ajoutez https://stiefenm.github.io/spoton/auth/ comme URI de redirection dans les paramètres de votre application développeur Spotify.
+	IT	Importante: aggiungi https://stiefenm.github.io/spoton/auth/ come Redirect URI nelle impostazioni della tua Spotify Developer App.
+	NL	Belangrijk: voeg https://stiefenm.github.io/spoton/auth/ toe als Redirect URI in de instellingen van uw Spotify Developer App.
+	NO	Viktig: Legg til https://stiefenm.github.io/spoton/auth/ som Redirect URI i innstillingene for Spotify Developer-appen din.
+	PL	Ważne: dodaj https://stiefenm.github.io/spoton/auth/ jako Redirect URI w ustawieniach swojej aplikacji Spotify Developer.
+	SV	Viktigt: Lägg till https://stiefenm.github.io/spoton/auth/ som Redirect URI i inställningarna för din Spotify Developer App.
+
+PLUGIN_SPOTON_SETUP_PKCE_TITLE
+	CS	Připojte svůj účet Spotify
+	DA	Tilslut din Spotify-konto
+	DE	Verbinde dein Spotify-Konto
+	EN	Connect your Spotify Account
+	ES	Conecta tu cuenta de Spotify
+	FR	Connectez votre compte Spotify
+	IT	Connetti il tuo account Spotify
+	NL	Verbind uw Spotify-account
+	NO	Koble til Spotify-kontoen din
+	PL	Połącz swoje konto Spotify
+	SV	Anslut ditt Spotify-konto
+
+PLUGIN_SPOTON_SETUP_PKCE_DESC
+	CS	Klikněte níže na „Připojit účet Spotify“ a autorizujte SpotOn pomocí svého účtu Spotify Premium.
+	DA	Klik på "Tilslut Spotify-konto" nedenfor for at godkende SpotOn med din Spotify Premium-konto.
+	DE	Klicke unten auf „Spotify-Konto verbinden“, um SpotOn mit deinem Spotify-Premium-Konto zu autorisieren.
+	EN	Click "Connect Spotify Account" below to authorize SpotOn with your Spotify Premium account.
+	ES	Haz clic en «Conectar cuenta de Spotify» abajo para autorizar SpotOn con tu cuenta de Spotify Premium.
+	FR	Cliquez sur « Connecter le compte Spotify » ci-dessous pour autoriser SpotOn avec votre compte Spotify Premium.
+	IT	Fai clic su "Connetti account Spotify" qui sotto per autorizzare SpotOn con il tuo account Spotify Premium.
+	NL	Klik hieronder op "Spotify-account verbinden" om SpotOn te autoriseren met uw Spotify Premium-account.
+	NO	Klikk på «Koble til Spotify-konto» nedenfor for å autorisere SpotOn med Spotify Premium-kontoen din.
+	PL	Kliknij poniżej „Połącz konto Spotify”, aby autoryzować SpotOn za pomocą swojego konta Spotify Premium.
+	SV	Klicka på "Anslut Spotify-konto" nedan för att auktorisera SpotOn med ditt Spotify Premium-konto.
+

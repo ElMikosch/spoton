@@ -44,11 +44,8 @@
 	<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-bottom:20px; border-radius:4px">
 		<h3 style="margin-top:0">[% 'PLUGIN_SPOTON_SETUP_GUIDE_TITLE' | string %]</h3>
 
-		<p style="margin:0 0 4px 0"><strong>1. [% 'PLUGIN_SPOTON_SETUP_CONNECT_TITLE' | string %]</strong></p>
-		<p style="margin:0 0 8px 0">[% 'PLUGIN_SPOTON_SETUP_CONNECT_DESC' | string %]</p>
-		<p style="background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.3); padding:8px 12px; border-radius:4px; margin:0 0 12px 0; font-size:0.9em">
-			[% 'PLUGIN_SPOTON_SETUP_CONNECT_NOTE' | string %]
-		</p>
+		<p style="margin:0 0 4px 0"><strong>1. [% 'PLUGIN_SPOTON_SETUP_PKCE_TITLE' | string %]</strong></p>
+		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_PKCE_DESC' | string %]</p>
 
 		<p style="margin:0 0 4px 0"><strong>2. [% 'PLUGIN_SPOTON_SETUP_BROWSE_TITLE' | string %]</strong></p>
 		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_BROWSE_DESC' | string %]</p>
@@ -133,6 +130,43 @@
 		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
 		       value="[% customClientId | html %]"
 		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_PKCE_AUTH" desc="PLUGIN_SPOTON_PKCE_AUTH_DESC" %]
+		[% IF degradedMode %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string %]
+		</div>
+		[% END %]
+
+		<p>
+			<button type="button" class="submit" id="pkceConnectBtn" onclick="spotonPkceStart()"
+				data-opening-text="[% 'PLUGIN_SPOTON_PKCE_OPENING' | string | html %]"
+				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]"
+				[% IF degradedMode %]disabled[% END %]>
+				[% 'PLUGIN_SPOTON_PKCE_CONNECT_BTN' | string %]
+			</button>
+		</p>
+
+		[% IF customClientId %]
+		<p style="background:rgba(66,133,244,0.08); border:1px solid rgba(66,133,244,0.3); padding:8px 12px; border-radius:4px; font-size:0.9em">
+			[% 'PLUGIN_SPOTON_PKCE_REDIRECT_NOTE' | string %]
+		</p>
+		[% END %]
+
+		<div id="pkce-status" style="display:none; margin-top:10px"></div>
+
+		<div id="pkce-fallback" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid rgba(128,128,128,0.2)">
+			<p style="margin:0 0 4px 0"><strong>[% 'PLUGIN_SPOTON_PKCE_MANUAL_TITLE' | string %]</strong></p>
+			<p style="margin:0 0 8px 0; font-size:0.9em">[% 'PLUGIN_SPOTON_PKCE_MANUAL_DESC' | string %]</p>
+			<input type="text" id="pkce-manual-url" class="stdedit" style="width:80%"
+				placeholder="http://..."/>
+			<button type="button" class="submit"
+				id="pkceManualBtn" onclick="spotonPkceManual()"
+				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]">
+				[% 'PLUGIN_SPOTON_PKCE_MANUAL_BTN' | string %]
+			</button>
+		</div>
 	[% END %]
 
 	[% IF NOT accounts.keys.size %]
@@ -221,6 +255,69 @@
 	[% END %]
 
 	<script type="text/javascript">
+	function spotonPkceStart() {
+		var btn      = document.getElementById('pkceConnectBtn');
+		var statusEl = document.getElementById('pkce-status');
+		var fallbackEl = document.getElementById('pkce-fallback');
+
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', '/plugins/SpotOn/settings/pkce/start', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.onload = function() {
+			if (xhr.status === 200) {
+				var data;
+				try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+				if (data && data.url) {
+					statusEl.textContent = btn.dataset.openingText;
+					statusEl.style.display = 'block';
+					// The copy-paste fallback stays visible for the whole flow —
+					// auto-redirect may not reach this LMS instance (edge case D).
+					fallbackEl.style.display = 'block';
+					window.open(data.url, '_blank');
+					// No AJAX way to know the browser-side redirect finished —
+					// reload once as a fallback so a completed auth shows up.
+					setTimeout(function() { window.location.reload(); }, 30000);
+					return;
+				}
+			}
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.onerror = function() {
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.send();
+	}
+
+	function spotonPkceManual() {
+		var input    = document.getElementById('pkce-manual-url');
+		var btn      = document.getElementById('pkceManualBtn');
+		var statusEl = document.getElementById('pkce-status');
+		var callbackUrl = input.value.trim();
+		if (!callbackUrl) { return; }
+
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', '/plugins/SpotOn/settings/pkce/manual', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+		xhr.onload = function() {
+			var data;
+			try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+			if (data && data.status === 'ok') {
+				window.location.href = window.location.pathname;
+				return;
+			}
+			statusEl.textContent = (data && data.message) || btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.onerror = function() {
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.send('callback_url=' + encodeURIComponent(callbackUrl));
+	}
+
 	function spotonDiscovery(action) {
 		var xhr = new XMLHttpRequest();
 		xhr.open('POST', '/plugins/SpotOn/settings/discovery/' + action, true);
