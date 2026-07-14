@@ -153,7 +153,14 @@
 
 - [ ] **Phase 50: Perl TokenManager Rewrite**
   **Goal**: Replace Keymaster-based TokenManager with PKCE token management — refresh flow, expiry handling, per-player token isolation. AUTH-05.
+  **Plans:** 3 plans
   Depends on: Phase 49
+
+  Plans:
+
+  - [ ] 50-01-PLAN.md — TokenManager.pm PKCE rewrite + PKCE.pm error extension + test rewrite
+  - [ ] 50-02-PLAN.md — Client.pm flavor system removal + test update
+  - [ ] 50-03-PLAN.md — Integration wiring (Plugin.pm + Settings.pm + basic.html + i18n)
 
 ### Phase 51: Credential Derivation + Connect
 

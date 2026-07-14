@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
-status: ready_to_plan
-stopped_at: v2.3.14 released, auth research done
-last_updated: 2026-07-13
-last_activity: 2026-07-13 -- woorszt confirms PKCE restores full playback, dead-end retracted
+current_phase: 49
+current_phase_name: pkce-oauth-flow
+status: verifying
+stopped_at: Phase 50 context gathered
+last_updated: "2026-07-14T09:01:06.395Z"
+last_activity: 2026-07-14
+last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 1
-  completed_plans: 1
-  percent: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 20
 ---
 
 # Project State: SpotOn
@@ -26,14 +29,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** v3.0 Auth Overhaul — PKCE validated (woorszt confirms full playback), ready for Phase 49-00 (slim audit) then Phase 49
+**Current Focus:** Phase 49 — pkce-oauth-flow
 
 ## Current Position
 
-Phase: 48 SUPERSEDED → v3.0 planned (Phases 49-53)
-Plan: Spike findings packaged, phases defined, branch pending
-Status: Ready to create v3.0-auth branch, slim audit (49-00), then Phase 49 PKCE
-Last activity: 2026-07-13
+Phase: 49 (pkce-oauth-flow) — EXECUTING
+Plan: 2 of 2
+Status: Phase complete — ready for verification
+Last activity: 2026-07-14 — Phase 49 execution started
 
 ## Progress Bar
 
@@ -78,6 +81,8 @@ Items carried forward from previous milestones:
 |----------|------|--------|
 | debug | connect-reconnect-no-audio | awaiting_human_verify |
 | uat | Phase 16 macOS Binary (3 scenarios) | deferred (no macOS test env) |
+| Phase 49 P01 | 18min | 2 tasks | 3 files |
+| Phase 49 P02 | 18min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -112,6 +117,10 @@ Items carried forward from previous milestones:
 - [v3.0]: Phase 49-00 Audit slim — Grep+Klassifikation der 4 Keymaster-Buckets, kein Research. Direkt danach Phase 49 PKCE.
 - [v3.0]: Audio key denial (newest cohort) tracked in #91, kein eigenes Issue — Population noch unklar
 - [v3.0]: **librespot Audio Pipeline analysiert (2026-07-13):** Kein Branching — BEIDE Pfade (CDN storage-resolve + AudioKeyManager RequestKey 0x0c) werden IMMER für jeden Track aufgerufen. CDN liefert AES-128-CTR-verschlüsselte Bytes, Audio Key ist der Entschlüsselungsschlüssel. Kein client-seitiger Workaround möglich — AP entscheidet serverseitig ob Key rausgegeben wird. Newest-cohort-Fix erfordert komplett anderes Audio-Backend (v4.0/spoton-private).
+- [Phase 49]: Added PKCE.pm to t/05_perl_syntax.t syntax-check list to keep CI coverage consistent with sibling API modules (TokenManager.pm, Client.pm)
+- [Phase 49]: Reused TokenManager::_storeAccountPrefs for PKCE account creation instead of duplicating prefs-writing logic in Settings.pm
+- [Phase 49]: Fallback userId on /me lookup failure derived from access_token hash, not a fixed literal, to avoid account-collision across concurrent failed lookups
+- [Phase 49]: PKCE OAuth result page HTML-escapes all interpolated values (attacker-controlled error query param reflected into HTML)
 
 ### Blockers/Concerns
 
@@ -132,15 +141,20 @@ Items carried forward from previous milestones:
 
 ## Session Continuity
 
-**Last session:** 2026-07-13
-**Stopped at:** Dead-end retracted — woorszt confirms PKCE restores full playback for mid-cohort accounts
+**Resume file:** .planning/phases/50-perl-tokenmanager-rewrite/50-CONTEXT.md
+
+**Last session:** 2026-07-14T09:01:06.390Z
+**Stopped at:** Phase 50 context gathered
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
+
 - Posted #115 reply (woorszt confirmation, 3-cohort model)
 - Posted #91 correction (retracted dead-end, updated assessment)
 - Fixed #60 label (waiting-user re-set, warminskimarcin hasn't run script)
 - Updated STATE.md decisions
+
 **Next action:**
+
 1. Create v3.0-auth branch from main
 2. Slim Phase 49-00 audit (Grep + 4-bucket classification)
 3. Plan Phase 49 PKCE OAuth
