@@ -485,8 +485,13 @@ sub _pkceStoreAccount {
         scope         => $tokenData->{scope},
     });
 
+    # IN-05: consistent accountId masking (T-50-01 discipline) — never log
+    # the full accountId; use the same substr(0,4).'****' pattern as the
+    # failure branch below.
+    my $maskedId = substr($accountId, 0, 4) . '****';
+
     unless ($stored) {
-        $log->error("Settings: PKCE token storage failed for account $accountId — aborting account creation");
+        $log->error("Settings: PKCE token storage failed for account $maskedId — aborting account creation");
         if ($isJson) {
             _jsonResponse($httpClient, $response, { status => 'error', message => 'Token storage failed' });
         } else {
@@ -503,7 +508,7 @@ sub _pkceStoreAccount {
     require Plugins::SpotOn::API::TokenManager;
     Plugins::SpotOn::API::TokenManager->_storeAccountPrefs($accountId, $userId, $displayName, sub {
         main::INFOLOG && $log->is_info && $log->info(
-            "Settings: PKCE account $accountId connected (displayName=$displayName)");
+            "Settings: PKCE account $maskedId connected (displayName=$displayName)");
 
         # T-50-11: clear the persistent needsReauth flag immediately on a
         # successful (re-)authentication rather than waiting for the next
@@ -551,9 +556,8 @@ sub _pkceStoreAccount {
                 # via the PKCE access token (Phase 50). Never reflect the
                 # raw $reason into the user-facing page (T-51-10); log only
                 # a masked accountId.
-                my $maskedAccount = substr($accountId, 0, 4) . '****';
                 $log->warn("Settings: PKCE credential derivation failed for account "
-                    . "$maskedAccount ($reason) -- Connect unavailable, account creation not blocked");
+                    . "$maskedId ($reason) -- Connect unavailable, account creation not blocked");
 
                 if ($isJson) {
                     _jsonResponse($httpClient, $response,
