@@ -252,9 +252,11 @@ sub _pkceStartHandler {
     my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
 
     # Nonce keys the one-time verifier cache and round-trips through the
-    # state parameter across the GitHub Pages relay. It is not itself a
-    # security boundary — the code_verifier is the actual OAuth proof.
-    my $nonce = sprintf('%08x%08x', rand(2**32), rand(2**32));
+    # state parameter across the GitHub Pages relay. WR-04: use
+    # cryptographic randomness — the nonce->verifier binding is the CSRF
+    # guard for the callback endpoint (RFC 6749 sec 10.12).
+    require Crypt::OpenSSL::Random;
+    my $nonce = unpack('H16', Crypt::OpenSSL::Random::random_bytes(8));
 
     my $request = $response->request;
     my $host    = ($request && $request->header('Host')) || 'localhost';
