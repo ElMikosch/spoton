@@ -186,7 +186,12 @@ sub exchangeCode {
 # POSTs to Spotify's token endpoint to refresh an access_token. Spotify
 # rotates the refresh_token on every call — the response includes a NEW
 # refresh_token that the caller MUST persist atomically (storeTokens).
-# $cb->($tokenData) on success, $cb->(undef, $errorMsg) on failure.
+# $cb->($tokenData) on success.
+# $cb->(undef, $errorMsg, $errorDetail) on failure -- $errorDetail is a
+# hashref { http_code => $code, oauth_error => $str_or_undef } so callers
+# (TokenManager) can distinguish a permanent revocation (400/invalid_grant)
+# from a transient network failure (timeout/5xx) without re-deriving HTTP
+# status parsing themselves.
 sub refreshAccessToken {
     my ($refreshToken, $clientId, $cb) = @_;
 
@@ -213,9 +218,38 @@ sub refreshAccessToken {
             $cb->($tokenData);
         },
         sub {
-            my ($http, $error) = @_;
+            # SimpleAsyncHTTP's ecb fires as ->ecb->($self, $error, $http->response)
+            # (Slim/Networking/SimpleAsyncHTTP.pm:96) -- $response is the raw HTTP
+            # response object, distinct from $http (the SimpleAsyncHTTP instance).
+            my ($http, $error, $response) = @_;
+
+            my $code = ($response && ref $response && $response->can('code'))
+                ? ($response->code || 0) : 0;
+
+            # A 400 from the token endpoint carries a JSON body with the OAuth
+            # error type (RFC 6749), e.g. {"error":"invalid_grant",...}. Try the
+            # response object first (most likely to hold the body on a definitive
+            # HTTP error), then fall back to $http->content for robustness.
+            my $oauthError;
+            if ($code == 400) {
+                my $rawBody;
+                if ($response && ref $response && $response->can('content')) {
+                    $rawBody = eval { $response->content };
+                }
+                if (!defined $rawBody || $rawBody eq '') {
+                    $rawBody = eval { $http->content };
+                }
+                if (defined $rawBody && $rawBody ne '') {
+                    my $errBody = eval { from_json($rawBody) };
+                    $oauthError = $errBody->{error}
+                        if !$@ && $errBody && ref $errBody eq 'HASH';
+                }
+            }
+
+            my $errorDetail = { http_code => $code, oauth_error => $oauthError };
+
             $log->error("PKCE: token refresh HTTP error [client_id=$maskedClient]: $error");
-            $cb->(undef, $error);
+            $cb->(undef, $error, $errorDetail);
         },
         { timeout => 30 }
     )->post(

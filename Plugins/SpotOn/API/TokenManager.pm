@@ -3,11 +3,9 @@ package Plugins::SpotOn::API::TokenManager;
 use strict;
 use warnings;
 
-use Digest::MD5 qw(md5_hex);
 use JSON::XS::VersionOneAndTwo;
 
 use File::Spec::Functions qw(catdir catfile);
-use File::Temp qw(tempfile);
 
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
@@ -18,11 +16,9 @@ use Time::HiRes;
 # Constants
 use constant TOKEN_EXPIRY_BUFFER   => 300;       # Refresh 5 min before expiry
 use constant TOKEN_REFRESH_TIMER   => 45 * 60;   # 45 minute proactive refresh cycle
-use constant DISCOVERY_TIMEOUT     => 60 * 15;   # 15 min Proc::Background watchdog
-use constant DISCOVER_DIR          => '__DISCOVER__'; # temp dir during ZeroConf
-use constant TOKEN_FETCH_TIMEOUT   => 15;        # H2: watchdog for --get-token subprocess
-use constant TOKEN_FETCH_POLL      => 0.2;       # H2: async poll interval (seconds)
 use constant SPOTIFY_ME_URL        => 'https://api.spotify.com/v1/me';
+# M1: cache flag prefix for the persistent (TTL 'never') re-auth marker (D-08).
+use constant REAUTH_FLAG_PREFIX    => 'spoton_needs_reauth_';
 # Import SPOTON_DEFAULT_CLIENT_ID from Client.pm (single source of truth — D-04).
 # Using require + direct call avoids circular compile-time dependency
 # (TokenManager is require'd by Client.pm at runtime via _doFlavouredRequest).
@@ -37,46 +33,45 @@ my $prefs = preferences('plugin.spoton');
 # always compiled first in production (this module is runtime-require'd).
 my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
-# Package-level discovery process reference
-my $discoveryProc;
-
-# H3: In-flight token fetch coalescing — keyed by "accountId|flavor".
+# H3: In-flight refresh coalescing — keyed by accountId (no flavor, D-04).
 # Each value is an arrayref of pending callbacks. Concurrent cache misses for
-# the same key share a single --get-token subprocess.
-my %tokenFetchInflight;
+# the same account share a single PKCE::refreshAccessToken call, preventing
+# a Refresh Token Rotation race (T-50-02).
+my %_refreshInflight;
 
 # ============================================================
 # Public class methods
 # ============================================================
 
-# getToken($class, $accountId, $flavorOrCb, [$cb])
-# Checks cache first; falls back to _fetchKeymasterToken on miss.
-# Flavor: 'own' (eigene Client-ID) | 'bundled' (librespot-Default-ID).
-# Backward-compatible: getToken($id, $cb) maps to flavor='own'.
+# getToken($class, $accountId, $cb)
+# Checks cache first; falls back to _refreshToken (PKCE-native) on miss.
+# M-4: short-circuits with $cb->(undef) when the account is flagged
+# needsReauth -- prevents a repeated HTTP POST to Spotify's token endpoint
+# after a confirmed permanent refresh failure (every Browse click would
+# otherwise re-trigger loadTokens + refreshAccessToken).
 sub getToken {
-    my ($class, $accountId, $flavorOrCb, $cb) = @_;
+    my ($class, $accountId, $cb) = @_;
 
-    my $flavor;
-    if (ref $flavorOrCb eq 'CODE') {
-        # Backward-compat: old callers without flavor parameter
-        $cb     = $flavorOrCb;
-        $flavor = 'own';
-    } else {
-        $flavor = $flavorOrCb // 'own';
+    if ($class->needsReauth($accountId)) {
+        main::INFOLOG && $log->info("TokenManager: short-circuit for account "
+            . _mask($accountId) . " -- needsReauth flag set (M-4)");
+        $cb->(undef);
+        return;
     }
 
-    my $cacheKey = "spoton_token_${accountId}_${flavor}";
+    my $cacheKey = "spoton_token_${accountId}";
     if (my $cached = $cache->get($cacheKey)) {
-        main::INFOLOG && $log->info("TokenManager: cache hit for account $accountId ($flavor)");
+        main::INFOLOG && $log->info("TokenManager: cache hit for account " . _mask($accountId));
         $cb->($cached);
         return;
     }
 
-    $class->_fetchKeymasterToken($accountId, $flavor, $cb);
+    $class->_refreshToken($accountId, $cb);
 }
 
 # removeAccount($class, $accountId)
-# Removes account from prefs and cache. Deletes both flavor keys and legacy key.
+# Removes account from prefs and cache. Single token cache key (no flavor,
+# D-04) plus the re-auth flag are both cleared.
 sub removeAccount {
     my ($class, $accountId) = @_;
 
@@ -85,16 +80,12 @@ sub removeAccount {
     delete $accounts->{$accountId};
     $prefs->set('accounts', $accounts);
 
-    # Clear flavor token cache keys (both new keys + legacy migration key):
-    #   spoton_token_${accountId}_own     — own Client-ID flavor
-    #   spoton_token_${accountId}_bundled — bundled librespot-Default-ID flavor
-    $cache->remove("spoton_token_${accountId}_own");
-    $cache->remove("spoton_token_${accountId}_bundled");
-    $cache->remove("spoton_token_$accountId");  # legacy key — safe migration net
+    # D-04: single cache key, no flavor suffix.
+    $cache->remove("spoton_token_${accountId}");
+    $cache->remove(REAUTH_FLAG_PREFIX . $accountId);
 
     # M2: Remove the account's credentials directory from disk — a "removed"
-    # account must not leave its Spotify credentials.json behind.
-    # Same dir _fetchKeymasterToken uses as --cache for this accountId.
+    # account must not leave its Spotify credentials/pkce_tokens.json behind.
     # Safety: only the per-ACCOUNT dir, never the shared spoton cache root —
     # assert the path ends in the accountId segment before removing.
     if ($accountId) {
@@ -103,9 +94,9 @@ sub removeAccount {
         if (-d $acctDir && $acctDir =~ m{[/\\]\Q$accountId\E$}) {
             require File::Path;
             if (eval { File::Path::remove_tree($acctDir); 1 }) {
-                main::INFOLOG && $log->info("TokenManager: removed credentials dir for account $accountId");
+                main::INFOLOG && $log->info("TokenManager: removed credentials dir for account " . _mask($accountId));
             } else {
-                $log->warn("TokenManager: failed to remove credentials dir for $accountId: $@");
+                $log->warn("TokenManager: failed to remove credentials dir for " . _mask($accountId) . ": $@");
             }
         }
     }
@@ -123,7 +114,7 @@ sub removeAccount {
         }
     }
 
-    main::INFOLOG && $log->info("TokenManager: account $accountId removed");
+    main::INFOLOG && $log->info("TokenManager: account " . _mask($accountId) . " removed");
 }
 
 # getAccountIds($class)
@@ -151,40 +142,82 @@ sub getActiveAccountName {
     return $accounts->{$activeId} ? $accounts->{$activeId}{displayName} : undef;
 }
 
+# needsReauth($class, $accountId)
+# Public query: returns 1 if the account's persistent re-auth flag is set,
+# 0 otherwise. Read by Plugin.pm handleFeed() (Channel 1) and Settings.pm
+# handler() (Channel 2) -- wired in Plan 03.
+sub needsReauth {
+    my ($class, $accountId) = @_;
+    return $cache->get(REAUTH_FLAG_PREFIX . $accountId) ? 1 : 0;
+}
+
+# anyAccountNeedsReauth($class)
+# Public query: returns 1 if ANY known account needs re-auth. Used for the
+# OPML-menu-wide warning item (Channel 1) and Settings-page-wide banner
+# (Channel 2).
+sub anyAccountNeedsReauth {
+    my ($class) = @_;
+    for my $id ($class->getAccountIds()) {
+        return 1 if $class->needsReauth($id);
+    }
+    return 0;
+}
+
+# clearNeedsReauth($class, $accountId)
+# PUBLIC method (no underscore prefix, L-6) -- cross-module API. Called from
+# _refreshToken() on successful refresh, and from Settings.pm's
+# _pkceStoreAccount() (Plan 03) immediately after a fresh PKCE re-auth,
+# rather than waiting for the next 45-minute refresh cycle to self-heal.
+sub clearNeedsReauth {
+    my ($class, $accountId) = @_;
+    $cache->remove(REAUTH_FLAG_PREFIX . $accountId);
+}
+
 # refreshAllTokens($class)
-# Refreshes own-flavor tokens for all accounts and re-arms the 45-minute timer.
-# Bundled tokens are lazy-only (on-demand) — no proactive refresh (D-Discretion).
+# M-5: Calls _refreshToken() DIRECTLY (bypassing getToken's cache check) so
+# the proactive refresh cycle always exchanges a fresh token, not a cache
+# hit no-op. This also keeps the refresh_token alive against Spotify's
+# 6-month inactivity expiry. D-07: only accounts with a loadable
+# pkce_tokens.json are refreshed -- accounts without one (pre-PKCE-migration,
+# or stale prefs entries) are skipped at INFO level, not flagged as expired
+# (Pitfall 3). Preserves the displayName-repair branch (M-5).
 sub refreshAllTokens {
     my ($class) = @_;
+
+    require Plugins::SpotOn::API::PKCE;
 
     my $accounts = $prefs->get('accounts') || {};
     my @ids = $class->getAccountIds();
     for my $id (@ids) {
         my $acct = $accounts->{$id} || {};
+
+        unless (Plugins::SpotOn::API::PKCE::loadTokens($id)) {
+            main::INFOLOG && $log->info("TokenManager: account " . _mask($id)
+                . " skipped -- no PKCE tokens (pre-migration account)");
+            next;
+        }
+
         my $needsDisplayName = $acct->{displayName}
             && $acct->{spotifyUserId}
             && $acct->{displayName} eq $acct->{spotifyUserId};
 
         if ($needsDisplayName) {
             $class->_fetchDisplayName($id, $acct->{spotifyUserId}, sub {
-                main::INFOLOG && $log->info("TokenManager: updated displayName for $id");
+                main::INFOLOG && $log->info("TokenManager: updated displayName for " . _mask($id));
             });
         } else {
-            $class->_fetchKeymasterToken($id, 'own', sub {
+            $class->_refreshToken($id, sub {
                 my $token = shift;
-                main::INFOLOG && $log->info("TokenManager: refreshed token for account $id (own)")
+                main::INFOLOG && $log->info("TokenManager: refreshed token for account " . _mask($id))
                     if $token;
                 unless ($token) {
-                    $log->error("TokenManager: failed to refresh token for account $id (own)");
-                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                        Plugins::SpotOn::Status->recordError('error', 'Token', "refresh failed for $id");
-                    }
+                    $log->error("TokenManager: failed to refresh token for account " . _mask($id));
                 }
             });
         }
     }
 
-    # Re-arm timer (AUTH-03 timer continuity)
+    # Re-arm timer (AUTH-05 timer continuity)
     Slim::Utils::Timers::killTimers($class, \&refreshAllTokens);
     Slim::Utils::Timers::setTimer(
         $class,
@@ -193,465 +226,110 @@ sub refreshAllTokens {
     );
 }
 
-# startDiscovery($class)
-# Manages ZeroConf discovery process via librespot --discover-once.
-# T-04.3-08: Always cleans __DISCOVER__ dir before starting (stale credential prevention).
-# T-04.3-09: DISCOVERY_TIMEOUT watchdog timer kills process after 15 min.
-sub startDiscovery {
-    my ($class) = @_;
-
-    my $serverPrefs = preferences('server');
-    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
-    my $credsFile = catfile($discoverDir, 'credentials.json');
-    if (-f $credsFile) {
-        # Stale credentials from a failed auto-setup — clean up so discovery can proceed
-        $log->warn("TokenManager: removing stale credentials.json from __DISCOVER__");
-        require File::Path;
-        File::Path::remove_tree($discoverDir);
-    }
-
-    # Stop existing discovery if running
-    if ($discoveryProc && $discoveryProc->alive()) {
-        $discoveryProc->die();
-        $discoveryProc = undef;
-    }
-
-    require Plugins::SpotOn::Helper;
-    my ($helperPath) = Plugins::SpotOn::Helper->get();
-    unless ($helperPath) {
-        $log->error("TokenManager: cannot start discovery — binary not found");
-        if ($INC{'Plugins/SpotOn/Status.pm'}) {
-            Plugins::SpotOn::Status->recordError('error', 'Token', "binary not found for discovery");
-        }
-        return;
-    }
-
-    # T-04.3-08: Clean up stale __DISCOVER__ dir (RESEARCH Pitfall 2)
-    if (-d $discoverDir) {
-        require File::Path;
-        File::Path::remove_tree($discoverDir);
-    }
-    require File::Path;
-    File::Path::make_path($discoverDir);
-
-    my $deviceName = _getLmsServerName();
-
-    main::INFOLOG && $log->info(
-        "TokenManager: starting ZeroConf discovery as '$deviceName', cache=$discoverDir");
-
-    require Proc::Background;
-    $discoveryProc = Proc::Background->new(
-        { 'die_upon_destroy' => 0 },
-        $helperPath,
-        '-n', $deviceName,
-        '--cache', $discoverDir,
-        '--discover-once',
-    );
-
-    unless ($discoveryProc && $discoveryProc->alive()) {
-        $log->error("TokenManager: discovery process failed to start");
-        if ($INC{'Plugins/SpotOn/Status.pm'}) {
-            Plugins::SpotOn::Status->recordError('error', 'Token', "discovery process failed to start");
-        }
-        $discoveryProc = undef;
-        return;
-    }
-
-    main::INFOLOG && $log->info(
-        "TokenManager: discovery process started (PID " . $discoveryProc->pid() . ")");
-    $log->warn("[DIAG] discovery_start: pid=" . $discoveryProc->pid() . " device_name=$deviceName cache=$discoverDir") if $prefs->get('diagnosticMode');
-
-    # T-04.3-09: Watchdog timer — kill discovery after DISCOVERY_TIMEOUT
-    Slim::Utils::Timers::killTimers($class, \&stopDiscovery);
-    Slim::Utils::Timers::setTimer(
-        $class,
-        Time::HiRes::time() + DISCOVERY_TIMEOUT,
-        \&stopDiscovery
-    );
-}
-
-# stopDiscovery($class)
-# Kills discovery process if alive and cleans up watchdog timer.
-# T-04.3-08: Cleans __DISCOVER__ if no credentials.json inside.
-sub stopDiscovery {
-    my ($class) = @_;
-
-    Slim::Utils::Timers::killTimers($class, \&stopDiscovery);
-
-    if ($discoveryProc && $discoveryProc->alive()) {
-        main::INFOLOG && $log->info("TokenManager: stopping discovery process");
-        $discoveryProc->die();
-    }
-    $discoveryProc = undef;
-
-    # T-04.3-08: Clean __DISCOVER__ dir if no credentials.json was written
-    my $serverPrefs = preferences('server');
-    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', DISCOVER_DIR);
-    my $credsFile   = catfile($discoverDir, 'credentials.json');
-
-    if (-d $discoverDir && !-f $credsFile) {
-        require File::Path;
-        File::Path::remove_tree($discoverDir);
-        main::INFOLOG && $log->info("TokenManager: cleaned up empty __DISCOVER__ dir");
-    }
-}
-
-# discoveryPid($class)
-# W2: Returns the PID of the running ZeroConf discovery process, or undef.
-# Consumed by Plugin.pm _killOrphanedProcesses so orphan cleanup does not
-# kill the discovery process (same helper binary name).
-sub discoveryPid {
-    return ($discoveryProc && $discoveryProc->alive) ? $discoveryProc->pid : undef;
-}
-
-# isDiscoveryRunning($class)
-# Returns boolean: true if discovery process is running.
-# Consumed by Settings.pm _isDiscoveryRunning() (Plan 03).
-sub isDiscoveryRunning {
-    my ($class) = @_;
-    return $discoveryProc && $discoveryProc->alive() ? 1 : 0;
-}
-
-# autoStartDiscoveryIfNeeded($class)
-# D-01: Checks if any account has credentials.json in its cache subdir.
-# If no accounts have credentials, calls startDiscovery.
-sub autoStartDiscoveryIfNeeded {
-    my ($class) = @_;
-
-    my $serverPrefs = preferences('server');
-    my $baseDir     = catdir($serverPrefs->get('cachedir'), 'spoton');
-
-    my @accountIds = $class->getAccountIds();
-
-    for my $id (@accountIds) {
-        my $credsFile = catfile($baseDir, $id, 'credentials.json');
-        if (-f $credsFile) {
-            main::INFOLOG && $log->info(
-                "TokenManager: credentials found for account $id — skipping auto-discovery");
-            return;
-        }
-    }
-
-    main::INFOLOG && $log->info(
-        "TokenManager: no credentials found — auto-starting ZeroConf discovery");
-    $class->startDiscovery();
-}
-
-# _setupAccountFromCredentials($class, $cb)
-# Called after discovery completes (from Settings AJAX flow).
-# Reads credentials.json, derives accountId, renames __DISCOVER__ dir,
-# sets chmod 0700, fetches display_name, stores in prefs.
-# T-04.3-07: chmod 0700 on account dir (credential storage security).
-sub _setupAccountFromCredentials {
-    my ($class, $cb) = @_;
-
-    my $serverPrefs = preferences('server');
-    my $baseDir     = catdir($serverPrefs->get('cachedir'), 'spoton');
-    my $discoverDir = catdir($baseDir, DISCOVER_DIR);
-    my $credsFile   = catfile($discoverDir, 'credentials.json');
-
-    open(my $fh, '<', $credsFile) or do {
-        $log->error("TokenManager: credentials.json not readable: $!");
-        $cb->(undef);
-        return;
-    };
-    local $/;
-    my $json = <$fh>;
-    close $fh;
-
-    my $creds = eval { from_json($json) };
-    if ($@ || !$creds->{username}) {
-        $log->error("TokenManager: credentials.json parse failed: $@");
-        $cb->(undef);
-        return;
-    }
-
-    my $spotifyUserId = $creds->{username};
-    # accountId pattern: MD5 of spotify user_id (stable across username changes)
-    my $accountId = substr(md5_hex($spotifyUserId), 0, 8);
-    $log->warn("[DIAG] discovery_credential: account=" . substr($accountId, 0, 4) . "**** spotify_user=" . substr($spotifyUserId, 0, 4) . "****") if $prefs->get('diagnosticMode');
-
-    # Dir-rename: __DISCOVER__ -> {accountId}
-    my $finalDir = catdir($baseDir, $accountId);
-    if (-d $finalDir) {
-        require File::Path;
-        File::Path::remove_tree($finalDir);
-    }
-    require File::Copy;
-    File::Copy::move($discoverDir, $finalDir) or do {
-        $log->error("TokenManager: dir rename failed: $!");
-        $cb->(undef);
-        return;
-    };
-
-    # T-04.3-07: Secure credential dir permissions
-    chmod(0700, $finalDir);
-
-    # Fetch display_name via --get-token + /me
-    $class->_fetchDisplayName($accountId, $spotifyUserId, $cb);
-}
-
 # ============================================================
 # Private methods
 # ============================================================
 
-# _fetchKeymasterToken($class, $accountId, $flavorOrCb, [$cb])
-# Spawns "spoton --get-token [--client-id X] --cache {cachedir}/spoton/{accountId}".
-# Flavor dispatch: 'bundled' = no --client-id; 'own' = own Client-ID from prefs/constant.
-# Backward-compatible: _fetchKeymasterToken($id, $cb) maps to flavor='own'.
-# H2: Non-blocking — Proc::Background + timer polling with a 15s watchdog.
-#     A hung librespot binary can no longer freeze the LMS event loop.
-#     Argument LIST spawn (no shell) makes manual quoting unnecessary (Windows-safe).
-# H3: Concurrent fetches for the same account/flavor coalesce to one subprocess.
-# T-04.3-06: Never logs $result->{accessToken} — logs only accountId, flavor, and TTL.
-sub _fetchKeymasterToken {
-    my ($class, $accountId, $flavorOrCb, $cb) = @_;
+# _refreshToken($class, $accountId, $cb)
+# PKCE-native refresh: loadTokens -> refreshAccessToken -> storeTokens
+# (rotated refresh_token) -> _cacheToken -> $cb. No subprocess (AUTH-05).
+# H3: in-flight coalescing -- concurrent callers for the same accountId
+# queue their callbacks and share a single refreshAccessToken call.
+sub _refreshToken {
+    my ($class, $accountId, $cb) = @_;
 
-    my $flavor;
-    if (ref $flavorOrCb eq 'CODE') {
-        # Backward-compat: internal callers without flavor parameter
-        $cb     = $flavorOrCb;
-        $flavor = 'own';
-    } else {
-        $flavor = $flavorOrCb // 'own';
-    }
-
-    # H3: Coalesce concurrent fetches for the same account/flavor.
-    my $inflightKey = "${accountId}|${flavor}";
-    if ($tokenFetchInflight{$inflightKey}) {
-        main::INFOLOG && $log->info("TokenManager: coalescing token fetch for $accountId ($flavor)");
-        push @{ $tokenFetchInflight{$inflightKey} }, $cb;
+    if ($_refreshInflight{$accountId}) {
+        main::INFOLOG && $log->info("TokenManager: coalescing refresh for account " . _mask($accountId));
+        push @{ $_refreshInflight{$accountId} }, $cb;
         return;
     }
-    $tokenFetchInflight{$inflightKey} = [$cb];
+    $_refreshInflight{$accountId} = [$cb];
 
     # Drains ALL queued callbacks with the same result. The key is deleted
-    # BEFORE invoking callbacks so a callback that re-triggers a fetch does
-    # not self-coalesce into a dead entry.
+    # BEFORE invoking callbacks so a callback that re-triggers a refresh
+    # does not self-coalesce into a dead entry.
     my $resolve = sub {
         my ($token) = @_;
-        my $queue = delete $tokenFetchInflight{$inflightKey} || [];
+        my $queue = delete $_refreshInflight{$accountId} || [];
         $_->($token) for @{$queue};
     };
 
-    require Plugins::SpotOn::Helper;
-    my ($helper) = Plugins::SpotOn::Helper->get();
-    unless ($helper) {
-        $log->error("TokenManager: binary not found for account $accountId ($flavor)");
+    require Plugins::SpotOn::API::PKCE;
+
+    my $stored = Plugins::SpotOn::API::PKCE::loadTokens($accountId);
+    unless ($stored && $stored->{refresh_token}) {
+        $log->error("TokenManager: no refresh_token on disk for account " . _mask($accountId));
+        $class->_markNeedsReauth($accountId, 'no_refresh_token');
         $resolve->(undef);
         return;
     }
 
-    my $serverPrefs = preferences('server');
-    my $cacheDir    = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
+    my $clientId = $stored->{client_id}
+        || $prefs->get('clientId')
+        || SPOTON_DEFAULT_CLIENT_ID;
 
-    my $usedClientId;
-    if ($flavor eq 'bundled') {
-        $usedClientId = SPOTON_DEFAULT_CLIENT_ID;
-    } else {
-        my $ownClientId = $prefs->get('clientId');
-        $usedClientId = $ownClientId || SPOTON_DEFAULT_CLIENT_ID;
-        if (!$ownClientId) {
-            main::INFOLOG && $log->info("TokenManager: flavor=own has no custom client ID — using bundled ID (fallback will be identical)");
-        }
-    }
+    Plugins::SpotOn::API::PKCE::refreshAccessToken($stored->{refresh_token}, $clientId, sub {
+        my ($tokenData, $err, $errorDetail) = @_;
 
-    # H2: Argument LIST spawn — no shell involved, so no quoting/escaping needed
-    # (replaces the old T-04.3-05 manual shell-quoting, which is now obsolete).
-    my @args = ($helper, '--get-token', '--cache', $cacheDir, '--client-id', $usedClientId);
+        unless ($tokenData) {
+            $errorDetail ||= {};
+            my $httpCode   = $errorDetail->{http_code}  || 0;
+            my $oauthError = $errorDetail->{oauth_error};
 
-    my $maskedId = substr($usedClientId, 0, 8) . '...';
-    main::INFOLOG && $log->info("TokenManager: --get-token for account $accountId ($flavor, client_id=$maskedId)");
+            $log->error("TokenManager: PKCE refresh failed for account " . _mask($accountId)
+                . ": " . ($err // 'unknown'));
 
-    # Tempfile for stdout+stderr capture (same pattern as Daemon.pm port capture).
-    # stderr is merged into the same file to preserve Keymaster error diagnostics.
-    my $tmpDir = catdir($serverPrefs->get('cachedir'), 'spoton');
-    unless (-d $tmpDir) {
-        require File::Path;
-        eval { File::Path::make_path($tmpDir) };
-    }
-    my ($out_fh, $out_tmpfile);
-    eval {
-        ($out_fh, $out_tmpfile) = tempfile('spoton-token-XXXX',
-            DIR    => $tmpDir,
-            UNLINK => 0,
-        );
-    };
-    if ($@ || !$out_tmpfile) {
-        $log->error("TokenManager: tempfile() failed for token capture: $@");
-        $resolve->(undef);
-        return;
-    }
-    close($out_fh);
-
-    require Proc::Background;
-
-    # Pitfall 7 (see Daemon.pm): LMS ties STDERR to Slim::Utils::Log::Trapper —
-    # untie around the fork so Proc::Background can dup2 it in the child.
-    my $had_stderr_tie = defined tied(*STDERR);
-    untie *STDERR if $had_stderr_tie;
-
-    # Windows service: Proc::Background stdout redirect fails (same as
-    # Daemon.pm Pitfall). Use SPOTON_TOKEN_FILE env var instead — the
-    # binary writes the token JSON directly to that file.
-    if (main::ISWINDOWS) {
-        $ENV{SPOTON_TOKEN_FILE} = $out_tmpfile;
-    }
-
-    my $proc;
-    eval {
-        $proc = Proc::Background->new(
-            { 'die_upon_destroy' => 1,
-              (main::ISWINDOWS ? () : (stdout => $out_tmpfile)),
-              (main::ISWINDOWS ? () : (stderr => $out_tmpfile)) },
-            @args,
-        );
-    };
-
-    delete $ENV{SPOTON_TOKEN_FILE} if main::ISWINDOWS;
-
-    tie *STDERR, 'Slim::Utils::Log::Trapper' if $had_stderr_tie;
-
-    if ($@ || !$proc) {
-        $log->error("TokenManager: failed to spawn --get-token for $accountId ($flavor): $@");
-        unlink $out_tmpfile;
-        $resolve->(undef);
-        return;
-    }
-
-    my $deadline = Time::HiRes::time() + TOKEN_FETCH_TIMEOUT;
-
-    # Completion continuation — runs the pre-existing output-parsing logic on
-    # the captured tempfile content, then resolves the coalescing queue.
-    my $finish = sub {
-        my ($timedOut) = @_;
-
-        if ($timedOut) {
-            # H2 watchdog: bounds the worst case at TOKEN_FETCH_TIMEOUT seconds
-            # of ASYNC waiting instead of an infinite SYNCHRONOUS freeze.
-            $proc->die if $proc->alive;
-            $log->error("TokenManager: --get-token timed out after " . TOKEN_FETCH_TIMEOUT . "s for $accountId ($flavor, client_id=$maskedId)");
-            if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                Plugins::SpotOn::Status->recordError('error', 'Token', "get-token timed out for $accountId ($flavor)");
-            }
-            $log->warn("[DIAG] token_refresh_timeout: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor") if $prefs->get('diagnosticMode');
-            unlink $out_tmpfile;
-            $resolve->(undef);
-            return;
-        }
-
-        my $exit = $proc->wait >> 8;
-        my $output = '';
-        if (open(my $ofh, '<', $out_tmpfile)) {
-            local $/;
-            $output = <$ofh> // '';
-            close($ofh);
-        }
-        unlink $out_tmpfile;
-
-        if ($exit != 0 || !$output) {
-            $log->error("TokenManager: --get-token failed for $accountId ($flavor, client_id=$maskedId) (exit $exit)");
-
-            if ($output) {
-                # Extract Keymaster HTTP status from librespot's MercuryResponse debug format
-                if ($output =~ /status_code:\s*(\d+)/) {
-                    $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
-                }
-                # Decode Keymaster error payload from byte array (e.g. payload: [[123, 34, ...]])
-                if ($output =~ /payload:\s*\[\[([0-9,\s]+)\]\]/) {
-                    my $payloadJson = join('', map { chr($_) } split(/,\s*/, $1));
-                    my $payload = eval { from_json($payloadJson) };
-                    if ($payload && $payload->{errorDescription}) {
-                        $log->error("TokenManager: keymaster_error: code=" . ($payload->{code} // '?')
-                            . " message=\"$payload->{errorDescription}\" (client_id=$maskedId)");
-                    }
-                }
-            }
-
-            if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                Plugins::SpotOn::Status->recordError('error', 'Token', "get-token failed for $accountId ($flavor)");
-            }
-            $log->warn("[DIAG] token_refresh_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor exit=$exit") if $prefs->get('diagnosticMode');
-            $resolve->(undef);
-            return;
-        }
-
-        # The token JSON is the last stdout line; stderr noise may precede it.
-        # from_json on the full merged output works when librespot is quiet;
-        # fall back to the last JSON-looking line if the full parse fails.
-        my $result = eval { from_json($output) };
-        if ($@ || !$result || !$result->{accessToken}) {
-            for my $line (reverse split /\r?\n/, $output) {
-                next unless $line =~ /^\s*\{/;
-                $result = eval { from_json($line) };
-                last if $result && $result->{accessToken};
-            }
-        }
-        if (!$result || !$result->{accessToken}) {
-            # Run Keymaster diagnostics on the raw output — same as the exit-nonzero path.
-            # When Keymaster returns 403, librespot exits 0 but writes only stderr log lines
-            # (format: [timestamp ERR ...]), so from_json sees '[' and misparses as JSON array.
-            my $hasKeymasterDiag = 0;
-            if ($output =~ /status_code:\s*(\d+)/) {
-                $log->error("TokenManager: keymaster_status: HTTP $1 for client_id=$maskedId");
-                $hasKeymasterDiag = 1;
-            }
-            if ($output =~ /payload:\s*\[\[([0-9,\s]+)\]\]/) {
-                my $payloadJson = join('', map { chr($_) } split(/,\s*/, $1));
-                my $payload = eval { from_json($payloadJson) };
-                if ($payload && $payload->{errorDescription}) {
-                    $log->error("TokenManager: keymaster_error: code=" . ($payload->{code} // '?')
-                        . " message=\"$payload->{errorDescription}\" (client_id=$maskedId)");
-                    $hasKeymasterDiag = 1;
-                }
-            }
-
-            if ($hasKeymasterDiag) {
-                $log->error("TokenManager: no valid token in --get-token output for $accountId ($flavor, client_id=$maskedId) — see keymaster errors above");
+            # M-6: HTTP 400 on the token endpoint is practically always a
+            # permanent rejection (invalid_grant is the RFC 6749 standard
+            # signal), even when the response body could not be parsed into
+            # a recognizable oauth_error string -- treat both cases as
+            # permanent. Non-400 failures (timeout, 5xx, DNS) are transient
+            # and must NOT flip the persistent needsReauth flag (Pitfall 1).
+            if (($oauthError && $oauthError eq 'invalid_grant') || $httpCode == 400) {
+                $class->_markNeedsReauth($accountId, $oauthError || 'token_rejected');
             } else {
-                $log->error("TokenManager: no valid token in --get-token output for $accountId ($flavor): $@");
+                main::INFOLOG && $log->info("TokenManager: transient refresh failure for account "
+                    . _mask($accountId) . " -- not flagging re-auth");
             }
-            $log->warn("[DIAG] token_parse_fail: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor") if $prefs->get('diagnosticMode');
 
-            if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                Plugins::SpotOn::Status->recordError('error', 'Token', "get-token failed for $accountId ($flavor)");
-            }
             $resolve->(undef);
             return;
         }
 
-        # T-04.3-06: Log only accountId, flavor, and TTL — never the token value
-        $class->_cacheToken($accountId, $flavor, $result->{accessToken}, $result->{expiresIn});
-        $log->warn("[DIAG] token_refresh_ok: account=" . substr($accountId, 0, 4) . "**** flavor=$flavor ttl=" . ($result->{expiresIn} || 'unknown') . "s") if $prefs->get('diagnosticMode');
-        $resolve->($result->{accessToken});
-    };
+        # Refresh Token Rotation (Spike 003) — MUST persist the NEW refresh_token.
+        my $ok = Plugins::SpotOn::API::PKCE::storeTokens($accountId, {
+            access_token  => $tokenData->{access_token},
+            refresh_token => $tokenData->{refresh_token} || $stored->{refresh_token},
+            expires_at    => time() + ($tokenData->{expires_in} || 3600),
+            client_id     => $clientId,
+            scope         => $tokenData->{scope},
+        });
 
-    # H2: Async polling — check every TOKEN_FETCH_POLL seconds whether the
-    # subprocess has exited; watchdog fires at $deadline.
-    my $pollCb;
-    $pollCb = sub {
-        unless ($proc->alive) {
-            undef $pollCb;   # break closure self-reference cycle
-            $finish->(0);
-            return;
+        unless ($ok) {
+            $log->error("TokenManager: rotated refresh_token persistence FAILED for account "
+                . _mask($accountId) . " -- user must re-auth");
+            $class->_markNeedsReauth($accountId, 'persist_failed');
+            # Still deliver the access_token for THIS request — it's valid
+            # for ~1h — but the account is flagged because the next refresh
+            # cycle will fail once the on-disk refresh_token is stale.
+        } else {
+            $class->clearNeedsReauth($accountId);
         }
-        if (Time::HiRes::time() >= $deadline) {
-            undef $pollCb;
-            $finish->(1);
-            return;
-        }
-        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + TOKEN_FETCH_POLL, $pollCb);
-    };
-    Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + TOKEN_FETCH_POLL, $pollCb);
+
+        $class->_cacheToken($accountId, $tokenData->{access_token}, $tokenData->{expires_in});
+        $resolve->($tokenData->{access_token});
+    });
 }
 
 # _fetchDisplayName($class, $accountId, $spotifyUserId, $cb)
-# Gets token via _fetchKeymasterToken (own flavor), then GET /me for display_name.
-# Fallback: uses spotifyUserId directly if /me fails.
+# L-1: 3-arg signature preserved -- callers (refreshAllTokens, Settings.pm)
+# pass $spotifyUserId as a fallback display name. Gets a token via the new
+# getToken (2-arg, cache-or-refresh) instead of the deleted
+# _fetchKeymasterToken, then GET /me for display_name.
 sub _fetchDisplayName {
     my ($class, $accountId, $spotifyUserId, $cb) = @_;
 
-    $class->_fetchKeymasterToken($accountId, 'own', sub {
+    $class->getToken($accountId, sub {
         my $accessToken = shift;
 
         unless ($accessToken) {
@@ -669,7 +347,7 @@ sub _fetchDisplayName {
                 my $http    = shift;
                 my $profile = eval { from_json($http->content) };
                 if ($@ || !$profile) {
-                    $log->warn("TokenManager: /me JSON parse failed for $accountId — using userId");
+                    $log->warn("TokenManager: /me JSON parse failed for " . _mask($accountId) . " — using userId");
                     $class->_storeAccountPrefs($accountId, $spotifyUserId, $spotifyUserId, $cb);
                     return;
                 }
@@ -678,7 +356,7 @@ sub _fetchDisplayName {
             },
             sub {
                 my ($http, $error) = @_;
-                $log->warn("TokenManager: /me HTTP error for $accountId: $error — using userId");
+                $log->warn("TokenManager: /me HTTP error for " . _mask($accountId) . ": $error — using userId");
                 $class->_storeAccountPrefs($accountId, $spotifyUserId, $spotifyUserId, $cb);
             },
             { timeout => 30 }
@@ -709,31 +387,66 @@ sub _storeAccountPrefs {
     }
 
     main::INFOLOG && $log->info(
-        "TokenManager: account $accountId stored (displayName=$displayName)");
+        "TokenManager: account " . _mask($accountId) . " stored (displayName=$displayName)");
 
     # Trigger daemon start when a fresh account was activated
     if ($needsDaemonStart) {
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
     }
-    $log->warn("[DIAG] account_stored: account=" . substr($accountId, 0, 4) . "**** display_name=$displayName is_active=" . (($prefs->get('activeAccount') || '') eq $accountId ? 1 : 0)) if $prefs->get('diagnosticMode');
+    $log->warn("[DIAG] account_stored: account=" . _mask($accountId) . " display_name=$displayName is_active=" . (($prefs->get('activeAccount') || '') eq $accountId ? 1 : 0)) if $prefs->get('diagnosticMode');
     $cb->($accountId);
 }
 
-# _cacheToken($class, $accountId, $flavor, $accessToken, $expiresIn)
-# Caches the access token under flavor-specific key with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
-# T-04.3-06: Never logs the token value itself — only accountId, flavor, and TTL.
+# _cacheToken($class, $accountId, $accessToken, $expiresIn)
+# D-04: no flavor param. Caches the access token under a single
+# per-account key with TTL = expiresIn - TOKEN_EXPIRY_BUFFER.
+# Never logs the token value itself — only accountId and TTL.
 sub _cacheToken {
-    my ($class, $accountId, $flavor, $accessToken, $expiresIn) = @_;
+    my ($class, $accountId, $accessToken, $expiresIn) = @_;
 
     $expiresIn //= 3600;
     my $ttl = $expiresIn > TOKEN_EXPIRY_BUFFER
         ? $expiresIn - TOKEN_EXPIRY_BUFFER
         : ($expiresIn > 60 ? $expiresIn : 60);
 
-    $cache->set("spoton_token_${accountId}_${flavor}", $accessToken, $ttl);
+    $cache->set("spoton_token_${accountId}", $accessToken, $ttl);
     main::INFOLOG && $log->info(
-        "TokenManager: token cached for account $accountId ($flavor), TTL ${ttl}s");
+        "TokenManager: token cached for account " . _mask($accountId) . ", TTL ${ttl}s");
+}
+
+# _markNeedsReauth($class, $accountId, $reason)
+# D-08 4-channel re-auth notification (Channels 3+4 fire here; Channels 1+2
+# are pull-based, read via needsReauth()/anyAccountNeedsReauth() -- wired in
+# Plan 03).
+# M-1: the third argument to $cache->set MUST be the string 'never' --
+# Slim::Utils::DbCache's DEFAULT_EXPIRES_TIME is 1 hour, so an omitted TTL
+# would silently expire the flag after an hour, not persist it.
+sub _markNeedsReauth {
+    my ($class, $accountId, $reason) = @_;
+
+    $cache->set(REAUTH_FLAG_PREFIX . $accountId, { reason => $reason, ts => time() }, 'never');
+
+    # Channel 3: Health Panel
+    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+        Plugins::SpotOn::Status->recordError('error', 'Auth',
+            "PKCE refresh failed for account " . _mask($accountId) . " ($reason) — re-authentication required");
+    }
+
+    # Channel 4: Log (WARN level, per D-08 exact wording)
+    $log->warn("TokenManager: PKCE refresh failed for account " . _mask($accountId) . " — re-authentication required");
+
+    # Channels 1 (OPML) and 2 (Settings) are PULL-based -- they read
+    # needsReauth($accountId) at render time. No push needed here.
+}
+
+# _mask($accountId)
+# T-50-01: masked accountId for log lines -- never log full account IDs or
+# any token value.
+sub _mask {
+    my ($accountId) = @_;
+    return 'unknown' unless defined $accountId && length $accountId;
+    return substr($accountId, 0, 4) . '****';
 }
 
 # _getLmsServerName()
