@@ -35,7 +35,7 @@ use constant DEFAULT_TOKEN_TTL   => 3300;  # fallback TTL if expiry field is mis
 # Degradation state enum (D-03/D-04/D-05, Open Question 3). Public query
 # state($accountId)/statusSnapshot($accountId) are implemented below;
 # _setState() is called from every mint transition so the cache stays in
-# sync even when only getToken()/​_mintToken() (not state()) is invoked.
+# sync even when only getToken()/_mintToken() (not state()) is invoked.
 use constant STATE_EMPTY        => 'empty';
 use constant STATE_VALID        => 'valid';
 use constant STATE_EXPIRED      => 'expired';
