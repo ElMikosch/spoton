@@ -700,7 +700,7 @@ sub _diagnosticBundleHandler {
 
         if ($INC{'Plugins/SpotOn/Status.pm'}) {
             my $errors = Plugins::SpotOn::Status->getErrorHistory() || [];
-            my @tokenErrors = grep { $_->{module} && $_->{module} eq 'Token' } @$errors;
+            my @tokenErrors = grep { $_->{module} && ($_->{module} eq 'Token' || $_->{module} eq 'Auth') } @$errors;
             if (@tokenErrors) {
                 push @tokenStatus, '';
                 push @tokenStatus, '  Recent token errors (' . scalar(@tokenErrors) . '):';
