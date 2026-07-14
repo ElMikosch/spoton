@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Digest::SHA qw(sha256);
-use MIME::Base64 qw(encode_base64url decode_base64url encode_base64);
+use MIME::Base64 qw(encode_base64 decode_base64);
 use Crypt::OpenSSL::Random;
 use JSON::XS::VersionOneAndTwo;
 use URI::Escape qw(uri_escape);
@@ -14,8 +14,20 @@ use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 
-use Exporter 'import';
-our @EXPORT_OK = qw(GITHUB_PAGES_REDIRECT_URI PKCE_SCOPES);
+# Perl 5.10-safe base64url (MIME::Base64 < 3.11 lacks encode_base64url).
+sub _encode_base64url {
+    my $encoded = encode_base64($_[0], '');
+    $encoded =~ tr|+/=|-_|d;
+    return $encoded;
+}
+
+sub _decode_base64url {
+    my $s = $_[0];
+    $s =~ tr|-_|+/|;
+    my $pad = length($s) % 4;
+    $s .= '=' x (4 - $pad) if $pad;
+    return decode_base64($s);
+}
 
 # ============================================================
 # Constants
@@ -48,16 +60,7 @@ use constant PKCE_SCOPES => [qw(
 use constant PKCE_VERIFIER_TTL => 600;              # 10 minutes — generous for auth flow completion
 use constant PKCE_TOKEN_FILE   => 'pkce_tokens.json';
 
-# Import SPOTON_DEFAULT_CLIENT_ID from Client.pm (single source of truth).
-# Using require + direct call avoids a circular compile-time dependency,
-# matching the pattern used by TokenManager.pm (lines 26-32).
-use constant SPOTON_DEFAULT_CLIENT_ID => do {
-    require Plugins::SpotOn::API::Client;
-    Plugins::SpotOn::API::Client::SPOTON_DEFAULT_CLIENT_ID();
-};
-
-my $log   = logger('plugin.spoton');
-my $prefs = preferences('plugin.spoton');
+my $log = logger('plugin.spoton');
 # M5: cache version lives in Plugin.pm (single source of truth). Plugin.pm is
 # always compiled first in production (this module is runtime-require'd).
 my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
@@ -72,18 +75,14 @@ my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CA
 # base64url encoding without padding satisfies this character set.
 sub generateCodeVerifier {
     my $bytes    = Crypt::OpenSSL::Random::random_bytes(64);
-    my $verifier = encode_base64url($bytes);
-    $verifier =~ s/=+$//;
-    return $verifier;
+    return _encode_base64url($bytes);
 }
 
 # generateCodeChallenge($verifier)
 # Returns the S256 code_challenge: base64url(SHA-256(verifier)), no padding.
 sub generateCodeChallenge {
     my ($verifier) = @_;
-    my $challenge = encode_base64url(sha256($verifier));
-    $challenge =~ s/=+$//;
-    return $challenge;
+    return _encode_base64url(sha256($verifier));
 }
 
 # ============================================================
@@ -96,9 +95,7 @@ sub generateCodeChallenge {
 sub buildState {
     my ($callbackUrl, $nonce) = @_;
     my $json  = to_json({ callback_url => $callbackUrl, nonce => $nonce });
-    my $state = encode_base64url($json);
-    $state =~ s/=+$//;
-    return $state;
+    return _encode_base64url($json);
 }
 
 # parseState($stateStr)
@@ -107,7 +104,7 @@ sub buildState {
 sub parseState {
     my ($stateStr) = @_;
     my $data = eval {
-        my $json = decode_base64url($stateStr);
+        my $json = _decode_base64url($stateStr);
         from_json($json);
     };
     if ($@ || !$data) {

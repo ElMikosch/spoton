@@ -393,7 +393,8 @@ sub _pkceStartHandler {
 
     my $request = $response->request;
     my $host    = ($request && $request->header('Host')) || 'localhost';
-    my $callbackUrl = 'http://' . $host . '/plugins/SpotOn/settings/pkce/callback';
+    my $scheme  = ($request && $request->header('X-Forwarded-Proto')) || 'http';
+    my $callbackUrl = $scheme . '://' . $host . '/plugins/SpotOn/settings/pkce/callback';
 
     my $state = Plugins::SpotOn::API::PKCE::buildState($callbackUrl, $nonce);
     Plugins::SpotOn::API::PKCE::storeVerifier($nonce, $verifier);
@@ -554,15 +555,31 @@ sub _pkceFinishAuth {
         sub {
             my $http    = shift;
             my $profile = eval { from_json($http->content) };
-            my $userId  = ($profile && $profile->{id}) || _pkceFallbackUserId($tokenData);
-            my $displayName = ($profile && $profile->{display_name}) || $userId;
+            my $userId  = $profile && $profile->{id};
+            unless ($userId) {
+                $log->error("Settings: PKCE /me lookup returned no user ID — cannot create account");
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'error', message => 'Spotify profile lookup failed — please try again' });
+                } else {
+                    _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                        'Could not retrieve Spotify profile. Please try again.', 1);
+                }
+                return;
+            }
+            my $displayName = $profile->{display_name} || $userId;
             _pkceStoreAccount($httpClient, $response, $tokenData, $clientId, $userId, $displayName, $isJson);
         },
         sub {
             my ($http, $error) = @_;
-            $log->warn("Settings: PKCE /me lookup failed: $error — using fallback identity");
-            my $userId = _pkceFallbackUserId($tokenData);
-            _pkceStoreAccount($httpClient, $response, $tokenData, $clientId, $userId, $userId, $isJson);
+            $log->error("Settings: PKCE /me lookup failed: $error — cannot create account without user identity");
+            if ($isJson) {
+                _jsonResponse($httpClient, $response,
+                    { status => 'error', message => 'Spotify profile lookup failed — please try again' });
+            } else {
+                _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                    'Could not retrieve Spotify profile. Please try again.', 1);
+            }
         },
         { timeout => 30 }
     )->get(
@@ -570,20 +587,6 @@ sub _pkceFinishAuth {
         'Authorization' => "Bearer $tokenData->{access_token}",
         'Accept'        => 'application/json',
     );
-}
-
-# ============================================================
-# _pkceFallbackUserId($tokenData)
-# Used only when the /me lookup fails right after token exchange. Derived
-# from the access_token (not a fixed literal) so that two different users
-# who both hit a transient /me failure at the same time do not collide on
-# the same accountId (Rule 1 — plan's literal 'unknown' fallback would
-# collide across accounts; display name still updates on next token use
-# via TokenManager's proactive refresh cycle).
-# ============================================================
-sub _pkceFallbackUserId {
-    my ($tokenData) = @_;
-    return 'unknown-' . substr(md5_hex($tokenData->{access_token} || rand()), 0, 8);
 }
 
 # ============================================================
@@ -600,13 +603,24 @@ sub _pkceStoreAccount {
     my $expiresAt = time() + ($tokenData->{expires_in} || 3600);
 
     require Plugins::SpotOn::API::PKCE;
-    Plugins::SpotOn::API::PKCE::storeTokens($accountId, {
+    my $stored = Plugins::SpotOn::API::PKCE::storeTokens($accountId, {
         access_token  => $tokenData->{access_token},
         refresh_token => $tokenData->{refresh_token},
         expires_at    => $expiresAt,
         client_id     => $clientId,
         scope         => $tokenData->{scope},
     });
+
+    unless ($stored) {
+        $log->error("Settings: PKCE token storage failed for account $accountId — aborting account creation");
+        if ($isJson) {
+            _jsonResponse($httpClient, $response, { status => 'error', message => 'Token storage failed' });
+        } else {
+            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                'Token storage failed — check disk space and cache directory permissions.', 1);
+        }
+        return;
+    }
 
     my $serverPrefs = preferences('server');
     my $accountDir  = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);

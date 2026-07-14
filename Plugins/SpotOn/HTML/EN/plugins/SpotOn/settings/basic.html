@@ -276,7 +276,11 @@
 					window.open(data.url, '_blank');
 					// No AJAX way to know the browser-side redirect finished —
 					// reload once as a fallback so a completed auth shows up.
-					setTimeout(function() { window.location.reload(); }, 30000);
+					var reloadTimer = setTimeout(function() { window.location.reload(); }, 30000);
+					var manualInput = document.getElementById('pkce-manual-url');
+					if (manualInput) {
+						manualInput.addEventListener('focus', function() { clearTimeout(reloadTimer); });
+					}
 					return;
 				}
 			}
