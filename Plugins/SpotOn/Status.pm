@@ -178,8 +178,7 @@ sub _collectDaemons {
 sub _collectTokens {
     require Plugins::SpotOn::API::TokenManager;
     return {
-        accountCount     => scalar(Plugins::SpotOn::API::TokenManager->getAccountIds()),
-        discoveryRunning => Plugins::SpotOn::API::TokenManager->isDiscoveryRunning() ? 1 : 0,
+        accountCount => scalar(Plugins::SpotOn::API::TokenManager->getAccountIds()),
     };
 }
 

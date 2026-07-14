@@ -291,16 +291,11 @@ footer {
         body.appendChild(createMetricRow('In-flight', val(api.inflightCount)));
         body.appendChild(createMetricRow('429 Responses', val(api.api429Count)));
 
-        var rlOwnVal = api.rateLimitedOwn ? 'Yes' : 'No';
-        var rlOwnClass = api.rateLimitedOwn ? 'rate-limited' : '';
-        body.appendChild(createMetricRow('Rate Limited Own', rlOwnVal, rlOwnClass));
-
-        var rlBundledVal = api.rateLimitedBundled ? 'Yes' : 'No';
-        var rlBundledClass = api.rateLimitedBundled ? 'rate-limited' : '';
-        body.appendChild(createMetricRow('Rate Limited Bundled', rlBundledVal, rlBundledClass));
+        var rlVal = api.rateLimited ? 'Yes' : 'No';
+        var rlClass = api.rateLimited ? 'rate-limited' : '';
+        body.appendChild(createMetricRow('Rate Limited', rlVal, rlClass));
 
         body.appendChild(createMetricRow('Active Accounts', val(tokens.accountCount)));
-        body.appendChild(createMetricRow('Discovery Running', tokens.discoveryRunning ? 'Yes' : 'No'));
     }
 
     function renderErrors(data) {
