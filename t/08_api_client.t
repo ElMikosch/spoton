@@ -349,6 +349,26 @@ sub refreshToken {
 1;
 END
 
+# Stub: Plugins::SpotOn::API::WebPlayer
+# For Client tests: getToken invokes callback immediately with a mock
+# { access_token, client_token } hash, or (undef, $mock_fail_reason) to
+# simulate D-03/D-04/D-05 degradation.
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+our $mock_access_token = 'mock_wp_access_token';
+our $mock_client_token = 'mock_wp_client_token';
+our $mock_fail_reason  = undef;
+sub getToken {
+    my ($class, $accountId, $cb) = @_;
+    if ($mock_fail_reason) {
+        $cb->(undef, $mock_fail_reason);
+        return;
+    }
+    $cb->({ access_token => $mock_access_token, client_token => $mock_client_token }, undef);
+}
+1;
+END
+
 # Stub: URI::Escape — not Perl core, bundled by LMS
 # Mirrors real behavior: uri_escape dies on codepoints > 255 (wide chars),
 # uri_escape_utf8 UTF-8-encodes first and never dies.
@@ -773,6 +793,133 @@ SKIP: {
     Slim::Utils::Cache->new()->clear();
     Slim::Networking::SimpleAsyncHTTP::reset_requests();
     Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+}
+
+# WP-01: getWebPlayerPlaylistItems rejects a malformed playlist ID before
+# any HTTP (D-07, T-52-05).
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', 'bad id!', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    is($got_err->{error}, 'invalid_id', 'WP-01: malformed playlist ID rejected with invalid_id');
+    is(scalar(@Slim::Networking::SimpleAsyncHTTP::requests), 0,
+        'WP-01: no HTTP request dispatched for an invalid playlist ID');
+}
+
+# WP-02: getWebPlayerPlaylistItems targets /playlists/{id}/items using the
+# Web-Player bearer token (D-07, Pitfall 3) -- never the PKCE token.
+SKIP: {
+    skip "Client.pm not yet created", 3 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 3
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Slim::Utils::Cache->new()->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode          = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '{"items":[]}';
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason     = undef;
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'WP-02: getWebPlayerPlaylistItems dispatches exactly one HTTP request');
+    like($reqs[0]->{url}, qr{/playlists/37i9dQZF1E39vTG1lmycOQ/items},
+        'WP-02: URL targets /playlists/{id}/items');
+    like($reqs[0]->{headers}{'Authorization'}, qr/^Bearer mock_wp_access_token$/,
+        'WP-02: Authorization header uses the Web-Player access token, not a PKCE token');
+
+    Slim::Utils::Cache->new()->clear();
+}
+
+# WP-03: a Web-Player 429 sets the isolated spoton_wp_rate_limit key, and
+# does NOT set the shared Browse spoton_rate_limit flag (Pitfall 5, T-52-04).
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Utils::Cache->new()->clear();
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
+    $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 45 };
+
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub { });
+
+    my $cache = Slim::Utils::Cache->new();
+    ok($cache->get('spoton_wp_rate_limit'), 'WP-03: Web-Player 429 sets the isolated spoton_wp_rate_limit key');
+    ok(!$cache->get('spoton_rate_limit'),
+        'WP-03: Web-Player 429 does NOT set the shared Browse spoton_rate_limit flag');
+
+    $cache->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
+}
+
+# WP-04: getWebPlayerPlaylistItems propagates a WebPlayer degradation reason
+# (D-03/D-04/D-05) without dispatching any HTTP request.
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Utils::Cache->new()->clear();
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = 'no_spdc';
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    is($got_err->{error}, 'no_spdc', 'WP-04: WebPlayer degradation reason propagated to the caller');
+    is(scalar(@Slim::Networking::SimpleAsyncHTTP::requests), 0,
+        'WP-04: no HTTP request dispatched when WebPlayer has no token');
+
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+}
+
+# WP-05: source assertion -- getWebPlayerPlaylistItems sources its bearer
+# token from WebPlayer->getToken, never TokenManager->getToken (D-07).
+SKIP: {
+    skip "Client.pm not yet created", 3 unless -f $client_module;
+
+    open(my $fh, '<', $client_module) or BAIL_OUT("Cannot open $client_module: $!");
+    my $source = do { local $/; <$fh> };
+    close($fh);
+
+    like($source, qr/^sub getWebPlayerPlaylistItems\b/m,
+        'WP-05: Client.pm defines getWebPlayerPlaylistItems');
+
+    my @lines = split /\n/, $source;
+    my ($start);
+    for my $i (0 .. $#lines) {
+        if ($lines[$i] =~ /^sub getWebPlayerPlaylistItems\b/) { $start = $i; last; }
+    }
+    my @body;
+    if (defined $start) {
+        for my $i ($start + 1 .. $#lines) {
+            last if $lines[$i] =~ /^sub \w/;
+            push @body, $lines[$i];
+        }
+    }
+    my $body = join("\n", @body);
+
+    like($body, qr/WebPlayer->getToken/,
+        'WP-05: getWebPlayerPlaylistItems calls WebPlayer->getToken');
+    unlike($body, qr/TokenManager->getToken/,
+        'WP-05: getWebPlayerPlaylistItems never calls TokenManager->getToken');
 }
 
 # API-06: No LWP or SimpleSyncHTTP in API/ modules — grep test (runs immediately)
