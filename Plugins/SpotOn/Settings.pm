@@ -94,6 +94,10 @@ sub handler {
         $paramRef->{'warning'} = string('PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS');
     }
 
+    # D-06/D-08: Made For You (sp_dc) — save handling + status params below
+    # both go through WebPlayer, never a raw pref key (T-52-02).
+    require Plugins::SpotOn::API::WebPlayer;
+
     if ($paramRef->{saveSettings}) {
         my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
         my $bitrate = $paramRef->{'pref_bitrate'} // 320;
@@ -119,6 +123,33 @@ sub handler {
             $id =~ s/[^a-zA-Z0-9]//g;  # T-04.4-01: alphanumeric only (injection guard)
             $id = substr($id, 0, 32);   # T-04.4-01: max 32 chars (Spotify Client-ID format)
             $prefs->set('clientId', $id);
+        }
+
+        # Save sp_dc cookie for Made For You (D-08/D-09). Deliberately NOT
+        # part of the base prefs() list (mirrors pref_clientId) -- sanitized
+        # here and routed through WebPlayer->storeSpDc rather than a raw
+        # $prefs->set() so masking/cache-invalidation stay centralized in
+        # WebPlayer (T-52-02). The template only ever echoes back a masked
+        # preview (spDcMasked below, containing literal '*' characters), so
+        # the "unchanged" comparison MUST happen against the raw
+        # (whitespace-trimmed only) submitted value BEFORE charset
+        # sanitization strips those asterisks -- otherwise a resubmit of an
+        # untouched field would never equal the placeholder and would
+        # incorrectly overwrite the stored cookie.
+        if (defined $paramRef->{pref_spDc}) {
+            my $raw = $paramRef->{pref_spDc} // '';
+            $raw =~ s/^\s+|\s+$//g;    # trim whitespace only, for comparison
+
+            my $activeAccountId = $prefs->get('activeAccount') || '';
+            if ($activeAccountId && length $raw) {
+                my $currentMasked = Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($activeAccountId);
+                if ($raw ne $currentMasked) {
+                    my $spdc = $raw;
+                    $spdc =~ s/[^A-Za-z0-9_\-\.]//g;    # restrict to sp_dc's known charset
+                    $spdc = substr($spdc, 0, 512);      # length cap
+                    Plugins::SpotOn::API::WebPlayer->storeSpDc($activeAccountId, $spdc) if length $spdc;
+                }
+            }
         }
 
         # Account remove (CR-03, WR-03).
@@ -211,6 +242,12 @@ sub handler {
     # PKCE OAuth flow (has a pkce_tokens.json)? Drives which setup guide/CTA
     # the template shows.
     $paramRef->{pkceConfigured} = _isPkceConfigured();
+
+    # D-04/D-08: Made For You (sp_dc) status for template -- masked preview
+    # (never the raw cookie, T-52-02) and the empty/valid/expired/secrets_down
+    # degradation state (Settings channel of the 3-channel D-04 display).
+    $paramRef->{spDcMasked}      = Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($paramRef->{activeAccount});
+    $paramRef->{madeForYouState} = Plugins::SpotOn::API::WebPlayer->state($paramRef->{activeAccount});
 
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;

@@ -365,6 +365,31 @@ sub reset_calls { $schedule_init_calls = 0 }
 1;
 END
 
+# Stub: Plugins::SpotOn::API::WebPlayer (D-06/D-08/D-09 sp_dc storage + state
+# consumed by Settings.pm — Plan 52-03). storeSpDc records calls instead of
+# writing prefs so tests can assert on the call args without depending on
+# WebPlayer's real internal storage layout (Plan 52-01, out of this plan's scope).
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+our @store_spdc_calls      = ();
+our $next_masked_preview   = '';
+our $next_state             = 'empty';
+sub storeSpDc {
+    my ($class, $accountId, $spdc) = @_;
+    push @store_spdc_calls, [$accountId, $spdc];
+    return 1;
+}
+sub spDcMaskedPreview { return $next_masked_preview }
+sub state             { return $next_state }
+sub hasSpDc           { return length($next_masked_preview) ? 1 : 0 }
+sub reset_calls {
+    @store_spdc_calls    = ();
+    $next_masked_preview = '';
+    $next_state           = 'empty';
+}
+1;
+END
+
 
 # Stub: URI::Escape — not Perl core, bundled by LMS
 # uri_escape_utf8 is needed too: Settings.pm's PKCE handlers pull in the real
@@ -507,6 +532,16 @@ SKIP: {
         'Settings.pm: prefs() method exists');
     ok($src !~ /return \(\$prefs.*clientId/,
         'Settings.pm: prefs() does not return clientId');
+
+    # D-08/D-09: sp_dc save/state wiring (Plan 52-03)
+    ok($src =~ /WebPlayer->storeSpDc/,
+        'Settings.pm: pref_spDc save routes through WebPlayer->storeSpDc');
+    ok($src =~ /WebPlayer->spDcMaskedPreview/,
+        'Settings.pm: spDcMasked template param sourced from WebPlayer->spDcMaskedPreview');
+    ok($src =~ /WebPlayer->state/,
+        'Settings.pm: madeForYouState template param sourced from WebPlayer->state');
+    ok($src !~ /\$prefs->set\(\s*'sp_?[Dd]c'/,
+        'Settings.pm: sp_dc is never written to a flat $prefs->set key');
 }
 
 # ============================================================
@@ -871,6 +906,71 @@ SKIP: {
         ok(scalar @matches >= 3,
             'P-CR-03: basic.html has X-Requested-With in >= 3 AJAX calls (got ' . scalar(@matches) . ')');
     }
+}
+
+# ============================================================
+# Plan 52-03: sp_dc save routes through WebPlayer->storeSpDc (D-08/D-09)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for sp_dc save test", 4
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { spdcacct1 => { displayName => 'Test' } });
+    $spotonPrefs->set('activeAccount', 'spdcacct1');
+
+    # (a) Saving a fresh sp_dc value routes through WebPlayer->storeSpDc,
+    # with the sanitized value (not the masked preview).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => 'AQDxAbCdEf1234567890' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 1,
+        'Plan52-03: saving pref_spDc calls WebPlayer->storeSpDc exactly once');
+    is($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0][0], 'spdcacct1',
+        'Plan52-03: storeSpDc called with the active accountId');
+    is($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0][1], 'AQDxAbCdEf1234567890',
+        'Plan52-03: storeSpDc receives the sanitized raw value (not masked)');
+
+    # (b) Resubmitting the current masked preview (user did not edit the
+    # field) must NOT overwrite the stored cookie.
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => 'AQDx****' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 0,
+        'Plan52-03: resubmitting the masked preview does not call storeSpDc again');
+}
+
+# ============================================================
+# Plan 52-03: template params spDcMasked / madeForYouState (D-04/D-08)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for madeForYouState param test", 3
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    is($Plugins::SpotOn::API::WebPlayer::next_state, 'empty',
+        'Plan52-03: WebPlayer stub next_state defaults to empty after reset_calls');
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    $Plugins::SpotOn::API::WebPlayer::next_state           = 'valid';
+
+    my $param_ref = {};
+    Plugins::SpotOn::Settings->handler(
+        undef, $param_ref,
+        sub { }, undef, undef
+    );
+
+    is($param_ref->{spDcMasked}, 'AQDx****',
+        'Plan52-03: template param spDcMasked populated from WebPlayer->spDcMaskedPreview');
+    is($param_ref->{madeForYouState}, 'valid',
+        'Plan52-03: template param madeForYouState populated from WebPlayer->state');
 }
 
 done_testing();
