@@ -249,7 +249,7 @@ sub reset_calls    { @registered_raw = () }
 1;
 END
 
-# Stub: Slim::Web::HTTP (for addHTTPResponse in _discoveryStatusHandler)
+# Stub: Slim::Web::HTTP (for addHTTPResponse in the diagnostic bundle / PKCE result handlers)
 write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
 package Slim::Web::HTTP;
 our @http_responses = ();
@@ -284,20 +284,19 @@ sub init { }
 1;
 END
 
-# Stub: Plugins::SpotOn::API::TokenManager (ZeroConf methods — no OAuth)
+# Stub: Plugins::SpotOn::API::TokenManager (PKCE-native re-auth query API — Plan 50-01/50-03)
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-our $discovery_running = 0;
-our @start_calls = ();
-our @stop_calls  = ();
-sub startDiscovery    { push @start_calls, 1; $discovery_running = 1 }
-sub stopDiscovery     { push @stop_calls,  1; $discovery_running = 0 }
-sub isDiscoveryRunning { return $discovery_running }
+our %needs_reauth;
+our @clear_reauth_calls = ();
+sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
+sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
+sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
 sub getAccountIds     { return () }
 sub reset_calls {
-    @start_calls = (); @stop_calls = ();
-    $discovery_running = 0;
+    %needs_reauth = ();
+    @clear_reauth_calls = ();
 }
 1;
 END
@@ -415,15 +414,23 @@ SKIP: {
     ok($src !~ /redirectUri/,        'Settings.pm: no redirectUri reference');
     ok($src !~ /buildRedirectUri/,   'Settings.pm: no buildRedirectUri reference');
 
-    # PLAN 03 acceptance criteria: ZeroConf discovery present
-    ok($src =~ /addRawFunction/,                              'Settings.pm: addRawFunction registered');
-    ok($src =~ /discoveryStatus/,                             'Settings.pm: discoveryStatus endpoint registered');
-    ok($src =~ /sub _discoveryStatusHandler/,                 'Settings.pm: _discoveryStatusHandler defined');
-    ok($src =~ /startDiscovery/,                              'Settings.pm: startDiscovery action present');
-    ok($src =~ /stopDiscovery/,                               'Settings.pm: stopDiscovery action present');
-    ok($src =~ /discoveryRunning/,                            'Settings.pm: discoveryRunning template param set');
-    ok($src =~ /to_json/,                                     'Settings.pm: to_json used in AJAX handler');
-    ok($src =~ /addHTTPResponse/,                             'Settings.pm: addHTTPResponse used in AJAX handler');
+    # Plan 50-03 acceptance criteria: ZeroConf discovery-as-auth code removed (D-01, M-3)
+    ok($src !~ /sub _discoveryStatusHandler/, 'Settings.pm: _discoveryStatusHandler removed');
+    ok($src !~ /sub _discoveryStartHandler/,  'Settings.pm: _discoveryStartHandler removed');
+    ok($src !~ /sub _discoveryStopHandler/,   'Settings.pm: _discoveryStopHandler removed');
+    ok($src !~ /\bstartDiscovery\b/,          'Settings.pm: no startDiscovery call site');
+    ok($src !~ /\bstopDiscovery\b/,           'Settings.pm: no stopDiscovery call site');
+    ok($src !~ /discoveryRunning/,            'Settings.pm: no discoveryRunning template param');
+    ok($src !~ /sub _isDiscoveryRunning/,     'Settings.pm: _isDiscoveryRunning removed');
+    ok($src !~ /sub _autoSetupAccount/,       'Settings.pm: _autoSetupAccount removed (M-3)');
+    ok($src !~ /__DISCOVER__/,                'Settings.pm: __DISCOVER__ fallback block removed (M-3)');
+    ok($src =~ /to_json/,                     'Settings.pm: to_json used in AJAX handler');
+    ok($src =~ /addHTTPResponse/,             'Settings.pm: addHTTPResponse used in AJAX handler');
+
+    # D-08 Channel 2: re-auth warning wiring
+    ok($src =~ /anyAccountNeedsReauth/,       'Settings.pm: anyAccountNeedsReauth checked in handler()');
+    ok($src =~ /paramRef->\{'warning'\}/,     q{Settings.pm: $paramRef->{'warning'} assignment present});
+    ok($src =~ /clearNeedsReauth/,            'Settings.pm: clearNeedsReauth called on successful PKCE auth');
 
     # prefs() should NOT include clientId
     ok($src =~ /sub prefs[^}]+return[^}]+(?!clientId)[^}]+}/s,
@@ -512,16 +519,16 @@ SKIP: {
 }
 
 # ============================================================
-# discoveryRunning template param test
+# D-08 Channel 2: Settings page re-auth warning banner test
 # ============================================================
 SKIP: {
-    skip "Settings.pm module required for discoveryRunning test", 2
+    skip "Settings.pm module required for reauth warning test", 2
         unless eval { require Plugins::SpotOn::Settings; 1 };
 
+    require Plugins::SpotOn::API::TokenManager;
+
     {
-        # Force TokenManager not loaded so _isDiscoveryRunning returns 0 quickly
-        # by temporarily removing it from %INC
-        my $saved = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
+        local %Plugins::SpotOn::API::TokenManager::needs_reauth = ();
 
         my $param_ref = {};
         Plugins::SpotOn::Settings->handler(
@@ -530,16 +537,17 @@ SKIP: {
             undef, undef
         );
 
-        # Restore %INC
-        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved if defined $saved;
-
-        is($param_ref->{discoveryRunning}, 0,
-            'discoveryRunning: returns 0 when TokenManager not loaded');
+        # NOTE: use exists() rather than truthiness — the shared Slim::Utils::Strings
+        # test stub treats string() like cstring() (drops the first arg as if it were
+        # a $client), so a single-arg string('KEY') call resolves to '' here, not the
+        # real translated text. What we're verifying is whether handler() assigned the
+        # key at all, not its stubbed content.
+        ok(!exists $param_ref->{'warning'},
+            'reauth warning: not set when no account needs reauth');
     }
 
     {
-        # Ensure TokenManager is loaded (stub or real) and discoveryRunning is 0
-        require Plugins::SpotOn::API::TokenManager;
+        local %Plugins::SpotOn::API::TokenManager::needs_reauth = ( abc12345 => 1 );
 
         my $param_ref = {};
         Plugins::SpotOn::Settings->handler(
@@ -548,49 +556,8 @@ SKIP: {
             undef, undef
         );
 
-        # The stub returns 0 by default; real module also has isDiscoveryRunning returning false
-        is($param_ref->{discoveryRunning}, 0,
-            'discoveryRunning: returns 0 when isDiscoveryRunning is false');
-    }
-}
-
-# ============================================================
-# _discoveryStatusHandler JSON response test
-# ============================================================
-SKIP: {
-    skip "Settings.pm module required for _discoveryStatusHandler test", 3
-        unless eval { require Plugins::SpotOn::Settings; 1 };
-
-    # Override addHTTPResponse to capture the JSON content
-    my $captured_content;
-    {
-        no warnings 'redefine', 'once';
-        local *Slim::Web::HTTP::addHTTPResponse = sub {
-            my ($client, $resp, $content_ref) = @_;
-            $captured_content = $$content_ref;
-        };
-
-        # Mock HTTP response object
-        my $response_obj = bless {}, 'MockHTTPResponse2';
-        no warnings 'once';
-        local *MockHTTPResponse2::header       = sub { };
-        local *MockHTTPResponse2::code         = sub { };
-        local *MockHTTPResponse2::content_type = sub { };
-
-        # Status: idle (TokenManager not running, no credentials file)
-        my $saved_tm = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
-        $captured_content = undef;
-        Plugins::SpotOn::Settings::_discoveryStatusHandler(undef, $response_obj);
-        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved_tm if defined $saved_tm;
-
-        ok(defined $captured_content, '_discoveryStatusHandler: addHTTPResponse was called');
-
-        my $decoded = eval { require JSON::PP; JSON::PP::decode_json($captured_content) };
-        ok(!$@ && defined $decoded->{status},
-            '_discoveryStatusHandler: response is valid JSON with status key');
-
-        is($decoded->{status}, 'idle',
-            '_discoveryStatusHandler: returns idle when discovery not running and no credentials');
+        ok(exists $param_ref->{'warning'},
+            'reauth warning: set when an account needs reauth');
     }
 }
 
@@ -718,7 +685,7 @@ SKIP: {
     my $html_file     = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
 
     SKIP: {
-        skip "Settings.pm not found", 6 unless -f $settings_file;
+        skip "Settings.pm not found", 4 unless -f $settings_file;
 
         open(my $fh, '<', $settings_file) or die $!;
         my $src = do { local $/; <$fh> };
@@ -727,21 +694,16 @@ SKIP: {
         # 1. _csrfCheck sub is defined
         ok($src =~ /sub _csrfCheck\b/, 'P-CR-03: _csrfCheck helper defined in Settings.pm');
 
-        # 2-4. Write handlers call _csrfCheck
+        # 2-3. Write handlers call _csrfCheck
         # Extract each handler body (from sub declaration to next sub or end of file)
         # and verify _csrfCheck is called within it.
-        for my $handler (qw(_clearLogsHandler _discoveryStartHandler _discoveryStopHandler)) {
+        for my $handler (qw(_clearLogsHandler _pkceStartHandler)) {
             my ($body) = $src =~ /(sub \Q$handler\E\b.*?)(?=\nsub \w|\z)/s;
             ok(defined $body && $body =~ /_csrfCheck/,
                 "P-CR-03: $handler calls _csrfCheck");
         }
 
-        # 5. _discoveryStatusHandler does NOT call _csrfCheck (read-only)
-        my ($status_body) = $src =~ /(sub _discoveryStatusHandler\b.*?)(?=\nsub \w|\z)/s;
-        ok(defined $status_body && $status_body !~ /_csrfCheck/,
-            'P-CR-03: _discoveryStatusHandler does NOT call _csrfCheck (read-only)');
-
-        # 6. _diagnosticBundleHandler does NOT call _csrfCheck (read-only, gated by diagnosticMode)
+        # 4. _diagnosticBundleHandler does NOT call _csrfCheck (read-only, gated by diagnosticMode)
         my ($diag_body) = $src =~ /(sub _diagnosticBundleHandler\b.*?)(?=\nsub \w|\z)/s;
         ok(defined $diag_body && $diag_body !~ /_csrfCheck/,
             'P-CR-03: _diagnosticBundleHandler does NOT call _csrfCheck (read-only)');

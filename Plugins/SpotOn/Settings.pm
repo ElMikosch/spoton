@@ -26,12 +26,7 @@ sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
 
-    # Register AJAX discoveryStatus endpoint (addRawFunction pattern from Spotty/Settings/Auth.pm)
     require Slim::Web::Pages;
-    Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discoveryStatus',
-        \&_discoveryStatusHandler
-    );
 
     # Register diagnostic bundle download endpoint (#3)
     Slim::Web::Pages->addRawFunction(
@@ -43,16 +38,6 @@ sub new {
     Slim::Web::Pages->addRawFunction(
         'plugins/SpotOn/settings/clearLogs',
         \&_clearLogsHandler
-    );
-
-    # Register AJAX discovery start/stop endpoints (ZC-01)
-    Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discovery/start',
-        \&_discoveryStartHandler
-    );
-    Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discovery/stop',
-        \&_discoveryStopHandler
     );
 
     # Register PKCE OAuth endpoints (AUTH-01, AUTH-02)
@@ -101,6 +86,14 @@ sub handler {
     $paramRef->{binaryPath}    = $helperPath    || '';
     $paramRef->{isMac}         = main::ISMAC ? 1 : 0;
 
+    # D-08 Channel 2: Settings page re-auth warning banner — show when any
+    # account needs re-authentication. Uses the LMS core $paramRef->{'warning'}
+    # idiom, rendered automatically by the settings/header.html template.
+    require Plugins::SpotOn::API::TokenManager;
+    if (Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth()) {
+        $paramRef->{'warning'} = string('PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS');
+    }
+
     if ($paramRef->{saveSettings}) {
         my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
         my $bitrate = $paramRef->{'pref_bitrate'} // 320;
@@ -127,9 +120,6 @@ sub handler {
             $id = substr($id, 0, 32);   # T-04.4-01: max 32 chars (Spotify Client-ID format)
             $prefs->set('clientId', $id);
         }
-
-        # Discovery start/stop moved to AJAX endpoints (_discoveryStartHandler,
-        # _discoveryStopHandler) to avoid "changes saved" banner on form POST.
 
         # Account remove (CR-03, WR-03).
         # WR-03: validate that removeId is an 8-char hex string that actually
@@ -207,22 +197,11 @@ sub handler {
         }
     }
 
-    # Auto-setup fallback for GET requests (manual reload, first visit).
-    # The primary check runs earlier (before startDiscovery) for POST requests.
     my $serverPrefs = preferences('server');
-    my $discoverCredsFile = catfile(
-        $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
 
-    if (-f $discoverCredsFile) {
-        require Plugins::SpotOn::API::TokenManager;
-        Plugins::SpotOn::API::TokenManager->stopDiscovery();
-        _autoSetupAccount($discoverCredsFile, $serverPrefs);
-    }
-
-    # Pass account and discovery data to template for all requests
+    # Pass account data to template for all requests
     $paramRef->{accounts}         = $prefs->get('accounts') || {};
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
-    $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
 
     # Client-ID and degraded-mode status for template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
@@ -251,120 +230,6 @@ sub handler {
                                 :                        "$logTotal B";
 
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
-}
-
-# ============================================================
-# Auto-setup: synchronous account creation from __DISCOVER__/credentials.json.
-# Reads credentials, derives accountId, renames dir, stores prefs immediately.
-# Display name is fetched asynchronously afterwards (may update on next page load).
-# ============================================================
-sub _autoSetupAccount {
-    my ($credsFile, $serverPrefs) = @_;
-
-    open(my $fh, '<', $credsFile) or do {
-        $log->error("Settings: cannot read $credsFile: $!");
-        return;
-    };
-    local $/;
-    my $json = <$fh>;
-    close $fh;
-
-    my $creds = eval { from_json($json) };
-    if ($@ || !$creds->{username}) {
-        $log->error("Settings: credentials.json parse failed: $@");
-        return;
-    }
-
-    my $username  = $creds->{username};
-    my $accountId = substr(md5_hex($username), 0, 8);
-    my $baseDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
-    my $discoverDir = catdir($baseDir, '__DISCOVER__');
-    my $finalDir    = catdir($baseDir, $accountId);
-
-    if (-d $finalDir) {
-        require File::Path;
-        File::Path::remove_tree($finalDir);
-    }
-    require File::Copy;
-    File::Copy::move($discoverDir, $finalDir) or do {
-        $log->error("Settings: dir rename __DISCOVER__ -> $accountId failed: $!");
-        return;
-    };
-    chmod(0700, $finalDir);
-
-    my $accounts = $prefs->get('accounts') || {};
-    $accounts->{$accountId} = {
-        displayName   => $username,
-        spotifyUserId => $username,
-    };
-    $prefs->set('accounts', $accounts);
-
-    unless ($prefs->get('activeAccount')) {
-        $prefs->set('activeAccount', $accountId);
-
-        require Plugins::SpotOn::Unified::DaemonManager;
-        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
-    }
-
-    $log->info("Settings: account $accountId created from ZeroConf discovery (user=$username)");
-
-    # Fire async /me fetch to get the real display name
-    Plugins::SpotOn::API::TokenManager->_fetchDisplayName(
-        $accountId, $username, sub { });
-}
-
-# ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discoveryStatus
-# Returns JSON with status: 'connected' | 'waiting' | 'idle'
-# Source pattern: Spotty/Settings/Auth.pm::checkCredentials (addRawFunction pattern)
-# ============================================================
-sub _discoveryStatusHandler {
-    my ($httpClient, $response) = @_;
-
-    my $serverPrefs = preferences('server');
-    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__');
-    my $credsFile   = catfile($discoverDir, 'credentials.json');
-
-    my $result;
-    if (-f $credsFile) {
-        $result = { status => 'connected' };
-    } elsif (_isDiscoveryRunning()) {
-        $result = { status => 'waiting' };
-    } else {
-        $result = { status => 'idle' };
-    }
-
-    _jsonResponse($httpClient, $response, $result);
-}
-
-# ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discovery/start
-# Starts ZeroConf discovery without form POST (no "changes saved" banner).
-# ============================================================
-sub _discoveryStartHandler {
-    my ($httpClient, $response) = @_;
-
-    return unless _csrfCheck($httpClient, $response);
-
-    require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->startDiscovery();
-
-    _jsonResponse($httpClient, $response, { status => 'ok' });
-}
-
-# ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discovery/stop
-# Stops ZeroConf discovery without form POST.
-# ============================================================
-sub _discoveryStopHandler {
-    my ($httpClient, $response) = @_;
-
-    return unless _csrfCheck($httpClient, $response);
-
-    require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->stopDiscovery();
-
-    _jsonResponse($httpClient, $response, { status => 'ok' });
 }
 
 # ============================================================
@@ -631,6 +496,11 @@ sub _pkceStoreAccount {
         main::INFOLOG && $log->is_info && $log->info(
             "Settings: PKCE account $accountId connected (displayName=$displayName)");
 
+        # T-50-11: clear the persistent needsReauth flag immediately on a
+        # successful (re-)authentication rather than waiting for the next
+        # refresh timer cycle.
+        Plugins::SpotOn::API::TokenManager->clearNeedsReauth($accountId);
+
         if ($isJson) {
             _jsonResponse($httpClient, $response, { status => 'ok', accountId => $accountId });
         } else {
@@ -826,8 +696,7 @@ sub _diagnosticBundleHandler {
         push @tokenStatus, "  Display name: $displayName";
         push @tokenStatus, "  API requests: " . ($snapshot->{apiRequestCount} || 0);
         push @tokenStatus, "  429 responses: " . ($snapshot->{api429Count} || 0);
-        push @tokenStatus, "  Rate limited (own): " . ($snapshot->{rateLimitedOwn} ? 'YES' : 'no');
-        push @tokenStatus, "  Rate limited (bundled): " . ($snapshot->{rateLimitedBundled} ? 'YES' : 'no');
+        push @tokenStatus, "  Rate limited: " . ($snapshot->{rateLimited} ? 'YES' : 'no');
 
         if ($INC{'Plugins/SpotOn/Status.pm'}) {
             my $errors = Plugins::SpotOn::Status->getErrorHistory() || [];
@@ -941,17 +810,12 @@ sub _jsonResponse {
 # Helper: check degraded mode (D-03)
 # Degraded = no custom Client-ID configured.
 # Shows a hint in Settings so the user can enter their own Spotify Developer App.
-# Analogous to _isDiscoveryRunning below.
 # ============================================================
 sub _isDegradedMode {
     my $customId = $prefs->get('clientId') || '';
     return $customId ? 0 : 1;
 }
 
-# ============================================================
-# Helper: check if ZeroConf discovery process is alive
-# Delegates to TokenManager which owns the $discoveryProc package var
-# ============================================================
 sub _readLogTail {
     my ($path, $maxBytes) = @_;
     if (open my $fh, '<', $path) {
@@ -968,13 +832,6 @@ sub _readLogTail {
         return $content;
     }
     return "(could not read " . basename($path) . ": $!)\n";
-}
-
-sub _isDiscoveryRunning {
-    # Lazy-load TokenManager to avoid circular dependency issues at startup
-    # If TokenManager is not loaded yet, discovery is not running
-    return 0 unless $INC{'Plugins/SpotOn/API/TokenManager.pm'};
-    return Plugins::SpotOn::API::TokenManager->isDiscoveryRunning();
 }
 
 # ============================================================

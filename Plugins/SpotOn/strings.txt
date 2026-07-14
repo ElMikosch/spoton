@@ -115,6 +115,32 @@ PLUGIN_SPOTON_RATE_LIMIT_HINT
 	PL	Żądania Spotify ograniczone -- proszę czekać
 	SV	Spotify-förfrågningar begränsade -- vänligen vänta
 
+PLUGIN_SPOTON_REAUTH_REQUIRED
+	CS	Platnost autorizace Spotify vypršela -- zkontrolujte nastavení
+	DA	Spotify-godkendelse udløbet -- tjek indstillinger
+	DE	Spotify-Authentifizierung abgelaufen -- siehe Einstellungen
+	EN	Spotify authentication expired -- check Settings
+	ES	La autenticación de Spotify ha caducado -- revisa la configuración
+	FR	Authentification Spotify expirée -- vérifiez les paramètres
+	IT	Autenticazione Spotify scaduta -- controlla le impostazioni
+	NL	Spotify-authenticatie verlopen -- controleer instellingen
+	NO	Spotify-autentisering utløpt -- sjekk innstillinger
+	PL	Autoryzacja Spotify wygasła -- sprawdź ustawienia
+	SV	Spotify-autentiseringen har gått ut -- kontrollera inställningar
+
+PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS
+	CS	Jeden nebo více účtů Spotify vyžaduje opětovnou autorizaci. Kliknutím na tlačítko "Připojit účet Spotify" ji obnovíte.
+	DA	En eller flere Spotify-konti kræver fornyet godkendelse. Klik på 'Tilslut Spotify-konto' for at forny.
+	DE	Ein oder mehrere Spotify-Konten erfordern eine erneute Authentifizierung. Klicken Sie auf 'Spotify-Konto verbinden' zum Erneuern.
+	EN	One or more Spotify accounts require re-authentication. Click 'Connect Spotify Account' to renew.
+	ES	Una o más cuentas de Spotify requieren volver a autenticarse. Haz clic en 'Conectar cuenta de Spotify' para renovarla.
+	FR	Un ou plusieurs comptes Spotify nécessitent une nouvelle authentification. Cliquez sur « Connecter un compte Spotify » pour renouveler.
+	IT	Uno o più account Spotify richiedono una nuova autenticazione. Fai clic su "Connetti account Spotify" per rinnovarla.
+	NL	Een of meer Spotify-accounts moeten opnieuw worden geverifieerd. Klik op 'Spotify-account verbinden' om te vernieuwen.
+	NO	En eller flere Spotify-kontoer krever fornyet autentisering. Klikk på «Koble til Spotify-konto» for å fornye.
+	PL	Jedno lub więcej kont Spotify wymaga ponownej autoryzacji. Kliknij "Połącz konto Spotify", aby ją odnowić.
+	SV	Ett eller flera Spotify-konton kräver förnyad autentisering. Klicka på "Anslut Spotify-konto" för att förnya.
+
 PLUGIN_SPOTON_ACCOUNT_NONE
 	CS	Žádný účet není nakonfigurován
 	DA	Ingen konto konfigureret

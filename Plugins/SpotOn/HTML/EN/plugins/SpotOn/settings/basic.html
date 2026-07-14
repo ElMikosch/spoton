@@ -1,45 +1,6 @@
 [% PROCESS settings/header.html %]
 	[% title = "PLUGIN_SPOTON" %]
 
-	[% BLOCK discovery_widget %]
-		[% IF discoveryRunning %]
-			<div id="discovery-status" style="opacity:0.6">
-				[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
-			</div>
-			<script type="text/javascript">
-			(function() {
-				var timer = setInterval(function() {
-					var xhr = new XMLHttpRequest();
-					xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
-					xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-					xhr.onload = function() {
-						if (xhr.status === 200) {
-							try { var data = JSON.parse(xhr.responseText); }
-							catch(e) { return; }
-							if (data.status === 'connected') {
-								clearInterval(timer);
-								window.location.href = window.location.pathname;
-							}
-						}
-					};
-					xhr.send();
-				}, 3000);
-			})();
-			</script>
-			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('stop')">
-					[% 'PLUGIN_SPOTON_STOP_DISCOVERY' | string %]
-				</button>
-			</p>
-		[% ELSE %]
-			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('start')">
-					[% start_label | string %]
-				</button>
-			</p>
-		[% END %]
-	[% END %]
-
 	[% IF NOT accounts.keys.size %]
 	<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-bottom:20px; border-radius:4px">
 		<h3 style="margin-top:0">[% 'PLUGIN_SPOTON_SETUP_GUIDE_TITLE' | string %]</h3>
@@ -169,12 +130,6 @@
 		</div>
 	[% END %]
 
-	[% IF NOT accounts.keys.size %]
-	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
-		[% INCLUDE discovery_widget start_label = 'PLUGIN_SPOTON_START_DISCOVERY' %]
-	[% END %]
-	[% END %]
-
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
 			<table style="width:100%">
@@ -199,17 +154,11 @@
 			[% END %]
 			</table>
 
-			[% IF discoveryRunning %]
-			<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-top:12px; border-radius:4px">
-				[% INCLUDE discovery_widget start_label = 'PLUGIN_SPOTON_ADD_ANOTHER' %]
-			</div>
-			[% ELSE %]
 			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('start')">
+				<button type="button" class="submit" onclick="spotonPkceStart()">
 					[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]
 				</button>
 			</p>
-			[% END %]
 		[% ELSE %]
 			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
 		[% END %]
@@ -322,18 +271,6 @@
 		xhr.send('callback_url=' + encodeURIComponent(callbackUrl));
 	}
 
-	function spotonDiscovery(action) {
-		var xhr = new XMLHttpRequest();
-		xhr.open('POST', '/plugins/SpotOn/settings/discovery/' + action, true);
-		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-		xhr.onload = function() {
-			window.location.href = window.location.pathname;
-		};
-		xhr.onerror = function() {
-			window.location.href = window.location.pathname;
-		};
-		xhr.send();
-	}
 	function spotonClearLogs() {
 		var btn = document.getElementById('clearLogsBtn');
 		var result = document.getElementById('clearLogsResult');
