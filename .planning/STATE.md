@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
-current_phase: 49
-current_phase_name: pkce-oauth-flow
-status: verifying
-stopped_at: Phase 50 context gathered
-last_updated: "2026-07-14T09:01:06.395Z"
+current_phase: 51
+current_phase_name: Credential Derivation + Connect
+status: executing
+stopped_at: Phase 51 context gathered
+last_updated: "2026-07-14T14:22:04.115Z"
 last_activity: 2026-07-14
-last_activity_desc: Phase 49 execution started
+last_activity_desc: Phase 50 complete, transitioned to Phase 51
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 20
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
+  percent: 40
 ---
 
 # Project State: SpotOn
@@ -29,14 +29,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** Phase 49 — pkce-oauth-flow
+**Current Focus:** Phase 50 — perl-tokenmanager-rewrite
 
 ## Current Position
 
-Phase: 49 (pkce-oauth-flow) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-07-14 — Phase 49 execution started
+Phase: 51 — Credential Derivation + Connect
+Plan: Not started
+Status: Ready to execute
+Last activity: 2026-07-14 — Phase 50 complete, transitioned to Phase 51
 
 ## Progress Bar
 
@@ -83,6 +83,9 @@ Items carried forward from previous milestones:
 | uat | Phase 16 macOS Binary (3 scenarios) | deferred (no macOS test env) |
 | Phase 49 P01 | 18min | 2 tasks | 3 files |
 | Phase 49 P02 | 18min | 2 tasks | 5 files |
+| Phase 50 P01 | 25min | 2 tasks | 3 files |
+| Phase 50 P02 | 12min | 2 tasks | 5 files |
+| Phase 50 P03 | 20min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -121,6 +124,12 @@ Items carried forward from previous milestones:
 - [Phase 49]: Reused TokenManager::_storeAccountPrefs for PKCE account creation instead of duplicating prefs-writing logic in Settings.pm
 - [Phase 49]: Fallback userId on /me lookup failure derived from access_token hash, not a fixed literal, to avoid account-collision across concurrent failed lookups
 - [Phase 49]: PKCE OAuth result page HTML-escapes all interpolated values (attacker-controlled error query param reflected into HTML)
+- [Phase 50]: [Phase 50-01]: getToken loses the $flavor parameter entirely (D-04) -- single PKCE token per account
+- [Phase 50]: [Phase 50-01]: needsReauth cache flag uses explicit 'never' TTL (M-1) -- DbCache defaults to 1h, would otherwise silently expire
+- [Phase 50]: [Phase 50-01]: refreshAllTokens calls _refreshToken directly, not getToken (M-5) -- forces real refresh, keeps refresh_token alive against Spotify 6-month expiry
+- [Phase 50]: [Phase 50-02]: D-04 completion -- Client.pm flavor system deleted entirely (single PKCE token per account, single spoton_rate_limit cache key, 2-arg getToken call site)
+- [Phase 50]: [Phase 50-02]: M-7 (Settings.pm still reads old rateLimitedOwn/rateLimitedBundled keys) intentionally deferred to Plan 03, not fixed here
+- [Phase 50]: [Phase 50-03]: D-08 completion -- OPML (Channel 1) + Settings (Channel 2) re-auth warnings wired via anyAccountNeedsReauth(); all ZeroConf discovery-as-auth code removed from Plugin.pm/Settings.pm/basic.html (D-01), including _autoSetupAccount + __DISCOVER__ fallback (M-3); Add Another Account repointed to spotonPkceStart() XHR (M-2)
 
 ### Blockers/Concerns
 
@@ -141,10 +150,10 @@ Items carried forward from previous milestones:
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/50-perl-tokenmanager-rewrite/50-CONTEXT.md
+**Resume file:** .planning/phases/51-credential-derivation-connect/51-CONTEXT.md
 
-**Last session:** 2026-07-14T09:01:06.390Z
-**Stopped at:** Phase 50 context gathered
+**Last session:** 2026-07-14T13:45:29.262Z
+**Stopped at:** Phase 51 context gathered
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
 
