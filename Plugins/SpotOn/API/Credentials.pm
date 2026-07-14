@@ -177,7 +177,9 @@ sub deriveCredentials {
             resolve   => $resolve,
             attempts  => 0,
         };
-        Slim::Utils::Timers::killTimers($state, \&_pollDerivation);
+        # IN-03: removed no-op killTimers($state, \&_pollDerivation) — $state
+        # was just created above and no timer exists on it. The in-flight
+        # coalescing guard already prevents concurrent polls per account.
         Slim::Utils::Timers::setTimer($state, Time::HiRes::time() + DERIVE_POLL_INTERVAL, \&_pollDerivation);
     });
 }
