@@ -130,23 +130,35 @@
 
 ### v3.0 Auth Overhaul
 
-- [ ] **Phase 49-00: Token Usage Audit**
-  **Goal**: Classify every Keymaster reference in codebase into 4 buckets: (1) Real Keymaster Service (hm://keymaster/token/authenticated), (2) Old Client-ID as platform identity hint, (3) Login5 path, (4) PKCE path. Slim grep+classification, no deep research.
-
+### Phase 49: PKCE OAuth Flow
 - [ ] **Phase 49: PKCE OAuth Flow**
   **Goal**: Implement PKCE OAuth authorization flow — GitHub Pages static relay, LMS Settings handler for code_verifier, token exchange, refresh token storage. AUTH-01, AUTH-02.
+  **Plans:** 2 plans
+  Depends on: Keymaster audit (.planning/notes/keymaster-audit.md), spike findings (spike-findings-spoton skill), urknall edge cases (#176)
 
+  Plans:
+  - [ ] 49-01-PLAN.md — PKCE core module (crypto, token exchange, persistence) + GitHub Pages relay page
+  - [ ] 49-02-PLAN.md — Settings integration (PKCE handlers, auth UI, copy-paste fallback, i18n strings)
+
+### Phase 50: Perl TokenManager Rewrite
 - [ ] **Phase 50: Perl TokenManager Rewrite**
   **Goal**: Replace Keymaster-based TokenManager with PKCE token management — refresh flow, expiry handling, per-player token isolation. AUTH-03.
+  Depends on: Phase 49
 
+### Phase 51: Credential Derivation + Connect
 - [ ] **Phase 51: Credential Derivation + Connect**
   **Goal**: Convert PKCE access tokens to stored credentials for librespot Connect sessions. Ensure Connect registration and audio playback work with PKCE-derived credentials. AUTH-04, AUTH-05.
+  Depends on: Phase 50
 
+### Phase 52: sp_dc + Pathfinder Integration
 - [ ] **Phase 52: sp_dc + Pathfinder Integration**
   **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
+  Depends on: Phase 50
 
+### Phase 53: Keymaster Removal + Migration
 - [ ] **Phase 53: Keymaster Removal + Migration**
   **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
+  Depends on: Phase 49, Phase 50, Phase 51
 
 ## Progress Table
 
