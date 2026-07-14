@@ -10,6 +10,7 @@ use File::Basename qw(basename);
 use File::Glob qw(bsd_glob);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
+use URI;
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -52,6 +53,20 @@ sub new {
     Slim::Web::Pages->addRawFunction(
         'plugins/SpotOn/settings/discovery/stop',
         \&_discoveryStopHandler
+    );
+
+    # Register PKCE OAuth endpoints (AUTH-01, AUTH-02)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/pkce/start',
+        \&_pkceStartHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/pkce/callback',
+        \&_pkceCallbackHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/pkce/manual',
+        \&_pkceManualHandler
     );
 
     return $self;
@@ -213,6 +228,11 @@ sub handler {
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
 
+    # PKCE auth status for template (AUTH-01): has any account completed the
+    # PKCE OAuth flow (has a pkce_tokens.json)? Drives which setup guide/CTA
+    # the template shows.
+    $paramRef->{pkceConfigured} = _isPkceConfigured();
+
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
 
@@ -345,6 +365,378 @@ sub _discoveryStopHandler {
     Plugins::SpotOn::API::TokenManager->stopDiscovery();
 
     _jsonResponse($httpClient, $response, { status => 'ok' });
+}
+
+# ============================================================
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/start
+# AJAX endpoint (AUTH-01, T-49-08). Generates a fresh code_verifier/challenge
+# pair, stashes the verifier under a nonce (bridges this request to the
+# later /pkce/callback or /pkce/manual request), and returns the Spotify
+# authorization URL for the browser to open in a new tab. The verifier
+# itself never leaves LMS (edge case A, urknall #176).
+# ============================================================
+sub _pkceStartHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $clientId  = _pkceClientId();
+    my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
+    my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
+
+    # Nonce keys the one-time verifier cache and round-trips through the
+    # state parameter across the GitHub Pages relay. It is not itself a
+    # security boundary — the code_verifier is the actual OAuth proof.
+    my $nonce = sprintf('%08x%08x', rand(2**32), rand(2**32));
+
+    my $request = $response->request;
+    my $host    = ($request && $request->header('Host')) || 'localhost';
+    my $callbackUrl = 'http://' . $host . '/plugins/SpotOn/settings/pkce/callback';
+
+    my $state = Plugins::SpotOn::API::PKCE::buildState($callbackUrl, $nonce);
+    Plugins::SpotOn::API::PKCE::storeVerifier($nonce, $verifier);
+
+    my $authUrl = Plugins::SpotOn::API::PKCE::buildAuthorizationUrl($clientId, $challenge, $state);
+
+    main::INFOLOG && $log->is_info && $log->info(
+        "Settings: PKCE auth flow started [nonce=" . substr($nonce, 0, 8) . "...]");
+
+    _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce });
+}
+
+# ============================================================
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/callback
+# Browser redirect target (AUTH-01, AUTH-02) reached via the GitHub Pages
+# relay after the user authorizes on accounts.spotify.com. This is a plain
+# browser GET navigation, NOT an AJAX call — there is no X-Requested-With
+# header to check, so it is intentionally exempt from _csrfCheck (T-49-09).
+# Security instead comes from the one-time-use verifier cache: a request
+# can only succeed once per /pkce/start call.
+# ============================================================
+sub _pkceCallbackHandler {
+    my ($httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $request = $response->request;
+    my %params  = $request ? $request->uri->query_form : ();
+
+    if (my $err = $params{error}) {
+        $log->warn("Settings: PKCE callback returned OAuth error: $err");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            string('PLUGIN_SPOTON_PKCE_ERROR'), 1);
+        return;
+    }
+
+    my $code  = $params{code};
+    my $state = $params{state};
+
+    unless ($code) {
+        $log->warn("Settings: PKCE callback missing authorization code");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            'No authorization code received.', 1);
+        return;
+    }
+
+    my $verifier = _pkceLoadVerifierFromState($state);
+    unless ($verifier) {
+        $log->warn("Settings: PKCE callback — no verifier found for state (expired/reused)");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            'Authorization session expired or already used. Please try again from the Settings page.', 1);
+        return;
+    }
+
+    my $clientId = _pkceClientId();
+
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+        my ($tokenData, $err) = @_;
+
+        unless ($tokenData) {
+            $log->error("Settings: PKCE token exchange failed: " . ($err || 'unknown'));
+            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                string('PLUGIN_SPOTON_PKCE_ERROR'), 1);
+            return;
+        }
+
+        _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, 0);
+    });
+}
+
+# ============================================================
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/manual
+# AJAX copy-paste fallback (edge case D, urknall #176) for when the browser
+# auto-redirect from the GitHub Pages relay never reaches LMS (e.g. relay
+# cannot resolve/reach a private-network LMS host from the user's phone).
+# The pasted URL is only ever parsed for its code/state query parameters —
+# it is never fetched or redirected to (T-49-10).
+# ============================================================
+sub _pkceManualHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $callbackUrl = _postParam($response->request, 'callback_url');
+    unless ($callbackUrl) {
+        _jsonResponse($httpClient, $response, { status => 'error', message => 'No callback URL provided' });
+        return;
+    }
+
+    my %params = eval { URI->new($callbackUrl)->query_form };
+    if ($@ || !%params) {
+        _jsonResponse($httpClient, $response, { status => 'error', message => 'Could not parse callback URL' });
+        return;
+    }
+
+    my $code  = $params{code};
+    my $state = $params{state};
+
+    unless ($code && $state) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', message => 'Callback URL is missing code or state parameters' });
+        return;
+    }
+
+    my $verifier = _pkceLoadVerifierFromState($state);
+    unless ($verifier) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', message => 'Authorization session expired or already used' });
+        return;
+    }
+
+    my $clientId = _pkceClientId();
+
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+        my ($tokenData, $err) = @_;
+
+        unless ($tokenData) {
+            $log->error("Settings: PKCE manual token exchange failed: " . ($err || 'unknown'));
+            _jsonResponse($httpClient, $response, { status => 'error', message => 'Token exchange failed' });
+            return;
+        }
+
+        _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, 1);
+    });
+}
+
+# ============================================================
+# _pkceLoadVerifierFromState($state)
+# Parses the state parameter and pops the matching verifier from the
+# one-time-use cache. Returns undef (safely) on any malformed/missing input.
+# ============================================================
+sub _pkceLoadVerifierFromState {
+    my ($state) = @_;
+    return undef unless $state;
+
+    my $stateData = Plugins::SpotOn::API::PKCE::parseState($state);
+    my $nonce = $stateData ? $stateData->{nonce} : undef;
+    return undef unless $nonce;
+
+    return Plugins::SpotOn::API::PKCE::loadAndDeleteVerifier($nonce);
+}
+
+# ============================================================
+# _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, $isJson)
+# Shared tail of the callback/manual handlers: looks up the Spotify user
+# profile to derive a stable accountId, persists the PKCE tokens, and
+# creates/updates the account in prefs. Responds with JSON (manual, AJAX
+# fallback) or an HTML result page (callback, browser redirect).
+# ============================================================
+sub _pkceFinishAuth {
+    my ($httpClient, $response, $tokenData, $clientId, $isJson) = @_;
+
+    require Slim::Networking::SimpleAsyncHTTP;
+
+    Slim::Networking::SimpleAsyncHTTP->new(
+        sub {
+            my $http    = shift;
+            my $profile = eval { from_json($http->content) };
+            my $userId  = ($profile && $profile->{id}) || _pkceFallbackUserId($tokenData);
+            my $displayName = ($profile && $profile->{display_name}) || $userId;
+            _pkceStoreAccount($httpClient, $response, $tokenData, $clientId, $userId, $displayName, $isJson);
+        },
+        sub {
+            my ($http, $error) = @_;
+            $log->warn("Settings: PKCE /me lookup failed: $error — using fallback identity");
+            my $userId = _pkceFallbackUserId($tokenData);
+            _pkceStoreAccount($httpClient, $response, $tokenData, $clientId, $userId, $userId, $isJson);
+        },
+        { timeout => 30 }
+    )->get(
+        'https://api.spotify.com/v1/me',
+        'Authorization' => "Bearer $tokenData->{access_token}",
+        'Accept'        => 'application/json',
+    );
+}
+
+# ============================================================
+# _pkceFallbackUserId($tokenData)
+# Used only when the /me lookup fails right after token exchange. Derived
+# from the access_token (not a fixed literal) so that two different users
+# who both hit a transient /me failure at the same time do not collide on
+# the same accountId (Rule 1 — plan's literal 'unknown' fallback would
+# collide across accounts; display name still updates on next token use
+# via TokenManager's proactive refresh cycle).
+# ============================================================
+sub _pkceFallbackUserId {
+    my ($tokenData) = @_;
+    return 'unknown-' . substr(md5_hex($tokenData->{access_token} || rand()), 0, 8);
+}
+
+# ============================================================
+# _pkceStoreAccount(...)
+# Derives accountId, persists PKCE tokens (chmod 0600 file via PKCE.pm),
+# secures the account directory (chmod 0700, T-04.3-07 pattern), and stores
+# the account in prefs via TokenManager's existing _storeAccountPrefs (sets
+# activeAccount + triggers daemon start if this is the first account).
+# ============================================================
+sub _pkceStoreAccount {
+    my ($httpClient, $response, $tokenData, $clientId, $userId, $displayName, $isJson) = @_;
+
+    my $accountId = substr(md5_hex($userId), 0, 8);
+    my $expiresAt = time() + ($tokenData->{expires_in} || 3600);
+
+    require Plugins::SpotOn::API::PKCE;
+    Plugins::SpotOn::API::PKCE::storeTokens($accountId, {
+        access_token  => $tokenData->{access_token},
+        refresh_token => $tokenData->{refresh_token},
+        expires_at    => $expiresAt,
+        client_id     => $clientId,
+        scope         => $tokenData->{scope},
+    });
+
+    my $serverPrefs = preferences('server');
+    my $accountDir  = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
+    chmod(0700, $accountDir) if -d $accountDir;
+
+    require Plugins::SpotOn::API::TokenManager;
+    Plugins::SpotOn::API::TokenManager->_storeAccountPrefs($accountId, $userId, $displayName, sub {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Settings: PKCE account $accountId connected (displayName=$displayName)");
+
+        if ($isJson) {
+            _jsonResponse($httpClient, $response, { status => 'ok', accountId => $accountId });
+        } else {
+            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
+        }
+    });
+}
+
+# ============================================================
+# _pkceClientId()
+# Resolves the Client-ID to use for PKCE requests: the user's own Spotify
+# Developer App Client-ID if configured, otherwise SpotOn's bundled default
+# (same fallback logic as the rest of the codebase, e.g. TokenManager.pm).
+# ============================================================
+sub _pkceClientId {
+    my $custom = $prefs->get('clientId');
+    return $custom if $custom;
+
+    require Plugins::SpotOn::API::Client;
+    return Plugins::SpotOn::API::Client::SPOTON_DEFAULT_CLIENT_ID();
+}
+
+# ============================================================
+# _isPkceConfigured()
+# True if any known account has completed the PKCE OAuth flow (has a
+# pkce_tokens.json). Drives which setup guide/CTA the template shows.
+# ============================================================
+sub _isPkceConfigured {
+    require Plugins::SpotOn::API::TokenManager;
+    require Plugins::SpotOn::API::PKCE;
+
+    for my $id (Plugins::SpotOn::API::TokenManager->getAccountIds()) {
+        return 1 if Plugins::SpotOn::API::PKCE::loadTokens($id);
+    }
+    return 0;
+}
+
+# ============================================================
+# _postParam($request, $key)
+# Extracts a single application/x-www-form-urlencoded POST body parameter.
+# Returns undef if the request/body is missing or the key is absent.
+# ============================================================
+sub _postParam {
+    my ($request, $key) = @_;
+    return undef unless $request;
+
+    my $body = $request->content;
+    return undef unless defined $body && length $body;
+
+    my %params = eval { URI->new("?$body")->query_form };
+    return undef if $@;
+    return $params{$key};
+}
+
+# ============================================================
+# _htmlEscape($str)
+# Minimal HTML entity escaping for values interpolated into
+# _renderPkceResultPage — the OAuth 'error' query parameter is attacker/
+# Spotify controlled and must not be reflected unescaped (Rule 2, XSS).
+# ============================================================
+sub _htmlEscape {
+    my ($s) = @_;
+    return '' unless defined $s;
+    $s =~ s/&/&amp;/g;
+    $s =~ s/</&lt;/g;
+    $s =~ s/>/&gt;/g;
+    $s =~ s/"/&quot;/g;
+    return $s;
+}
+
+# ============================================================
+# _renderPkceResultPage($httpClient, $response, $title, $message, $isError)
+# Renders a minimal centered-card HTML result page for the /pkce/callback
+# browser redirect flow. Success pages meta-refresh back to Settings after
+# 3 seconds; error pages show a link back to Settings instead (the user may
+# need to read the error before leaving).
+# ============================================================
+sub _renderPkceResultPage {
+    my ($httpClient, $response, $title, $message, $isError) = @_;
+
+    my $safeTitle   = _htmlEscape($title);
+    my $safeMessage = _htmlEscape($message);
+    my $settingsUrl = '/' . SETTINGS_URL;
+
+    my $action = $isError
+        ? qq{<p><a href="$settingsUrl">} . _htmlEscape(string('PLUGIN_SPOTON_NAME')) . qq{</a></p>}
+        : qq{<meta http-equiv="refresh" content="3;url=$settingsUrl">};
+
+    my $html = qq{<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$safeTitle</title>
+$action
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #191414;
+         color: #fff; display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; }
+  .card { background: #282828; border-radius: 12px; padding: 2em 2.5em; max-width: 420px;
+          text-align: center; }
+  a { color: #1db954; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>$safeTitle</h2>
+    <p>$safeMessage</p>
+  </div>
+</body>
+</html>
+};
+
+    my $bytes = encode('UTF-8', $html);
+    $response->header('Content-Length' => length($bytes));
+    $response->code($isError ? 400 : 200);
+    $response->header('Connection' => 'close');
+    $response->content_type('text/html; charset=utf-8');
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$bytes);
 }
 
 # ============================================================

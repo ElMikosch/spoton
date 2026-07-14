@@ -51,8 +51,20 @@ sub init { }
 END
 
 # Stub: Slim::Utils::Log
+# logger() must also be installed into the caller's namespace: Settings.pm
+# calls it as a method (Slim::Utils::Log->logger(...)), but Client.pm (pulled
+# in transitively via the PKCE handlers) calls it as a bare imported function
+# (use Slim::Utils::Log; ... logger('plugin.spoton')) — matches t/08's stub.
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
+use parent 'Exporter';
+our @EXPORT_OK = qw(logger);
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::logger"} = \&logger;
+}
 sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
 sub logger {
     return bless { _calls => [] }, 'Slim::Utils::Log';
@@ -297,12 +309,22 @@ sub scheduleInit { }
 1;
 END
 
+
 # Stub: URI::Escape — not Perl core, bundled by LMS
+# uri_escape_utf8 is needed too: Settings.pm's PKCE handlers pull in the real
+# Plugins::SpotOn::API::Client (for SPOTON_DEFAULT_CLIENT_ID), which imports
+# both symbols from URI::Escape.
 write_stub($stub_dir, 'URI::Escape', <<'END');
 package URI::Escape;
 use Exporter 'import';
-our @EXPORT_OK = qw(uri_escape);
+our @EXPORT_OK = qw(uri_escape uri_escape_utf8);
 sub uri_escape { my ($s) = @_; $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge; return $s; }
+sub uri_escape_utf8 {
+    my ($s) = @_;
+    utf8::encode($s) if utf8::is_utf8($s);
+    $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge;
+    return $s;
+}
 1;
 END
 
@@ -318,6 +340,16 @@ BEGIN {
     *main::ISWINDOWS   = sub () { 0 };
     *main::ISMAC       = sub () { 0 };
     *main::PERFMON     = sub () { 0 };
+}
+
+# M5: SPOTON_CACHE_VERSION is defined in Plugin.pm (single source of truth);
+# submodules resolve it via a fully-qualified call at load time. Production
+# always compiles Plugin.pm first — provide the constant for standalone loads
+# (Settings.pm's PKCE handlers pull in the real Client.pm/PKCE.pm, matching
+# the pattern already used by t/08_api_client.t).
+BEGIN {
+    package Plugins::SpotOn::Plugin;
+    use constant SPOTON_CACHE_VERSION => 4;
 }
 
 # Add to @INC
