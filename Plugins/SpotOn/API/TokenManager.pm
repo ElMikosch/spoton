@@ -197,6 +197,15 @@ sub refreshAllTokens {
             next;
         }
 
+        # WR-03: respect M-4 needsReauth flag — permanently rejected accounts
+        # must not be retried on the 45-min cycle (cleared via clearNeedsReauth
+        # on successful re-auth).
+        if ($class->needsReauth($id)) {
+            main::INFOLOG && $log->info("TokenManager: account " . _mask($id)
+                . " skipped -- needsReauth flag set");
+            next;
+        }
+
         my $needsDisplayName = $acct->{displayName}
             && $acct->{spotifyUserId}
             && $acct->{displayName} eq $acct->{spotifyUserId};
