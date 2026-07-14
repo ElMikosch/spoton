@@ -164,16 +164,16 @@
 
 ### Phase 51: Credential Derivation + Connect
 
-- [ ] **Phase 51: Credential Derivation + Connect**
+- [x] **Phase 51: Credential Derivation + Connect** (completed 2026-07-14)
   **Goal**: Convert PKCE access tokens to stored credentials for librespot Connect sessions. Ensure Connect registration and audio playback work with PKCE-derived credentials. AUTH-03, AUTH-04.
-  **Plans:** 2/3 plans executed
+  **Plans:** 3/3 plans complete
   Depends on: Phase 50
 
   Plans:
 
   - [x] 51-01-PLAN.md — Credentials.pm shared derivation module (D-01) + t/16_credentials.t (rate limiting D-05, mismatch detection D-08, error classification D-03)
   - [x] 51-02-PLAN.md — Daemon lifecycle wiring: always-on stderr capture, lazy derivation safety-net, crash auto-re-derive (D-03/D-04), D-09 verification
-  - [ ] 51-03-PLAN.md — Settings eager derivation (D-02/D-06) + i18n warning string + test updates
+  - [x] 51-03-PLAN.md — Settings eager derivation (D-02/D-06) + i18n warning string + test updates
 
 ### Phase 52: sp_dc + Pathfinder Integration
 
