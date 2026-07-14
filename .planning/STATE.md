@@ -5,15 +5,15 @@ milestone_name: Library Integration
 current_phase: 51
 current_phase_name: credential-derivation-connect
 status: executing
-stopped_at: Phase 51 context gathered
-last_updated: "2026-07-14T14:36:56.174Z"
+stopped_at: Completed 51-02-PLAN.md
+last_updated: "2026-07-14T14:47:13.214Z"
 last_activity: 2026-07-14
 last_activity_desc: Phase 51 execution started
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 40
 ---
 
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 ## Current Position
 
 Phase: 51 (credential-derivation-connect) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-14 — Phase 51 execution started
 
@@ -87,6 +87,7 @@ Items carried forward from previous milestones:
 | Phase 50 P02 | 12min | 2 tasks | 5 files |
 | Phase 50 P03 | 20min | 2 tasks | 6 files |
 | Phase 51 P01 | 8min | 2 tasks | 3 files |
+| Phase 51 P02 | 9min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,9 @@ Items carried forward from previous milestones:
 - [Phase 50]: [Phase 50-03]: D-08 completion -- OPML (Channel 1) + Settings (Channel 2) re-auth warnings wired via anyAccountNeedsReauth(); all ZeroConf discovery-as-auth code removed from Plugin.pm/Settings.pm/basic.html (D-01), including _autoSetupAccount + __DISCOVER__ fallback (M-3); Add Another Account repointed to spotonPkceStart() XHR (M-2)
 - [Phase 51]: [51-01] D-05 rate-limit counter only counts real derivation-attempt failures (spawn_failed/derivation_failed), not pre-flight gate skips (no_token/no_binary/binary_too_old)
 - [Phase 51]: [51-01] accountMismatch reads credentials.json via a raw parse independent of verifyCredentials's auth_type==1 validation
+- [Phase 51]: [51-02] diagnosticMode OFF now truncates the same per-daemon stderr file on every start instead of routing to devnull -- simplest fix for Pitfall 1 (stderr must be readable for D-03 crash classification in the default configuration)
+- [Phase 51]: [51-02] D-08 mismatch repair and D-01 lazy safety-net both gated on non-empty activeAccountId (Pitfall 4) -- legacy flat-dir credential setups untouched, D-10 cleanup deferred to Phase 53
+- [Phase 51]: [51-02] _handleCredentialCrash only escalates markNeedsReauth for 'derivation_failed' -- 'no_token' is already flagged internally by TokenManager, avoiding a duplicate 4-channel warning
 
 ### Blockers/Concerns
 
@@ -153,10 +157,10 @@ Items carried forward from previous milestones:
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/51-credential-derivation-connect/51-CONTEXT.md
+**Resume file:** None
 
-**Last session:** 2026-07-14T14:36:22.371Z
-**Stopped at:** Phase 51 context gathered
+**Last session:** 2026-07-14T14:47:13.209Z
+**Stopped at:** Completed 51-02-PLAN.md
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
 
