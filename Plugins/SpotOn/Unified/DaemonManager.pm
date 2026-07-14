@@ -399,6 +399,23 @@ sub _handleCredentialCrash {
 
     my $activeAccountId = $prefs->get('activeAccount') || '';
 
+    # WR-01: if the account is already flagged for re-auth (permanent
+    # failure), stop re-entering this handler every 5s poll cycle.
+    # Deregister the dead daemon so _streamAlivePoll stops finding it;
+    # the re-auth flow will re-create it on success.
+    if ($activeAccountId) {
+        require Plugins::SpotOn::API::TokenManager;
+        if (Plugins::SpotOn::API::TokenManager->needsReauth($activeAccountId)) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "SpotOn Unified daemon for " . $helper->mac
+                . " — credential crash already escalated to re-auth for account "
+                . _maskAccountId($activeAccountId) . ", stopping poll"
+            );
+            $class->stopHelper($helper->mac);
+            return;
+        }
+    }
+
     # Pitfall 4 / legacy flat-dir setup: credential repair requires a PKCE
     # account. Phase 53 owns the broader legacy-migration UX (D-10) -- do
     # not delete or derive anything here.
