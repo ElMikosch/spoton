@@ -616,6 +616,93 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
         'Plugin.pm: distinct D-03 (empty) log line present' );
     ok( $src =~ /Made For You hidden.*TOTP secrets unavailable.*D-05/s,
         'Plugin.pm: distinct D-05 (secrets_down) log line present' );
+
+    my ($mfyBody) = $src =~ /(sub _madeForYouFeed\b.*?)(?=\nsub \w|\z)/s;
+    ok( defined $mfyBody, 'Plugin.pm: sub _madeForYouFeed found for scoped source assertions' );
+    ok( $mfyBody =~ /pathfinderHome/,
+        'Plugin.pm: _madeForYouFeed calls Client->pathfinderHome' );
+    ok( $mfyBody !~ /getPersonalMixes/,
+        'Plugin.pm: _madeForYouFeed no longer calls getPersonalMixes in its own body' );
+
+    my $wp_items_calls = () = $src =~ /getWebPlayerPlaylistItems/g;
+    ok( $wp_items_calls >= 1,
+        'Plugin.pm: getWebPlayerPlaylistItems referenced (playlist drill-down)' );
+}
+
+# ============================================================
+# Phase 52 Plan 04, Task 2 -- Pathfinder-backed _madeForYouFeed +
+# webPlayer-flagged playlist drill-down (D-07, Pitfall 3)
+# ============================================================
+{
+    my $client = MockClient->new('player-mfy2');
+    Slim::Utils::Prefs::preferences('plugin.spoton')->set('activeAccount', 'mfy-account-id-2');
+
+    # Test 10: successful discovery -- items built via the webPlayer-flagged
+    # _playlistItem, in pathfinderHome's returned order (stable sort, no
+    # name metadata to discriminate -- RESEARCH A1).
+    Plugins::SpotOn::API::Client::reset_calls();
+    $Plugins::SpotOn::API::Client::next_pathfinder_ids = ['37i9dQZF1abc', '37i9dQZF1def'];
+    $Plugins::SpotOn::API::Client::next_pathfinder_err = undef;
+
+    my $result;
+    Plugins::SpotOn::Plugin::_madeForYouFeed($client, sub { $result = shift }, {});
+
+    is( scalar(@Plugins::SpotOn::API::Client::pathfinder_home_calls), 1,
+        'CTX-10: _madeForYouFeed calls Client->pathfinderHome exactly once' );
+    is( scalar @{ $result->{items} }, 2,
+        'CTX-10: two discovered playlists produce two OPML items' );
+    is( $result->{items}[0]{type}, 'playlist', 'CTX-10: item type is playlist' );
+    is( $result->{items}[0]{passthrough}[0]{playlistId}, '37i9dQZF1abc',
+        'CTX-10: first item passthrough carries the discovered playlist ID' );
+    is( $result->{items}[0]{passthrough}[0]{webPlayer}, 1,
+        'CTX-10: item passthrough sets webPlayer=1 (Pitfall 3)' );
+    is( $result->{items}[0]{url}, \&Plugins::SpotOn::Plugin::_playlistFeed,
+        'CTX-10: item drills into _playlistFeed' );
+
+    # Test 11: selecting the item fetches tracks via getWebPlayerPlaylistItems,
+    # never getPlaylistItems (Pitfall 3 -- the stub dies if that were called).
+    Plugins::SpotOn::API::Client::reset_calls();
+    $Plugins::SpotOn::API::Client::next_wp_items = { items => [], total => 0 };
+    my $drillResult;
+    $result->{items}[0]{url}->(
+        $client, sub { $drillResult = shift }, {}, $result->{items}[0]{passthrough}[0]
+    );
+    is( scalar(@Plugins::SpotOn::API::Client::wp_items_calls), 1,
+        'CTX-11: playlist drill-down calls Client->getWebPlayerPlaylistItems exactly once' );
+    is( $Plugins::SpotOn::API::Client::wp_items_calls[0][1], '37i9dQZF1abc',
+        'CTX-11: getWebPlayerPlaylistItems called with the discovered playlist ID' );
+
+    # Test 12: empty discovery -- one graceful textarea item, not a die.
+    Plugins::SpotOn::API::Client::reset_calls();
+    $Plugins::SpotOn::API::Client::next_pathfinder_ids = [];
+    $Plugins::SpotOn::API::Client::next_pathfinder_err = undef;
+    undef $result;
+    eval {
+        Plugins::SpotOn::Plugin::_madeForYouFeed($client, sub { $result = shift }, {});
+        1;
+    } or do {
+        fail("CTX-12: _madeForYouFeed died on empty discovery: $@");
+    };
+    is( scalar @{ $result->{items} }, 1,
+        'CTX-12: empty discovery renders exactly one item' );
+    is( $result->{items}[0]{type}, 'textarea',
+        'CTX-12: empty discovery item type is textarea' );
+    is( $result->{items}[0]{name}, 'PLUGIN_SPOTON_NO_RESULTS',
+        'CTX-12: empty discovery falls back to the generic NO_RESULTS string' );
+
+    # Test 13: no_secrets failure -- distinct secrets-down message, not the
+    # raw error reason reflected into the menu (Security V7/T-52-02).
+    Plugins::SpotOn::API::Client::reset_calls();
+    $Plugins::SpotOn::API::Client::next_pathfinder_ids = undef;
+    $Plugins::SpotOn::API::Client::next_pathfinder_err = { error => 'no_secrets' };
+    undef $result;
+    Plugins::SpotOn::Plugin::_madeForYouFeed($client, sub { $result = shift }, {});
+    is( scalar @{ $result->{items} }, 1,
+        'CTX-13: no_secrets failure renders exactly one item' );
+    is( $result->{items}[0]{name}, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN',
+        'CTX-13: no_secrets failure renders the distinct secrets-down message' );
+
+    Plugins::SpotOn::API::Client::reset_calls();
 }
 
 done_testing();

@@ -1097,18 +1097,24 @@ sub _artistItem {
     };
 }
 
-# _playlistItem($client, $playlist)
+# _playlistItem($client, $playlist, $opts)
 # Builds an OPML link item for playlist navigation.
 # url => \&_playlistFeed is defined in Plan 03-03 (resolved at runtime by Perl).
+# $opts->{webPlayer} (Phase 52, D-07/Pitfall 3): when set, the passthrough
+# flag tells _playlistFeed to fetch tracks via Client->getWebPlayerPlaylistItems
+# (Web-Player bearer token) instead of Client->getPlaylistItems (PKCE token) --
+# Dev-Mode PKCE tokens 404 on ALL Spotify-owned (37i9...) playlists regardless
+# of ID validity. Used exclusively by the Made For You feed (_madeForYouFeed).
 sub _playlistItem {
-    my ($client, $playlist) = @_;
+    my ($client, $playlist, $opts) = @_;
     # spoton:// URL for LMS Favorites playback (explodePlaylist resolves to tracks)
     my $pl_spoton = 'spoton://playlist:' . ($playlist->{id} // '');
+    my $webPlayer = ($opts && ref $opts eq 'HASH' && $opts->{webPlayer}) ? 1 : 0;
 
     return {
         name          => $playlist->{name} // '',
         url           => \&_playlistFeed,
-        passthrough   => [{ playlistId => $playlist->{id} }],
+        passthrough   => [{ playlistId => $playlist->{id}, webPlayer => $webPlayer }],
         image         => _largestImage($playlist->{images}),
         line2         => $playlist->{owner}{display_name} // '',
         favorites_url => $pl_spoton,
@@ -1268,43 +1274,50 @@ sub _fetchAllPersonalMixes {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# Fetches personal mixes in two parallel requests: localized (for display) and
-# English (for locale-independent sorting). Merges by playlist ID.
+# D-07: Discovers algorithmic ("Made for You") playlists -- Daily Mix,
+# Discover Weekly, Release Radar, Daylist, genre mixes -- via
+# Client->pathfinderHome (Pathfinder Home Feed GraphQL), superseding the dead
+# getPersonalMixes (browse/categories, removed Dev Mode Feb 2026). Left
+# dormant per the plan rather than deleted -- see _fetchAllPersonalMixes above.
+#
+# pathfinderHome returns bare 37i9... playlist IDs only (no name/image
+# metadata in the current defensive parse, RESEARCH A1 MEDIUM confidence) --
+# items are labelled by ID for now; a richer Pathfinder parse is future work.
+# Each item's drill-down is wired via _playlistItem's webPlayer flag so
+# selecting a Made For You playlist loads its tracks through
+# Client->getWebPlayerPlaylistItems (D-07, Pitfall 3 resolved) rather than
+# the PKCE-token _playlistFeed path, which 404s on ALL 37i9... playlists.
+#
+# On empty discovery or a hard token/hash failure, renders a single graceful
+# textarea item -- never lets the failure bubble into Browse (T-52-11). A
+# secrets-down failure gets its own distinct message (PLUGIN_SPOTON_MFY_SECRETS_DOWN);
+# every other empty/failure case falls back to the generic NO_RESULTS string
+# so no raw error/reason is ever reflected into the menu (Security V7/T-52-02).
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
-    my ($localized, %en_names);
-    my $pending = 2;
+    Plugins::SpotOn::API::Client->pathfinderHome($accountId, {}, sub {
+        my ($ids, $err) = @_;
 
-    my $merge = sub {
-        return if --$pending > 0;
-
-        unless ($localized && @$localized) {
-            $callback->({ items => [{ name => cstring($client,
-                'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+        unless ($ids && @$ids) {
+            my $reason = ($err && ref $err eq 'HASH') ? ($err->{error} // '') : '';
+            my $name = ($reason eq 'no_secrets')
+                ? cstring($client, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN')
+                : cstring($client, 'PLUGIN_SPOTON_NO_RESULTS');
+            $callback->({ items => [{ name => $name, type => 'textarea' }] });
             return;
         }
 
         my @sorted = sort {
-            _madeForYouPriority($en_names{$a->{id}} // $a->{name} // '')
-            <=>
-            _madeForYouPriority($en_names{$b->{id}} // $b->{name} // '')
-        } @$localized;
+            _madeForYouPriority($a) <=> _madeForYouPriority($b)
+        } @$ids;
 
-        my @items = map { _playlistItem($client, $_) } @sorted;
+        my @items = map {
+            _playlistItem($client, { id => $_, name => $_ }, { webPlayer => 1 })
+        } @sorted;
+
         $callback->({ items => \@items });
-    };
-
-    _fetchAllPersonalMixes($accountId, undef, sub {
-        $localized = shift;
-        $merge->();
-    });
-
-    _fetchAllPersonalMixes($accountId, 'en', sub {
-        my $en = shift || [];
-        %en_names = map { $_->{id} => $_->{name} } @$en;
-        $merge->();
     });
 }
 
@@ -2655,10 +2668,18 @@ sub _albumTrackItem {
 # Null track entries (local files) are skipped per T-03-10.
 # Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
 # Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Phase 52 (D-07/Pitfall 3): $passthrough->{webPlayer} (set by _playlistItem
+# for Made For You / 37i9... playlists) routes the track fetch through
+# Client->getWebPlayerPlaylistItems (Web-Player bearer token) instead of
+# Client->getPlaylistItems (PKCE token) -- Dev-Mode PKCE tokens 404 on ALL
+# Spotify-owned playlists regardless of ID validity. Same pagination
+# offset/limit shape either way, so the play-all/_fetchAllPages path below
+# is unchanged.
 sub _playlistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $playlistId = $passthrough->{playlistId} // '';
+    my $webPlayer  = $passthrough->{webPlayer} ? 1 : 0;
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
@@ -2666,7 +2687,11 @@ sub _playlistFeed {
 
     my $accountId = _getAccountId($client);
 
-    my $plCacheKey = "playlist:$accountId:$playlistId";
+    my $fetchItems = $webPlayer
+        ? sub { Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems(@_) }
+        : sub { Plugins::SpotOn::API::Client->getPlaylistItems(@_) };
+
+    my $plCacheKey = ($webPlayer ? 'mfyplaylist:' : 'playlist:') . "$accountId:$playlistId";
 
     if ($qty >= 500 && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
@@ -2674,7 +2699,7 @@ sub _playlistFeed {
             accountId    => $accountId,
             apiFn        => sub {
                 my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getPlaylistItems($acct, $playlistId, $params, $cb);
+                $fetchItems->($acct, $playlistId, $params, $cb);
             },
             pageLimit    => 100,
             extractItems => sub { $_[0]->{items} || [] },
@@ -2705,7 +2730,7 @@ sub _playlistFeed {
         delete $_playAllItemCache{$plCacheKey};
         goto &_playlistFeed;  # re-enter with same @_ after cache eviction
     } else {
-        Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
+        $fetchItems->($accountId, $playlistId, {
             offset => $offset,
             limit  => $limit,
         }, sub {
