@@ -6,7 +6,6 @@ use warnings;
 use base qw(Slim::Utils::Accessor);
 
 use File::Glob qw(bsd_glob);
-use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
 use File::Temp qw(tempfile);
 use MIME::Base64 qw(encode_base64);
@@ -206,19 +205,21 @@ sub start {
 		return;
 	}
 
-	# T-29-09: stderr log only when diagnosticMode is on; /dev/null otherwise.
-	# Append mode (>>) matches Browse::Daemon pattern — preserves logs across restarts.
+	# Pitfall 1 (Phase 51): stderr is ALWAYS captured to the same per-daemon
+	# file, independent of diagnosticMode — D-03's credential-error detection
+	# (isCredentialError) must be able to read stderr text in the DEFAULT
+	# (non-diagnostic) configuration, not just when diagnosticMode is on.
+	# diagnosticMode ON: append mode (unchanged T-29-09 behavior, preserves
+	# logs across restarts). diagnosticMode OFF: truncate-on-start bounds
+	# growth structurally — each start resets the file, and the non-diagnostic
+	# RUST_LOG level (spoton=info,librespot=warn) emits only a handful of
+	# lines per run. The devnull branch is removed entirely.
 	my $diagMode = $prefs->get('diagnosticMode');
-	my $stderrFile;
+	my $stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-unified.log');
 	my $stderr_fh;
-	if ($diagMode) {
-		$stderrFile = catfile($serverPrefs->get('cachedir'), 'spoton', $self->id . '-unified.log');
-		open($stderr_fh, '>>', $stderrFile)
-			or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; undef $stderrFile; };
-	} else {
-		open($stderr_fh, '>', File::Spec->devnull)
-			or do { $log->warn("Cannot open /dev/null for stderr: $!"); undef $stderr_fh; };
-	}
+	my $openMode = $diagMode ? '>>' : '>';
+	open($stderr_fh, $openMode, $stderrFile)
+		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; undef $stderrFile; };
 
 	# T-29-09 / Pitfall 7 (MANDATORY): Temporarily untie STDERR before fork so
 	# Proc::Background can dup2 it in the child. LMS ties STDERR to
@@ -505,6 +506,32 @@ sub alive {
 sub uptime {
 	my $self = shift;
 	return Time::HiRes::time() - ($self->_startTimes->[-1] || time());
+}
+
+# stderrTail($self, $maxBytes)
+# D-03: returns the last $maxBytes (default 8192) bytes of the daemon's
+# always-on stderr capture file (see Pitfall 1 above). Returns '' when
+# _stderrFile is unset, missing, or unreadable. Pure read — no state
+# mutation, safe to call on a dead daemon (the crash handler calls this
+# BEFORE the next start() truncates the file).
+sub stderrTail {
+	my ($self, $maxBytes) = @_;
+	$maxBytes ||= 8192;
+
+	my $file = $self->_stderrFile;
+	return '' unless $file && -f $file;
+
+	my $text = eval {
+		open(my $fh, '<', $file) or die "open failed: $!";
+		my $size = -s $fh;
+		seek($fh, ($size > $maxBytes ? $size - $maxBytes : 0), 0);
+		local $/;
+		my $data = <$fh>;
+		close($fh);
+		$data;
+	};
+	return '' if $@ || !defined $text;
+	return $text;
 }
 
 1;
