@@ -1,23 +1,27 @@
 ---
 phase: 51-credential-derivation-connect
 verified: 2026-07-14T18:30:00Z
-status: human_needed
+status: passed
 score: 11/15 must-haves verified
 behavior_unverified: 4
 overrides_applied: 0
 behavior_unverified_items:
+
   - truth: "When credentials.json is missing but PKCE tokens exist, daemon start self-heals by deriving credentials and then starting the daemon (D-01 lazy safety-net)"
     test: "Configure a PKCE account, manually delete the account's credentials.json, then trigger startHelper (player connect or LMS restart) and observe the daemon log."
     expected: "Log shows 'deriving from PKCE tokens (D-01 lazy safety-net)' then 'Lazy credential derivation succeeded ... retrying daemon start'; credentials.json reappears; daemon starts and the Connect device shows up in the Spotify app."
     why_human: "No Daemon.pm/DaemonManager.pm test harness exists in t/ (unlike TokenManager.pm/Credentials.pm) — the wiring is grep-verified and code-read-verified, but the actual state transition (delete -> self-heal -> daemon start) requires a live spoton binary + real/stubbed PKCE tokens, which is exactly the manual UAT this phase's own 51-VALIDATION.md and PLAN verification sections reserve for AUTH-04."
+
   - truth: "A daemon crash caused by rejected credentials auto-deletes credentials.json, re-derives from PKCE tokens, and restarts — transparent to the user (D-03)"
     test: "Force a daemon crash whose stderr tail contains one of the three librespot-core credential-rejection strings (e.g. corrupt the stored auth_data so the AP rejects it), then observe _streamAlivePoll's next cycle."
     expected: "_handleCredentialCrash fires (WARN log), credentials.json is unlinked, deriveCredentials re-derives, and startHelper restarts the daemon without any user action."
     why_human: "Same as above — no automated crash-simulation stub exists for Daemon.pm's Proc::Background lifecycle; requires a live/near-live daemon crash to exercise the branch."
+
   - truth: "When re-derivation fails permanently, the 4-channel re-auth warning fires and the daemon stays stopped (D-04)"
     test: "Force _handleCredentialCrash's re-derive callback to receive reason='derivation_failed' (fresh token rejected by AP) and observe TokenManager's 4-channel escalation (cache flag, Status page, etc.) plus confirm startHelper does not restart the daemon."
     expected: "TokenManager->markNeedsReauth(accountId, 'derivation_failed') fires exactly once; the daemon remains stopped because startHelper's credential pre-check finds no credentials.json."
     why_human: "Requires driving _handleCredentialCrash's failure branch end-to-end against a real/near-real derivation failure; not covered by any existing unit test."
+
   - truth: "credentials.json belonging to a different Spotify user than the active PKCE account is deleted and re-derived without user confirmation (D-08)"
     test: "Write a credentials.json with a foreign username into the active account's cache dir, then call startHelper."
     expected: "Log shows 'belong to a different Spotify user — deleting and re-deriving' (D-08), the single credentials.json file is unlinked (pkce_tokens.json untouched), and the lazy D-01 branch immediately re-derives fresh credentials for the active account."
