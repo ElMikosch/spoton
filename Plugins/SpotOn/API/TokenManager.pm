@@ -260,7 +260,12 @@ sub _refreshToken {
     my $resolve = sub {
         my ($token) = @_;
         my $queue = delete $_refreshInflight{$accountId} || [];
-        $_->($token) for @{$queue};
+        # WR-06: eval-guard each callback — one dying consumer must not starve
+        # remaining waiters or leak Client.pm's inflight counter.
+        for my $qcb (@{$queue}) {
+            eval { $qcb->($token); 1 }
+                or $log->error("TokenManager: refresh callback died: $@");
+        }
     };
 
     require Plugins::SpotOn::API::PKCE;
