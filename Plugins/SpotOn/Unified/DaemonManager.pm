@@ -54,6 +54,15 @@ my %lastHealthRestart;
 # across plugin re-inits.
 my ($clientSubRef, $syncSubRef);
 
+# _maskAccountId($accountId)
+# T-50-01/T-29-07 discipline: masked accountId for log lines -- never log
+# full account IDs. Identical convention to TokenManager::_mask/Credentials::_mask.
+sub _maskAccountId {
+    my ($accountId) = @_;
+    return 'unknown' unless defined $accountId && length $accountId;
+    return substr($accountId, 0, 4) . '****';
+}
+
 # _isConnectEnabled($client)
 # Returns true if the per-player (or global fallback) Spotify Connect toggle is on.
 # Used by Unified::Daemon::start() to determine whether to pass --enable-connect to the
@@ -392,13 +401,73 @@ sub startHelper {
     # Mirrors Daemon.pm start() cache dir construction (CON-01 account-level scope).
     # Without this, librespot starts, finds no credentials, and exits immediately —
     # triggering crash-loop detection => 30min disable => retry, filling logs with noise.
+    #
+    # Pitfall 4 (Phase 51): the D-08 mismatch repair and D-01 lazy safety-net
+    # below operate EXCLUSIVELY on the account-scoped path. When
+    # $activeAccountId is empty (legacy flat-dir / pre-PKCE setup), neither
+    # new branch applies — that cleanup is deferred to Phase 53 (D-10).
     my $activeAccountId = $prefs->get('activeAccount') || '';
     my $cacheDir = $activeAccountId
         ? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
         : catdir($serverPrefs->get('cachedir'), 'spoton');
     my $credFile = catfile($cacheDir, 'credentials.json');
 
+    if ($activeAccountId && -f $credFile) {
+        # D-08: PKCE account is authoritative. A credentials.json belonging to
+        # a different Spotify user is deleted and re-derived without user
+        # confirmation. Delete ONLY the single file — pkce_tokens.json in the
+        # same account directory must survive (Anti-Pattern: no remove_tree).
+        require Plugins::SpotOn::API::Credentials;
+        if (Plugins::SpotOn::API::Credentials->accountMismatch($activeAccountId)) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Credentials for account " . _maskAccountId($activeAccountId)
+                . " belong to a different Spotify user — deleting and re-deriving "
+                . "from the active PKCE account (D-08)"
+            );
+            unlink $credFile;
+        }
+    }
+
     if (! -f $credFile) {
+        # D-01: lazy safety-net. When credentials.json is missing but PKCE
+        # tokens exist for the active account, self-heal by deriving fresh
+        # credentials and retrying startHelper on success. Token freshness is
+        # guaranteed inside deriveCredentials via TokenManager->getToken
+        # (Pitfall 5) — never read/pass tokens here.
+        if ($activeAccountId) {
+            require Plugins::SpotOn::API::PKCE;
+            if (Plugins::SpotOn::API::PKCE::loadTokens($activeAccountId)) {
+                require Plugins::SpotOn::API::Credentials;
+                main::INFOLOG && $log->is_info && $log->info(
+                    "No cached credentials for $clientId (account "
+                    . _maskAccountId($activeAccountId)
+                    . ") — deriving from PKCE tokens (D-01 lazy safety-net)"
+                );
+                Plugins::SpotOn::API::Credentials->deriveCredentials($activeAccountId, sub {
+                    my ($ok, $reason) = @_;
+                    if ($ok) {
+                        main::INFOLOG && $log->is_info && $log->info(
+                            "Lazy credential derivation succeeded for account "
+                            . _maskAccountId($activeAccountId) . " — retrying daemon start for $clientId"
+                        );
+                        $class->startHelper($clientId);
+                    } else {
+                        # No needsReauth flagging here — the lazy path fires at
+                        # LMS startup where transient failures are likely.
+                        # Retries are watchdog-driven (60s initHelpers cycle)
+                        # and rate-limited by D-05's cooldown inside
+                        # Credentials.pm. Permanent token failures ('no_token')
+                        # are already flagged by TokenManager internally.
+                        $log->warn(
+                            "Lazy credential derivation failed for account "
+                            . _maskAccountId($activeAccountId) . " ($reason) — daemon start for $clientId deferred"
+                        );
+                    }
+                });
+                return;
+            }
+        }
+
         main::INFOLOG && $log->is_info && $log->info(
             "Skipping Unified daemon for $clientId - no cached credentials (expected: $credFile)"
         );
