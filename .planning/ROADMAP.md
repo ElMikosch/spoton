@@ -177,17 +177,19 @@
 
 ### Phase 52: sp_dc + Pathfinder Integration
 
-- [ ] **Phase 52: sp_dc + Pathfinder Integration**
+- [ ] **Phase 52: sp_dc + Pathfinder Integration** (gap closure)
   **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
-  **Plans:** 4 plans (3 waves)
+  **Plans:** 6 plans (4 complete, 2 gap closure)
   Depends on: Phase 50
 
   Plans:
 
-  - [ ] 52-01-PLAN.md — WebPlayer.pm token lifecycle (SecretSource, TOTP, mint, client-token, state enum) + Wave 0 tests (D-01/D-02/D-05/D-06/D-09/D-10)
-  - [ ] 52-02-PLAN.md — Client.pm Pathfinder discovery + Web-Player 37i9 track fetch + separate rate pool (D-07)
-  - [ ] 52-03-PLAN.md — Settings sp_dc section + Status channel + i18n strings + template (D-04/D-08/D-09)
-  - [ ] 52-04-PLAN.md — Plugin.pm OPML Made for You feed gating + Pathfinder wiring (D-03/D-04/D-05/D-07)
+  - [x] 52-01-PLAN.md — WebPlayer.pm token lifecycle (SecretSource, TOTP, mint, client-token, state enum) + Wave 0 tests (D-01/D-02/D-05/D-06/D-09/D-10)
+  - [x] 52-02-PLAN.md — Client.pm Pathfinder discovery + Web-Player 37i9 track fetch + separate rate pool (D-07)
+  - [x] 52-03-PLAN.md — Settings sp_dc section + Status channel + i18n strings + template (D-04/D-08/D-09)
+  - [x] 52-04-PLAN.md — Plugin.pm OPML Made for You feed gating + Pathfinder wiring (D-03/D-04/D-05/D-07)
+  - [ ] 52-05-PLAN.md — Gap closure: Fix STATE_EXPIRED over-attribution in WebPlayer mint errors (CR-02) + regression tests (WR-04)
+  - [ ] 52-06-PLAN.md — Gap closure: Pathfinder hash admin path via Settings (CR-01) + sp_dc clear (WR-03) + dead cache write removal (WR-02)
 
 ### Phase 53: Keymaster Removal + Migration
 
