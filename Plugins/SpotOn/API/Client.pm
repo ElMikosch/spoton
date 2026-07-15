@@ -43,12 +43,13 @@ use constant PATHFINDER_URL        => 'https://api-partner.spotify.com/pathfinde
 # Assumption A4 (LOW confidence): no reliable public feed for this hash was
 # found during this phase's research (rotates with every web-player release).
 # Must be captured from a live web-player session (DevTools Network tab ->
-# pathfinder/v2/query request -> extensions.persistedQuery.sha256Hash) during
-# the phase-level manual UAT pass and seeded into the spoton_wp_gql_hash
-# cache override (or this constant updated directly). Until replaced, a real
-# pathfinderHome() call will most likely receive a PersistedQueryNotFound
-# errors[] response and degrade to an empty result -- the designed fail-safe
-# (Pitfall 4), not a bug.
+# pathfinder/v2/query request -> extensions.persistedQuery.sha256Hash) and
+# pasted into the "Pathfinder Query Hash (Advanced)" field under Settings ->
+# Made For You (Plan 52-06 / CR-01 fix), which stores it in the
+# pathfinderHash pref -- read prefs-first by pathfinderHome() below. Until an
+# admin configures a real hash, a pathfinderHome() call will most likely
+# receive a PersistedQueryNotFound errors[] response and degrade to an empty
+# result -- the designed fail-safe (Pitfall 4), not a bug.
 use constant PATHFINDER_HOME_HASH_DEFAULT => 'REPLACE_WITH_LIVE_CAPTURED_HOME_PERSISTED_QUERY_HASH';
 
 my $log   = logger('plugin.spoton');
@@ -513,8 +514,11 @@ sub pathfinderHome {
         }
 
         # GraphQL persisted-query hash is refreshable config (Pitfall 4):
-        # prefer a cached override over the shipped placeholder default.
-        my $hash = $cache->get(WP_GQL_HASH_CACHE_KEY) || PATHFINDER_HOME_HASH_DEFAULT;
+        # read from prefs first (persistent, survives cache clears and
+        # restarts; admin-configurable via Settings -- Plan 52-06 / CR-01
+        # fix), falling back to the shipped placeholder default.
+        my $prefHash = $prefs->get('pathfinderHash');
+        my $hash = (defined $prefHash && length $prefHash) ? $prefHash : PATHFINDER_HOME_HASH_DEFAULT;
 
         my $body = eval { to_json({
             operationName => 'home',
@@ -555,12 +559,6 @@ sub pathfinderHome {
                     main::INFOLOG && $log->info('Client: pathfinderHome degraded -- '
                         . 'errors[] in response (persisted-query hash rotation? Pitfall 4)');
                 }
-
-                # Per-user stable IDs (RESEARCH Specifics) -- only cache a
-                # non-empty discovery so a transient degrade doesn't clobber
-                # a previously known-good list.
-                $cache->set("spoton_wp_mfy_ids_${accountId}", $ids, 3600)
-                    if $accountId && @$ids;
 
                 $cb->($ids, undef);
             },

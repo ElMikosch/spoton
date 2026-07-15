@@ -164,6 +164,17 @@
 		</details>
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_SPOTON_PATHFINDER_HASH" desc="PLUGIN_SPOTON_PATHFINDER_HASH_DESC" %]
+		<input type="text" class="stdedit" name="pref_pathfinderHash" id="pref_pathfinderHash"
+		       value="[% pathfinderHash | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_PATHFINDER_HASH' | string | html %]"/>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">How to capture the Pathfinder hash</summary>
+			<p style="margin:8px 0 0 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO' | string | html %]</p>
+		</details>
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
 		[% IF accounts.keys.size > 0 %]
 			<table style="width:100%">

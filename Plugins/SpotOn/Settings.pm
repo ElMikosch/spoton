@@ -150,6 +150,27 @@ sub handler {
                     Plugins::SpotOn::API::WebPlayer->storeSpDc($activeAccountId, $spdc) if length $spdc;
                 }
             }
+            elsif ($activeAccountId && !length($raw)) {
+                # WR-03: empty submission clears a previously stored sp_dc.
+                # Only act if there IS a stored cookie to clear (avoid no-op
+                # storeSpDc calls on accounts that never had sp_dc).
+                if (Plugins::SpotOn::API::WebPlayer->hasSpDc($activeAccountId)) {
+                    Plugins::SpotOn::API::WebPlayer->storeSpDc($activeAccountId, '');
+                }
+            }
+        }
+
+        # Save Pathfinder GraphQL persisted-query hash (D-07, CR-01 gap
+        # closure -- Plan 52-06). Hex-only charset validation + length cap
+        # (128 chars, T-52-GC-02): the hash is not a secret, just a query
+        # identifier, but validation still guards against storing unexpected
+        # bytes in the pref. An empty submission clears the pref.
+        if (defined $paramRef->{pref_pathfinderHash}) {
+            my $hash = $paramRef->{pref_pathfinderHash} // '';
+            $hash =~ s/^\s+|\s+$//g;        # trim whitespace
+            $hash =~ s/[^0-9a-fA-F]//g;     # hex-only charset guard
+            $hash = substr($hash, 0, 128);  # length cap
+            $prefs->set('pathfinderHash', $hash);
         }
 
         # Account remove (CR-03, WR-03).
@@ -248,6 +269,11 @@ sub handler {
     # degradation state (Settings channel of the 3-channel D-04 display).
     $paramRef->{spDcMasked}      = Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($paramRef->{activeAccount});
     $paramRef->{madeForYouState} = Plugins::SpotOn::API::WebPlayer->state($paramRef->{activeAccount});
+
+    # D-07/CR-01: Pathfinder GraphQL persisted-query hash for template --
+    # exposes the currently stored value (or empty string) so the Settings
+    # field can be pre-filled (Plan 52-06).
+    $paramRef->{pathfinderHash} = $prefs->get('pathfinderHash') || '';
 
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
