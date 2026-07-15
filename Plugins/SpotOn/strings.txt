@@ -2416,6 +2416,19 @@ PLUGIN_SPOTON_SP_DC_DESC
 	PL	Wklej tutaj swoje ciasteczko sp_dc Spotify, aby odblokować spersonalizowaną zawartość Stworzone dla Ciebie (Daily Mix, Discover Weekly, Release Radar, Daylist). Przechowywane bezpiecznie i nigdy nie wyświetlane w całości.
 	SV	Klistra in din Spotify sp_dc-cookie här för att låsa upp personligt innehåll under Gjort för dig (Daily Mix, Discover Weekly, Release Radar, Daylist). Lagras säkert och visas aldrig i sin helhet.
 
+PLUGIN_SPOTON_SP_DC_HOWTO_TITLE
+	CS	Jak najít cookie sp_dc
+	DA	Sådan finder du din sp_dc-cookie
+	DE	So findest du deinen sp_dc-Cookie
+	EN	How to find your sp_dc cookie
+	ES	Cómo encontrar tu cookie sp_dc
+	FR	Comment trouver votre cookie sp_dc
+	IT	Come trovare il tuo cookie sp_dc
+	NL	Zo vindt u uw sp_dc-cookie
+	NO	Slik finner du sp_dc-informasjonskapselen din
+	PL	Jak znaleźć ciasteczko sp_dc
+	SV	Så hittar du din sp_dc-cookie
+
 PLUGIN_SPOTON_SP_DC_HOWTO
 	CS	Jak najít cookie sp_dc: 1) Otevřete open.spotify.com v prohlížeči a přihlaste se. 2) Otevřete nástroje pro vývojáře (F12) a přejděte na Application → Cookies → https://open.spotify.com. 3) Najděte cookie s názvem „sp_dc“ a zkopírujte jeho hodnotu. 4) Vložte ji do pole výše.
 	DA	Sådan finder du din sp_dc-cookie: 1) Åbn open.spotify.com i din browser, og log ind. 2) Åbn udviklerværktøjer (F12), og gå til Application → Cookies → https://open.spotify.com. 3) Find cookien med navnet "sp_dc", og kopiér dens værdi. 4) Indsæt den i feltet ovenfor.
@@ -2519,6 +2532,19 @@ PLUGIN_SPOTON_PATHFINDER_HASH_DESC
 	NO	Valgfritt. Lim inn sha256Hash fra en direkte Pathfinder-forespørsel for å aktivere Laget for deg-oppdagelse. Denne hashen endres med utgivelser av Spotify-webspilleren og kan trenge periodisk oppdatering.
 	PL	Opcjonalne. Wklej sha256Hash z aktywnego żądania Pathfinder, aby włączyć odkrywanie Stworzone dla Ciebie. Ten hash zmienia się wraz z wydaniami odtwarzacza internetowego Spotify i może wymagać okresowej aktualizacji.
 	SV	Valfritt. Klistra in sha256Hash från en aktiv Pathfinder-förfrågan för att aktivera upptäckt av Gjort för dig. Denna hash roterar med Spotify webbspelarens utgåvor och kan behöva uppdateras med jämna mellanrum.
+
+PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO_TITLE
+	CS	Jak získat Pathfinder hash
+	DA	Sådan finder du Pathfinder-hashen
+	DE	So findest du den Pathfinder-Hash
+	EN	How to capture the Pathfinder hash
+	ES	Cómo capturar el hash de Pathfinder
+	FR	Comment récupérer le hash Pathfinder
+	IT	Come catturare l'hash Pathfinder
+	NL	Zo achterhaalt u de Pathfinder-hash
+	NO	Slik henter du Pathfinder-hashen
+	PL	Jak przechwycić hash Pathfinder
+	SV	Så hämtar du Pathfinder-hashen
 
 PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO
 	CS	Jak získat hash: 1) Otevřete open.spotify.com v prohlížeči a přihlaste se. 2) Otevřete nástroje pro vývojáře (F12) a přejděte na kartu Síť (Network). 3) Filtrujte podle „pathfinder“. 4) Klikněte na požadavek pathfinder/v2/query. 5) V datech požadavku (Request Payload) najděte extensions.persistedQuery.sha256Hash. 6) Zkopírujte hexadecimální řetězec a vložte jej sem.
