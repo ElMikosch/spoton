@@ -641,7 +641,10 @@ ok( !defined(&Plugins::SpotOn::ProtocolHandler::trackInfoURL),
     # _playlistItem, in pathfinderHome's returned order (stable sort, no
     # name metadata to discriminate -- RESEARCH A1).
     Plugins::SpotOn::API::Client::reset_calls();
-    $Plugins::SpotOn::API::Client::next_pathfinder_ids = ['37i9dQZF1abc', '37i9dQZF1def'];
+    $Plugins::SpotOn::API::Client::next_pathfinder_ids = [
+        { id => '37i9dQZF1abc', name => 'Test Playlist A', images => [] },
+        { id => '37i9dQZF1def', name => 'Test Playlist B', images => [] },
+    ];
     $Plugins::SpotOn::API::Client::next_pathfinder_err = undef;
 
     my $result;

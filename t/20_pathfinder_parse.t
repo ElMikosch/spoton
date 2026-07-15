@@ -272,8 +272,38 @@ SKIP: {
 
         my ($ids, $degraded) = Plugins::SpotOn::API::Client->_extractPathfinderIds($fixture);
         is($degraded, 0, 'valid fixture: not flagged as degraded');
-        is_deeply($ids, ['37i9dQZF1E39vTG1lmycOQ', '37i9dQZF1E37fO0f01qkyz'],
-            'valid fixture: extracts ordered 37i9 playlist IDs, filters non-37i9/non-playlist/malformed entries');
+        is(scalar(@$ids), 2, 'valid fixture: extracts 2 playlists from fixture');
+        is($ids->[0]{id}, '37i9dQZF1E39vTG1lmycOQ', 'valid fixture: first playlist ID correct');
+        is($ids->[1]{id}, '37i9dQZF1E37fO0f01qkyz', 'valid fixture: second playlist ID correct');
+        ok(exists $ids->[0]{name} && exists $ids->[0]{images}, 'valid fixture: hashref has name and images keys');
+    }
+
+    # PlaylistResponseWrapper: name and images extracted from content.data
+    {
+        my $fixture = { data => { home => { sectionContainer => { sections => { items => [
+            { sectionItems => { items => [
+                {
+                    uri => 'spotify:playlist:37i9dQZF1DXcBWIGoYBM5M',
+                    content => { data => {
+                        name => 'Daily Mix 1',
+                        images => { items => [
+                            { sources => [
+                                { url => 'https://mosaic.scdn.co/daily1.jpg', width => 300, height => 300 },
+                            ] }
+                        ] }
+                    } }
+                },
+                { uri => 'spotify:playlist:37i9dQZF1EQnqst5TRe9Y9' },
+            ] } },
+        ] } } } } };
+
+        my ($pls, $degraded) = Plugins::SpotOn::API::Client->_extractPathfinderIds($fixture);
+        is(scalar(@$pls), 2, 'metadata fixture: extracts 2 playlists');
+        is($pls->[0]{name}, 'Daily Mix 1', 'metadata fixture: name extracted from content.data');
+        is(scalar(@{$pls->[0]{images}}), 1, 'metadata fixture: images extracted from content.data');
+        is($pls->[0]{images}[0]{url}, 'https://mosaic.scdn.co/daily1.jpg', 'metadata fixture: image URL correct');
+        is($pls->[1]{name}, $pls->[1]{id}, 'metadata fixture: no content.data falls back to ID as name');
+        is_deeply($pls->[1]{images}, [], 'metadata fixture: no content.data returns empty images');
     }
 
     # Missing data.home -> empty list, does not die.
@@ -328,7 +358,7 @@ SKIP: {
 
         my ($ids, $degraded) = Plugins::SpotOn::API::Client->_extractPathfinderIds($fixture);
         is(scalar(@$ids), 1, 'over-length 37i9 ID rejected by the length guard, valid one kept');
-        like($ids->[0], qr/^[A-Za-z0-9]{1,40}$/, 'extracted ID matches the strict validation regex');
+        like($ids->[0]{id}, qr/^[A-Za-z0-9]{1,40}$/, 'extracted ID matches the strict validation regex');
     }
 }
 

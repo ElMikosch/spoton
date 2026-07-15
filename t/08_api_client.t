@@ -817,17 +817,17 @@ SKIP: {
         'WP-01: no HTTP request dispatched for an invalid playlist ID');
 }
 
-# WP-02: getWebPlayerPlaylistItems targets /playlists/{id}/items using the
-# Web-Player bearer token (D-07, Pitfall 3) -- never the PKCE token.
+# WP-02: getWebPlayerPlaylistItems uses Pathfinder GraphQL (fetchPlaylistContents)
+# with the Web-Player bearer token (D-07, Pitfall 3) -- never the PKCE token.
 SKIP: {
-    skip "Client.pm not yet created", 3 unless -f $client_module;
-    skip "getWebPlayerPlaylistItems not yet implemented", 3
+    skip "Client.pm not yet created", 4 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 4
         unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
 
     Slim::Networking::SimpleAsyncHTTP::reset_requests();
     Slim::Utils::Cache->new()->clear();
     $Slim::Networking::SimpleAsyncHTTP::auto_mode          = 'success';
-    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '{"items":[]}';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '{"data":{"playlistV2":{"content":{"totalCount":0,"items":[]}}}}';
     $Plugins::SpotOn::API::WebPlayer::mock_fail_reason     = undef;
 
     my ($got_result, $got_err);
@@ -837,8 +837,9 @@ SKIP: {
 
     my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
     is(scalar(@reqs), 1, 'WP-02: getWebPlayerPlaylistItems dispatches exactly one HTTP request');
-    like($reqs[0]->{url}, qr{/playlists/37i9dQZF1E39vTG1lmycOQ/items},
-        'WP-02: URL targets /playlists/{id}/items');
+    like($reqs[0]->{url}, qr{api-partner\.spotify\.com/pathfinder/v2/query},
+        'WP-02: URL targets Pathfinder GraphQL endpoint');
+    is($reqs[0]->{method}, 'POST', 'WP-02: request method is POST (GraphQL)');
     like($reqs[0]->{headers}{'Authorization'}, qr/^Bearer mock_wp_access_token$/,
         'WP-02: Authorization header uses the Web-Player access token, not a PKCE token');
 
