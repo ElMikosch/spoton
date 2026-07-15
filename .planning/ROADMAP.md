@@ -177,9 +177,9 @@
 
 ### Phase 52: sp_dc + Pathfinder Integration
 
-- [ ] **Phase 52: sp_dc + Pathfinder Integration** (gap closure)
+- [x] **Phase 52: sp_dc + Pathfinder Integration** (gap closure) (completed 2026-07-15)
   **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
-  **Plans:** 6 plans (4 complete, 2 gap closure)
+  **Plans:** 6/6 plans complete
   Depends on: Phase 50
 
   Plans:
@@ -188,14 +188,20 @@
   - [x] 52-02-PLAN.md — Client.pm Pathfinder discovery + Web-Player 37i9 track fetch + separate rate pool (D-07)
   - [x] 52-03-PLAN.md — Settings sp_dc section + Status channel + i18n strings + template (D-04/D-08/D-09)
   - [x] 52-04-PLAN.md — Plugin.pm OPML Made for You feed gating + Pathfinder wiring (D-03/D-04/D-05/D-07)
-  - [ ] 52-05-PLAN.md — Gap closure: Fix STATE_EXPIRED over-attribution in WebPlayer mint errors (CR-02) + regression tests (WR-04)
-  - [ ] 52-06-PLAN.md — Gap closure: Pathfinder hash admin path via Settings (CR-01) + sp_dc clear (WR-03) + dead cache write removal (WR-02)
+  - [x] 52-05-PLAN.md — Gap closure: Fix STATE_EXPIRED over-attribution in WebPlayer mint errors (CR-02) + regression tests (WR-04)
+  - [x] 52-06-PLAN.md — Gap closure: Pathfinder hash admin path via Settings (CR-01) + sp_dc clear (WR-03) + dead cache write removal (WR-02)
 
 ### Phase 53: Keymaster Removal + Migration
 
 - [ ] **Phase 53: Keymaster Removal + Migration**
   **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
   Depends on: Phase 49, Phase 50, Phase 51
+
+### Phase 54: Auth Health Dashboard
+
+- [ ] **Phase 54: Auth Health Dashboard**
+  **Goal**: Status page shows auth health at a glance — TOTP secret freshness, sp_dc cookie validity, Pathfinder hash state, and whether the account is affected by the Keymaster 403 issue. Cached probe results, no extra requests on page load.
+  Depends on: Phase 52, Phase 53
 
 ## Progress Table
 
