@@ -51,6 +51,7 @@ use constant PATHFINDER_URL        => 'https://api-partner.spotify.com/pathfinde
 # receive a PersistedQueryNotFound errors[] response and degrade to an empty
 # result -- the designed fail-safe (Pitfall 4), not a bug.
 use constant PATHFINDER_HOME_HASH_DEFAULT => 'REPLACE_WITH_LIVE_CAPTURED_HOME_PERSISTED_QUERY_HASH';
+use constant PATHFINDER_PLAYLIST_HASH    => 'a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4';
 
 my $log   = logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
@@ -545,7 +546,6 @@ sub pathfinderHome {
 
         my $http = Slim::Networking::SimpleAsyncHTTP->new(
             sub {
-                # Success callback -- parse JSON, defensively extract 37i9 IDs
                 my $http    = shift;
                 my $content = $http->content // '';
                 my $result  = eval { from_json($content) };
@@ -555,13 +555,13 @@ sub pathfinderHome {
                     return;
                 }
 
-                my ($ids, $degraded) = $class->_extractPathfinderIds($result);
+                my ($playlists, $degraded) = $class->_extractPathfinderIds($result);
                 if ($degraded) {
                     main::INFOLOG && $log->info('Client: pathfinderHome degraded -- '
                         . 'errors[] in response (persisted-query hash rotation? Pitfall 4)');
                 }
 
-                $cb->($ids, undef);
+                $cb->($playlists, undef);
             },
             sub {
                 # Error callback -- 429 (isolated WP pool), 401, generic
@@ -626,39 +626,35 @@ sub pathfinderHome {
 }
 
 # _extractPathfinderIds($class, $result)
-# Defensive multi-level parse of a Pathfinder "home" GraphQL response body
-# (A1, RESEARCH MEDIUM confidence -- the exact path was not verified against
-# a live response in this phase; verify/refine with a captured fixture
-# during UAT). Walks data.home.sectionContainer.sections.items[] ->
+# Defensive multi-level parse of a Pathfinder "home" GraphQL response body.
+# Walks data.home.sectionContainer.sections.items[] ->
 # sectionItems.items[] -> playlist URIs, keeps only spotify:playlist:37i9...,
-# strips to the bare ID, and validates each ID against the same
-# ^[A-Za-z0-9]{1,40}$ guard used throughout Client.pm (T-52-05, Security V5).
-# Returns ($idsArrayRef, $degraded) in list context -- $degraded is true
-# only when the response carries a top-level non-empty errors[] array
-# (PersistedQueryNotFound-style failure, Pitfall 4). NEVER dies -- any shape
-# mismatch at any level degrades to an empty list.
+# and extracts name + images from content.data (PlaylistResponseWrapper).
+# Returns ($playlistsArrayRef, $degraded) -- each entry is a hashref
+# {id, name, images} ready for _playlistItem. $degraded is true when the
+# response carries a top-level errors[] array (Pitfall 4).
 sub _extractPathfinderIds {
     my ($class, $result) = @_;
-    my @ids;
+    my @playlists;
 
-    return (\@ids, 0) unless $result && ref($result) eq 'HASH';
+    return (\@playlists, 0) unless $result && ref($result) eq 'HASH';
 
     if (ref($result->{errors}) eq 'ARRAY' && @{$result->{errors}}) {
-        return (\@ids, 1);
+        return (\@playlists, 1);
     }
 
     my $home = ($result->{data} && ref($result->{data}) eq 'HASH')
         ? $result->{data}->{home} : undef;
-    return (\@ids, 0) unless $home && ref($home) eq 'HASH';
+    return (\@playlists, 0) unless $home && ref($home) eq 'HASH';
 
     my $sectionContainer = $home->{sectionContainer};
-    return (\@ids, 0) unless $sectionContainer && ref($sectionContainer) eq 'HASH';
+    return (\@playlists, 0) unless $sectionContainer && ref($sectionContainer) eq 'HASH';
 
     my $sections = $sectionContainer->{sections};
-    return (\@ids, 0) unless $sections && ref($sections) eq 'HASH';
+    return (\@playlists, 0) unless $sections && ref($sections) eq 'HASH';
 
     my $sectionList = $sections->{items};
-    return (\@ids, 0) unless ref($sectionList) eq 'ARRAY';
+    return (\@playlists, 0) unless ref($sectionList) eq 'ARRAY';
 
     for my $section (@$sectionList) {
         next unless $section && ref($section) eq 'HASH';
@@ -673,14 +669,23 @@ sub _extractPathfinderIds {
             next unless defined $uri && !ref($uri);
             next unless $uri =~ /^spotify:playlist:(37i9[A-Za-z0-9]*)$/;
             my $id = $1;
-            # T-52-05/Security V5: strict validation before the ID is ever
-            # used to build a URL (copied guard from getPlaylistItems above).
             next unless $id =~ /^[A-Za-z0-9]{1,40}$/;
-            push @ids, $id;
+
+            my $name   = $id;
+            my $images = [];
+            my $contentData = ($item->{content} && ref($item->{content}) eq 'HASH')
+                ? $item->{content}{data} : undef;
+            if ($contentData && ref($contentData) eq 'HASH') {
+                $name = $contentData->{name} if defined $contentData->{name}
+                    && !ref($contentData->{name}) && length($contentData->{name});
+                $images = _pathfinderImagesToRest($contentData->{images});
+            }
+
+            push @playlists, { id => $id, name => $name, images => $images };
         }
     }
 
-    return (\@ids, 0);
+    return (\@playlists, 0);
 }
 
 # _pathfinderItemUri($item)
@@ -699,19 +704,117 @@ sub _pathfinderItemUri {
     return undef;
 }
 
+sub _pathfinderCoverArtToImages {
+    my ($coverArt) = @_;
+    return [] unless $coverArt && ref($coverArt) eq 'HASH';
+    my $sources = $coverArt->{sources};
+    return [] unless ref($sources) eq 'ARRAY';
+    my @images;
+    for my $s (@$sources) {
+        next unless $s && ref($s) eq 'HASH' && $s->{url};
+        push @images, { url => $s->{url}, width => $s->{width}, height => $s->{height} };
+    }
+    return \@images;
+}
+
+sub _pathfinderImagesToRest {
+    my ($images) = @_;
+    return [] unless $images && ref($images) eq 'HASH';
+    my $imageItems = $images->{items};
+    return [] unless ref($imageItems) eq 'ARRAY';
+    my @result;
+    for my $item (@$imageItems) {
+        next unless $item && ref($item) eq 'HASH';
+        my $sources = $item->{sources};
+        next unless ref($sources) eq 'ARRAY';
+        for my $s (@$sources) {
+            next unless $s && ref($s) eq 'HASH' && $s->{url};
+            push @result, { url => $s->{url}, width => $s->{width}, height => $s->{height} };
+        }
+    }
+    return \@result;
+}
+
+sub _transformPlaylistContents {
+    my ($class, $result) = @_;
+
+    my $playlist = ($result->{data} && ref($result->{data}) eq 'HASH')
+        ? $result->{data}{playlistV2} : undef;
+    return undef unless $playlist && ref($playlist) eq 'HASH';
+
+    my $content = $playlist->{content};
+    return undef unless $content && ref($content) eq 'HASH';
+
+    my $totalCount = $content->{totalCount} // 0;
+    my $rawItems   = $content->{items};
+    return { items => [], total => $totalCount } unless ref($rawItems) eq 'ARRAY';
+
+    my @items;
+    for my $entry (@$rawItems) {
+        next unless $entry && ref($entry) eq 'HASH';
+        my $itemV2 = $entry->{itemV2};
+        next unless $itemV2 && ref($itemV2) eq 'HASH';
+        my $trackData = $itemV2->{data};
+        next unless $trackData && ref($trackData) eq 'HASH';
+
+        my $uri = $trackData->{uri} // '';
+        next unless $uri =~ /^spotify:track:([A-Za-z0-9]+)$/;
+        my $trackId = $1;
+
+        my @artists;
+        if ($trackData->{artists} && ref($trackData->{artists}) eq 'HASH') {
+            my $artistItems = $trackData->{artists}{items};
+            if (ref($artistItems) eq 'ARRAY') {
+                for my $a (@$artistItems) {
+                    next unless $a && ref($a) eq 'HASH';
+                    my $aUri = $a->{uri} // '';
+                    my $aId  = ($aUri =~ /^spotify:artist:([A-Za-z0-9]+)$/) ? $1 : '';
+                    my $name = ($a->{profile} && ref($a->{profile}) eq 'HASH')
+                        ? ($a->{profile}{name} // '') : '';
+                    push @artists, { name => $name, id => $aId, uri => $aUri };
+                }
+            }
+        }
+
+        my %album;
+        my $albumData = $trackData->{albumOfTrack};
+        if ($albumData && ref($albumData) eq 'HASH') {
+            my $albumUri = $albumData->{uri} // '';
+            my $albumId  = ($albumUri =~ /^spotify:album:([A-Za-z0-9]+)$/) ? $1 : '';
+            %album = (
+                name   => $albumData->{name} // '',
+                id     => $albumId,
+                uri    => $albumUri,
+                images => _pathfinderCoverArtToImages($albumData->{coverArt}),
+            );
+        }
+
+        my $durationMs = 0;
+        if ($trackData->{trackDuration} && ref($trackData->{trackDuration}) eq 'HASH') {
+            $durationMs = $trackData->{trackDuration}{totalMilliseconds} // 0;
+        }
+
+        push @items, {
+            track => {
+                id          => $trackId,
+                name        => $trackData->{name} // '',
+                uri         => $uri,
+                artists     => \@artists,
+                album       => \%album,
+                duration_ms => $durationMs + 0,
+            },
+        };
+    }
+
+    return { items => \@items, total => $totalCount };
+}
+
 # getWebPlayerPlaylistItems($class, $accountId, $playlistId, $params, $cb)
-# Fetches paginated items for a Spotify-owned (37i9...) playlist
-# (/playlists/{playlistId}/items) using the Web-Player bearer token instead
-# of the PKCE token (D-07, Pitfall 3) -- Dev Mode returns 404 for ALL
-# 37i9... playlists on the normal PKCE-token pipeline, even with a known
-# valid ID. Mirrors getPlaylistItems above but:
-#   - validates $playlistId up front (same ^[A-Za-z0-9]{1,40}$ guard, T-52-05)
-#   - sources the bearer token from WebPlayer->getToken, NOT
-#     TokenManager->getToken (D-07)
-#   - uses the isolated WP_RATE_LIMIT_KEY pool so a Web-Player 429 never
-#     sets the Browse spoton_rate_limit flag (Pitfall 5, T-52-04)
-# Same pagination $params (offset/limit) shape as getPlaylistItems so the
-# existing _fetchAllPages play-all helper can drive it unchanged.
+# Fetches paginated items for a Spotify-owned (37i9...) playlist via
+# Pathfinder GraphQL (fetchPlaylistContents) using the Web-Player bearer
+# token (D-07, Pitfall 3). Transforms the GraphQL response to the same
+# REST-compatible {items => [{track => ...}], total => N} shape so
+# _playlistFeed/_fetchAllPages work unchanged.
 sub getWebPlayerPlaylistItems {
     my ($class, $accountId, $playlistId, $params, $cb) = @_;
     $params ||= {};
@@ -736,22 +839,46 @@ sub getWebPlayerPlaylistItems {
 
         my $offset = $params->{offset} // 0;
         my $limit  = $params->{limit}  // 100;
-        my $url    = API_BASE . "/playlists/$playlistId/items?offset=$offset&limit=$limit";
+
+        my $body = eval { to_json({
+            operationName => 'fetchPlaylistContents',
+            variables     => {
+                uri    => "spotify:playlist:$playlistId",
+                offset => $offset + 0,
+                limit  => $limit + 0,
+            },
+            extensions => {
+                persistedQuery => {
+                    version    => 1,
+                    sha256Hash => PATHFINDER_PLAYLIST_HASH,
+                },
+            },
+        }) };
+        unless (defined $body) {
+            $log->error("Client: getWebPlayerPlaylistItems request body build failed: $@");
+            $cb->(undef, { error => 'internal_error' });
+            return;
+        }
 
         my $http = Slim::Networking::SimpleAsyncHTTP->new(
             sub {
                 my $http    = shift;
                 my $content = $http->content // '';
-                my $result;
-                if ($content =~ /\S/) {
-                    $result = eval { from_json($content) };
-                    if ($@) {
-                        $log->error("Client: getWebPlayerPlaylistItems JSON parse error: $@");
-                        $cb->(undef, { error => 'parse_error' });
-                        return;
-                    }
+                my $result  = eval { from_json($content) };
+                if ($@ || ref($result) ne 'HASH') {
+                    $log->error("Client: getWebPlayerPlaylistItems JSON parse error: $@");
+                    $cb->(undef, { error => 'parse_error' });
+                    return;
                 }
-                $cb->($result);
+
+                if (ref($result->{errors}) eq 'ARRAY' && @{$result->{errors}}) {
+                    $log->warn('Client: getWebPlayerPlaylistItems GraphQL errors in response');
+                    $cb->(undef, { error => 'graphql_error' });
+                    return;
+                }
+
+                my $transformed = $class->_transformPlaylistContents($result);
+                $cb->($transformed);
             },
             sub {
                 my ($http, $error, $response) = @_;
@@ -768,12 +895,10 @@ sub getWebPlayerPlaylistItems {
                     $retryAfter = 1   if $retryAfter < 1;
                     $retryAfter = 300 if $retryAfter > 300;
 
-                    # Isolated Web-Player rate-limit key -- MUST NOT be
-                    # 'spoton_rate_limit' (Pitfall 5, T-52-04).
                     $cache->set(WP_RATE_LIMIT_KEY, 1, $retryAfter);
                     $api429Count++;
                     if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                        Plugins::SpotOn::Status->recordError('warn', 'API', "429 on WP playlists/$playlistId/items");
+                        Plugins::SpotOn::Status->recordError('warn', 'API', '429 on pathfinder fetchPlaylistContents');
                     }
                     $log->warn("Client: getWebPlayerPlaylistItems 429 rate limited for ${retryAfter}s (Web-Player pool)");
                     $cb->(undef, { error => 'rate_limited', code => 429 });
@@ -789,22 +914,24 @@ sub getWebPlayerPlaylistItems {
 
                 $log->error("Client: getWebPlayerPlaylistItems HTTP $code error: $error");
                 if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for WP playlists/$playlistId/items");
+                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for pathfinder fetchPlaylistContents");
                 }
                 $cb->(undef, { error => $error, code => $code });
             },
             { timeout => REQUEST_TIMEOUT, cache => 0 }
         );
 
-        $http->get(
-            $url,
+        $http->post(
+            PATHFINDER_URL,
             'Authorization'        => "Bearer $tokenHash->{access_token}",
             'client-token'         => ($tokenHash->{client_token} // ''),
+            'Content-Type'         => 'application/json;charset=UTF-8',
             'Accept'               => 'application/json',
             'App-Platform'         => 'WebPlayer',
             'Origin'               => 'https://open.spotify.com',
             'Referer'              => 'https://open.spotify.com/',
             'spotify-app-version'  => Plugins::SpotOn::API::WebPlayer::CLIENT_VERSION(),
+            $body,
         );
     });
 }

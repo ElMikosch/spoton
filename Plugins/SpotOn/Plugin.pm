@@ -1274,33 +1274,18 @@ sub _fetchAllPersonalMixes {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# D-07: Discovers algorithmic ("Made for You") playlists -- Daily Mix,
-# Discover Weekly, Release Radar, Daylist, genre mixes -- via
-# Client->pathfinderHome (Pathfinder Home Feed GraphQL), superseding the dead
-# getPersonalMixes (browse/categories, removed Dev Mode Feb 2026). Left
-# dormant per the plan rather than deleted -- see _fetchAllPersonalMixes above.
-#
-# pathfinderHome returns bare 37i9... playlist IDs only (no name/image
-# metadata in the current defensive parse, RESEARCH A1 MEDIUM confidence) --
-# items are labelled by ID for now; a richer Pathfinder parse is future work.
-# Each item's drill-down is wired via _playlistItem's webPlayer flag so
-# selecting a Made For You playlist loads its tracks through
-# Client->getWebPlayerPlaylistItems (D-07, Pitfall 3 resolved) rather than
-# the PKCE-token _playlistFeed path, which 404s on ALL 37i9... playlists.
-#
-# On empty discovery or a hard token/hash failure, renders a single graceful
-# textarea item -- never lets the failure bubble into Browse (T-52-11). A
-# secrets-down failure gets its own distinct message (PLUGIN_SPOTON_MFY_SECRETS_DOWN);
-# every other empty/failure case falls back to the generic NO_RESULTS string
-# so no raw error/reason is ever reflected into the menu (Security V7/T-52-02).
+# Discovers algorithmic ("Made for You") playlists via pathfinderHome
+# (Pathfinder Home Feed GraphQL). pathfinderHome returns hashrefs with
+# {id, name, images} extracted from PlaylistResponseWrapper items, so
+# each OPML entry shows the real playlist name and artwork.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->pathfinderHome($accountId, {}, sub {
-        my ($ids, $err) = @_;
+        my ($playlists, $err) = @_;
 
-        unless ($ids && @$ids) {
+        unless ($playlists && @$playlists) {
             my $reason = ($err && ref $err eq 'HASH') ? ($err->{error} // '') : '';
             my $name = ($reason eq 'no_secrets')
                 ? cstring($client, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN')
@@ -1310,11 +1295,11 @@ sub _madeForYouFeed {
         }
 
         my @sorted = sort {
-            _madeForYouPriority($a) <=> _madeForYouPriority($b)
-        } @$ids;
+            _madeForYouPriority($a->{name}) <=> _madeForYouPriority($b->{name})
+        } @$playlists;
 
         my @items = map {
-            _playlistItem($client, { id => $_, name => $_ }, { webPlayer => 1 })
+            _playlistItem($client, $_, { webPlayer => 1 })
         } @sorted;
 
         $callback->({ items => \@items });
