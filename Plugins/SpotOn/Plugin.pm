@@ -134,6 +134,9 @@ sub initPlugin {
     # Reset API client inflight counter (Pitfall 2 prevention — stale counter on reload)
     Plugins::SpotOn::API::Client->reset();
 
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer->reset();
+
     # Start proactive token refresh timer — T-02-15: killTimers first to prevent duplicates
     if ( !main::SCANNER ) {
         Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
@@ -1287,9 +1290,9 @@ sub _madeForYouFeed {
 
         unless ($playlists && @$playlists) {
             my $reason = ($err && ref $err eq 'HASH') ? ($err->{error} // '') : '';
-            my $name = ($reason eq 'no_secrets')
-                ? cstring($client, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN')
-                : cstring($client, 'PLUGIN_SPOTON_NO_RESULTS');
+            my $name = $reason eq 'no_secrets' ? cstring($client, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN')
+                     : $reason eq 'expired'    ? cstring($client, 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT')
+                     :                           cstring($client, 'PLUGIN_SPOTON_NO_RESULTS');
             $callback->({ items => [{ name => $name, type => 'textarea' }] });
             return;
         }

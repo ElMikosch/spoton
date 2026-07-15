@@ -91,6 +91,7 @@ sub statusSnapshot {
         apiRequestCount => $apiRequestCount,
         api429Count     => $api429Count,
         rateLimited     => $cache->get('spoton_rate_limit') ? 1 : 0,
+        wpRateLimited   => $cache->get(WP_RATE_LIMIT_KEY) ? 1 : 0,
     };
 }
 
@@ -608,8 +609,7 @@ sub pathfinderHome {
             { timeout => REQUEST_TIMEOUT, cache => 0 }
         );
 
-        # T-52-08: Authorization/client-token values are passed as headers
-        # only -- never interpolated into a log line.
+        $apiRequestCount++;
         $http->post(
             PATHFINDER_URL,
             'Authorization'        => "Bearer $tokenHash->{access_token}",
@@ -656,6 +656,7 @@ sub _extractPathfinderIds {
     my $sectionList = $sections->{items};
     return (\@playlists, 0) unless ref($sectionList) eq 'ARRAY';
 
+    my %seen;
     for my $section (@$sectionList) {
         next unless $section && ref($section) eq 'HASH';
         my $itemsWrapper = $section->{sectionItems};
@@ -670,6 +671,7 @@ sub _extractPathfinderIds {
             next unless $uri =~ /^spotify:playlist:(37i9[A-Za-z0-9]*)$/;
             my $id = $1;
             next unless $id =~ /^[A-Za-z0-9]{1,40}$/;
+            next if $seen{$id}++;
 
             my $name   = $id;
             my $images = [];
@@ -758,7 +760,10 @@ sub _transformPlaylistContents {
         next unless $trackData && ref($trackData) eq 'HASH';
 
         my $uri = $trackData->{uri} // '';
-        next unless $uri =~ /^spotify:track:([A-Za-z0-9]+)$/;
+        unless ($uri =~ /^spotify:track:([A-Za-z0-9]+)$/) {
+            push @items, { track => undef };
+            next;
+        }
         my $trackId = $1;
 
         my @artists;
@@ -921,6 +926,7 @@ sub getWebPlayerPlaylistItems {
             { timeout => REQUEST_TIMEOUT, cache => 0 }
         );
 
+        $apiRequestCount++;
         $http->post(
             PATHFINDER_URL,
             'Authorization'        => "Bearer $tokenHash->{access_token}",

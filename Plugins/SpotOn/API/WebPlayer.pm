@@ -257,6 +257,15 @@ sub _loadSpDc {
     return $accounts->{$accountId} ? $accounts->{$accountId}->{sp_dc} : undef;
 }
 
+# reset($class)
+# Clears in-flight mint queue. Called by Plugin.pm::initPlugin on startup
+# to prevent stale coalescing state after plugin reload.
+sub reset {
+    my ($class) = @_;
+    %_mintInflight = ();
+    main::INFOLOG && $log->info('WebPlayer: mintInflight reset');
+}
+
 # ============================================================
 # Token lifecycle -- getToken (D-07 single entry point)
 # ============================================================
@@ -319,21 +328,27 @@ sub _mintToken {
         return;
     }
 
-    Plugins::SpotOn::API::WebPlayer::SecretSource->getSecret(sub {
-        my ($secret) = @_;
-        unless ($secret) {
-            main::INFOLOG && $log->info('WebPlayer: SecretSource unreachable for account '
-                . _mask($accountId) . ' (D-05)');
-            _setState($accountId, STATE_SECRETS_DOWN);
-            $resolve->(undef, 'no_secrets');
-            return;
-        }
+    eval {
+        Plugins::SpotOn::API::WebPlayer::SecretSource->getSecret(sub {
+            my ($secret) = @_;
+            unless ($secret) {
+                main::INFOLOG && $log->info('WebPlayer: SecretSource unreachable for account '
+                    . _mask($accountId) . ' (D-05)');
+                _setState($accountId, STATE_SECRETS_DOWN);
+                $resolve->(undef, 'no_secrets');
+                return;
+            }
 
-        $class->_serverTime(sub {
-            my ($epoch) = @_;
-            $class->_requestToken($accountId, $spdc, $secret, $epoch, 0, $resolve);
+            $class->_serverTime(sub {
+                my ($epoch) = @_;
+                $class->_requestToken($accountId, $spdc, $secret, $epoch, 0, $resolve);
+            });
         });
-    });
+        1;
+    } or do {
+        $log->error("WebPlayer: mint chain died for account " . _mask($accountId) . ": $@");
+        $resolve->(undef, 'mint_failed');
+    };
 }
 
 # _requestToken($class, $accountId, $spdc, $secret, $epoch, $isRetry, $resolve)
@@ -354,17 +369,38 @@ sub _requestToken {
     Slim::Networking::SimpleAsyncHTTP->new(
         sub {
             my $http      = shift;
-            my $tokenData = eval { from_json($http->content) };
+            my $content   = $http->content // '';
+            my $tokenData = eval { from_json($content) };
             if ($@ || !$tokenData || !$tokenData->{accessToken}) {
+                if (!$isRetry && $content =~ /totpVerExpired/i) {
+                    main::INFOLOG && $log->info('WebPlayer: totpVerExpired in 200 body for account '
+                        . _mask($accountId) . ' -- forcing secret refresh (Pitfall 2)');
+                    Plugins::SpotOn::API::WebPlayer::SecretSource->getSecret(sub {
+                        my ($freshSecret) = @_;
+                        unless ($freshSecret) {
+                            _setState($accountId, STATE_SECRETS_DOWN);
+                            $resolve->(undef, 'no_secrets');
+                            return;
+                        }
+                        $class->_requestToken($accountId, $spdc, $freshSecret, $epoch, 1, $resolve);
+                    }, { forceRefresh => 1 });
+                    return;
+                }
                 $log->error('WebPlayer: token mint response parse failed for account '
                     . _mask($accountId) . ": $@");
-                # Transient failure -- do not overwrite a previously cached state (CR-02 fix)
                 $resolve->(undef, 'mint_failed');
                 return;
             }
 
             $class->_clientToken($tokenData->{clientId}, sub {
                 my ($clientToken) = @_;
+
+                unless ($clientToken) {
+                    $log->warn('WebPlayer: client-token mint failed for account '
+                        . _mask($accountId) . ' -- not caching partial result');
+                    $resolve->(undef, 'mint_failed');
+                    return;
+                }
 
                 my $result = {
                     access_token => $tokenData->{accessToken},
