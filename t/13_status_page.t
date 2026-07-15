@@ -503,5 +503,5 @@ ok($statusData && exists $statusData->{madeForYou},
 
 my @madeForYouKeys = $statusData && ref $statusData->{madeForYou} eq 'HASH'
     ? sort keys %{$statusData->{madeForYou}} : ();
-is_deeply(\@madeForYouKeys, [sort qw(state spDcPresent spDcMasked)],
-    'Test 12: madeForYou carries only state/spDcPresent/spDcMasked -- no access_token/client_token/raw sp_dc fields');
+is_deeply(\@madeForYouKeys, [sort qw(state spDcPresent spDcMasked hashConfigured)],
+    'Test 12: madeForYou carries only state/spDcPresent/spDcMasked/hashConfigured -- no access_token/client_token/raw sp_dc fields');

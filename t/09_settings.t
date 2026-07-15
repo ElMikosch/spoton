@@ -374,6 +374,7 @@ package Plugins::SpotOn::API::WebPlayer;
 our @store_spdc_calls      = ();
 our $next_masked_preview   = '';
 our $next_state             = 'empty';
+our $next_has_spdc          = 0;
 sub storeSpDc {
     my ($class, $accountId, $spdc) = @_;
     push @store_spdc_calls, [$accountId, $spdc];
@@ -381,11 +382,12 @@ sub storeSpDc {
 }
 sub spDcMaskedPreview { return $next_masked_preview }
 sub state             { return $next_state }
-sub hasSpDc           { return length($next_masked_preview) ? 1 : 0 }
+sub hasSpDc           { return $next_has_spdc }
 sub reset_calls {
     @store_spdc_calls    = ();
     $next_masked_preview = '';
     $next_state           = 'empty';
+    $next_has_spdc        = 0;
 }
 1;
 END
@@ -945,6 +947,91 @@ SKIP: {
     );
     is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 0,
         'Plan52-03: resubmitting the masked preview does not call storeSpDc again');
+}
+
+# ============================================================
+# Plan 52-06 gap closure: empty sp_dc submission clears stored cookie (WR-03)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for sp_dc clear test", 3
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { spdcacct1 => { displayName => 'Test' } });
+    $spotonPrefs->set('activeAccount', 'spdcacct1');
+
+    # (a) A previously stored cookie exists (hasSpDc => 1) and the user
+    # submits an empty pref_spDc -- storeSpDc(accountId, '') must be called
+    # exactly once to clear it.
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    $Plugins::SpotOn::API::WebPlayer::next_has_spdc        = 1;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => '' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 1,
+        'Plan52-06: empty pref_spDc with a stored cookie calls storeSpDc exactly once');
+    is_deeply($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0], ['spdcacct1', ''],
+        'Plan52-06: storeSpDc called with (accountId, empty string) to clear');
+
+    # (b) No stored cookie (hasSpDc => 0) -- empty submission must NOT call
+    # storeSpDc (avoid pointless calls on accounts that never had sp_dc).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_has_spdc = 0;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => '' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 0,
+        'Plan52-06: empty pref_spDc with no stored cookie does not call storeSpDc');
+}
+
+# ============================================================
+# Plan 52-06 gap closure: pathfinderHash pref stored via Settings
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for pathfinderHash pref test", 4
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+
+    # (a) A valid 64-hex-char hash is stored as submitted.
+    my $validHash = 'a1b2c3d4' x 8;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => $validHash },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), $validHash,
+        'Plan52-06: pathfinderHash pref stored with valid hex input');
+
+    # (b) Non-hex characters are stripped before storage.
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => 'zzZZ' . $validHash . '!!' },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), $validHash,
+        'Plan52-06: pathfinderHash pref strips non-hex characters from input');
+
+    # (c) Empty submission clears the pref.
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => '' },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), '',
+        'Plan52-06: empty pref_pathfinderHash clears the stored hash');
+
+    # (d) Template param pathfinderHash is populated from prefs (no saveSettings).
+    $spotonPrefs->set('pathfinderHash', $validHash);
+    my $param_ref = {};
+    Plugins::SpotOn::Settings->handler(
+        undef, $param_ref,
+        sub { }, undef, undef
+    );
+    is($param_ref->{pathfinderHash}, $validHash,
+        'Plan52-06: template param pathfinderHash populated from prefs');
 }
 
 # ============================================================
