@@ -358,6 +358,8 @@ package Plugins::SpotOn::API::WebPlayer;
 our $mock_access_token = 'mock_wp_access_token';
 our $mock_client_token = 'mock_wp_client_token';
 our $mock_fail_reason  = undef;
+use constant USER_AGENT      => 'MockUA/1.0';
+use constant CLIENT_VERSION  => '1.0.0.0.mock';
 sub getToken {
     my ($class, $accountId, $cb) = @_;
     if ($mock_fail_reason) {

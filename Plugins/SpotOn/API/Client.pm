@@ -523,11 +523,12 @@ sub pathfinderHome {
         my $body = eval { to_json({
             operationName => 'home',
             variables     => {
-                homeEndUserIntegration => 'INTEGRATION_WEB_PLAYER',
-                timeZone               => $params->{timeZone} || 'UTC',
-                sp_t                   => '',
-                facet                  => undef,
-                sectionItemsLimit      => 10,
+                homeEndUserIntegration       => 'INTEGRATION_WEB_PLAYER',
+                timeZone                     => $params->{timeZone} || 'Europe/Berlin',
+                sp_t                         => '',
+                facet                        => '',
+                sectionItemsLimit            => 10,
+                includeEpisodeContentRatingsV2 => JSON::XS::true(),
             },
             extensions => {
                 persistedQuery => {
@@ -611,10 +612,14 @@ sub pathfinderHome {
         # only -- never interpolated into a log line.
         $http->post(
             PATHFINDER_URL,
-            'Authorization' => "Bearer $tokenHash->{access_token}",
-            'client-token'  => ($tokenHash->{client_token} // ''),
-            'Content-Type'  => 'application/json',
-            'App-Platform'  => 'WebPlayer',
+            'Authorization'        => "Bearer $tokenHash->{access_token}",
+            'client-token'         => ($tokenHash->{client_token} // ''),
+            'Content-Type'         => 'application/json;charset=UTF-8',
+            'Accept'               => 'application/json',
+            'App-Platform'         => 'WebPlayer',
+            'Origin'               => 'https://open.spotify.com',
+            'Referer'              => 'https://open.spotify.com/',
+            'spotify-app-version'  => Plugins::SpotOn::API::WebPlayer::CLIENT_VERSION(),
             $body,
         );
     });
@@ -793,8 +798,13 @@ sub getWebPlayerPlaylistItems {
 
         $http->get(
             $url,
-            'Authorization' => "Bearer $tokenHash->{access_token}",
-            'Accept'        => 'application/json',
+            'Authorization'        => "Bearer $tokenHash->{access_token}",
+            'client-token'         => ($tokenHash->{client_token} // ''),
+            'Accept'               => 'application/json',
+            'App-Platform'         => 'WebPlayer',
+            'Origin'               => 'https://open.spotify.com',
+            'Referer'              => 'https://open.spotify.com/',
+            'spotify-app-version'  => Plugins::SpotOn::API::WebPlayer::CLIENT_VERSION(),
         );
     });
 }

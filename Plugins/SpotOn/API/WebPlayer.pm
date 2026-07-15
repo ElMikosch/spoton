@@ -26,8 +26,9 @@ use constant TOKEN_URL        => 'https://open.spotify.com/api/token';
 use constant CLIENT_TOKEN_URL => 'https://clienttoken.spotify.com/v1/clienttoken';
 use constant SERVER_TIME_URL  => 'https://open.spotify.com/';
 
-use constant USER_AGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-    . 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+use constant USER_AGENT => 'Mozilla/5.0 (X11; Linux x86_64) '
+    . 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
+use constant CLIENT_VERSION => '1.2.94.583.g60394bd5';
 
 use constant TOKEN_EXPIRY_BUFFER => 60;    # seconds subtracted from mint TTL
 use constant DEFAULT_TOKEN_TTL   => 3300;  # fallback TTL if expiry field is missing
@@ -442,7 +443,7 @@ sub _clientToken {
 
     my $body = to_json({
         client_data => {
-            client_version => '1.2.52.442.g5765789a',
+            client_version => CLIENT_VERSION,
             client_id      => $clientId,
             js_sdk_data    => {
                 device_brand => '',
@@ -460,7 +461,9 @@ sub _clientToken {
             my $http = shift;
             my $data = eval { from_json($http->content) };
             if ($@ || !$data || !$data->{granted_token} || !$data->{granted_token}->{token}) {
-                $log->warn("WebPlayer: client-token response parse failed: $@");
+                my $code = $http->response ? $http->response->code : '?';
+                my $len  = length($http->content // '');
+                $log->warn("WebPlayer: client-token response parse failed (HTTP $code, ${len}B): $@");
                 $cb->(undef);
                 return;
             }
@@ -474,7 +477,8 @@ sub _clientToken {
         { timeout => 30 }
     )->post(
         CLIENT_TOKEN_URL(),
-        'Content-Type' => 'application/json',
+        'Content-Type'  => 'application/json',
+        'Accept'        => 'application/json',
         $body,
     );
 }
