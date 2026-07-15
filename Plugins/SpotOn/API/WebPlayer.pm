@@ -357,7 +357,7 @@ sub _requestToken {
             if ($@ || !$tokenData || !$tokenData->{accessToken}) {
                 $log->error('WebPlayer: token mint response parse failed for account '
                     . _mask($accountId) . ": $@");
-                _setState($accountId, STATE_EXPIRED);
+                # Transient failure -- do not overwrite a previously cached state (CR-02 fix)
                 $resolve->(undef, 'mint_failed');
                 return;
             }
@@ -413,7 +413,7 @@ sub _requestToken {
             }
 
             $log->error('WebPlayer: token mint HTTP error for account ' . _mask($accountId) . ": $error");
-            _setState($accountId, STATE_EXPIRED);
+            # Transient failure -- do not overwrite a previously cached state (CR-02 fix)
             $resolve->(undef, 'mint_failed');
         },
         { timeout => 30 }
