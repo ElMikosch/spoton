@@ -25,6 +25,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Connect.pm",
     "$project_dir/Plugins/SpotOn/Connect/Daemon.pm",
     "$project_dir/Plugins/SpotOn/Status.pm",
+    "$project_dir/t/21_webplayer_mint_errors.t",
 );
 
 # Check which files actually exist
