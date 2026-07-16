@@ -1425,6 +1425,7 @@ sub _savedTracksFeed {
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
     my $limit  = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
+    $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
 
@@ -1750,6 +1751,7 @@ sub _showFeed {
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
     my $limit  = $qty > 50 ? 50 : $qty;
+    $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
@@ -2451,6 +2453,7 @@ sub _albumFeed {
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
     my $limit  = $qty > 50 ? 50 : $qty;
+    $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
@@ -2735,6 +2738,7 @@ sub _playlistFeed {
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
     my $limit  = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
+    $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
 
