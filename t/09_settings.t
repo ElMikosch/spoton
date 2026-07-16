@@ -307,7 +307,9 @@ package Plugins::SpotOn::API::TokenManager;
 our %needs_reauth;
 our @clear_reauth_calls = ();
 our @store_account_prefs_calls = ();
+our $needs_migration = 0;    # Plan 03 Task 3: Settings.pm migration banner (D-04 Channel 2)
 sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
+sub anyAccountNeedsMigration { return $needs_migration ? 1 : 0 }
 sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
 sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
@@ -495,7 +497,11 @@ SKIP: {
 
     # PLAN 03 acceptance criteria: no OAuth artifacts (clientId is legitimate — custom Client-ID pref from Phase 04.4)
     ok($src !~ /startOAuth/,         'Settings.pm: no startOAuth reference');
-    ok($src !~ /redirectUri/,        'Settings.pm: no redirectUri reference');
+    # Phase 53 Plan 03 (D-13): redirectUri is now a legitimate $paramRef entry,
+    # sourced from the single PKCE::GITHUB_PAGES_REDIRECT_URI constant for the
+    # Client-ID setup wizard -- distinct from the old hand-rolled OAuth
+    # redirect_uri assembly this guard originally banned. buildRedirectUri
+    # (the old hand-rolled assembly function) remains banned.
     ok($src !~ /buildRedirectUri/,   'Settings.pm: no buildRedirectUri reference');
 
     # Plan 50-03 acceptance criteria: ZeroConf discovery-as-auth code removed (D-01, M-3)

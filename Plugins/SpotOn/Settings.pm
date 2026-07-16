@@ -264,6 +264,20 @@ sub handler {
     # the template shows.
     $paramRef->{pkceConfigured} = _isPkceConfigured();
 
+    # D-04 Channel 2 (AUTH-07, Plan 03 Task 3): Settings migration banner --
+    # global check across ALL known accounts (deliberate asymmetry vs.
+    # Plugin.pm's OPML hint, which checks only the active account since
+    # Browse/Library always operates on it; Settings is a global config page
+    # where any account's migration state is relevant).
+    require Plugins::SpotOn::API::TokenManager;
+    $paramRef->{needsMigration} = Plugins::SpotOn::API::TokenManager->anyAccountNeedsMigration();
+
+    # D-13: redirect URI for the Client-ID PKCE setup wizard, read from the
+    # single-source-of-truth constant (never a second hardcoded literal --
+    # Pitfall 4).
+    require Plugins::SpotOn::API::PKCE;
+    $paramRef->{redirectUri} = Plugins::SpotOn::API::PKCE::GITHUB_PAGES_REDIRECT_URI();
+
     # D-04/D-08: Made For You (sp_dc) status for template -- masked preview
     # (never the raw cookie, T-52-02) and the empty/valid/expired/secrets_down
     # degradation state (Settings channel of the 3-channel D-04 display).
