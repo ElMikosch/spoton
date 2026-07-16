@@ -1418,20 +1418,23 @@ sub _libraryFeed {
 # Per NAV-08: unconditional access (no gating).
 # Per NAV-09: API default sort is added_at desc (recently added first).
 # Per D-12: LMS index/quantity mapped to Spotify offset/limit.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
 sub _savedTracksFeed {
     my ($client, $callback, $args) = @_;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
     $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "savedTracks:$accountId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
@@ -1739,7 +1742,9 @@ sub _showItem {
 # Per POD-02: always uses getShowEpisodes (no embedded-episodes shortcut).
 # Per Pitfall 2: response is { items, total } directly, not nested.
 # Per D-09: API default order is newest first.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL episodes via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL episodes
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
 # In play-all mode, the Follow button is excluded (not a playable item).
 sub _showFeed {
     my ($client, $callback, $args, $passthrough) = @_;
@@ -1748,9 +1753,10 @@ sub _showFeed {
     my $showUri    = $passthrough->{showUri}     // "spotify:show:$showId";
     my $showImages = $passthrough->{showImages};
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;
     $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
@@ -1758,7 +1764,7 @@ sub _showFeed {
 
     my $showCacheKey = "showEpisodes:$accountId:$showId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
         _fetchAllPages({
@@ -2438,7 +2444,9 @@ sub _artistAlbumsFeed {
 # Per NAV-06: line1 = "$track_number. $title", line2 = featuring artists (if differ from album artist).
 # For index=0 (browse): uses tracks embedded in getAlbum response.
 # For index>0 (browse): fetches separate getAlbumTracks page.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages,
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04),
 # seeding the accumulator with the first-page tracks already in the getAlbum response.
 # Album artwork and artist are passed via passthrough for subsequent pages.
 sub _albumFeed {
@@ -2450,15 +2458,16 @@ sub _albumFeed {
     my $albumName        = $passthrough->{albumName}        // '';    # WR-01: carried for metadata cache
     my $albumReleaseDate = $passthrough->{albumReleaseDate} // '';    # carried for release year in track metadata
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;
     $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
             my $album = shift;
@@ -2721,7 +2730,9 @@ sub _albumTrackItem {
 # Per NAV-07: maps LMS index/quantity to Spotify offset/limit (cap 100).
 # Null track entries (local files) are skipped per T-03-10.
 # Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
 # Phase 52 (D-07/Pitfall 3): $passthrough->{webPlayer} (set by _playlistItem
 # for Made For You / 37i9... playlists) routes the track fetch through
 # Client->getWebPlayerPlaylistItems (Web-Player bearer token) instead of
@@ -2735,9 +2746,10 @@ sub _playlistFeed {
     my $playlistId = $passthrough->{playlistId} // '';
     my $webPlayer  = $passthrough->{webPlayer} ? 1 : 0;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
     $log->error("DIAG " . (caller(0))[3] . ": index=" . ($args->{index}//'undef') . " quantity=" . ($args->{quantity}//'undef'));
 
     my $accountId = _getAccountId($client);
@@ -2748,7 +2760,7 @@ sub _playlistFeed {
 
     my $plCacheKey = ($webPlayer ? 'mfyplaylist:' : 'playlist:') . "$accountId:$playlistId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
