@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0]
+### Changed
+- **Authentication**: PKCE OAuth replaces ZeroConf/Keymaster as the primary auth mechanism
+- **Token management**: PKCE-native TokenManager with refresh token rotation
+- **Connect**: Stored credentials derived from PKCE tokens (no ZeroConf needed for Connect)
+- **Auth Health Dashboard**: Per-account status indicators on the Settings page
+
+### Added
+- **PKCE OAuth flow** via GitHub Pages static relay (one-click browser auth)
+- **sp_dc cookie support** for Made For You playlists (Pathfinder integration)
+- **Credential derivation**: automatic conversion of PKCE tokens to Connect credentials
+- **Migration detection and guided re-auth flow** for existing v2.x accounts
+- **Auth Health Dashboard** showing PKCE, sp_dc, Connect, migration, and audio-key status
+- **Client-ID PKCE setup wizard** in Settings
+
+### Removed
+- **Keymaster token service** (`hm://keymaster/token/authenticated`) — all code paths removed
+- **ZeroConf as auth mechanism** (retained only for guest LAN Connect discovery)
+- **`--get-token` binary mode** (replaced by PKCE refresh in pure Perl)
+- **Dual-token flavor system** in Client.pm (single PKCE token per account)
+
+### Fixed
+- **Playlist play-all from folder-level "Play now"**: CLI/Material Skin-driven play-all commands leave `quantity` undefined (unlike the Classic/Web UI, which sends `quantity>=500`). The play-all trigger now fires on `quantity` being undefined OR `>=500`, applied uniformly across Liked Songs, Shows, Albums, and Playlists.
+
 ## [2.3.18] - 2026-07-09
 ### Fixed
 - **Connect silent failure with LMS password protection (GH #116)**: when LMS password protection is enabled, the Connect daemon's JSON-RPC notify to LMS was silently rejected with HTTP 401. SpotOn sent the stored SHA1 password hash via Basic Auth, but LMS re-hashed it (double hash), causing a mismatch on every request. Added the `X-Scanner` header that LMS accepts for backend processes authenticating with the stored hash directly — matching Spotty's original implementation. Connect now works with password protection enabled.
