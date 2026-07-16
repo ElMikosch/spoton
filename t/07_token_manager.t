@@ -404,6 +404,25 @@ sub reset_stub { @recordError_calls = () }
 END
 
 # ============================================================
+# Stub: Plugins::SpotOn::API::Credentials — credentialsPathFor() only.
+# Mirrors the real _accountDir logic ({cachedir}/spoton/{accountId}/) using
+# the same $cache_dir the Prefs stub already exposes as cachedir, so
+# accountNeedsMigration's -f check resolves to the same directory the tests
+# write credentials.json/pkce_tokens.json fixtures into (D-05 migration
+# detection tests, Task 1).
+# ============================================================
+write_stub($stub_dir, 'Plugins::SpotOn::API::Credentials', <<"END");
+package Plugins::SpotOn::API::Credentials;
+use File::Spec::Functions qw(catdir catfile);
+my \$stub_cache_dir = '$cache_dir';
+sub credentialsPathFor {
+    my (\$class, \$accountId) = \@_;
+    return catfile(\$stub_cache_dir, 'spoton', \$accountId, 'credentials.json');
+}
+1;
+END
+
+# ============================================================
 # main:: constants (TRANSCODING, WEBUI, SCANNER, INFOLOG, etc.)
 # ============================================================
 BEGIN {
@@ -438,6 +457,7 @@ Slim::Utils::Prefs->import();
 require Slim::Utils::Log;
 Slim::Utils::Log->import();
 require Plugins::SpotOn::API::PKCE;
+require Plugins::SpotOn::API::Credentials;
 require Plugins::SpotOn::Status;
 
 # ============================================================
@@ -809,6 +829,115 @@ SKIP: {
         Slim::Utils::Cache->new()->set('spoton_needs_reauth_expired_acct', { reason => 'x' }, 'never');
         is(Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth(), 1,
             'anyAccountNeedsReauth: returns 1 when at least one account is flagged');
+    }
+
+    # --------------------------------------------------------
+    # accountNeedsMigration / anyAccountNeedsMigration (D-05, AUTH-07, Plan 03 Task 1)
+    # --------------------------------------------------------
+
+    # (A) credentials.json present, no pkce_tokens.json -- v2.x migration account
+    {
+        reset_all();
+        my $acct_dir = catdir($cache_dir, 'spoton', 'mig_needs');
+        File::Path::make_path($acct_dir);
+        open(my $cfh, '>', catfile($acct_dir, 'credentials.json')) or die "seed creds: $!";
+        print $cfh '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{mig_needs} = undef;
+
+        is(Plugins::SpotOn::API::TokenManager->accountNeedsMigration('mig_needs'), 1,
+            'accountNeedsMigration: credentials.json present + no pkce_tokens.json => needs migration (D-05)');
+    }
+
+    # (B) credentials.json present AND PKCE tokens loadable -- already migrated (D-06 auto-dismiss)
+    {
+        reset_all();
+        my $acct_dir = catdir($cache_dir, 'spoton', 'mig_has_pkce');
+        File::Path::make_path($acct_dir);
+        open(my $cfh, '>', catfile($acct_dir, 'credentials.json')) or die "seed creds: $!";
+        print $cfh '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{mig_has_pkce} =
+            { refresh_token => 'rt', client_id => 'cid' };
+
+        is(Plugins::SpotOn::API::TokenManager->accountNeedsMigration('mig_has_pkce'), 0,
+            'accountNeedsMigration: credentials.json + pkce_tokens.json present => already migrated (D-06)');
+    }
+
+    # (C) no credentials.json at all -- not a v2.x user, nothing to migrate
+    {
+        reset_all();
+        is(Plugins::SpotOn::API::TokenManager->accountNeedsMigration('mig_no_creds'), 0,
+            'accountNeedsMigration: no credentials.json => not a v2.x account, returns 0');
+    }
+
+    # (D) anyAccountNeedsMigration: at least one account needs migration
+    {
+        reset_all();
+        my $needs_dir = catdir($cache_dir, 'spoton', 'agg_needs');
+        File::Path::make_path($needs_dir);
+        open(my $cfh1, '>', catfile($needs_dir, 'credentials.json')) or die "seed creds: $!";
+        print $cfh1 '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh1);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{agg_needs} = undef;
+
+        my $has_pkce_dir = catdir($cache_dir, 'spoton', 'agg_has_pkce');
+        File::Path::make_path($has_pkce_dir);
+        open(my $cfh2, '>', catfile($has_pkce_dir, 'credentials.json')) or die "seed creds: $!";
+        print $cfh2 '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh2);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{agg_has_pkce} =
+            { refresh_token => 'rt', client_id => 'cid' };
+
+        preferences('plugin.spoton')->set('accounts', {
+            agg_needs    => { displayName => 'Needs',   spotifyUserId => 'needs' },
+            agg_has_pkce => { displayName => 'HasPkce',  spotifyUserId => 'haspkce' },
+        });
+
+        is(Plugins::SpotOn::API::TokenManager->anyAccountNeedsMigration(), 1,
+            'anyAccountNeedsMigration: returns 1 when at least one known account needs migration');
+    }
+
+    # (E) anyAccountNeedsMigration: no account needs migration
+    {
+        reset_all();
+        my $dir1 = catdir($cache_dir, 'spoton', 'agg_ok1');
+        File::Path::make_path($dir1);
+        open(my $cfh1, '>', catfile($dir1, 'credentials.json')) or die "seed creds: $!";
+        print $cfh1 '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh1);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{agg_ok1} =
+            { refresh_token => 'rt1', client_id => 'cid' };
+
+        my $dir2 = catdir($cache_dir, 'spoton', 'agg_ok2');
+        File::Path::make_path($dir2);
+        open(my $cfh2, '>', catfile($dir2, 'credentials.json')) or die "seed creds: $!";
+        print $cfh2 '{"auth_type":1,"username":"u","auth_data":"d"}';
+        close($cfh2);
+        $Plugins::SpotOn::API::PKCE::loadTokens_by_account{agg_ok2} =
+            { refresh_token => 'rt2', client_id => 'cid' };
+
+        preferences('plugin.spoton')->set('accounts', {
+            agg_ok1 => { displayName => 'Ok1', spotifyUserId => 'ok1' },
+            agg_ok2 => { displayName => 'Ok2', spotifyUserId => 'ok2' },
+        });
+
+        is(Plugins::SpotOn::API::TokenManager->anyAccountNeedsMigration(), 0,
+            'anyAccountNeedsMigration: returns 0 when every known account already has PKCE tokens');
+    }
+
+    # (F) Permanent regression guard (review finding #5, AUTH-07): TokenManager.pm
+    # source must never re-introduce a "keymaster" reference (case-insensitive).
+    {
+        open(my $src_fh, '<', $tm_module) or die "cannot read $tm_module: $!";
+        local $/;
+        my $source = <$src_fh>;
+        close($src_fh);
+
+        my @hits = ($source =~ /keymaster/gi);
+        is(scalar(@hits), 0,
+            'AUTH-07 regression guard: TokenManager.pm source contains zero case-insensitive '
+            . '"keymaster" references');
     }
 }
 
