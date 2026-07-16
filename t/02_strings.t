@@ -111,6 +111,22 @@ SKIP: {
         PLUGIN_SPOTON_RESUME_UNPLAYED
         PLUGIN_SPOTON_RESUME_IN_PROGRESS
         PLUGIN_SPOTON_RESUME_FINISHED
+        PLUGIN_SPOTON_PKCE_AUTH
+        PLUGIN_SPOTON_PKCE_AUTH_DESC
+        PLUGIN_SPOTON_PKCE_CONNECT_BTN
+        PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID
+        PLUGIN_SPOTON_PKCE_OPENING
+        PLUGIN_SPOTON_PKCE_SUCCESS
+        PLUGIN_SPOTON_PKCE_ERROR
+        PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
+        PLUGIN_SPOTON_PKCE_MANUAL_TITLE
+        PLUGIN_SPOTON_PKCE_MANUAL_DESC
+        PLUGIN_SPOTON_PKCE_MANUAL_BTN
+        PLUGIN_SPOTON_PKCE_REDIRECT_NOTE
+        PLUGIN_SPOTON_SETUP_PKCE_TITLE
+        PLUGIN_SPOTON_SETUP_PKCE_DESC
+        PLUGIN_SPOTON_REAUTH_REQUIRED
+        PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS
     );
 
     # Obsolete keys that must NOT be present
@@ -197,6 +213,22 @@ SKIP: {
         }
     }
     is($bad_indent, 0, "All translation lines use Tab indentation (not spaces)");
+
+    # Permanent regression test (Phase 53 D-15/D-16): the Keymaster HTTP
+    # service is fully removed from the auth architecture (PKCE-only). No
+    # translation value may reintroduce a "keymaster" reference. This checks
+    # translation VALUES only (lines matching \tLANG\ttext), not key names,
+    # so a future Keymaster-named key would not itself trip this assertion --
+    # it targets user-facing string content specifically.
+    my @keymaster_hits;
+    for my $line (split /\n/, $content) {
+        if ($line =~ /^\t[A-Z]{2}\t(.+)$/ && $1 =~ /keymaster/i) {
+            push @keymaster_hits, $line;
+        }
+    }
+    is(scalar(@keymaster_hits), 0,
+        "No translation value references 'keymaster' (Phase 53 permanent regression guard)")
+        or diag("Found keymaster reference(s): " . join("; ", @keymaster_hits));
 }
 
 done_testing();

@@ -1,54 +1,12 @@
 [% PROCESS settings/header.html %]
 	[% title = "PLUGIN_SPOTON" %]
 
-	[% BLOCK discovery_widget %]
-		[% IF discoveryRunning %]
-			<div id="discovery-status" style="opacity:0.6">
-				[% 'PLUGIN_SPOTON_WAITING_FOR_CONNECTION' | string %]
-			</div>
-			<script type="text/javascript">
-			(function() {
-				var timer = setInterval(function() {
-					var xhr = new XMLHttpRequest();
-					xhr.open('GET', '/plugins/SpotOn/settings/discoveryStatus', true);
-					xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-					xhr.onload = function() {
-						if (xhr.status === 200) {
-							try { var data = JSON.parse(xhr.responseText); }
-							catch(e) { return; }
-							if (data.status === 'connected') {
-								clearInterval(timer);
-								window.location.href = window.location.pathname;
-							}
-						}
-					};
-					xhr.send();
-				}, 3000);
-			})();
-			</script>
-			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('stop')">
-					[% 'PLUGIN_SPOTON_STOP_DISCOVERY' | string %]
-				</button>
-			</p>
-		[% ELSE %]
-			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('start')">
-					[% start_label | string %]
-				</button>
-			</p>
-		[% END %]
-	[% END %]
-
 	[% IF NOT accounts.keys.size %]
 	<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-bottom:20px; border-radius:4px">
 		<h3 style="margin-top:0">[% 'PLUGIN_SPOTON_SETUP_GUIDE_TITLE' | string %]</h3>
 
-		<p style="margin:0 0 4px 0"><strong>1. [% 'PLUGIN_SPOTON_SETUP_CONNECT_TITLE' | string %]</strong></p>
-		<p style="margin:0 0 8px 0">[% 'PLUGIN_SPOTON_SETUP_CONNECT_DESC' | string %]</p>
-		<p style="background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.3); padding:8px 12px; border-radius:4px; margin:0 0 12px 0; font-size:0.9em">
-			[% 'PLUGIN_SPOTON_SETUP_CONNECT_NOTE' | string %]
-		</p>
+		<p style="margin:0 0 4px 0"><strong>1. [% 'PLUGIN_SPOTON_SETUP_PKCE_TITLE' | string %]</strong></p>
+		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_PKCE_DESC' | string %]</p>
 
 		<p style="margin:0 0 4px 0"><strong>2. [% 'PLUGIN_SPOTON_SETUP_BROWSE_TITLE' | string %]</strong></p>
 		<p style="margin:0 0 12px 0">[% 'PLUGIN_SPOTON_SETUP_BROWSE_DESC' | string %]</p>
@@ -64,6 +22,18 @@
 			<a href="https://github.com/stiefenm/spoton/blob/main/TROUBLESHOOTING.md" target="_blank">
 				[% 'PLUGIN_SPOTON_SETUP_TROUBLESHOOT_LINK' | string %] &rarr;
 			</a>
+		</p>
+	</div>
+	[% END %]
+
+	[% IF needsMigration %]
+	<div style="background:rgba(255,165,0,0.08); border:1px solid orange; padding:12px 16px; margin-bottom:20px; border-radius:4px">
+		<strong style="color:orange">[% 'PLUGIN_SPOTON_MIGRATION_SETTINGS_HINT' | string %]</strong>
+		<p style="margin:8px 0 0 0">
+			<button type="button" class="submit" onclick="spotonPkceStart()"
+				[% IF degradedMode %]disabled title="[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string | html %]"[% END %]>
+				[% 'PLUGIN_SPOTON_PKCE_CONNECT_BTN' | string %]
+			</button>
 		</p>
 	</div>
 	[% END %]
@@ -133,12 +103,96 @@
 		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
 		       value="[% customClientId | html %]"
 		       placeholder="[% 'PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER' | string %]"/>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">[% 'PLUGIN_SPOTON_CLIENT_ID_WIZARD_TITLE' | string %]</summary>
+			<p style="margin:8px 0 4px 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_SETUP_DEVAPP_DESC' | string %]</p>
+			<p style="margin:0; font-size:0.85em">
+				<code style="background:rgba(128,128,128,0.1); padding:2px 6px; border-radius:3px">[% redirectUri | html %]</code>
+			</p>
+		</details>
 	[% END %]
 
-	[% IF NOT accounts.keys.size %]
-	[% WRAPPER setting title="PLUGIN_SPOTON_ZEROCONF_SETUP" desc="" %]
-		[% INCLUDE discovery_widget start_label = 'PLUGIN_SPOTON_START_DISCOVERY' %]
+	[% WRAPPER setting title="PLUGIN_SPOTON_PKCE_AUTH" desc="PLUGIN_SPOTON_PKCE_AUTH_DESC" %]
+		[% IF degradedMode %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string %]
+		</div>
+		[% END %]
+
+		<p>
+			<button type="button" class="submit" id="pkceConnectBtn" onclick="spotonPkceStart()"
+				data-opening-text="[% 'PLUGIN_SPOTON_PKCE_OPENING' | string | html %]"
+				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]"
+				[% IF degradedMode %]disabled[% END %]>
+				[% 'PLUGIN_SPOTON_PKCE_CONNECT_BTN' | string %]
+			</button>
+		</p>
+
+		[% IF customClientId %]
+		<p style="background:rgba(66,133,244,0.08); border:1px solid rgba(66,133,244,0.3); padding:8px 12px; border-radius:4px; font-size:0.9em">
+			[% 'PLUGIN_SPOTON_PKCE_REDIRECT_NOTE' | string %]
+		</p>
+		[% END %]
+
+		<div id="pkce-status" style="display:none; margin-top:10px"></div>
+
+		<div id="pkce-fallback" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid rgba(128,128,128,0.2)">
+			<p style="margin:0 0 4px 0"><strong>[% 'PLUGIN_SPOTON_PKCE_MANUAL_TITLE' | string %]</strong></p>
+			<p style="margin:0 0 8px 0; font-size:0.9em">[% 'PLUGIN_SPOTON_PKCE_MANUAL_DESC' | string %]</p>
+			<input type="text" id="pkce-manual-url" class="stdedit" style="width:80%"
+				placeholder="http://..."/>
+			<button type="button" class="submit"
+				id="pkceManualBtn" onclick="spotonPkceManual()"
+				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]">
+				[% 'PLUGIN_SPOTON_PKCE_MANUAL_BTN' | string %]
+			</button>
+		</div>
 	[% END %]
+
+	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
+	<h2>[% 'PLUGIN_SPOTON_MADE_FOR_YOU_SECTION' | string %]</h2>
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_SP_DC" desc="PLUGIN_SPOTON_SP_DC_DESC" %]
+		[% IF madeForYouState == 'expired' %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT' | string %]
+		</div>
+		[% ELSIF madeForYouState == 'secrets_down' %]
+		<div style="color: orange; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_MFY_SECRETS_DOWN' | string %]
+		</div>
+		[% END %]
+
+		<input type="text" class="stdedit" name="pref_spDc" id="pref_spDc"
+		       value="[% spDcMasked | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_SP_DC' | string | html %]"/>
+
+		<div style="margin-top:6px; font-size:0.9em">
+			[% IF madeForYouState == 'valid' %]
+			<span style="color: green">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_VALID' | string %]</span>
+			[% ELSIF madeForYouState == 'expired' %]
+			<span style="color: orange">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EXPIRED' | string %]</span>
+			[% ELSE %]
+			<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EMPTY' | string %]</span>
+			[% END %]
+		</div>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">[% 'PLUGIN_SPOTON_SP_DC_HOWTO_TITLE' | string %]</summary>
+			<p style="margin:8px 0 0 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_SP_DC_HOWTO' | string | html %]</p>
+		</details>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_SPOTON_PATHFINDER_HASH" desc="PLUGIN_SPOTON_PATHFINDER_HASH_DESC" %]
+		<input type="text" class="stdedit" name="pref_pathfinderHash" id="pref_pathfinderHash"
+		       value="[% pathfinderHash | html %]"
+		       placeholder="[% 'PLUGIN_SPOTON_PATHFINDER_HASH' | string | html %]"/>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">[% 'PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO_TITLE' | string %]</summary>
+			<p style="margin:8px 0 0 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO' | string | html %]</p>
+		</details>
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_ACCOUNT_SETTINGS" desc="" %]
@@ -165,20 +219,98 @@
 			[% END %]
 			</table>
 
-			[% IF discoveryRunning %]
-			<div style="background:rgba(128,128,128,0.1); border:1px solid rgba(128,128,128,0.25); padding:16px; margin-top:12px; border-radius:4px">
-				[% INCLUDE discovery_widget start_label = 'PLUGIN_SPOTON_ADD_ANOTHER' %]
-			</div>
-			[% ELSE %]
 			<p>
-				<button type="button" class="submit" onclick="spotonDiscovery('start')">
+				<button type="button" class="submit" onclick="spotonPkceStart()"
+					[% IF degradedMode %]disabled title="[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string | html %]"[% END %]>
 					[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]
 				</button>
 			</p>
-			[% END %]
 		[% ELSE %]
 			<p>[% 'PLUGIN_SPOTON_ACCOUNT_NONE' | string %]</p>
 		[% END %]
+	[% END %]
+
+	[% IF accounts.keys.size > 0 %]
+	<details style="margin-top:10px">
+		<summary style="cursor:pointer">[% 'PLUGIN_SPOTON_DASHBOARD_TITLE' | string %]</summary>
+		<table style="width:100%; margin-top:10px">
+		[% FOREACH id IN accounts.keys %]
+			<tr>
+				<td colspan="2" style="padding-top:12px; border-top:1px solid rgba(128,128,128,0.15)">
+					<strong>[% accounts.$id.displayName | html %]</strong>
+				</td>
+			</tr>
+			<tr>
+				<td style="padding-left:12px; width:45%">[% 'PLUGIN_SPOTON_DASHBOARD_PKCE' | string %]</td>
+				<td>
+					[% IF authHealth.$id.pkce.hasToken AND NOT authHealth.$id.pkce.needsReauth %]
+					<span style="color:green">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_PKCE_OK' | string %]</span>
+					[% ELSE %]
+					<span style="color:red">&#10007; [% 'PLUGIN_SPOTON_DASHBOARD_PKCE_REAUTH' | string %]</span>
+					[% END %]
+					<span style="opacity:0.6; font-size:0.85em; margin-left:8px">
+						[% 'PLUGIN_SPOTON_DASHBOARD_LAST_API' | string %]:
+						[% IF authHealth.$id.pkce.lastApiCall %]
+						<span class="spotonRelTime" data-epoch="[% authHealth.$id.pkce.lastApiCall | html %]">&hellip;</span>
+						[% ELSE %]
+						[% 'PLUGIN_SPOTON_DASHBOARD_NEVER' | string %]
+						[% END %]
+					</span>
+				</td>
+			</tr>
+			<tr>
+				<td style="padding-left:12px">[% 'PLUGIN_SPOTON_DASHBOARD_SPDC' | string %]</td>
+				<td>
+					[% IF authHealth.$id.spDc.state == 'valid' %]
+					<span style="color:green">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_VALID' | string %]</span>
+					[% ELSIF authHealth.$id.spDc.state == 'expired' %]
+					<span style="color:orange">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EXPIRED' | string %]</span>
+					[% ELSIF authHealth.$id.spDc.state == 'secrets_down' %]
+					<span style="color:orange">&#9679; [% 'PLUGIN_SPOTON_MFY_SECRETS_DOWN' | string %]</span>
+					[% ELSE %]
+					<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_SP_DC_STATUS_EMPTY' | string %]</span>
+					[% END %]
+					[% IF authHealth.$id.spDc.state != 'empty' AND authHealth.$id.spDc.maskedPreview %]
+					<span style="opacity:0.6; font-size:0.85em; margin-left:8px">([% authHealth.$id.spDc.maskedPreview | html %])</span>
+					[% END %]
+				</td>
+			</tr>
+			<tr>
+				<td style="padding-left:12px">[% 'PLUGIN_SPOTON_DASHBOARD_CONNECT' | string %]</td>
+				<td>
+					[% IF authHealth.$id.connect.alive %]
+					<span style="color:green">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_CONNECT_ALIVE' | string %]</span>
+					<span style="opacity:0.6; font-size:0.85em; margin-left:8px">PID [% authHealth.$id.connect.pid | html %], [% authHealth.$id.connect.uptime | html %]s</span>
+					[% ELSE %]
+					<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_CONNECT_DEAD' | string %]</span>
+					[% END %]
+				</td>
+			</tr>
+			<tr>
+				<td style="padding-left:12px">[% 'PLUGIN_SPOTON_DASHBOARD_MIGRATION' | string %]</td>
+				<td>
+					[% IF authHealth.$id.migration.needed %]
+					<span style="color:orange">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_MIGRATION_NEEDED' | string %]</span>
+					[% ELSE %]
+					<span style="color:green">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_MIGRATION_DONE' | string %]</span>
+					[% END %]
+				</td>
+			</tr>
+			<tr>
+				<td style="padding-left:12px; padding-bottom:10px">[% 'PLUGIN_SPOTON_DASHBOARD_AUDIOKEY' | string %]</td>
+				<td style="padding-bottom:10px">
+					[% IF authHealth.$id.audioKey.state == 'denied' %]
+					<span style="color:red">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_DENIED' | string %]</span>
+					[% ELSIF authHealth.$id.audioKey.state == 'throttled' %]
+					<span style="color:orange">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_THROTTLED' | string %]</span>
+					[% ELSE %]
+					<span style="opacity:0.5">&#9679; [% 'PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_OK' | string %]</span>
+					[% END %]
+				</td>
+			</tr>
+		[% END %]
+		</table>
+	</details>
 	[% END %]
 
 	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
@@ -221,18 +353,90 @@
 	[% END %]
 
 	<script type="text/javascript">
-	function spotonDiscovery(action) {
+	// Auth Health Dashboard: render lastApiCall epoch timestamps as relative
+	// time client-side (D-01) -- avoids a server-side date-formatting
+	// dependency and keeps the value naturally correct in the viewer's
+	// local timezone.
+	document.querySelectorAll('.spotonRelTime').forEach(function(el) {
+		var epoch = parseInt(el.dataset.epoch, 10);
+		if (!epoch) { return; }
+		var diffSec = Math.floor(Date.now() / 1000) - epoch;
+		var text;
+		if (diffSec < 0)          { text = new Date(epoch * 1000).toLocaleString(); }
+		else if (diffSec < 60)    { text = diffSec + 's ago'; }
+		else if (diffSec < 3600)  { text = Math.floor(diffSec / 60) + 'm ago'; }
+		else if (diffSec < 86400) { text = Math.floor(diffSec / 3600) + 'h ago'; }
+		else                      { text = Math.floor(diffSec / 86400) + 'd ago'; }
+		el.textContent = text;
+	});
+
+	function spotonPkceStart() {
+		var btn      = document.getElementById('pkceConnectBtn');
+		var statusEl = document.getElementById('pkce-status');
+		var fallbackEl = document.getElementById('pkce-fallback');
+
 		var xhr = new XMLHttpRequest();
-		xhr.open('POST', '/plugins/SpotOn/settings/discovery/' + action, true);
+		xhr.open('POST', '/plugins/SpotOn/settings/pkce/start', true);
 		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		xhr.onload = function() {
-			window.location.href = window.location.pathname;
+			if (xhr.status === 200) {
+				var data;
+				try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+				if (data && data.url) {
+					statusEl.textContent = btn.dataset.openingText;
+					statusEl.style.display = 'block';
+					// The copy-paste fallback stays visible for the whole flow —
+					// auto-redirect may not reach this LMS instance (edge case D).
+					fallbackEl.style.display = 'block';
+					window.open(data.url, '_blank');
+					// No AJAX way to know the browser-side redirect finished —
+					// reload once as a fallback so a completed auth shows up.
+					var reloadTimer = setTimeout(function() { window.location.reload(); }, 30000);
+					var manualInput = document.getElementById('pkce-manual-url');
+					if (manualInput) {
+						manualInput.addEventListener('focus', function() { clearTimeout(reloadTimer); });
+					}
+					return;
+				}
+			}
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
 		};
 		xhr.onerror = function() {
-			window.location.href = window.location.pathname;
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
 		};
 		xhr.send();
 	}
+
+	function spotonPkceManual() {
+		var input    = document.getElementById('pkce-manual-url');
+		var btn      = document.getElementById('pkceManualBtn');
+		var statusEl = document.getElementById('pkce-status');
+		var callbackUrl = input.value.trim();
+		if (!callbackUrl) { return; }
+
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', '/plugins/SpotOn/settings/pkce/manual', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+		xhr.onload = function() {
+			var data;
+			try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+			if (data && data.status === 'ok') {
+				window.location.href = window.location.pathname;
+				return;
+			}
+			statusEl.textContent = (data && data.message) || btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.onerror = function() {
+			statusEl.textContent = btn.dataset.errorText;
+			statusEl.style.display = 'block';
+		};
+		xhr.send('callback_url=' + encodeURIComponent(callbackUrl));
+	}
+
 	function spotonClearLogs() {
 		var btn = document.getElementById('clearLogsBtn');
 		var result = document.getElementById('clearLogsResult');

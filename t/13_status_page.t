@@ -6,6 +6,24 @@ use File::Basename qw(dirname);
 use File::Temp qw(tempdir);
 use File::Path qw(make_path);
 use Cwd qw(abs_path);
+use JSON::PP ();
+
+# ============================================================
+# FakeStatusResponse — minimal Slim::Web response double for exercising
+# _statusDataHandler directly (Plan 52-03 Task 3): supports the
+# header/code/content_type accessor calls made by _jsonResponse.
+# ============================================================
+package FakeStatusResponse;
+sub new { return bless { headers => {} }, shift }
+sub header {
+    my $self = shift;
+    if (@_ == 2) { $self->{headers}{ $_[0] } = $_[1]; return $_[1]; }
+    return $self->{headers}{ $_[0] };
+}
+sub code         { my $self = shift; $self->{code}         = $_[0] if @_; return $self->{code}; }
+sub content_type { my $self = shift; $self->{content_type} = $_[0] if @_; return $self->{content_type}; }
+
+package main;
 
 # Resolve project root
 my $test_dir    = dirname(abs_path($0));
@@ -139,10 +157,14 @@ sub uri_escape_utf8 { $_[0] }
 END
 
 # Stub: Slim::Web::HTTP
+# addHTTPResponse records its call args so tests can inspect the JSON bytes
+# written by _jsonResponse (Plan 52-03: madeForYou D-04 channel 3 check).
 write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
 package Slim::Web::HTTP;
-sub addHTTPResponse { }
+our @http_responses = ();
+sub addHTTPResponse { push @http_responses, [@_] }
 sub filltemplatefile { \'' }
+sub reset_calls { @http_responses = () }
 1;
 END
 
@@ -358,8 +380,18 @@ END
 # Stub: Plugins::SpotOn::API::TokenManager (needed by Status.pm _collectTokens)
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-sub getAccountIds     { () }
-sub isDiscoveryRunning { 0 }
+sub getAccountIds { () }
+1;
+END
+
+# Stub: Plugins::SpotOn::API::WebPlayer (needed by Status.pm madeForYou
+# collector -- Plan 52-03, D-04 channel 3). Returns a fixed no-credentials
+# snapshot shape matching the real WebPlayer->statusSnapshot contract.
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+sub statusSnapshot {
+    return { state => 'valid', spDcPresent => 1, spDcMasked => 'AQDx****' };
+}
 1;
 END
 
@@ -387,7 +419,7 @@ require Plugins::SpotOn::Plugin;
 # Tests
 # ============================================================
 
-plan tests => 13;
+plan tests => 16;
 
 # Test 1: Status.pm compiles
 require_ok('Plugins::SpotOn::Status');
@@ -442,7 +474,7 @@ is($sys1, $sys2, '_systemInfo returns same reference (cached)');
 # Test 8: Client->statusSnapshot returns expected keys
 require Plugins::SpotOn::API::Client;
 my $snapshot = Plugins::SpotOn::API::Client->statusSnapshot();
-my @expected_keys = sort qw(inflightCount apiRequestCount api429Count rateLimitedOwn rateLimitedBundled);
+my @expected_keys = sort qw(inflightCount apiRequestCount api429Count rateLimited wpRateLimited);
 my @actual_keys   = sort keys %$snapshot;
 is_deeply(\@actual_keys, \@expected_keys, 'statusSnapshot has all 5 expected keys');
 
@@ -450,3 +482,26 @@ is_deeply(\@actual_keys, \@expected_keys, 'statusSnapshot has all 5 expected key
 Plugins::SpotOn::API::Client->reset();
 my $after_reset = Plugins::SpotOn::API::Client->statusSnapshot();
 is($after_reset->{apiRequestCount}, 0, 'apiRequestCount is 0 after reset');
+
+# ============================================================
+# Test 10-12: _statusDataHandler includes madeForYou (D-04 channel 3),
+# eval-guarded and sourced from a stubbed WebPlayer->statusSnapshot, with
+# no raw credential/token/secret fields leaking into the response (Plan 52-03).
+# ============================================================
+require Plugins::SpotOn::API::WebPlayer;
+require Slim::Web::HTTP;
+@Slim::Web::HTTP::http_responses = ();
+my $fake_response = FakeStatusResponse->new;
+Plugins::SpotOn::Status::_statusDataHandler('fake_http_client', $fake_response);
+
+ok(scalar(@Slim::Web::HTTP::http_responses), 'Test 10: _statusDataHandler produced an HTTP response');
+
+my $bytesRef = $Slim::Web::HTTP::http_responses[-1][2];
+my $statusData = eval { JSON::PP::decode_json($$bytesRef) };
+ok($statusData && exists $statusData->{madeForYou},
+    'Test 11: status data includes a madeForYou key sourced from WebPlayer->statusSnapshot');
+
+my @madeForYouKeys = $statusData && ref $statusData->{madeForYou} eq 'HASH'
+    ? sort keys %{$statusData->{madeForYou}} : ();
+is_deeply(\@madeForYouKeys, [sort qw(state spDcPresent spDcMasked hashConfigured)],
+    'Test 12: madeForYou carries only state/spDcPresent/spDcMasked/hashConfigured -- no access_token/client_token/raw sp_dc fields');

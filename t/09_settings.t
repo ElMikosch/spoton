@@ -11,6 +11,23 @@ use Cwd qw(abs_path);
 my $test_dir    = dirname(abs_path($0));
 my $project_dir = dirname($test_dir);
 
+# ============================================================
+# FakeSettingsResponse — minimal Slim::Web response double for exercising
+# _pkceStoreAccount directly (Plan 51-03 Task 2): supports the header/code/
+# content_type accessor calls made by _jsonResponse and _renderPkceResultPage.
+# ============================================================
+package FakeSettingsResponse;
+sub new { return bless { headers => {} }, shift }
+sub header {
+    my $self = shift;
+    if (@_ == 2) { $self->{headers}{ $_[0] } = $_[1]; return $_[1]; }
+    return $self->{headers}{ $_[0] };
+}
+sub code         { my $self = shift; $self->{code}         = $_[0] if @_; return $self->{code}; }
+sub content_type { my $self = shift; $self->{content_type} = $_[0] if @_; return $self->{content_type}; }
+
+package main;
+
 # Create a temporary directory for LMS stubs
 my $stub_dir = tempdir(CLEANUP => 1);
 my $cache_dir = tempdir(CLEANUP => 1);
@@ -51,8 +68,20 @@ sub init { }
 END
 
 # Stub: Slim::Utils::Log
+# logger() must also be installed into the caller's namespace: Settings.pm
+# calls it as a method (Slim::Utils::Log->logger(...)), but Client.pm (pulled
+# in transitively via the PKCE handlers) calls it as a bare imported function
+# (use Slim::Utils::Log; ... logger('plugin.spoton')) — matches t/08's stub.
 write_stub($stub_dir, 'Slim::Utils::Log', <<'END');
 package Slim::Utils::Log;
+use parent 'Exporter';
+our @EXPORT_OK = qw(logger);
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    no strict 'refs';
+    *{"${caller}::logger"} = \&logger;
+}
 sub addLogCategory { return bless {}, 'Slim::Utils::Log' }
 sub logger {
     return bless { _calls => [] }, 'Slim::Utils::Log';
@@ -237,7 +266,7 @@ sub reset_calls    { @registered_raw = () }
 1;
 END
 
-# Stub: Slim::Web::HTTP (for addHTTPResponse in _discoveryStatusHandler)
+# Stub: Slim::Web::HTTP (for addHTTPResponse in the diagnostic bundle / PKCE result handlers)
 write_stub($stub_dir, 'Slim::Web::HTTP', <<'END');
 package Slim::Web::HTTP;
 our @http_responses = ();
@@ -272,37 +301,134 @@ sub init { }
 1;
 END
 
-# Stub: Plugins::SpotOn::API::TokenManager (ZeroConf methods — no OAuth)
+# Stub: Plugins::SpotOn::API::TokenManager (PKCE-native re-auth query API — Plan 50-01/50-03)
 write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
-our $discovery_running = 0;
-our @start_calls = ();
-our @stop_calls  = ();
-sub startDiscovery    { push @start_calls, 1; $discovery_running = 1 }
-sub stopDiscovery     { push @stop_calls,  1; $discovery_running = 0 }
-sub isDiscoveryRunning { return $discovery_running }
+our %needs_reauth;
+our @clear_reauth_calls = ();
+our @store_account_prefs_calls = ();
+our $needs_migration = 0;    # Plan 03 Task 3: Settings.pm migration banner (D-04 Channel 2)
+our %account_needs_migration;    # Plan 54-02: per-account override for _collectAuthHealth tests
+sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
+sub anyAccountNeedsMigration { return $needs_migration ? 1 : 0 }
+sub accountNeedsMigration { my ($class, $id) = @_; return $account_needs_migration{$id} ? 1 : 0 }
+sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
+sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
 sub getAccountIds     { return () }
+# _storeAccountPrefs — minimal re-implementation of the real TokenManager
+# behavior (Plan 51-03 Task 2): stores the account, sets activeAccount only
+# if none is set yet (mirrors the $needsDaemonStart first-account-only
+# conditional that Pitfall 6 documents), then invokes the no-arg callback.
+sub _storeAccountPrefs {
+    my ($class, $accountId, $spotifyUserId, $displayName, $cb) = @_;
+    push @store_account_prefs_calls, $accountId;
+    my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    my $accounts = $prefs->get('accounts') || {};
+    $accounts->{$accountId} = { displayName => $displayName, spotifyUserId => $spotifyUserId };
+    $prefs->set('accounts', $accounts);
+    $prefs->set('activeAccount', $accountId) unless $prefs->get('activeAccount');
+    $cb->();
+}
 sub reset_calls {
-    @start_calls = (); @stop_calls = ();
-    $discovery_running = 0;
+    %needs_reauth = ();
+    @clear_reauth_calls = ();
+    @store_account_prefs_calls = ();
+    %account_needs_migration = ();
 }
 1;
 END
 
-# Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref save)
-write_stub($stub_dir, 'Plugins::SpotOn::Unified::DaemonManager', <<'END');
-package Plugins::SpotOn::Unified::DaemonManager;
-sub scheduleInit { }
+# Stub: Plugins::SpotOn::API::Credentials (D-01 eager derivation call site — Plan 51-03)
+write_stub($stub_dir, 'Plugins::SpotOn::API::Credentials', <<'END');
+package Plugins::SpotOn::API::Credentials;
+our $next_derive_ok = 1;
+our $derive_call_count = 0;
+our $last_derive_account;
+sub deriveCredentials {
+    my ($class, $accountId, $cb) = @_;
+    $derive_call_count++;
+    $last_derive_account = $accountId;
+    $cb->($next_derive_ok, $next_derive_ok ? undef : 'derivation_failed');
+}
+# WR-02: clearRateLimit stub (called by _pkceStoreAccount before deriveCredentials)
+sub clearRateLimit { }
+sub reset_calls {
+    $next_derive_ok = 1;
+    $derive_call_count = 0;
+    $last_derive_account = undef;
+}
 1;
 END
 
+# Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref
+# save; helperInstances + FakeHelper added for Plan 54-02's Auth Health
+# Dashboard aggregation test -- a controllable fixture list of fake daemon
+# helper objects exposing the same _accountId/alive/pid/uptime accessors as
+# the real Unified::Daemon.pm).
+write_stub($stub_dir, 'Plugins::SpotOn::Unified::DaemonManager', <<'END');
+package Plugins::SpotOn::Unified::DaemonManager;
+our $schedule_init_calls = 0;
+our @fake_helpers = ();
+sub scheduleInit    { $schedule_init_calls++ }
+sub helperInstances { return @fake_helpers }
+sub reset_calls     { $schedule_init_calls = 0; @fake_helpers = () }
+
+package Plugins::SpotOn::Unified::DaemonManager::FakeHelper;
+sub new {
+    my ($class, %args) = @_;
+    return bless { %args }, $class;
+}
+sub _accountId { return $_[0]->{_accountId} }
+sub alive      { return $_[0]->{alive} }
+sub pid        { return $_[0]->{pid} }
+sub uptime     { return $_[0]->{uptime} }
+1;
+END
+
+# Stub: Plugins::SpotOn::API::WebPlayer (D-06/D-08/D-09 sp_dc storage + state
+# consumed by Settings.pm — Plan 52-03). storeSpDc records calls instead of
+# writing prefs so tests can assert on the call args without depending on
+# WebPlayer's real internal storage layout (Plan 52-01, out of this plan's scope).
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+our @store_spdc_calls      = ();
+our $next_masked_preview   = '';
+our $next_state             = 'empty';
+our $next_has_spdc          = 0;
+sub storeSpDc {
+    my ($class, $accountId, $spdc) = @_;
+    push @store_spdc_calls, [$accountId, $spdc];
+    return 1;
+}
+sub spDcMaskedPreview { return $next_masked_preview }
+sub state             { return $next_state }
+sub hasSpDc           { return $next_has_spdc }
+sub reset_calls {
+    @store_spdc_calls    = ();
+    $next_masked_preview = '';
+    $next_state           = 'empty';
+    $next_has_spdc        = 0;
+}
+1;
+END
+
+
 # Stub: URI::Escape — not Perl core, bundled by LMS
+# uri_escape_utf8 is needed too: Settings.pm's PKCE handlers pull in the real
+# Plugins::SpotOn::API::Client (for SPOTON_DEFAULT_CLIENT_ID), which imports
+# both symbols from URI::Escape.
 write_stub($stub_dir, 'URI::Escape', <<'END');
 package URI::Escape;
 use Exporter 'import';
-our @EXPORT_OK = qw(uri_escape);
+our @EXPORT_OK = qw(uri_escape uri_escape_utf8);
 sub uri_escape { my ($s) = @_; $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge; return $s; }
+sub uri_escape_utf8 {
+    my ($s) = @_;
+    utf8::encode($s) if utf8::is_utf8($s);
+    $s =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/ge;
+    return $s;
+}
 1;
 END
 
@@ -318,6 +444,16 @@ BEGIN {
     *main::ISWINDOWS   = sub () { 0 };
     *main::ISMAC       = sub () { 0 };
     *main::PERFMON     = sub () { 0 };
+}
+
+# M5: SPOTON_CACHE_VERSION is defined in Plugin.pm (single source of truth);
+# submodules resolve it via a fully-qualified call at load time. Production
+# always compiles Plugin.pm first — provide the constant for standalone loads
+# (Settings.pm's PKCE handlers pull in the real Client.pm/PKCE.pm, matching
+# the pattern already used by t/08_api_client.t).
+BEGIN {
+    package Plugins::SpotOn::Plugin;
+    use constant SPOTON_CACHE_VERSION => 4;
 }
 
 # Add to @INC
@@ -380,24 +516,59 @@ SKIP: {
 
     # PLAN 03 acceptance criteria: no OAuth artifacts (clientId is legitimate — custom Client-ID pref from Phase 04.4)
     ok($src !~ /startOAuth/,         'Settings.pm: no startOAuth reference');
-    ok($src !~ /redirectUri/,        'Settings.pm: no redirectUri reference');
+    # Phase 53 Plan 03 (D-13): redirectUri is now a legitimate $paramRef entry,
+    # sourced from the single PKCE::GITHUB_PAGES_REDIRECT_URI constant for the
+    # Client-ID setup wizard -- distinct from the old hand-rolled OAuth
+    # redirect_uri assembly this guard originally banned. buildRedirectUri
+    # (the old hand-rolled assembly function) remains banned.
     ok($src !~ /buildRedirectUri/,   'Settings.pm: no buildRedirectUri reference');
 
-    # PLAN 03 acceptance criteria: ZeroConf discovery present
-    ok($src =~ /addRawFunction/,                              'Settings.pm: addRawFunction registered');
-    ok($src =~ /discoveryStatus/,                             'Settings.pm: discoveryStatus endpoint registered');
-    ok($src =~ /sub _discoveryStatusHandler/,                 'Settings.pm: _discoveryStatusHandler defined');
-    ok($src =~ /startDiscovery/,                              'Settings.pm: startDiscovery action present');
-    ok($src =~ /stopDiscovery/,                               'Settings.pm: stopDiscovery action present');
-    ok($src =~ /discoveryRunning/,                            'Settings.pm: discoveryRunning template param set');
-    ok($src =~ /to_json/,                                     'Settings.pm: to_json used in AJAX handler');
-    ok($src =~ /addHTTPResponse/,                             'Settings.pm: addHTTPResponse used in AJAX handler');
+    # Plan 50-03 acceptance criteria: ZeroConf discovery-as-auth code removed (D-01, M-3)
+    ok($src !~ /sub _discoveryStatusHandler/, 'Settings.pm: _discoveryStatusHandler removed');
+    ok($src !~ /sub _discoveryStartHandler/,  'Settings.pm: _discoveryStartHandler removed');
+    ok($src !~ /sub _discoveryStopHandler/,   'Settings.pm: _discoveryStopHandler removed');
+    ok($src !~ /\bstartDiscovery\b/,          'Settings.pm: no startDiscovery call site');
+    ok($src !~ /\bstopDiscovery\b/,           'Settings.pm: no stopDiscovery call site');
+    ok($src !~ /discoveryRunning/,            'Settings.pm: no discoveryRunning template param');
+    ok($src !~ /sub _isDiscoveryRunning/,     'Settings.pm: _isDiscoveryRunning removed');
+    ok($src !~ /sub _autoSetupAccount/,       'Settings.pm: _autoSetupAccount removed (M-3)');
+    ok($src !~ /__DISCOVER__/,                'Settings.pm: __DISCOVER__ fallback block removed (M-3)');
+    ok($src =~ /to_json/,                     'Settings.pm: to_json used in AJAX handler');
+    ok($src =~ /addHTTPResponse/,             'Settings.pm: addHTTPResponse used in AJAX handler');
+
+    # D-08 Channel 2: re-auth warning wiring
+    ok($src =~ /anyAccountNeedsReauth/,       'Settings.pm: anyAccountNeedsReauth checked in handler()');
+    ok($src =~ /paramRef->\{'warning'\}/,     q{Settings.pm: $paramRef->{'warning'} assignment present});
+    ok($src =~ /clearNeedsReauth/,            'Settings.pm: clearNeedsReauth called on successful PKCE auth');
+
+    # Plan 51-03: D-01 eager derivation call site
+    ok($src =~ /deriveCredentials/,           'Settings.pm: deriveCredentials called in _pkceStoreAccount');
+
+    # Plan 51-03 D-02: the failure branch must reference the new warning
+    # i18n key. Scoped to _pkceStoreAccount's own body (rather than the
+    # whole file) since the JSON/HTML output itself can't be inspected for
+    # the real translated string under the shared Slim::Utils::Strings stub
+    # (single-arg string() calls resolve to '' -- see D-08 Channel 2 note
+    # above).
+    my ($pkce_store_body) = $src =~ /(sub _pkceStoreAccount\b.*?)(?=\nsub \w|\z)/s;
+    ok(defined $pkce_store_body && $pkce_store_body =~ /PLUGIN_SPOTON_CONNECT_DERIVE_FAILED/,
+        'Settings.pm: _pkceStoreAccount failure branch references PLUGIN_SPOTON_CONNECT_DERIVE_FAILED');
 
     # prefs() should NOT include clientId
     ok($src =~ /sub prefs[^}]+return[^}]+(?!clientId)[^}]+}/s,
         'Settings.pm: prefs() method exists');
     ok($src !~ /return \(\$prefs.*clientId/,
         'Settings.pm: prefs() does not return clientId');
+
+    # D-08/D-09: sp_dc save/state wiring (Plan 52-03)
+    ok($src =~ /WebPlayer->storeSpDc/,
+        'Settings.pm: pref_spDc save routes through WebPlayer->storeSpDc');
+    ok($src =~ /WebPlayer->spDcMaskedPreview/,
+        'Settings.pm: spDcMasked template param sourced from WebPlayer->spDcMaskedPreview');
+    ok($src =~ /WebPlayer->state/,
+        'Settings.pm: madeForYouState template param sourced from WebPlayer->state');
+    ok($src !~ /\$prefs->set\(\s*'sp_?[Dd]c'/,
+        'Settings.pm: sp_dc is never written to a flat $prefs->set key');
 }
 
 # ============================================================
@@ -433,6 +604,86 @@ SKIP: {
         my $active = $prefs->get('activeAccount');
         is($active, 'abc12345',
             'AUTH-06: Account switch via handler updates activeAccount preference to new ID');
+    }
+}
+
+# ============================================================
+# Plan 51-03: D-01 eager derivation + D-06 unconditional daemon start
+# Exercises the real _pkceStoreAccount directly against stubbed
+# Credentials/DaemonManager/TokenManager collaborators. Runs after AUTH-06
+# (which depends on a pristine 'accounts'/'activeAccount' prefs state via
+# its own init() call) since this block deliberately mutates both keys.
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for eager derivation test", 6
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::Credentials;
+    require Plugins::SpotOn::API::TokenManager;
+    require Plugins::SpotOn::Unified::DaemonManager;
+    require Slim::Web::HTTP;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+
+    # (a) + (b): a successful derivation calls deriveCredentials exactly
+    # once and triggers scheduleInit unconditionally (Pitfall 6 regression
+    # guard) -- even though activeAccount is ALREADY set before the flow,
+    # which means _storeAccountPrefs's own $needsDaemonStart conditional
+    # would NOT have fired on its own.
+    {
+        $spotonPrefs->set('accounts', {});
+        $spotonPrefs->set('activeAccount', 'existingacct');
+
+        $Plugins::SpotOn::API::Credentials::derive_call_count            = 0;
+        $Plugins::SpotOn::API::Credentials::next_derive_ok                = 1;
+        $Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls     = 0;
+        @Plugins::SpotOn::API::TokenManager::store_account_prefs_calls    = ();
+        @Slim::Web::HTTP::http_responses                                  = ();
+
+        my $response = FakeSettingsResponse->new;
+        Plugins::SpotOn::Settings::_pkceStoreAccount(
+            'http_client_a', $response,
+            { access_token => 'tok1', refresh_token => 'rtok1', expires_in => 3600, scope => 'x' },
+            'client123', 'spotifyUserA', 'Test User A', 1,
+        );
+
+        is($Plugins::SpotOn::API::Credentials::derive_call_count, 1,
+            'Plan51-03: _pkceStoreAccount calls deriveCredentials exactly once on success');
+        is($Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls, 1,
+            'Plan51-03 Pitfall 6: scheduleInit fires unconditionally even though activeAccount was already set');
+
+        my $storedAccountId = $Plugins::SpotOn::API::Credentials::last_derive_account;
+        ok($storedAccountId && exists $spotonPrefs->get('accounts')->{$storedAccountId},
+            'Plan51-03: account creation completed alongside successful derivation');
+        is(scalar(@Plugins::SpotOn::API::TokenManager::store_account_prefs_calls), 1,
+            'Plan51-03: _storeAccountPrefs invoked exactly once for the flow');
+    }
+
+    # (c): derivation failure does not roll back account creation, and does
+    # NOT trigger scheduleInit (content of the rendered warning string is
+    # covered by the structure assertion above, not output capture -- see
+    # that assertion's comment for why).
+    {
+        $spotonPrefs->set('accounts', {});
+        $spotonPrefs->set('activeAccount', '');
+
+        $Plugins::SpotOn::API::Credentials::derive_call_count        = 0;
+        $Plugins::SpotOn::API::Credentials::next_derive_ok            = 0;
+        $Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls = 0;
+        @Slim::Web::HTTP::http_responses                              = ();
+
+        my $response = FakeSettingsResponse->new;
+        Plugins::SpotOn::Settings::_pkceStoreAccount(
+            'http_client_b', $response,
+            { access_token => 'tok2', refresh_token => 'rtok2', expires_in => 3600, scope => 'x' },
+            'client123', 'spotifyUserB', 'Test User B', 1,
+        );
+
+        my $storedAccountId = $Plugins::SpotOn::API::Credentials::last_derive_account;
+        ok($storedAccountId && exists $spotonPrefs->get('accounts')->{$storedAccountId},
+            'Plan51-03 D-02: account creation NOT rolled back when derivation fails');
+        is($Plugins::SpotOn::Unified::DaemonManager::schedule_init_calls, 0,
+            'Plan51-03 D-06: scheduleInit NOT called when derivation fails');
     }
 }
 
@@ -480,16 +731,16 @@ SKIP: {
 }
 
 # ============================================================
-# discoveryRunning template param test
+# D-08 Channel 2: Settings page re-auth warning banner test
 # ============================================================
 SKIP: {
-    skip "Settings.pm module required for discoveryRunning test", 2
+    skip "Settings.pm module required for reauth warning test", 2
         unless eval { require Plugins::SpotOn::Settings; 1 };
 
+    require Plugins::SpotOn::API::TokenManager;
+
     {
-        # Force TokenManager not loaded so _isDiscoveryRunning returns 0 quickly
-        # by temporarily removing it from %INC
-        my $saved = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
+        local %Plugins::SpotOn::API::TokenManager::needs_reauth = ();
 
         my $param_ref = {};
         Plugins::SpotOn::Settings->handler(
@@ -498,16 +749,17 @@ SKIP: {
             undef, undef
         );
 
-        # Restore %INC
-        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved if defined $saved;
-
-        is($param_ref->{discoveryRunning}, 0,
-            'discoveryRunning: returns 0 when TokenManager not loaded');
+        # NOTE: use exists() rather than truthiness — the shared Slim::Utils::Strings
+        # test stub treats string() like cstring() (drops the first arg as if it were
+        # a $client), so a single-arg string('KEY') call resolves to '' here, not the
+        # real translated text. What we're verifying is whether handler() assigned the
+        # key at all, not its stubbed content.
+        ok(!exists $param_ref->{'warning'},
+            'reauth warning: not set when no account needs reauth');
     }
 
     {
-        # Ensure TokenManager is loaded (stub or real) and discoveryRunning is 0
-        require Plugins::SpotOn::API::TokenManager;
+        local %Plugins::SpotOn::API::TokenManager::needs_reauth = ( abc12345 => 1 );
 
         my $param_ref = {};
         Plugins::SpotOn::Settings->handler(
@@ -516,49 +768,8 @@ SKIP: {
             undef, undef
         );
 
-        # The stub returns 0 by default; real module also has isDiscoveryRunning returning false
-        is($param_ref->{discoveryRunning}, 0,
-            'discoveryRunning: returns 0 when isDiscoveryRunning is false');
-    }
-}
-
-# ============================================================
-# _discoveryStatusHandler JSON response test
-# ============================================================
-SKIP: {
-    skip "Settings.pm module required for _discoveryStatusHandler test", 3
-        unless eval { require Plugins::SpotOn::Settings; 1 };
-
-    # Override addHTTPResponse to capture the JSON content
-    my $captured_content;
-    {
-        no warnings 'redefine', 'once';
-        local *Slim::Web::HTTP::addHTTPResponse = sub {
-            my ($client, $resp, $content_ref) = @_;
-            $captured_content = $$content_ref;
-        };
-
-        # Mock HTTP response object
-        my $response_obj = bless {}, 'MockHTTPResponse2';
-        no warnings 'once';
-        local *MockHTTPResponse2::header       = sub { };
-        local *MockHTTPResponse2::code         = sub { };
-        local *MockHTTPResponse2::content_type = sub { };
-
-        # Status: idle (TokenManager not running, no credentials file)
-        my $saved_tm = delete $INC{'Plugins/SpotOn/API/TokenManager.pm'};
-        $captured_content = undef;
-        Plugins::SpotOn::Settings::_discoveryStatusHandler(undef, $response_obj);
-        $INC{'Plugins/SpotOn/API/TokenManager.pm'} = $saved_tm if defined $saved_tm;
-
-        ok(defined $captured_content, '_discoveryStatusHandler: addHTTPResponse was called');
-
-        my $decoded = eval { require JSON::PP; JSON::PP::decode_json($captured_content) };
-        ok(!$@ && defined $decoded->{status},
-            '_discoveryStatusHandler: response is valid JSON with status key');
-
-        is($decoded->{status}, 'idle',
-            '_discoveryStatusHandler: returns idle when discovery not running and no credentials');
+        ok(exists $param_ref->{'warning'},
+            'reauth warning: set when an account needs reauth');
     }
 }
 
@@ -686,7 +897,7 @@ SKIP: {
     my $html_file     = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
 
     SKIP: {
-        skip "Settings.pm not found", 6 unless -f $settings_file;
+        skip "Settings.pm not found", 4 unless -f $settings_file;
 
         open(my $fh, '<', $settings_file) or die $!;
         my $src = do { local $/; <$fh> };
@@ -695,21 +906,16 @@ SKIP: {
         # 1. _csrfCheck sub is defined
         ok($src =~ /sub _csrfCheck\b/, 'P-CR-03: _csrfCheck helper defined in Settings.pm');
 
-        # 2-4. Write handlers call _csrfCheck
+        # 2-3. Write handlers call _csrfCheck
         # Extract each handler body (from sub declaration to next sub or end of file)
         # and verify _csrfCheck is called within it.
-        for my $handler (qw(_clearLogsHandler _discoveryStartHandler _discoveryStopHandler)) {
+        for my $handler (qw(_clearLogsHandler _pkceStartHandler)) {
             my ($body) = $src =~ /(sub \Q$handler\E\b.*?)(?=\nsub \w|\z)/s;
             ok(defined $body && $body =~ /_csrfCheck/,
                 "P-CR-03: $handler calls _csrfCheck");
         }
 
-        # 5. _discoveryStatusHandler does NOT call _csrfCheck (read-only)
-        my ($status_body) = $src =~ /(sub _discoveryStatusHandler\b.*?)(?=\nsub \w|\z)/s;
-        ok(defined $status_body && $status_body !~ /_csrfCheck/,
-            'P-CR-03: _discoveryStatusHandler does NOT call _csrfCheck (read-only)');
-
-        # 6. _diagnosticBundleHandler does NOT call _csrfCheck (read-only, gated by diagnosticMode)
+        # 4. _diagnosticBundleHandler does NOT call _csrfCheck (read-only, gated by diagnosticMode)
         my ($diag_body) = $src =~ /(sub _diagnosticBundleHandler\b.*?)(?=\nsub \w|\z)/s;
         ok(defined $diag_body && $diag_body !~ /_csrfCheck/,
             'P-CR-03: _diagnosticBundleHandler does NOT call _csrfCheck (read-only)');
@@ -727,6 +933,248 @@ SKIP: {
         ok(scalar @matches >= 3,
             'P-CR-03: basic.html has X-Requested-With in >= 3 AJAX calls (got ' . scalar(@matches) . ')');
     }
+}
+
+# ============================================================
+# Plan 52-03: sp_dc save routes through WebPlayer->storeSpDc (D-08/D-09)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for sp_dc save test", 4
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { spdcacct1 => { displayName => 'Test' } });
+    $spotonPrefs->set('activeAccount', 'spdcacct1');
+
+    # (a) Saving a fresh sp_dc value routes through WebPlayer->storeSpDc,
+    # with the sanitized value (not the masked preview).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => 'AQDxAbCdEf1234567890' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 1,
+        'Plan52-03: saving pref_spDc calls WebPlayer->storeSpDc exactly once');
+    is($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0][0], 'spdcacct1',
+        'Plan52-03: storeSpDc called with the active accountId');
+    is($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0][1], 'AQDxAbCdEf1234567890',
+        'Plan52-03: storeSpDc receives the sanitized raw value (not masked)');
+
+    # (b) Resubmitting the current masked preview (user did not edit the
+    # field) must NOT overwrite the stored cookie.
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => 'AQDx****' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 0,
+        'Plan52-03: resubmitting the masked preview does not call storeSpDc again');
+}
+
+# ============================================================
+# Plan 52-06 gap closure: empty sp_dc submission clears stored cookie (WR-03)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for sp_dc clear test", 3
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { spdcacct1 => { displayName => 'Test' } });
+    $spotonPrefs->set('activeAccount', 'spdcacct1');
+
+    # (a) A previously stored cookie exists (hasSpDc => 1) and the user
+    # submits an empty pref_spDc -- storeSpDc(accountId, '') must be called
+    # exactly once to clear it.
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    $Plugins::SpotOn::API::WebPlayer::next_has_spdc        = 1;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => '' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 1,
+        'Plan52-06: empty pref_spDc with a stored cookie calls storeSpDc exactly once');
+    is_deeply($Plugins::SpotOn::API::WebPlayer::store_spdc_calls[0], ['spdcacct1', ''],
+        'Plan52-06: storeSpDc called with (accountId, empty string) to clear');
+
+    # (b) No stored cookie (hasSpDc => 0) -- empty submission must NOT call
+    # storeSpDc (avoid pointless calls on accounts that never had sp_dc).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_has_spdc = 0;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_spDc => '' },
+        sub { }, undef, undef
+    );
+    is(scalar(@Plugins::SpotOn::API::WebPlayer::store_spdc_calls), 0,
+        'Plan52-06: empty pref_spDc with no stored cookie does not call storeSpDc');
+}
+
+# ============================================================
+# Plan 52-06 gap closure: pathfinderHash pref stored via Settings
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for pathfinderHash pref test", 4
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+
+    # (a) A valid 64-hex-char hash is stored as submitted.
+    my $validHash = 'a1b2c3d4' x 8;
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => $validHash },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), $validHash,
+        'Plan52-06: pathfinderHash pref stored with valid hex input');
+
+    # (b) Non-hex characters are stripped before storage.
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => 'zzZZ' . $validHash . '!!' },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), $validHash,
+        'Plan52-06: pathfinderHash pref strips non-hex characters from input');
+
+    # (c) Empty submission clears the pref.
+    Plugins::SpotOn::Settings->handler(
+        undef, { saveSettings => 1, pref_pathfinderHash => '' },
+        sub { }, undef, undef
+    );
+    is($spotonPrefs->get('pathfinderHash'), '',
+        'Plan52-06: empty pref_pathfinderHash clears the stored hash');
+
+    # (d) Template param pathfinderHash is populated from prefs (no saveSettings).
+    $spotonPrefs->set('pathfinderHash', $validHash);
+    my $param_ref = {};
+    Plugins::SpotOn::Settings->handler(
+        undef, $param_ref,
+        sub { }, undef, undef
+    );
+    is($param_ref->{pathfinderHash}, $validHash,
+        'Plan52-06: template param pathfinderHash populated from prefs');
+}
+
+# ============================================================
+# Plan 52-03: template params spDcMasked / madeForYouState (D-04/D-08)
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for madeForYouState param test", 3
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    is($Plugins::SpotOn::API::WebPlayer::next_state, 'empty',
+        'Plan52-03: WebPlayer stub next_state defaults to empty after reset_calls');
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+    $Plugins::SpotOn::API::WebPlayer::next_state           = 'valid';
+
+    my $param_ref = {};
+    Plugins::SpotOn::Settings->handler(
+        undef, $param_ref,
+        sub { }, undef, undef
+    );
+
+    is($param_ref->{spDcMasked}, 'AQDx****',
+        'Plan52-03: template param spDcMasked populated from WebPlayer->spDcMaskedPreview');
+    is($param_ref->{madeForYouState}, 'valid',
+        'Plan52-03: template param madeForYouState populated from WebPlayer->state');
+}
+
+# ============================================================
+# Plan 54-02: Auth Health Dashboard -- structural wiring (Settings.pm + basic.html)
+# ============================================================
+{
+    my $html_file = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
+
+    SKIP: {
+        skip "basic.html not found", 7 unless -f $html_file;
+
+        open(my $fh, '<', $html_file) or die $!;
+        my $html = do { local $/; <$fh> };
+        close($fh);
+
+        ok($html =~ /authHealth/, 'Plan54-02: basic.html references authHealth');
+        ok($html =~ /PLUGIN_SPOTON_DASHBOARD_TITLE/,
+            'Plan54-02: basic.html references PLUGIN_SPOTON_DASHBOARD_TITLE');
+
+        for my $group (qw(pkce spDc connect migration audioKey)) {
+            ok($html =~ /authHealth\.\$id\.\Q$group\E/,
+                "Plan54-02: basic.html iterates authHealth.\$id.$group");
+        }
+    }
+
+    SKIP: {
+        skip "Settings.pm not found", 2 unless -f $settings_module;
+
+        open(my $fh, '<', $settings_module) or die $!;
+        my $src = do { local $/; <$fh> };
+        close($fh);
+
+        ok($src =~ /sub _collectAuthHealth\b/,
+            'Plan54-02: Settings.pm defines _collectAuthHealth');
+        ok($src =~ /paramRef->\{authHealth\}/,
+            'Plan54-02: Settings.pm wires authHealth into paramRef');
+    }
+}
+
+# ============================================================
+# Plan 54-02: Auth Health Dashboard -- _collectAuthHealth fixture test
+# Exercises the real helper directly against a single mocked account with
+# known states across all 5 indicator groups (review-suggested minimal
+# aggregation test).
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for Auth Health Dashboard test", 6
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Slim::Utils::Cache;
+    require Plugins::SpotOn::Unified::DaemonManager;
+    require Plugins::SpotOn::API::WebPlayer;
+    require Plugins::SpotOn::API::TokenManager;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { authhealth1 => { displayName => 'AuthHealth Test' } });
+
+    # Fixture: exactly one alive daemon helper for this account.
+    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = (
+        Plugins::SpotOn::Unified::DaemonManager::FakeHelper->new(
+            _accountId => 'authhealth1', alive => 1, pid => 4242, uptime => 99,
+        ),
+    );
+
+    # sp_dc state via the shared WebPlayer stub (Plan 52-03 pattern).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_state          = 'valid';
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+
+    # Cache-backed indicators (spoton_last_api_call_/spoton_audiokey_state_,
+    # Plan 54-01 keys) -- written via a fresh Slim::Utils::Cache instance that
+    # shares the stub's package-level store (keyed by cache key string, not
+    # by instance), matching how Settings.pm's own private $cache reads them.
+    my $cache = Slim::Utils::Cache->new('spoton', 4);
+    $cache->set('spoton_last_api_call_authhealth1', 1700000000, 86400);
+    $cache->set('spoton_audiokey_state_authhealth1', 'throttled', 600);
+
+    my $health = Plugins::SpotOn::Settings::_collectAuthHealth('authhealth1');
+
+    ok(ref($health) eq 'HASH', 'Plan54-02: _collectAuthHealth returns a hashref');
+    is_deeply([ sort keys %$health ], [ sort qw(pkce spDc connect migration audioKey) ],
+        'Plan54-02: _collectAuthHealth returns exactly the 5 expected indicator groups');
+    is($health->{spDc}{state}, 'valid',
+        'Plan54-02: spDc.state sourced from WebPlayer->state');
+    is($health->{connect}{alive}, 1,
+        'Plan54-02: connect.alive reflects the matching alive helper');
+    is($health->{connect}{pid}, 4242,
+        'Plan54-02: connect.pid sourced from the matching helper');
+    is($health->{audioKey}{state}, 'throttled',
+        'Plan54-02: audioKey.state sourced from cache');
+
+    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = ();
 }
 
 done_testing();

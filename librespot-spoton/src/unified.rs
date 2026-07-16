@@ -1550,7 +1550,10 @@ pub async fn run_unified(
         let discovery = if disable_discovery {
             None
         } else {
-            const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+            // DISCOVERY_CLIENT_ID — standard librespot client ID used for mDNS
+            // Discovery identity (not a Web API OAuth client — this is librespot-core's
+            // built-in ZeroConf/Spotify-Connect discovery identity).
+            const DISCOVERY_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
             let route_addr = match lms_host_port {
                 Some(hp) => {
                     let host = hp.rsplit_once(':').map(|(h, _)| h).unwrap_or(hp);
@@ -1570,7 +1573,7 @@ pub async fn run_unified(
                 Ok(addr) => vec![addr.ip()],
                 Err(_) => vec![],
             };
-            match librespot_discovery::Discovery::builder(device_id_shared.clone(), KEYMASTER_CLIENT_ID.to_string())
+            match librespot_discovery::Discovery::builder(device_id_shared.clone(), DISCOVERY_CLIENT_ID.to_string())
                 .name(device_name.to_string())
                 .device_type(DeviceType::Speaker)
                 .zeroconf_ip(zeroconf_ip)

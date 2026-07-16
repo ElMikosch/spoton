@@ -134,6 +134,9 @@ sub initPlugin {
     # Reset API client inflight counter (Pitfall 2 prevention — stale counter on reload)
     Plugins::SpotOn::API::Client->reset();
 
+    require Plugins::SpotOn::API::WebPlayer;
+    Plugins::SpotOn::API::WebPlayer->reset();
+
     # Start proactive token refresh timer — T-02-15: killTimers first to prevent duplicates
     if ( !main::SCANNER ) {
         Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
@@ -176,11 +179,6 @@ sub initPlugin {
 
         require Plugins::SpotOn::Status;
         Plugins::SpotOn::Status->new();
-
-        # D-01: Auto-start ZeroConf Discovery if no credentials exist.
-        # Deferred via timer to not block initPlugin.
-        Slim::Utils::Timers::killTimers(undef, \&_autoStartDiscovery);
-        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 2, \&_autoStartDiscovery);
 
         # Start Unified daemon manager for all players.
         # 4s delay: allows player list to populate after LMS start.
@@ -266,6 +264,13 @@ sub shutdownPlugin {
     Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
     Slim::Utils::Timers::killTimers($class, \&_refreshAllTokens);
     Slim::Utils::Timers::killTimers($class, \&_startUnifiedDaemons);
+
+    # WR-02: TokenManager's refreshAllTokens re-arms itself with its own class
+    # as invocant, not Plugin — kill that timer too to prevent background refresh
+    # loops surviving plugin disable.
+    require Plugins::SpotOn::API::TokenManager;
+    Slim::Utils::Timers::killTimers('Plugins::SpotOn::API::TokenManager',
+        \&Plugins::SpotOn::API::TokenManager::refreshAllTokens);
 }
 
 # Material Skin resolves app icons via /material/svg/{tag} from its own
@@ -293,13 +298,6 @@ sub _deployMaterialSkinIcon {
 # Thin timer callback wrapper — Slim::Utils::Timers passes $class as first arg.
 sub _refreshAllTokens {
     Plugins::SpotOn::API::TokenManager->refreshAllTokens();
-}
-
-# _autoStartDiscovery()
-# D-01: Timer callback — auto-starts ZeroConf discovery if no credentials exist.
-sub _autoStartDiscovery {
-    require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->autoStartDiscoveryIfNeeded();
 }
 
 # _startUnifiedDaemons()
@@ -349,13 +347,6 @@ sub _killOrphanedProcesses {
     unless ($isBusy) {
         my ($helper) = Plugins::SpotOn::Helper->get();
         if ($helper) {
-            # W2: The ZeroConf discovery process runs the same helper binary —
-            # exclude its PID from orphan cleanup so a running discovery is
-            # not killed mid-flow.
-            my $discoveryPid;
-            if ($INC{'Plugins/SpotOn/API/TokenManager.pm'}) {
-                $discoveryPid = Plugins::SpotOn::API::TokenManager->discoveryPid;
-            }
             eval {
                 if (main::ISWINDOWS) {
                     my $name = basename($helper);
@@ -371,7 +362,6 @@ sub _killOrphanedProcesses {
                         for my $pid (@pids) {
                             next if $activePids{$pid};
                             next if $unifiedPids{$pid};
-                            next if $discoveryPid && $pid == $discoveryPid;   # W2
                             kill 'KILL', $pid;
                             main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid (Windows)");
                         }
@@ -395,7 +385,6 @@ sub _killOrphanedProcesses {
                     for my $pid (@pids) {
                         next if $activePids{$pid};
                         next if $unifiedPids{$pid};    # CON-09: protect Unified daemon PIDs
-                        next if $discoveryPid && $pid == $discoveryPid;   # W2
                         kill 'TERM', $pid;
                         main::DEBUGLOG && $log->is_debug && $log->debug("Killed orphaned spoton process PID $pid");
                     }
@@ -428,8 +417,41 @@ sub handleFeed {
 
     my @items;
 
-    # Rate-limit hint (D-12): show when either token flavor is throttled
-    if ( $cache->get('spoton_rate_limit_own') || $cache->get('spoton_rate_limit_bundled') ) {
+    # D-04 Channel 1: OPML proactive migration hint — show when the ACTIVE
+    # account is a v2.x ZeroConf user who has never completed PKCE auth
+    # (accountNeedsMigration: credentials.json present, pkce_tokens.json
+    # absent). Proactive and filesystem-based, independent of the reactive
+    # needsReauth flag checked below. OPML checks only the active account
+    # (via _getAccountId) since Browse/Library always operates on it --
+    # deliberate asymmetry vs. Settings.pm's anyAccountNeedsMigration() global
+    # check (RESEARCH.md, review finding: hint scope asymmetry).
+    require Plugins::SpotOn::API::TokenManager;
+    my $activeAccountId = _getAccountId($client);
+    my $showingMigrationHint =
+        Plugins::SpotOn::API::TokenManager->accountNeedsMigration($activeAccountId);
+    if ($showingMigrationHint) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_MIGRATION_REQUIRED'),
+            type => 'textarea',
+        };
+    }
+
+    # D-08 Channel 1: OPML re-auth warning — show when any account needs
+    # re-authentication. Precedence rule (RESEARCH.md Open Question 1
+    # resolution): only shown when the migration hint above is NOT showing,
+    # since a migration account cannot yet have hit the reactive reauth path
+    # -- avoids double-stacking two warning items for the same account.
+    if ( !$showingMigrationHint
+        && Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth())
+    {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_REAUTH_REQUIRED'),
+            type => 'textarea',
+        };
+    }
+
+    # Rate-limit hint (D-12): show when the API is throttled
+    if ( $cache->get('spoton_rate_limit') ) {
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_RATE_LIMIT_HINT'),
             type => 'textarea',
@@ -1063,6 +1085,29 @@ sub _trackItem {
     return \%item;
 }
 
+# _authRequiredItem($client, $accountId, $err)
+# Shared OPML error-branch helper (D-04 Channel 3, AUTH-07, Plan 03 Task 2).
+# Called from the ~17 feed-function `unless ($data)` sites in place of the
+# old hardcoded PLUGIN_SPOTON_NO_RESULTS item construction. Distinguishes
+# "authentication required" (v2.x migration pending OR PKCE refresh
+# rejected) from a genuine empty result set.
+# SECURITY (T-53-05, mirrors T-51-10/T-52-02): $err is accepted but NEVER
+# interpolated into the returned name/string -- only fixed, pre-translated
+# cstring() keys are returned. $err is reserved for future server-side
+# logging only.
+sub _authRequiredItem {
+    my ($client, $accountId, $err) = @_;
+    require Plugins::SpotOn::API::TokenManager;
+
+    my $needsAuth = Plugins::SpotOn::API::TokenManager->accountNeedsMigration($accountId)
+                 || Plugins::SpotOn::API::TokenManager->needsReauth($accountId);
+
+    return {
+        name => cstring($client, $needsAuth ? 'PLUGIN_SPOTON_AUTH_REQUIRED' : 'PLUGIN_SPOTON_NO_RESULTS'),
+        type => 'textarea',
+    };
+}
+
 # _albumItem($client, $album)
 # Builds an OPML link item for album navigation.
 # url => \&_albumFeed is defined in Plan 03-03 (resolved at runtime by Perl).
@@ -1102,18 +1147,24 @@ sub _artistItem {
     };
 }
 
-# _playlistItem($client, $playlist)
+# _playlistItem($client, $playlist, $opts)
 # Builds an OPML link item for playlist navigation.
 # url => \&_playlistFeed is defined in Plan 03-03 (resolved at runtime by Perl).
+# $opts->{webPlayer} (Phase 52, D-07/Pitfall 3): when set, the passthrough
+# flag tells _playlistFeed to fetch tracks via Client->getWebPlayerPlaylistItems
+# (Web-Player bearer token) instead of Client->getPlaylistItems (PKCE token) --
+# Dev-Mode PKCE tokens 404 on ALL Spotify-owned (37i9...) playlists regardless
+# of ID validity. Used exclusively by the Made For You feed (_madeForYouFeed).
 sub _playlistItem {
-    my ($client, $playlist) = @_;
+    my ($client, $playlist, $opts) = @_;
     # spoton:// URL for LMS Favorites playback (explodePlaylist resolves to tracks)
     my $pl_spoton = 'spoton://playlist:' . ($playlist->{id} // '');
+    my $webPlayer = ($opts && ref $opts eq 'HASH' && $opts->{webPlayer}) ? 1 : 0;
 
     return {
         name          => $playlist->{name} // '',
         url           => \&_playlistFeed,
-        passthrough   => [{ playlistId => $playlist->{id} }],
+        passthrough   => [{ playlistId => $playlist->{id}, webPlayer => $webPlayer }],
         image         => _largestImage($playlist->{images}),
         line2         => $playlist->{owner}{display_name} // '',
         favorites_url => $pl_spoton,
@@ -1126,8 +1177,17 @@ sub _playlistItem {
 # ============================================================
 
 # _homeFeed($client, $callback, $args)
-# Returns three navigation items: Recently Played, Made For You, Top Tracks.
+# Returns navigation items: Recently Played, (conditional) Made For You, Top Tracks.
 # Per D-02: each item opens its own sub-feed.
+#
+# Phase 52 (D-03/D-04/D-05): the Made For You item's visibility is gated on
+# Plugins::SpotOn::API::WebPlayer->state($accountId), the OPML degradation
+# channel (third of the three D-04 channels -- Settings/Status are Plan 03):
+#   empty        (D-03, no sp_dc)        -> item hidden entirely, distinct INFO log
+#   secrets_down (D-05, xyloflake down)  -> item hidden entirely, distinct INFO log
+#   expired      (D-04, sp_dc expired)   -> item shown, drills into an "sp_dc
+#                                            expired" hint instead of fetching
+#   valid                                -> item shown, drills into the normal feed
 sub _homeFeed {
     my ($client, $callback, $args) = @_;
 
@@ -1137,19 +1197,63 @@ sub _homeFeed {
             url  => \&_recentlyPlayedFeed,
             type => 'link',
         },
-        {
+    );
+
+    require Plugins::SpotOn::API::WebPlayer;
+    my $accountId = _getAccountId($client);
+    my $mfyState  = Plugins::SpotOn::API::WebPlayer->state($accountId);
+
+    if ($mfyState eq 'empty') {
+        main::INFOLOG && $log->is_info && $log->info(
+            'Plugin: Made For You hidden -- no sp_dc configured for account '
+            . _mfyMaskAccount($accountId) . ' (D-03)');
+    } elsif ($mfyState eq 'secrets_down') {
+        main::INFOLOG && $log->is_info && $log->info(
+            'Plugin: Made For You hidden -- TOTP secrets unavailable for account '
+            . _mfyMaskAccount($accountId) . ' (D-05)');
+    } elsif ($mfyState eq 'expired') {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
+            url  => \&_madeForYouExpiredFeed,
+            type => 'link',
+        };
+    } else {
+        push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
             url  => \&_madeForYouFeed,
             type => 'link',
-        },
-        {
-            name => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
-            url  => \&_topTracksFeed,
-            type => 'link',
-        },
-    );
+        };
+    }
+
+    push @items, {
+        name => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
+        url  => \&_topTracksFeed,
+        type => 'link',
+    };
 
     $callback->({ items => \@items });
+}
+
+# _mfyMaskAccount($accountId)
+# T-29-07 masking convention for the two Made For You D-03/D-05 log lines
+# above -- mirrors API::WebPlayer::_mask / API::TokenManager::_mask.
+sub _mfyMaskAccount {
+    my ($accountId) = @_;
+    return 'unknown' unless defined $accountId && length $accountId;
+    return substr($accountId, 0, 4) . '****';
+}
+
+# _madeForYouExpiredFeed($client, $callback, $args)
+# D-04 OPML channel: sp_dc has expired. Renders a fixed hint instead of
+# attempting a Pathfinder fetch that would only fail -- Settings.pm and
+# Status.pm carry the other two D-04 channels (Plan 03). Never reflects any
+# raw error/reason into the menu (Security V7/T-52-02).
+sub _madeForYouExpiredFeed {
+    my ($client, $callback, $args) = @_;
+    $callback->({ items => [{
+        name => cstring($client, 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT'),
+        type => 'textarea',
+    }] });
 }
 
 # _recentlyPlayedFeed($client, $callback, $args)
@@ -1161,9 +1265,9 @@ sub _recentlyPlayedFeed {
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getRecentlyPlayed($accountId, { limit => 50 }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
@@ -1220,43 +1324,35 @@ sub _fetchAllPersonalMixes {
 }
 
 # _madeForYouFeed($client, $callback, $args)
-# Fetches personal mixes in two parallel requests: localized (for display) and
-# English (for locale-independent sorting). Merges by playlist ID.
+# Discovers algorithmic ("Made for You") playlists via pathfinderHome
+# (Pathfinder Home Feed GraphQL). pathfinderHome returns hashrefs with
+# {id, name, images} extracted from PlaylistResponseWrapper items, so
+# each OPML entry shows the real playlist name and artwork.
 sub _madeForYouFeed {
     my ($client, $callback, $args) = @_;
     my $accountId = _getAccountId($client);
 
-    my ($localized, %en_names);
-    my $pending = 2;
+    Plugins::SpotOn::API::Client->pathfinderHome($accountId, {}, sub {
+        my ($playlists, $err) = @_;
 
-    my $merge = sub {
-        return if --$pending > 0;
-
-        unless ($localized && @$localized) {
-            $callback->({ items => [{ name => cstring($client,
-                'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+        unless ($playlists && @$playlists) {
+            my $reason = ($err && ref $err eq 'HASH') ? ($err->{error} // '') : '';
+            my $name = $reason eq 'no_secrets' ? cstring($client, 'PLUGIN_SPOTON_MFY_SECRETS_DOWN')
+                     : $reason eq 'expired'    ? cstring($client, 'PLUGIN_SPOTON_SP_DC_EXPIRED_HINT')
+                     :                           cstring($client, 'PLUGIN_SPOTON_NO_RESULTS');
+            $callback->({ items => [{ name => $name, type => 'textarea' }] });
             return;
         }
 
         my @sorted = sort {
-            _madeForYouPriority($en_names{$a->{id}} // $a->{name} // '')
-            <=>
-            _madeForYouPriority($en_names{$b->{id}} // $b->{name} // '')
-        } @$localized;
+            _madeForYouPriority($a->{name}) <=> _madeForYouPriority($b->{name})
+        } @$playlists;
 
-        my @items = map { _playlistItem($client, $_) } @sorted;
+        my @items = map {
+            _playlistItem($client, $_, { webPlayer => 1 })
+        } @sorted;
+
         $callback->({ items => \@items });
-    };
-
-    _fetchAllPersonalMixes($accountId, undef, sub {
-        $localized = shift;
-        $merge->();
-    });
-
-    _fetchAllPersonalMixes($accountId, 'en', sub {
-        my $en = shift || [];
-        %en_names = map { $_->{id} => $_->{name} } @$en;
-        $merge->();
     });
 }
 
@@ -1271,9 +1367,9 @@ sub _topTracksFeed {
         time_range => 'medium_term',
         limit      => 50,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _trackItem($client, $_) } @{ $data->{items} || [] };
@@ -1322,19 +1418,22 @@ sub _libraryFeed {
 # Per NAV-08: unconditional access (no gating).
 # Per NAV-09: API default sort is added_at desc (recently added first).
 # Per D-12: LMS index/quantity mapped to Spotify offset/limit.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
 sub _savedTracksFeed {
     my ($client, $callback, $args) = @_;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "savedTracks:$accountId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
@@ -1345,7 +1444,7 @@ sub _savedTracksFeed {
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 # FIX-01: defer metadata cache writes to avoid blocking event loop
                 # with N synchronous SQLite INSERTs before callback fires.
                 my @deferredMeta;
@@ -1353,7 +1452,7 @@ sub _savedTracksFeed {
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -1376,9 +1475,9 @@ sub _savedTracksFeed {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
             my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
@@ -1402,9 +1501,9 @@ sub _savedAlbumsFeed {
         offset => $offset,
         limit  => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _albumItem($client, $_->{album}) } @{ $data->{items} || [] };
@@ -1422,15 +1521,21 @@ sub _followedArtistsFeed {
     my $accountId = _getAccountId($client);
 
     _fetchAllFollowedArtists($client, $accountId, undef, [], sub {
-        my ($allArtists) = @_;
+        my ($allArtists, $err) = @_;
         my @items = map { _artistItem($client, $_) } @{$allArtists};
         if (!@items) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            push @items, _authRequiredItem($client, $accountId, $err);
         }
         $callback->({ items => \@items });
     });
 }
 
+# _fetchAllFollowedArtists: on a fetch failure, $err is propagated up to
+# $done (as the 2nd arg) so the caller's empty-result branch can distinguish
+# "authentication required" from a genuine empty followed-artists list
+# (Plan 03 Task 2 -- one of the 2 non-standard sites among the 17
+# unless($data) call sites, since this internal paginator has no inline
+# NO_RESULTS item of its own to substitute).
 sub _fetchAllFollowedArtists {
     my ($client, $accountId, $after, $accumulated, $done) = @_;
 
@@ -1438,9 +1543,9 @@ sub _fetchAllFollowedArtists {
     $params{after} = $after if defined $after;
 
     Plugins::SpotOn::API::Client->getFollowedArtists($accountId, \%params, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $done->($accumulated);
+            $done->($accumulated, $err);
             return;
         }
         my $artists = $data->{artists}{items} || [];
@@ -1474,6 +1579,11 @@ sub _fetchAllFollowedArtists {
 #
 # T-25-01: Guards against infinite recursion — stops when current page returns 0 items,
 # regardless of what the total field says. Prevents infinite loop on API inconsistencies.
+# On a fetch failure, $err is propagated up to $done (as the 2nd arg) so
+# callers' empty-result branch can distinguish "authentication required"
+# from a genuine empty result set (Plan 03 Task 2 -- this shared paginator
+# has no inline NO_RESULTS item of its own to substitute at its unless($data)
+# site, unlike the 15 standard call sites).
 sub _fetchAllPages {
     my ($args) = @_;
 
@@ -1491,10 +1601,10 @@ sub _fetchAllPages {
     $fetchPage = sub {
         my ($offset) = @_;
         $apiFn->($accountId, { offset => $offset, limit => $pageLimit }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
                 undef $fetchPage;
-                $done->(\@accumulated);
+                $done->(\@accumulated, $err);
                 return;
             }
             my $items = $extractItems->($data);
@@ -1531,9 +1641,9 @@ sub _userPlaylistsFeed {
         offset => $offset,
         limit  => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         # D-03: Exclude Made-For-You playlists from Library Playlists
@@ -1588,9 +1698,9 @@ sub _savedShowsFeed {
         limit    => $limit,
         _noCache => 1,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
@@ -1631,7 +1741,9 @@ sub _showItem {
 # Per POD-02: always uses getShowEpisodes (no embedded-episodes shortcut).
 # Per Pitfall 2: response is { items, total } directly, not nested.
 # Per D-09: API default order is newest first.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL episodes via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL episodes
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
 # In play-all mode, the Follow button is excluded (not a playable item).
 sub _showFeed {
     my ($client, $callback, $args, $passthrough) = @_;
@@ -1640,16 +1752,17 @@ sub _showFeed {
     my $showUri    = $passthrough->{showUri}     // "spotify:show:$showId";
     my $showImages = $passthrough->{showImages};
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
 
     my $showCacheKey = "showEpisodes:$accountId:$showId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
         _fetchAllPages({
@@ -1661,10 +1774,10 @@ sub _showFeed {
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 my @items = map { _episodeItem($client, $_, $showCtx) } @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$showCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -1689,9 +1802,9 @@ sub _showFeed {
             offset => $apiOffset,
             limit  => $apiLimit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
             my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
@@ -2012,9 +2125,9 @@ sub _podcastSearchFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2068,9 +2181,9 @@ sub _podcastSearchTypeFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2120,9 +2233,9 @@ sub _searchFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2207,9 +2320,9 @@ sub _searchTypeFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2307,9 +2420,9 @@ sub _artistAlbumsFeed {
         offset         => $offset,
         limit          => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
@@ -2329,7 +2442,9 @@ sub _artistAlbumsFeed {
 # Per NAV-06: line1 = "$track_number. $title", line2 = featuring artists (if differ from album artist).
 # For index=0 (browse): uses tracks embedded in getAlbum response.
 # For index>0 (browse): fetches separate getAlbumTracks page.
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages,
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04),
 # seeding the accumulator with the first-page tracks already in the getAlbum response.
 # Album artwork and artist are passed via passthrough for subsequent pages.
 sub _albumFeed {
@@ -2341,14 +2456,15 @@ sub _albumFeed {
     my $albumName        = $passthrough->{albumName}        // '';    # WR-01: carried for metadata cache
     my $albumReleaseDate = $passthrough->{albumReleaseDate} // '';    # carried for release year in track metadata
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
 
-    if ($qty >= 500 && $offset == 0) {
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
             my $album = shift;
@@ -2389,14 +2505,19 @@ sub _albumFeed {
                     offset => $pageOffset,
                     limit  => 50,
                 }, sub {
-                    my $data = shift;
+                    # NON-UNIFORM site (review finding #4): on fetch failure, fall back to
+                    # any accumulated tracks from prior pages -- only replace the inner
+                    # if (!@items) NO_RESULTS push with _authRequiredItem; the outer
+                    # unless($data) block and the partial-result fallback itself are
+                    # preserved exactly as before.
+                    my ($data, $err) = @_;
                     unless ($data) {
                         undef $fetchPage;
                         # FIX-01: defer metadata cache writes.
                         my @deferredMeta;
                         my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta, albumReleaseDate => $albumRd }) } @accumulated;
                         if (!@items) {
-                            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                            push @items, _authRequiredItem($client, $accountId, $err);
                         }
                         $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
@@ -2462,9 +2583,9 @@ sub _albumFeed {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
 
@@ -2606,32 +2727,47 @@ sub _albumTrackItem {
 # Per NAV-07: maps LMS index/quantity to Spotify offset/limit (cap 100).
 # Null track entries (local files) are skipped per T-03-10.
 # Made-For-You 403 fallback: undef $data returns NO_RESULTS textarea (graceful).
-# Play-all detection: if $qty >= 500 AND $offset == 0, fetches ALL tracks via _fetchAllPages.
+# Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
+# $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
+# via _fetchAllPages (Option D, Phase 54 Plan 04).
+# Phase 52 (D-07/Pitfall 3): $passthrough->{webPlayer} (set by _playlistItem
+# for Made For You / 37i9... playlists) routes the track fetch through
+# Client->getWebPlayerPlaylistItems (Web-Player bearer token) instead of
+# Client->getPlaylistItems (PKCE token) -- Dev-Mode PKCE tokens 404 on ALL
+# Spotify-owned playlists regardless of ID validity. Same pagination
+# offset/limit shape either way, so the play-all/_fetchAllPages path below
+# is unchanged.
 sub _playlistFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $playlistId = $passthrough->{playlistId} // '';
+    my $webPlayer  = $passthrough->{webPlayer} ? 1 : 0;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} // 200;
+    my $limit     = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
 
     my $accountId = _getAccountId($client);
 
-    my $plCacheKey = "playlist:$accountId:$playlistId";
+    my $fetchItems = $webPlayer
+        ? sub { Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems(@_) }
+        : sub { Plugins::SpotOn::API::Client->getPlaylistItems(@_) };
 
-    if ($qty >= 500 && $offset == 0) {
+    my $plCacheKey = ($webPlayer ? 'mfyplaylist:' : 'playlist:') . "$accountId:$playlistId";
+
+    if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
             apiFn        => sub {
                 my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getPlaylistItems($acct, $playlistId, $params, $cb);
+                $fetchItems->($acct, $playlistId, $params, $cb);
             },
             pageLimit    => 100,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 # T-03-10: Skip null track entries (local files in playlists return null track objects).
                 # FIX-01: defer metadata cache writes to avoid blocking event loop with N SQLite INSERTs.
                 my @deferredMeta;
@@ -2639,7 +2775,7 @@ sub _playlistFeed {
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$plCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -2657,14 +2793,19 @@ sub _playlistFeed {
         delete $_playAllItemCache{$plCacheKey};
         goto &_playlistFeed;  # re-enter with same @_ after cache eviction
     } else {
-        Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
+        $fetchItems->($accountId, $playlistId, {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            # NON-UNIFORM site (review finding #4): error source may be
+            # sp_dc/Pathfinder (webPlayer mode) rather than PKCE.
+            # _authRequiredItem still works correctly here -- it checks
+            # accountNeedsMigration/needsReauth state, not the error source.
+            # Existing graceful-degradation behavior (no partial-cache
+            # fallback at this site) is otherwise unchanged.
+            my ($data, $err) = @_;
             unless ($data) {
-                # Made-For-You 403 or other error — graceful fallback per RESEARCH Open Question 2.
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
 

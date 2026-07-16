@@ -1,0 +1,254 @@
+# Roadmap: SpotOn
+
+**Project:** SpotOn — LMS Spotify Plugin
+**Created:** 2026-05-26
+**Granularity:** standard
+
+## Milestones
+
+- ✅ **v1.0 Foundation** — Phases 1-6 (shipped 2026-06-03)
+- ✅ **v1.1 Hardening & Reach** — Phases 7-12 (shipped 2026-06-06)
+- ✅ **v1.3 Polish & Publish** — Phases 13-16.1 (shipped 2026-06-13)
+- ✅ **v1.5 Podcasts** — Phases 18-21 (shipped 2026-06-15)
+- 🔄 **v2.0 Browse Daemon Migration** — Phases 28-30 (active)
+
+## Phases
+
+<details>
+<summary>✅ v1.0 Foundation (Phases 1-6) — SHIPPED 2026-06-03</summary>
+
+- [x] **Phase 1: Plugin Skeleton + Binary Foundation** — completed 2026-05-26
+- [x] **Phase 2: Auth + API Foundation** (6/6 plans) — completed 2026-05-27
+- [x] **Phase 02.1: OAuth-PKCE Browser Auth** (4/4 plans) — completed 2026-05-27
+- [x] **Phase 3: Browse + Navigation** (3/3 plans) — completed 2026-05-28
+- [x] **Phase 4: Single-Track Streaming** (2/2 plans) — completed 2026-05-28
+- [x] **Phase 04.1: Streaming Bug Fixes + Passthrough Binary** (2/2 plans) — completed 2026-05-28
+- [x] **Phase 04.2: Credentials + Made For You Fix** (2/2 plans) — completed 2026-05-29
+- [x] **Phase 04.3: ZeroConf + Keymaster Auth** (4/4 plans) — completed 2026-05-29
+- [x] **Phase 04.4: Dual-Token API Routing** (2/2 plans) — completed 2026-05-29
+- [x] **Phase 5: Spotify Connect** (5/5 plans) — completed 2026-06-01
+- [x] **Phase 05.1: Connect Audio Streaming Bugfix** (3/3 plans) — completed 2026-06-01
+- [x] **Phase 05.2: Connect Controls & Resume** (2/2 plans) — completed 2026-06-01
+- [x] **Phase 05.3: Sync Groups + Connect Robustness** (3/3 plans) — completed 2026-06-02
+- [x] **Phase 05.4: mDNS Connect Discovery Fix** (3/3 plans) — completed 2026-06-02
+- [x] **Phase 6: Polish + DSTM + Settings** (5/5 plans) — completed 2026-06-03
+
+</details>
+
+<details>
+<summary>✅ v1.1 Hardening & Reach (Phases 7-12) — SHIPPED 2026-06-06</summary>
+
+- [x] **Phase 7: DE→EN Code Cleanup** (1/1 plan) — completed 2026-06-03
+- [x] **Phase 8: Multi-Arch Binary Distribution** (2/2 plans) — completed 2026-06-03
+- [x] **Phase 9: Stream Metadata** (1/1 plan) — completed 2026-06-04
+- [x] **Phase 9.5: Prod Deployment & Monitoring** (2/2 plans) — completed 2026-06-04
+- [x] **Phase 10: Connect-DSTM** (3/3 plans) — completed 2026-06-04
+- [x] **Phase 11: Track History Metadata** (2/2 plans) — completed 2026-06-05
+- [x] **Phase 12: Protocol Handler Rename** (2/2 plans) — completed 2026-06-05
+
+</details>
+
+<details>
+<summary>✅ v1.3 Polish & Publish (Phases 13-16.1) — SHIPPED 2026-06-13</summary>
+
+- [x] **Phase 13: Repo Maintenance** (2/2 plans) — completed 2026-06-07
+- [x] **Phase 14: Connect Fixes** (2/2 plans) — completed 2026-06-07
+- [x] **Phase 15: Like Button** (2/2 plans) — completed 2026-06-11
+- [x] **Phase 16: macOS Universal Binary** (2/2 plans) — completed 2026-06-11
+- [x] **Phase 16.1: CI Conditional Build** (1/1 plan) — completed 2026-06-12
+
+</details>
+
+- ✅ **v1.5 Podcasts** — Phases 18-21 (shipped 2026-06-15) → [archive](milestones/v1.5-ROADMAP.md)
+
+## Active
+
+- [x] **Phase 22: Seek + Favorites Bugfixes** — completed 2026-06-17
+  **Goal**: Fix seeking (duration 0:00 in seek bar) and LMS favorites (spotify: scheme statt spoton://)
+  **Plans:** 1 plan
+
+  Plans:
+
+  - [x] 22-01-PLAN.md — Fix seek bar duration + favorites URL scheme + explodePlaylist
+
+- [ ] **Phase 23: Forum Monitor + Draft Generation**
+  **Goal**: GitHub Action (cron) die den Lyrion-Forum-Thread pollt, neue Posts erkennt, via Claude API Draft-Replies generiert und als GitHub Issues zur Review erstellt.
+
+- [ ] **Phase 24: Forum Auto-Post**
+  **Goal**: Label-getriggerter GitHub Action Workflow der approved Draft-Replies automatisch im vBulletin-Forum postet.
+
+- [x] **Phase 25: Play-All Full Pagination** — completed 2026-06-18
+  **Goal**: Play-All auf Playlists, Liked Songs, Alben und Shows spielt alle Tracks ab — nicht nur die erste API-Seite (max 50/100). Reusable Paginator-Helper für alle Feed-Funktionen.
+  **Plans:** 1/1 plans complete
+
+  Plans:
+
+  - [x] 25-01-PLAN.md — Reusable _fetchAllPages helper + integration in all four feeds + ProtocolHandler show-explode fix
+
+- [x] **Phase 26: Browse Error Recovery + Diagnostics** — completed 2026-06-21
+  **Goal**: Unavailable Tracks in Browse Mode erkennen und automatisch skippen statt endlos hängen. Diagnostic Bundle um Browse-Mode stderr erweitern.
+  **Plans:** 2/2 plans complete
+
+  Plans:
+
+  - [x] 26-01-PLAN.md — Unavailable track detection + auto-skip
+  - [x] 26-02-PLAN.md — Browse stderr capture for diagnostics
+
+- [x] **Phase 27: Browse Pipeline Failure Recovery** — completed 2026-06-22
+  **Goal**: Prefetch-Hang bei unavailable Tracks verhindern (LMS wartet auf PCM-Daten die nie kommen) und Rapid-Retry-Loop stoppen.
+  **Plans:** 1/1 plans complete
+
+  Plans:
+
+  - [x] 27-01-PLAN.md — Prefetch watchdog + skip cache
+
+### v2.0 Browse Daemon Migration
+
+- [x] **Phase 28: Persistent Browse Daemon** — completed 2026-06-22
+  **Goal**: Per-track `--single-track` spawning durch persistenten Browse-Daemon mit HTTP-Track-Serving ersetzen. Löst Prefetch-Hang, Audio-Key-Throttling und Log-Flood an der Wurzel.
+  **Plans:** 3/3 plans complete
+  Canonical refs: `.planning/notes/browse-daemon-architecture-decision.md`
+
+  Plans:
+
+  - [x] 28-01-PLAN.md — Browse daemon Rust implementation (HTTP server + track endpoint)
+  - [x] 28-02-PLAN.md — Browse daemon lifecycle modules (DaemonManager + Daemon Perl)
+  - [x] 28-03-PLAN.md — Browse-HTTP pipeline integration (ProtocolHandler + Plugin wiring)
+
+- [x] **Phase 29: Unified Browse+Connect Daemon** (completed 2026-06-22)
+  **Goal**: Browse- und Connect-Daemon in einen Prozess pro Player zusammenführen — ein librespot-Prozess mit Spirc (Connect) + HTTP Track-Endpoint (Browse) gleichzeitig. Eliminiert doppelten RAM-Overhead und Session-Koordination.
+  **Plans:** 3 plans
+  Canonical refs: `.planning/notes/browse-daemon-architecture-decision.md`, `.planning/seeds/evaluate-phase2-unified-daemon.md`
+
+  Plans:
+
+  - [x] 29-01-PLAN.md — Unified Rust daemon (unified.rs + main.rs CLI dispatch)
+  - [x] 29-02-PLAN.md — Unified Perl DaemonManager + Daemon lifecycle modules
+  - [x] 29-03-PLAN.md — Integration (ProtocolHandler + Plugin.pm + daemonMode pref)
+
+- [ ] **Phase 30: Legacy Pipe Cleanup**
+  **Goal**: Remove `--single-track` mode and `son-*` transcoding pipelines. Remove `browseMode`/`daemonMode` toggle prefs. Delete Browse::DM, Browse::Daemon, Connect::DM, Connect::Daemon modules. Add rapid-skip debounce to unified.rs.
+  **Plans:** 2 plans
+
+  Plans:
+
+  - [x] 30-01-PLAN.md — Delete legacy Perl modules + simplify Plugin.pm/ProtocolHandler.pm/Connect.pm + remove son-* from custom-convert.conf + remove dead Rust modes
+  - [ ] 30-02-PLAN.md — Add browse_abort_gen rapid-skip debounce to unified.rs + final verification
+
+### v3.0 Auth Overhaul
+
+### Phase 49: PKCE OAuth Flow
+
+- [x] **Phase 49: PKCE OAuth Flow** (completed 2026-07-14)
+  **Goal**: Implement PKCE OAuth authorization flow — GitHub Pages static relay, LMS Settings handler for code_verifier, token exchange, refresh token storage. AUTH-01, AUTH-02.
+  **Plans:** 2/2 plans complete
+  Depends on: Keymaster audit (.planning/notes/keymaster-audit.md), spike findings (spike-findings-spoton skill), urknall edge cases (#176)
+
+  Plans:
+
+  - [x] 49-01-PLAN.md — PKCE core module (crypto, token exchange, persistence) + GitHub Pages relay page
+  - [x] 49-02-PLAN.md — Settings integration (PKCE handlers, auth UI, copy-paste fallback, i18n strings)
+
+### Phase 50: Perl TokenManager Rewrite
+
+- [x] **Phase 50: Perl TokenManager Rewrite** (completed 2026-07-14)
+  **Goal**: Replace Keymaster-based TokenManager with PKCE token management — refresh flow, expiry handling, per-player token isolation. AUTH-05.
+  **Plans:** 3/3 plans complete
+  Depends on: Phase 49
+
+  Plans:
+
+  - [x] 50-01-PLAN.md — TokenManager.pm PKCE rewrite + PKCE.pm error extension + test rewrite (review: M-1/M-4/M-5/M-6/L-1/L-4/L-6)
+  - [x] 50-02-PLAN.md — Client.pm flavor removal + Status.pm/status.html fix + test updates (review: H-1/H-2/L-2/L-5)
+  - [x] 50-03-PLAN.md — Integration wiring: Plugin.pm + Settings.pm + basic.html + i18n (review: M-2/M-3/M-7)
+
+### Phase 51: Credential Derivation + Connect
+
+- [x] **Phase 51: Credential Derivation + Connect** (completed 2026-07-14)
+  **Goal**: Convert PKCE access tokens to stored credentials for librespot Connect sessions. Ensure Connect registration and audio playback work with PKCE-derived credentials. AUTH-03, AUTH-04.
+  **Plans:** 3/3 plans complete
+  Depends on: Phase 50
+
+  Plans:
+
+  - [x] 51-01-PLAN.md — Credentials.pm shared derivation module (D-01) + t/16_credentials.t (rate limiting D-05, mismatch detection D-08, error classification D-03)
+  - [x] 51-02-PLAN.md — Daemon lifecycle wiring: always-on stderr capture, lazy derivation safety-net, crash auto-re-derive (D-03/D-04), D-09 verification
+  - [x] 51-03-PLAN.md — Settings eager derivation (D-02/D-06) + i18n warning string + test updates
+
+### Phase 52: sp_dc + Pathfinder Integration
+
+- [x] **Phase 52: sp_dc + Pathfinder Integration** (gap closure) (completed 2026-07-15)
+  **Goal**: Best-effort sp_dc cookie extraction + Pathfinder API for Made for You content. TOTP rotation, graceful degradation, re-scrape on failure.
+  **Plans:** 6/6 plans complete
+  Depends on: Phase 50
+
+  Plans:
+
+  - [x] 52-01-PLAN.md — WebPlayer.pm token lifecycle (SecretSource, TOTP, mint, client-token, state enum) + Wave 0 tests (D-01/D-02/D-05/D-06/D-09/D-10)
+  - [x] 52-02-PLAN.md — Client.pm Pathfinder discovery + Web-Player 37i9 track fetch + separate rate pool (D-07)
+  - [x] 52-03-PLAN.md — Settings sp_dc section + Status channel + i18n strings + template (D-04/D-08/D-09)
+  - [x] 52-04-PLAN.md — Plugin.pm OPML Made for You feed gating + Pathfinder wiring (D-03/D-04/D-05/D-07)
+  - [x] 52-05-PLAN.md — Gap closure: Fix STATE_EXPIRED over-attribution in WebPlayer mint errors (CR-02) + regression tests (WR-04)
+  - [x] 52-06-PLAN.md — Gap closure: Pathfinder hash admin path via Settings (CR-01) + sp_dc clear (WR-03) + dead cache write removal (WR-02)
+
+### Phase 53: Keymaster Removal + Migration
+
+- [x] **Phase 53: Keymaster Removal + Migration** (completed 2026-07-16)
+  **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
+  **Plans:** 3/3 plans complete
+  Depends on: Phase 49, Phase 50, Phase 51
+
+  Plans:
+
+  - [x] 53-01-PLAN.md — Rust binary: remove --get-token/Mode::GetToken/run_get_token(), rename KEYMASTER_CLIENT_ID
+  - [x] 53-02-PLAN.md — Perl naming cleanup (Client.pm), i18n string rewrite (22+), AUTH-06 disposition
+  - [x] 53-03-PLAN.md — Migration detection + OPML/Settings/feed UX wiring + Client-ID setup wizard
+
+### Phase 54: Auth Health Dashboard
+
+- [ ] **Phase 54: Auth Health Dashboard + v3.0 Release Prep**
+  **Goal**: Auth Health Dashboard on Settings page (5 indicators per account, passive reads only), Playlist Play-All bug fix, v2-legacy fallback branch, v3.0.0 merge to main, PKCE Migration E2E verification.
+  **Plans:** 4/5 plans executed
+  Depends on: Phase 52, Phase 53
+
+  Plans:
+
+  - [x] 54-01-PLAN.md — Audio-key classifier + dashboard backend state (last-API-call timestamp, unconditional stderr scan)
+  - [x] 54-02-PLAN.md — Auth Health Dashboard UI (Settings.pm aggregation + basic.html template + i18n)
+  - [x] 54-03-PLAN.md — Playlist play-all investigation (debug logging + fix decision checkpoint)
+  - [x] 54-04-PLAN.md — Playlist play-all fix (implement chosen approach + cleanup)
+  - [ ] 54-05-PLAN.md — v2-legacy branch + v3.0 merge + version bump + PKCE E2E verification
+
+## Progress Table
+
+| Phase | Milestone | Plans | Status | Completed |
+|-------|-----------|-------|--------|-----------|
+| 1-6 (15 phases) | v1.0 | 50/50 | Complete | 2026-06-03 |
+| 7-12 (7 phases) | v1.1 | 13/13 | Complete | 2026-06-06 |
+| 13-16.1 (5 phases) | v1.3 | 9/9 | Complete | 2026-06-13 |
+| 18. Podcast API Foundation | v1.5 | 1/1 | Complete | 2026-06-14 |
+| 19. Podcast Browse | v1.5 | 2/2 | Complete | 2026-06-14 |
+| 20. Podcast Library Actions | v1.5 | 1/1 | Complete | 2026-06-15 |
+| 21. Podcast UX Polish + i18n | v1.5 | 2/2 | Complete | 2026-06-15 |
+| 22. Seek + Favorites Bugfixes | — | 1/1 | Complete | 2026-06-17 |
+| 25. Play-All Full Pagination | — | 1/1 | Complete | 2026-06-18 |
+| 26. Browse Error Recovery | — | 2/2 | Complete | 2026-06-21 |
+| 27. Pipeline Failure Recovery | — | 1/1 | Complete | 2026-06-22 |
+| 28. Persistent Browse Daemon | v2.0 | 3/3 | Complete | 2026-06-22 |
+| 29. Unified Daemon | v2.0 | 3/3 | Complete   | 2026-06-22 |
+| 30. Legacy Pipe Cleanup | v2.0 | 1/2 | In Progress|  |
+
+## Backlog
+
+Items discovered during development — not assigned to a milestone.
+
+1. **Eigene SpotOn Client-ID bei Spotify registrieren** — Blocked: Spotify requires 250k MAU + legally registered business. Extended Quota documentation deferred to future milestone.
+2. **~~Online-Musiksammlung (Importer.pm / OnlineLibraryBase)~~** — Evaluiert und bewusst abgelehnt. API-Quota im Dev Mode macht Library-Scan extrem teuer; Browse > Library deckt den Use Case on-demand ab.
+3. ~~**LMS Community Repo Submission**~~ — Erledigt: Plugin im Community Repo veröffentlicht.
+4. ~~**ZeroConf Auth UX: "Connected" an Spotify App melden**~~ — Verworfen: Setup Guide erklärt das Verhalten, kein technischer Fix möglich ohne Playback-Session.
+5. ~~**Diagnostics: "Clear Logs" Button in Settings**~~ — Implementiert in v1.7.4 (truncate on daemon restart + Clear Logs button).
+6. **Spotty Favorites Migration** — Settings-Button der `spotify://` Einträge in LMS Favorites und Playlists als `spoton://` Duplikate anlegt. Originale bleiben erhalten, User kann Spotty danach deinstallieren. URI-Schema nach Prefix ist identisch (`track:ID`, `album:ID`, etc.). Idee von Paul Webster (Forum #32, 2026-06-19).
+
+---
+*Roadmap created: 2026-05-26*
+*Last updated: 2026-06-22 — Phase 30 plans created (2 plans, 2 waves)*

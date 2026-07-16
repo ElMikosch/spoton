@@ -339,18 +339,34 @@ write_stub($stub_dir, 'Plugins::SpotOn::API::TokenManager', <<'END');
 package Plugins::SpotOn::API::TokenManager;
 our $mock_token = 'mock_token_abc123';
 sub getToken {
-    my ($class, $accountId, $flavorOrCb, $cb) = @_;
-    if (ref $flavorOrCb eq 'CODE') {
-        $cb = $flavorOrCb;
-    }
+    my ($class, $accountId, $cb) = @_;
     $cb->($mock_token);
 }
 sub refreshToken {
-    my ($class, $accountId, $flavorOrCb, $cb) = @_;
-    if (ref $flavorOrCb eq 'CODE') {
-        $cb = $flavorOrCb;
-    }
+    my ($class, $accountId, $cb) = @_;
     $cb->($mock_token);
+}
+1;
+END
+
+# Stub: Plugins::SpotOn::API::WebPlayer
+# For Client tests: getToken invokes callback immediately with a mock
+# { access_token, client_token } hash, or (undef, $mock_fail_reason) to
+# simulate D-03/D-04/D-05 degradation.
+write_stub($stub_dir, 'Plugins::SpotOn::API::WebPlayer', <<'END');
+package Plugins::SpotOn::API::WebPlayer;
+our $mock_access_token = 'mock_wp_access_token';
+our $mock_client_token = 'mock_wp_client_token';
+our $mock_fail_reason  = undef;
+use constant USER_AGENT      => 'MockUA/1.0';
+use constant CLIENT_VERSION  => '1.0.0.0.mock';
+sub getToken {
+    my ($class, $accountId, $cb) = @_;
+    if ($mock_fail_reason) {
+        $cb->(undef, $mock_fail_reason);
+        return;
+    }
+    $cb->({ access_token => $mock_access_token, client_token => $mock_client_token }, undef);
 }
 1;
 END
@@ -473,14 +489,11 @@ SKIP: {
         is($ttl_pl,     300,  'API-03: _cacheTTL returns 300 for playlists/<id>');
     }
 
-    # API-04: 429 response sets per-flavor rate-limit key with Retry-After TTL
+    # API-04: 429 response sets single rate-limit key with Retry-After TTL
     {
         Slim::Utils::Cache->new()->clear();
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
         Slim::Networking::SimpleAsyncHTTP::reset_requests();
-
-        # me/* needs clientId pref to route via flavor=own (D-05 fallback change)
-        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', 'test-client-id');
 
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
         $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 60 };
@@ -491,15 +504,14 @@ SKIP: {
         });
 
         my $cache = Slim::Utils::Cache->new();
-        ok($cache->get('spoton_rate_limit_own'), 'API-04: per-flavor rate-limit key set in cache after 429');
+        ok($cache->get('spoton_rate_limit'), 'API-04: single rate-limit key set in cache after 429');
 
-        my $ttl = $cache->ttl('spoton_rate_limit_own');
+        my $ttl = $cache->ttl('spoton_rate_limit');
         is($ttl, 60, 'API-04: Rate limit cache TTL equals Retry-After header value');
 
         # Reset for next test
         $cache->clear();
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
-        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', undef);
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
     }
 
@@ -509,21 +521,18 @@ SKIP: {
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
         Slim::Networking::SimpleAsyncHTTP::reset_requests();
 
-        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', 'test-client-id');
-
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
         $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 9999 };
 
         Plugins::SpotOn::API::Client->getMe('testacct', sub { });
 
-        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_rate_limit_own');
+        my $ttl = Slim::Utils::Cache->new()->ttl('spoton_rate_limit');
         ok($ttl <= 300,
             "API-04: Retry-After capped at 300s (got $ttl)");
 
         # Reset
         Slim::Utils::Cache->new()->clear();
         $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
-        Slim::Utils::Prefs->preferences('plugin.spoton')->set('clientId', undef);
         Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
     }
 }
@@ -786,6 +795,134 @@ SKIP: {
     Slim::Utils::Cache->new()->clear();
     Slim::Networking::SimpleAsyncHTTP::reset_requests();
     Plugins::SpotOn::API::Client->reset() if Plugins::SpotOn::API::Client->can('reset');
+}
+
+# WP-01: getWebPlayerPlaylistItems rejects a malformed playlist ID before
+# any HTTP (D-07, T-52-05).
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', 'bad id!', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    is($got_err->{error}, 'invalid_id', 'WP-01: malformed playlist ID rejected with invalid_id');
+    is(scalar(@Slim::Networking::SimpleAsyncHTTP::requests), 0,
+        'WP-01: no HTTP request dispatched for an invalid playlist ID');
+}
+
+# WP-02: getWebPlayerPlaylistItems uses Pathfinder GraphQL (fetchPlaylistContents)
+# with the Web-Player bearer token (D-07, Pitfall 3) -- never the PKCE token.
+SKIP: {
+    skip "Client.pm not yet created", 4 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 4
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    Slim::Utils::Cache->new()->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode          = 'success';
+    $Slim::Networking::SimpleAsyncHTTP::auto_response_content = '{"data":{"playlistV2":{"content":{"totalCount":0,"items":[]}}}}';
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason     = undef;
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    my @reqs = @Slim::Networking::SimpleAsyncHTTP::requests;
+    is(scalar(@reqs), 1, 'WP-02: getWebPlayerPlaylistItems dispatches exactly one HTTP request');
+    like($reqs[0]->{url}, qr{api-partner\.spotify\.com/pathfinder/v2/query},
+        'WP-02: URL targets Pathfinder GraphQL endpoint');
+    is($reqs[0]->{method}, 'POST', 'WP-02: request method is POST (GraphQL)');
+    like($reqs[0]->{headers}{'Authorization'}, qr/^Bearer mock_wp_access_token$/,
+        'WP-02: Authorization header uses the Web-Player access token, not a PKCE token');
+
+    Slim::Utils::Cache->new()->clear();
+}
+
+# WP-03: a Web-Player 429 sets the isolated spoton_wp_rate_limit key, and
+# does NOT set the shared Browse spoton_rate_limit flag (Pitfall 5, T-52-04).
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Utils::Cache->new()->clear();
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'error_429';
+    $Slim::Networking::SimpleAsyncHTTP::last_response_headers = { 'Retry-After' => 45 };
+
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub { });
+
+    my $cache = Slim::Utils::Cache->new();
+    ok($cache->get('spoton_wp_rate_limit'), 'WP-03: Web-Player 429 sets the isolated spoton_wp_rate_limit key');
+    ok(!$cache->get('spoton_rate_limit'),
+        'WP-03: Web-Player 429 does NOT set the shared Browse spoton_rate_limit flag');
+
+    $cache->clear();
+    $Slim::Networking::SimpleAsyncHTTP::auto_mode = 'success';
+}
+
+# WP-04: getWebPlayerPlaylistItems propagates a WebPlayer degradation reason
+# (D-03/D-04/D-05) without dispatching any HTTP request.
+SKIP: {
+    skip "Client.pm not yet created", 2 unless -f $client_module;
+    skip "getWebPlayerPlaylistItems not yet implemented", 2
+        unless Plugins::SpotOn::API::Client->can('getWebPlayerPlaylistItems');
+
+    Slim::Utils::Cache->new()->clear();
+    Slim::Networking::SimpleAsyncHTTP::reset_requests();
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = 'no_spdc';
+
+    my ($got_result, $got_err);
+    Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems('testacct', '37i9dQZF1E39vTG1lmycOQ', {}, sub {
+        ($got_result, $got_err) = @_;
+    });
+
+    is($got_err->{error}, 'no_spdc', 'WP-04: WebPlayer degradation reason propagated to the caller');
+    is(scalar(@Slim::Networking::SimpleAsyncHTTP::requests), 0,
+        'WP-04: no HTTP request dispatched when WebPlayer has no token');
+
+    $Plugins::SpotOn::API::WebPlayer::mock_fail_reason = undef;
+}
+
+# WP-05: source assertion -- getWebPlayerPlaylistItems sources its bearer
+# token from WebPlayer->getToken, never TokenManager->getToken (D-07).
+SKIP: {
+    skip "Client.pm not yet created", 3 unless -f $client_module;
+
+    open(my $fh, '<', $client_module) or BAIL_OUT("Cannot open $client_module: $!");
+    my $source = do { local $/; <$fh> };
+    close($fh);
+
+    like($source, qr/^sub getWebPlayerPlaylistItems\b/m,
+        'WP-05: Client.pm defines getWebPlayerPlaylistItems');
+
+    my @lines = split /\n/, $source;
+    my ($start);
+    for my $i (0 .. $#lines) {
+        if ($lines[$i] =~ /^sub getWebPlayerPlaylistItems\b/) { $start = $i; last; }
+    }
+    my @body;
+    if (defined $start) {
+        for my $i ($start + 1 .. $#lines) {
+            last if $lines[$i] =~ /^sub \w/;
+            push @body, $lines[$i];
+        }
+    }
+    my $body = join("\n", @body);
+
+    like($body, qr/WebPlayer->getToken/,
+        'WP-05: getWebPlayerPlaylistItems calls WebPlayer->getToken');
+    unlike($body, qr/TokenManager->getToken/,
+        'WP-05: getWebPlayerPlaylistItems never calls TokenManager->getToken');
 }
 
 # API-06: No LWP or SimpleSyncHTTP in API/ modules — grep test (runs immediately)

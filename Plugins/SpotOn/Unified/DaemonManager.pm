@@ -9,6 +9,7 @@ use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 
 use JSON::XS::VersionOneAndTwo;
+use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
@@ -33,9 +34,18 @@ use constant ORPHAN_LOG_CLEANUP_DELAY => 30;
 # With 6 players at 3s each, all daemons start within ~15s instead of simultaneously.
 use constant STAGGER_DELAY => 3;
 
+# D-03: bytes of stderr tail read for credential-error classification on
+# daemon crash. Mirrors Credentials.pm's own bounded-read discipline.
+use constant STDERR_TAIL_BYTES => 8192;
+
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
+
+# D-02: cache instance for audio-key cohort state, keyed by accountId.
+# Mirrors TokenManager.pm's own $cache instantiation pattern (single source
+# of truth for the version number: Plugin.pm's SPOTON_CACHE_VERSION).
+my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
 my %helperInstances;
 
@@ -53,6 +63,15 @@ my %lastHealthRestart;
 # anonymous subs passed inline can never be unregistered and accumulate
 # across plugin re-inits.
 my ($clientSubRef, $syncSubRef);
+
+# _maskAccountId($accountId)
+# T-50-01/T-29-07 discipline: masked accountId for log lines -- never log
+# full account IDs. Identical convention to TokenManager::_mask/Credentials::_mask.
+sub _maskAccountId {
+    my ($accountId) = @_;
+    return 'unknown' unless defined $accountId && length $accountId;
+    return substr($accountId, 0, 4) . '****';
+}
 
 # _isConnectEnabled($client)
 # Returns true if the per-player (or global fallback) Spotify Connect toggle is on.
@@ -322,13 +341,55 @@ sub _streamAlivePoll {
 
     for my $helper (values %helperInstances) {
         if (!$helper->alive) {
-            main::INFOLOG && $log->is_info && $log->info(
-                "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting via startHelper"
-            );
-            $class->startHelper($helper->mac);
+            # D-03: classify the crash BEFORE the generic restart -- a
+            # credential-rejection error gets the delete->re-derive->restart
+            # treatment (self-healing); anything else falls through to the
+            # existing plain restart path, unchanged.
+            require Plugins::SpotOn::API::Credentials;
+            my $tail = $helper->stderrTail(STDERR_TAIL_BYTES);
+            if (Plugins::SpotOn::API::Credentials->isCredentialError($tail)) {
+                $class->_handleCredentialCrash($helper);
+            } else {
+                main::INFOLOG && $log->is_info && $log->info(
+                    "SpotOn Unified daemon crashed for " . $helper->mac . " - restarting via startHelper"
+                );
+                $class->startHelper($helper->mac);
+            }
         }
         elsif (main::DEBUGLOG && $log->is_debug) {
             $log->debug("SpotOn Unified daemon alive: " . $helper->mac . " pid=" . ($helper->pid || '?'));
+        }
+
+        # D-02: unconditional passive audio-key cohort classification on every
+        # alive daemon's stderr tail. Never triggers a new process spawn --
+        # purely reads the existing stderrTail buffer. Cache write is guarded
+        # against redundant writes (same classified state every 5s poll).
+        if ($helper->alive && $helper->_accountId) {
+            require Plugins::SpotOn::API::Credentials;
+            my $tail  = $helper->stderrTail(STDERR_TAIL_BYTES);
+            my $state = Plugins::SpotOn::API::Credentials->classifyAudioKeyError($tail);
+
+            if (defined $state) {
+                my $cacheKey = "spoton_audiokey_state_" . $helper->_accountId;
+                my $cached   = $cache->get($cacheKey);
+
+                if (($cached // '') ne $state) {
+                    if ($state eq 'denied') {
+                        # Permanent cohort property -- persists until explicitly
+                        # cleared, mirrors _markNeedsReauth's 'never' TTL discipline.
+                        $cache->set($cacheKey, 'denied', 'never');
+                    }
+                    elsif ($state eq 'throttled') {
+                        # Transient rapid-skip state (~2min actual) -- 600s TTL
+                        # gives generous margin for auto-clear back to 'ok'.
+                        $cache->set($cacheKey, 'throttled', 600);
+                    }
+                }
+            }
+            # else: classifier returned undef -- do NOT write to cache. Preserve
+            # any existing 'denied' state that may have scrolled out of the
+            # stderr tail buffer; permanent denial is only ever set, never
+            # cleared by absence.
         }
 
         if ($helper->alive && $helper->_streamPort) {
@@ -350,6 +411,107 @@ sub _streamAlivePoll {
         Time::HiRes::time() + STREAM_WATCHDOG_INTERVAL,
         \&_streamAlivePoll
     );
+}
+
+# D-09 division of responsibility (verified, not rebuilt in Perl): the Rust
+# binary already guarantees a LAN guest authenticating via ZeroConf discovery
+# can never overwrite the on-disk credentials.json for the active PKCE
+# account -- librespot-spoton/src/unified.rs constructs every post-startup
+# reconnect_cache WITHOUT a credentials_location ("Phase 14 (Credential
+# Isolation)", verified present at unified.rs L1261), making
+# Cache::save_credentials() a no-op for guest ZeroConf sessions. Perl-side
+# repair below only ever touches the account-scoped credentials.json for the
+# active PKCE account -- it never re-implements or interacts with that
+# guest-isolation guard.
+#
+# _handleCredentialCrash($class, $helper) (D-03/D-04)
+# Called when _streamAlivePoll's crash branch classifies the daemon's stderr
+# tail as a credential error (Credentials->isCredentialError). Deletes the
+# single credentials.json for the active PKCE account and re-derives from
+# fresh PKCE tokens, restarting the daemon transparently on success. A
+# permanent derivation failure (fresh token rejected by the AP) escalates to
+# the Phase 50 4-channel re-auth warning via TokenManager's PUBLIC
+# markNeedsReauth wrapper -- never the underscore-prefixed private method.
+sub _handleCredentialCrash {
+    my ($class, $helper) = @_;
+
+    my $activeAccountId = $prefs->get('activeAccount') || '';
+
+    # WR-01: if the account is already flagged for re-auth (permanent
+    # failure), stop re-entering this handler every 5s poll cycle.
+    # Deregister the dead daemon so _streamAlivePoll stops finding it;
+    # the re-auth flow will re-create it on success.
+    if ($activeAccountId) {
+        require Plugins::SpotOn::API::TokenManager;
+        if (Plugins::SpotOn::API::TokenManager->needsReauth($activeAccountId)) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "SpotOn Unified daemon for " . $helper->mac
+                . " — credential crash already escalated to re-auth for account "
+                . _maskAccountId($activeAccountId) . ", stopping poll"
+            );
+            $class->stopHelper($helper->mac);
+            return;
+        }
+    }
+
+    # Pitfall 4 / legacy flat-dir setup: credential repair requires a PKCE
+    # account. Phase 53 owns the broader legacy-migration UX (D-10) -- do
+    # not delete or derive anything here.
+    unless ($activeAccountId) {
+        $log->warn(
+            "SpotOn Unified daemon for " . $helper->mac . " crashed with a credential "
+            . "error, but no active PKCE account is configured -- skipping auto-repair "
+            . "(legacy flat-dir credential setups are not self-healed; see Phase 53)"
+        );
+        return;
+    }
+
+    $log->warn(
+        "SpotOn Unified daemon for " . $helper->mac . " crashed with a credential error "
+        . "(account " . _maskAccountId($activeAccountId) . ") -- deleting credentials.json "
+        . "and re-deriving from PKCE tokens"
+    );
+
+    require Plugins::SpotOn::API::Credentials;
+    my $credFile = Plugins::SpotOn::API::Credentials->credentialsPathFor($activeAccountId);
+    unlink $credFile if -f $credFile;
+
+    Plugins::SpotOn::API::Credentials->deriveCredentials($activeAccountId, sub {
+        my ($ok, $reason) = @_;
+
+        if ($ok) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Credential re-derivation succeeded for account " . _maskAccountId($activeAccountId)
+                . " -- restarting daemon for " . $helper->mac
+            );
+            $class->startHelper($helper->mac);
+        }
+        elsif (($reason // '') eq 'derivation_failed') {
+            # The PKCE token was fresh but the AP rejected the exchange --
+            # permanent failure. Escalate via the PUBLIC wrapper (D-04);
+            # the daemon stays stopped because startHelper's pre-check finds
+            # no credentials.json and getToken short-circuits on needsReauth.
+            require Plugins::SpotOn::API::TokenManager;
+            Plugins::SpotOn::API::TokenManager->markNeedsReauth($activeAccountId, $reason);
+        }
+        elsif (($reason // '') eq 'no_token') {
+            # TokenManager already flagged needsReauth internally during its
+            # own refresh failure -- nothing more to do here than log.
+            $log->warn(
+                "Credential re-derivation for account " . _maskAccountId($activeAccountId)
+                . " could not obtain a token (already flagged for re-auth)"
+            );
+        }
+        else {
+            # rate_limited / spawn_failed / no_binary / binary_too_old --
+            # D-05's cooldown inside Credentials.pm prevents crash-loop
+            # hammering; the 60s watchdog owns any later retry.
+            $log->warn(
+                "Credential re-derivation for account " . _maskAccountId($activeAccountId)
+                . " failed ($reason) -- will retry via the next watchdog cycle"
+            );
+        }
+    });
 }
 
 sub _cleanupOrphanedLogs {
@@ -392,13 +554,73 @@ sub startHelper {
     # Mirrors Daemon.pm start() cache dir construction (CON-01 account-level scope).
     # Without this, librespot starts, finds no credentials, and exits immediately —
     # triggering crash-loop detection => 30min disable => retry, filling logs with noise.
+    #
+    # Pitfall 4 (Phase 51): the D-08 mismatch repair and D-01 lazy safety-net
+    # below operate EXCLUSIVELY on the account-scoped path. When
+    # $activeAccountId is empty (legacy flat-dir / pre-PKCE setup), neither
+    # new branch applies — that cleanup is deferred to Phase 53 (D-10).
     my $activeAccountId = $prefs->get('activeAccount') || '';
     my $cacheDir = $activeAccountId
         ? catdir($serverPrefs->get('cachedir'), 'spoton', $activeAccountId)
         : catdir($serverPrefs->get('cachedir'), 'spoton');
     my $credFile = catfile($cacheDir, 'credentials.json');
 
+    if ($activeAccountId && -f $credFile) {
+        # D-08: PKCE account is authoritative. A credentials.json belonging to
+        # a different Spotify user is deleted and re-derived without user
+        # confirmation. Delete ONLY the single file — pkce_tokens.json in the
+        # same account directory must survive (Anti-Pattern: no remove_tree).
+        require Plugins::SpotOn::API::Credentials;
+        if (Plugins::SpotOn::API::Credentials->accountMismatch($activeAccountId)) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Credentials for account " . _maskAccountId($activeAccountId)
+                . " belong to a different Spotify user — deleting and re-deriving "
+                . "from the active PKCE account (D-08)"
+            );
+            unlink $credFile;
+        }
+    }
+
     if (! -f $credFile) {
+        # D-01: lazy safety-net. When credentials.json is missing but PKCE
+        # tokens exist for the active account, self-heal by deriving fresh
+        # credentials and retrying startHelper on success. Token freshness is
+        # guaranteed inside deriveCredentials via TokenManager->getToken
+        # (Pitfall 5) — never read/pass tokens here.
+        if ($activeAccountId) {
+            require Plugins::SpotOn::API::PKCE;
+            if (Plugins::SpotOn::API::PKCE::loadTokens($activeAccountId)) {
+                require Plugins::SpotOn::API::Credentials;
+                main::INFOLOG && $log->is_info && $log->info(
+                    "No cached credentials for $clientId (account "
+                    . _maskAccountId($activeAccountId)
+                    . ") — deriving from PKCE tokens (D-01 lazy safety-net)"
+                );
+                Plugins::SpotOn::API::Credentials->deriveCredentials($activeAccountId, sub {
+                    my ($ok, $reason) = @_;
+                    if ($ok) {
+                        main::INFOLOG && $log->is_info && $log->info(
+                            "Lazy credential derivation succeeded for account "
+                            . _maskAccountId($activeAccountId) . " — retrying daemon start for $clientId"
+                        );
+                        $class->startHelper($clientId);
+                    } else {
+                        # No needsReauth flagging here — the lazy path fires at
+                        # LMS startup where transient failures are likely.
+                        # Retries are watchdog-driven (60s initHelpers cycle)
+                        # and rate-limited by D-05's cooldown inside
+                        # Credentials.pm. Permanent token failures ('no_token')
+                        # are already flagged by TokenManager internally.
+                        $log->warn(
+                            "Lazy credential derivation failed for account "
+                            . _maskAccountId($activeAccountId) . " ($reason) — daemon start for $clientId deferred"
+                        );
+                    }
+                });
+                return;
+            }
+        }
+
         main::INFOLOG && $log->is_info && $log->info(
             "Skipping Unified daemon for $clientId - no cached credentials (expected: $credFile)"
         );

@@ -10,7 +10,9 @@ use File::Basename qw(basename);
 use File::Glob qw(bsd_glob);
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
+use URI;
 
+use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(string);
@@ -20,17 +22,19 @@ use constant SETTINGS_URL => 'plugins/SpotOn/settings/basic.html';
 
 my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = preferences('plugin.spoton');
+# D-01/D-02/D-03 Auth Health Dashboard (Plan 54-02): shared cache instance for
+# passive reads of the audio-key cohort state and last-API-call timestamps
+# written by TokenManager.pm/DaemonManager.pm (Plan 54-01). Same instantiation
+# pattern as those modules (single source of truth: Plugin.pm
+# SPOTON_CACHE_VERSION; Plugin.pm always compiles before Settings.pm in
+# production, matching the M5 convention documented in TokenManager.pm).
+my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
 
-    # Register AJAX discoveryStatus endpoint (addRawFunction pattern from Spotty/Settings/Auth.pm)
     require Slim::Web::Pages;
-    Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discoveryStatus',
-        \&_discoveryStatusHandler
-    );
 
     # Register diagnostic bundle download endpoint (#3)
     Slim::Web::Pages->addRawFunction(
@@ -44,14 +48,18 @@ sub new {
         \&_clearLogsHandler
     );
 
-    # Register AJAX discovery start/stop endpoints (ZC-01)
+    # Register PKCE OAuth endpoints (AUTH-01, AUTH-02)
     Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discovery/start',
-        \&_discoveryStartHandler
+        'plugins/SpotOn/settings/pkce/start',
+        \&_pkceStartHandler
     );
     Slim::Web::Pages->addRawFunction(
-        'plugins/SpotOn/settings/discovery/stop',
-        \&_discoveryStopHandler
+        'plugins/SpotOn/settings/pkce/callback',
+        \&_pkceCallbackHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/pkce/manual',
+        \&_pkceManualHandler
     );
 
     return $self;
@@ -86,6 +94,18 @@ sub handler {
     $paramRef->{binaryPath}    = $helperPath    || '';
     $paramRef->{isMac}         = main::ISMAC ? 1 : 0;
 
+    # D-08 Channel 2: Settings page re-auth warning banner — show when any
+    # account needs re-authentication. Uses the LMS core $paramRef->{'warning'}
+    # idiom, rendered automatically by the settings/header.html template.
+    require Plugins::SpotOn::API::TokenManager;
+    if (Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth()) {
+        $paramRef->{'warning'} = string('PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS');
+    }
+
+    # D-06/D-08: Made For You (sp_dc) — save handling + status params below
+    # both go through WebPlayer, never a raw pref key (T-52-02).
+    require Plugins::SpotOn::API::WebPlayer;
+
     if ($paramRef->{saveSettings}) {
         my %valid_bitrates = map { $_ => 1 } (96, 160, 320);
         my $bitrate = $paramRef->{'pref_bitrate'} // 320;
@@ -113,8 +133,53 @@ sub handler {
             $prefs->set('clientId', $id);
         }
 
-        # Discovery start/stop moved to AJAX endpoints (_discoveryStartHandler,
-        # _discoveryStopHandler) to avoid "changes saved" banner on form POST.
+        # Save sp_dc cookie for Made For You (D-08/D-09). Deliberately NOT
+        # part of the base prefs() list (mirrors pref_clientId) -- sanitized
+        # here and routed through WebPlayer->storeSpDc rather than a raw
+        # $prefs->set() so masking/cache-invalidation stay centralized in
+        # WebPlayer (T-52-02). The template only ever echoes back a masked
+        # preview (spDcMasked below, containing literal '*' characters), so
+        # the "unchanged" comparison MUST happen against the raw
+        # (whitespace-trimmed only) submitted value BEFORE charset
+        # sanitization strips those asterisks -- otherwise a resubmit of an
+        # untouched field would never equal the placeholder and would
+        # incorrectly overwrite the stored cookie.
+        if (defined $paramRef->{pref_spDc}) {
+            my $raw = $paramRef->{pref_spDc} // '';
+            $raw =~ s/^\s+|\s+$//g;    # trim whitespace only, for comparison
+
+            my $activeAccountId = $prefs->get('activeAccount') || '';
+            if ($activeAccountId && length $raw) {
+                my $currentMasked = Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($activeAccountId);
+                if ($raw ne $currentMasked) {
+                    my $spdc = $raw;
+                    $spdc =~ s/[^A-Za-z0-9_\-\.]//g;    # restrict to sp_dc's known charset
+                    $spdc = substr($spdc, 0, 512);      # length cap
+                    Plugins::SpotOn::API::WebPlayer->storeSpDc($activeAccountId, $spdc) if length $spdc;
+                }
+            }
+            elsif ($activeAccountId && !length($raw)) {
+                # WR-03: empty submission clears a previously stored sp_dc.
+                # Only act if there IS a stored cookie to clear (avoid no-op
+                # storeSpDc calls on accounts that never had sp_dc).
+                if (Plugins::SpotOn::API::WebPlayer->hasSpDc($activeAccountId)) {
+                    Plugins::SpotOn::API::WebPlayer->storeSpDc($activeAccountId, '');
+                }
+            }
+        }
+
+        # Save Pathfinder GraphQL persisted-query hash (D-07, CR-01 gap
+        # closure -- Plan 52-06). Hex-only charset validation + length cap
+        # (128 chars, T-52-GC-02): the hash is not a secret, just a query
+        # identifier, but validation still guards against storing unexpected
+        # bytes in the pref. An empty submission clears the pref.
+        if (defined $paramRef->{pref_pathfinderHash}) {
+            my $hash = $paramRef->{pref_pathfinderHash} // '';
+            $hash =~ s/^\s+|\s+$//g;        # trim whitespace
+            $hash =~ s/[^0-9a-fA-F]//g;     # hex-only charset guard
+            $hash = substr($hash, 0, 128);  # length cap
+            $prefs->set('pathfinderHash', $hash);
+        }
 
         # Account remove (CR-03, WR-03).
         # WR-03: validate that removeId is an 8-char hex string that actually
@@ -192,26 +257,45 @@ sub handler {
         }
     }
 
-    # Auto-setup fallback for GET requests (manual reload, first visit).
-    # The primary check runs earlier (before startDiscovery) for POST requests.
     my $serverPrefs = preferences('server');
-    my $discoverCredsFile = catfile(
-        $serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__', 'credentials.json');
 
-    if (-f $discoverCredsFile) {
-        require Plugins::SpotOn::API::TokenManager;
-        Plugins::SpotOn::API::TokenManager->stopDiscovery();
-        _autoSetupAccount($discoverCredsFile, $serverPrefs);
-    }
-
-    # Pass account and discovery data to template for all requests
+    # Pass account data to template for all requests
     $paramRef->{accounts}         = $prefs->get('accounts') || {};
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
-    $paramRef->{discoveryRunning} = _isDiscoveryRunning() ? 1 : 0;
 
     # Client-ID and degraded-mode status for template (D-02, D-03)
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
     $paramRef->{degradedMode}   = _isDegradedMode();
+
+    # PKCE auth status for template (AUTH-01): has any account completed the
+    # PKCE OAuth flow (has a pkce_tokens.json)? Drives which setup guide/CTA
+    # the template shows.
+    $paramRef->{pkceConfigured} = _isPkceConfigured();
+
+    # D-04 Channel 2 (AUTH-07, Plan 03 Task 3): Settings migration banner --
+    # global check across ALL known accounts (deliberate asymmetry vs.
+    # Plugin.pm's OPML hint, which checks only the active account since
+    # Browse/Library always operates on it; Settings is a global config page
+    # where any account's migration state is relevant).
+    require Plugins::SpotOn::API::TokenManager;
+    $paramRef->{needsMigration} = Plugins::SpotOn::API::TokenManager->anyAccountNeedsMigration();
+
+    # D-13: redirect URI for the Client-ID PKCE setup wizard, read from the
+    # single-source-of-truth constant (never a second hardcoded literal --
+    # Pitfall 4).
+    require Plugins::SpotOn::API::PKCE;
+    $paramRef->{redirectUri} = Plugins::SpotOn::API::PKCE::GITHUB_PAGES_REDIRECT_URI();
+
+    # D-04/D-08: Made For You (sp_dc) status for template -- masked preview
+    # (never the raw cookie, T-52-02) and the empty/valid/expired/secrets_down
+    # degradation state (Settings channel of the 3-channel D-04 display).
+    $paramRef->{spDcMasked}      = Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($paramRef->{activeAccount});
+    $paramRef->{madeForYouState} = Plugins::SpotOn::API::WebPlayer->state($paramRef->{activeAccount});
+
+    # D-07/CR-01: Pathfinder GraphQL persisted-query hash for template --
+    # exposes the currently stored value (or empty string) so the Settings
+    # field can be pre-filled (Plan 52-06).
+    $paramRef->{pathfinderHash} = $prefs->get('pathfinderHash') || '';
 
     # Diagnostic mode status for template (#3)
     $paramRef->{diagnosticEnabled} = $prefs->get('diagnosticMode') ? 1 : 0;
@@ -230,121 +314,539 @@ sub handler {
                                 : $logTotal >= 1024    ? sprintf('%.1f KB', $logTotal / 1024)
                                 :                        "$logTotal B";
 
+    # Auth Health Dashboard (D-01/D-02/D-03, Plan 54-02): per-account 5-indicator
+    # aggregation for the Settings page. Every read inside _collectAuthHealth is
+    # a passive cache/prefs/accessor query -- zero outbound API calls triggered
+    # by page render (T-54-02/T-54-06).
+    my %authHealth;
+    for my $id (Plugins::SpotOn::API::TokenManager->getAccountIds()) {
+        $authHealth{$id} = _collectAuthHealth($id);
+    }
+    $paramRef->{authHealth} = \%authHealth;
+
     return $class->SUPER::handler($client, $paramRef, $callback, $httpClient, $response);
 }
 
 # ============================================================
-# Auto-setup: synchronous account creation from __DISCOVER__/credentials.json.
-# Reads credentials, derives accountId, renames dir, stores prefs immediately.
-# Display name is fetched asynchronously afterwards (may update on next page load).
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/start
+# AJAX endpoint (AUTH-01, T-49-08). Generates a fresh code_verifier/challenge
+# pair, stashes the verifier under a nonce (bridges this request to the
+# later /pkce/callback or /pkce/manual request), and returns the Spotify
+# authorization URL for the browser to open in a new tab. The verifier
+# itself never leaves LMS (edge case A, urknall #176).
 # ============================================================
-sub _autoSetupAccount {
-    my ($credsFile, $serverPrefs) = @_;
+sub _pkceStartHandler {
+    my ($httpClient, $response) = @_;
 
-    open(my $fh, '<', $credsFile) or do {
-        $log->error("Settings: cannot read $credsFile: $!");
-        return;
-    };
-    local $/;
-    my $json = <$fh>;
-    close $fh;
+    return unless _csrfCheck($httpClient, $response);
 
-    my $creds = eval { from_json($json) };
-    if ($@ || !$creds->{username}) {
-        $log->error("Settings: credentials.json parse failed: $@");
-        return;
+    # WR-05: reject PKCE start when no Client-ID is configured — the bundled
+    # default cannot have the user's relay redirect URI registered, so the
+    # flow would end with a Spotify error page.
+    my $clientId = $prefs->get('clientId');
+    unless ($clientId) {
+        return _jsonResponse($httpClient, $response,
+            { error => 'no_client_id', message => 'A custom Spotify Client-ID is required for PKCE authentication.' });
     }
 
-    my $username  = $creds->{username};
-    my $accountId = substr(md5_hex($username), 0, 8);
-    my $baseDir   = catdir($serverPrefs->get('cachedir'), 'spoton');
-    my $discoverDir = catdir($baseDir, '__DISCOVER__');
-    my $finalDir    = catdir($baseDir, $accountId);
+    require Plugins::SpotOn::API::PKCE;
+    my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
+    my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
 
-    if (-d $finalDir) {
-        require File::Path;
-        File::Path::remove_tree($finalDir);
-    }
-    require File::Copy;
-    File::Copy::move($discoverDir, $finalDir) or do {
-        $log->error("Settings: dir rename __DISCOVER__ -> $accountId failed: $!");
-        return;
-    };
-    chmod(0700, $finalDir);
+    # Nonce keys the one-time verifier cache and round-trips through the
+    # state parameter across the GitHub Pages relay. WR-04: use
+    # cryptographic randomness — the nonce->verifier binding is the CSRF
+    # guard for the callback endpoint (RFC 6749 sec 10.12).
+    require Crypt::OpenSSL::Random;
+    my $nonce = unpack('H16', Crypt::OpenSSL::Random::random_bytes(8));
 
-    my $accounts = $prefs->get('accounts') || {};
-    $accounts->{$accountId} = {
-        displayName   => $username,
-        spotifyUserId => $username,
-    };
-    $prefs->set('accounts', $accounts);
+    my $request = $response->request;
+    my $host    = ($request && $request->header('Host')) || 'localhost';
+    my $scheme  = ($request && $request->header('X-Forwarded-Proto')) || 'http';
+    my $callbackUrl = $scheme . '://' . $host . '/plugins/SpotOn/settings/pkce/callback';
 
-    unless ($prefs->get('activeAccount')) {
-        $prefs->set('activeAccount', $accountId);
+    my $state = Plugins::SpotOn::API::PKCE::buildState($callbackUrl, $nonce);
+    Plugins::SpotOn::API::PKCE::storeVerifier($nonce, $verifier);
 
-        require Plugins::SpotOn::Unified::DaemonManager;
-        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
-    }
+    my $authUrl = Plugins::SpotOn::API::PKCE::buildAuthorizationUrl($clientId, $challenge, $state);
 
-    $log->info("Settings: account $accountId created from ZeroConf discovery (user=$username)");
+    main::INFOLOG && $log->is_info && $log->info(
+        "Settings: PKCE auth flow started [nonce=" . substr($nonce, 0, 8) . "...]");
 
-    # Fire async /me fetch to get the real display name
-    Plugins::SpotOn::API::TokenManager->_fetchDisplayName(
-        $accountId, $username, sub { });
+    _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce });
 }
 
 # ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discoveryStatus
-# Returns JSON with status: 'connected' | 'waiting' | 'idle'
-# Source pattern: Spotty/Settings/Auth.pm::checkCredentials (addRawFunction pattern)
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/callback
+# Browser redirect target (AUTH-01, AUTH-02) reached via the GitHub Pages
+# relay after the user authorizes on accounts.spotify.com. This is a plain
+# browser GET navigation, NOT an AJAX call — there is no X-Requested-With
+# header to check, so it is intentionally exempt from _csrfCheck (T-49-09).
+# Security instead comes from the one-time-use verifier cache: a request
+# can only succeed once per /pkce/start call.
 # ============================================================
-sub _discoveryStatusHandler {
+sub _pkceCallbackHandler {
     my ($httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $request = $response->request;
+    my %params  = $request ? $request->uri->query_form : ();
+
+    if (my $err = $params{error}) {
+        $log->warn("Settings: PKCE callback returned OAuth error: $err");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            string('PLUGIN_SPOTON_PKCE_ERROR'), 1);
+        return;
+    }
+
+    my $code  = $params{code};
+    my $state = $params{state};
+
+    unless ($code) {
+        $log->warn("Settings: PKCE callback missing authorization code");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            'No authorization code received.', 1);
+        return;
+    }
+
+    my $verifier = _pkceLoadVerifierFromState($state);
+    unless ($verifier) {
+        $log->warn("Settings: PKCE callback — no verifier found for state (expired/reused)");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            'Authorization session expired or already used. Please try again from the Settings page.', 1);
+        return;
+    }
+
+    my $clientId = _pkceClientId();
+
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+        my ($tokenData, $err) = @_;
+
+        unless ($tokenData) {
+            $log->error("Settings: PKCE token exchange failed: " . ($err || 'unknown'));
+            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                string('PLUGIN_SPOTON_PKCE_ERROR'), 1);
+            return;
+        }
+
+        _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, 0);
+    });
+}
+
+# ============================================================
+# PKCE OAuth: /plugins/SpotOn/settings/pkce/manual
+# AJAX copy-paste fallback (edge case D, urknall #176) for when the browser
+# auto-redirect from the GitHub Pages relay never reaches LMS (e.g. relay
+# cannot resolve/reach a private-network LMS host from the user's phone).
+# The pasted URL is only ever parsed for its code/state query parameters —
+# it is never fetched or redirected to (T-49-10).
+# ============================================================
+sub _pkceManualHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $callbackUrl = _postParam($response->request, 'callback_url');
+    unless ($callbackUrl) {
+        _jsonResponse($httpClient, $response, { status => 'error', message => 'No callback URL provided' });
+        return;
+    }
+
+    my %params = eval { URI->new($callbackUrl)->query_form };
+    if ($@ || !%params) {
+        _jsonResponse($httpClient, $response, { status => 'error', message => 'Could not parse callback URL' });
+        return;
+    }
+
+    my $code  = $params{code};
+    my $state = $params{state};
+
+    unless ($code && $state) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', message => 'Callback URL is missing code or state parameters' });
+        return;
+    }
+
+    my $verifier = _pkceLoadVerifierFromState($state);
+    unless ($verifier) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', message => 'Authorization session expired or already used' });
+        return;
+    }
+
+    my $clientId = _pkceClientId();
+
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+        my ($tokenData, $err) = @_;
+
+        unless ($tokenData) {
+            $log->error("Settings: PKCE manual token exchange failed: " . ($err || 'unknown'));
+            _jsonResponse($httpClient, $response, { status => 'error', message => 'Token exchange failed' });
+            return;
+        }
+
+        _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, 1);
+    });
+}
+
+# ============================================================
+# _pkceLoadVerifierFromState($state)
+# Parses the state parameter and pops the matching verifier from the
+# one-time-use cache. Returns undef (safely) on any malformed/missing input.
+# ============================================================
+sub _pkceLoadVerifierFromState {
+    my ($state) = @_;
+    return undef unless $state;
+
+    my $stateData = Plugins::SpotOn::API::PKCE::parseState($state);
+    my $nonce = $stateData ? $stateData->{nonce} : undef;
+    return undef unless $nonce;
+
+    return Plugins::SpotOn::API::PKCE::loadAndDeleteVerifier($nonce);
+}
+
+# ============================================================
+# _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, $isJson)
+# Shared tail of the callback/manual handlers: looks up the Spotify user
+# profile to derive a stable accountId, persists the PKCE tokens, and
+# creates/updates the account in prefs. Responds with JSON (manual, AJAX
+# fallback) or an HTML result page (callback, browser redirect).
+# ============================================================
+sub _pkceFinishAuth {
+    my ($httpClient, $response, $tokenData, $clientId, $isJson) = @_;
+
+    require Slim::Networking::SimpleAsyncHTTP;
+
+    Slim::Networking::SimpleAsyncHTTP->new(
+        sub {
+            my $http    = shift;
+            my $profile = eval { from_json($http->content) };
+            my $userId  = $profile && $profile->{id};
+            unless ($userId) {
+                $log->error("Settings: PKCE /me lookup returned no user ID — cannot create account");
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'error', message => 'Spotify profile lookup failed — please try again' });
+                } else {
+                    _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                        'Could not retrieve Spotify profile. Please try again.', 1);
+                }
+                return;
+            }
+            my $displayName = $profile->{display_name} || $userId;
+            _pkceStoreAccount($httpClient, $response, $tokenData, $clientId, $userId, $displayName, $isJson);
+        },
+        sub {
+            my ($http, $error) = @_;
+            $log->error("Settings: PKCE /me lookup failed: $error — cannot create account without user identity");
+            if ($isJson) {
+                _jsonResponse($httpClient, $response,
+                    { status => 'error', message => 'Spotify profile lookup failed — please try again' });
+            } else {
+                _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                    'Could not retrieve Spotify profile. Please try again.', 1);
+            }
+        },
+        { timeout => 30 }
+    )->get(
+        'https://api.spotify.com/v1/me',
+        'Authorization' => "Bearer $tokenData->{access_token}",
+        'Accept'        => 'application/json',
+    );
+}
+
+# ============================================================
+# _pkceStoreAccount(...)
+# Derives accountId, persists PKCE tokens (chmod 0600 file via PKCE.pm),
+# secures the account directory (chmod 0700, T-04.3-07 pattern), and stores
+# the account in prefs via TokenManager's existing _storeAccountPrefs (sets
+# activeAccount + triggers daemon start if this is the first account).
+# ============================================================
+sub _pkceStoreAccount {
+    my ($httpClient, $response, $tokenData, $clientId, $userId, $displayName, $isJson) = @_;
+
+    my $accountId = substr(md5_hex($userId), 0, 8);
+    my $expiresAt = time() + ($tokenData->{expires_in} || 3600);
+
+    require Plugins::SpotOn::API::PKCE;
+    my $stored = Plugins::SpotOn::API::PKCE::storeTokens($accountId, {
+        access_token  => $tokenData->{access_token},
+        refresh_token => $tokenData->{refresh_token},
+        expires_at    => $expiresAt,
+        client_id     => $clientId,
+        scope         => $tokenData->{scope},
+    });
+
+    # IN-05: consistent accountId masking (T-50-01 discipline) — never log
+    # the full accountId; use the same substr(0,4).'****' pattern as the
+    # failure branch below.
+    my $maskedId = substr($accountId, 0, 4) . '****';
+
+    unless ($stored) {
+        $log->error("Settings: PKCE token storage failed for account $maskedId — aborting account creation");
+        if ($isJson) {
+            _jsonResponse($httpClient, $response, { status => 'error', message => 'Token storage failed' });
+        } else {
+            _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+                'Token storage failed — check disk space and cache directory permissions.', 1);
+        }
+        return;
+    }
 
     my $serverPrefs = preferences('server');
-    my $discoverDir = catdir($serverPrefs->get('cachedir'), 'spoton', '__DISCOVER__');
-    my $credsFile   = catfile($discoverDir, 'credentials.json');
+    my $accountDir  = catdir($serverPrefs->get('cachedir'), 'spoton', $accountId);
+    chmod(0700, $accountDir) if -d $accountDir;
 
-    my $result;
-    if (-f $credsFile) {
-        $result = { status => 'connected' };
-    } elsif (_isDiscoveryRunning()) {
-        $result = { status => 'waiting' };
-    } else {
-        $result = { status => 'idle' };
+    require Plugins::SpotOn::API::TokenManager;
+    Plugins::SpotOn::API::TokenManager->_storeAccountPrefs($accountId, $userId, $displayName, sub {
+        main::INFOLOG && $log->is_info && $log->info(
+            "Settings: PKCE account $maskedId connected (displayName=$displayName)");
+
+        # T-50-11: clear the persistent needsReauth flag immediately on a
+        # successful (re-)authentication rather than waiting for the next
+        # refresh timer cycle.
+        Plugins::SpotOn::API::TokenManager->clearNeedsReauth($accountId);
+
+        # D-01: eagerly derive librespot credentials right here, while the
+        # PKCE access token is guaranteed fresh (it was exchanged seconds
+        # ago) -- this is the primary, user-facing trigger for AUTH-03
+        # credential derivation (RESEARCH Pitfall 6 / Open Question 2).
+        require Plugins::SpotOn::API::Credentials;
+        # WR-02: clear D-05 rate-limit cooldown before deriving -- a fresh
+        # user-initiated PKCE exchange is exactly the event the cooldown
+        # should yield to. Without this, 3 prior derivation failures would
+        # block the re-auth's eager derivation for up to 30 minutes.
+        Plugins::SpotOn::API::Credentials->clearRateLimit($accountId);
+        Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub {
+            my ($ok, $reason) = @_;
+
+            if ($ok) {
+                # D-06: trigger the daemon start unconditionally on
+                # derivation success -- do NOT rely on
+                # _storeAccountPrefs's $needsDaemonStart conditional above,
+                # which only fires for the very first account ever
+                # configured. Without this, "Add Another Account" and
+                # re-auth flows would otherwise wait up to 60s for the
+                # watchdog to notice the new credentials (Pitfall 6). This
+                # also covers D-07: DaemonManager's existing account-change
+                # detection in initHelpers/startHelper restarts any daemon
+                # already running with stale credentials.
+                require Plugins::SpotOn::Unified::DaemonManager;
+                Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'ok', accountId => $accountId, connectReady => 1 });
+                } else {
+                    _renderPkceResultPage($httpClient, $response,
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
+                }
+            } else {
+                # D-02: a derivation failure is a warning, not a blocking
+                # error -- tokens are already stored and Browse/Search work
+                # via the PKCE access token (Phase 50). Never reflect the
+                # raw $reason into the user-facing page (T-51-10); log only
+                # a masked accountId.
+                $log->warn("Settings: PKCE credential derivation failed for account "
+                    . "$maskedId ($reason) -- Connect unavailable, account creation not blocked");
+
+                if ($isJson) {
+                    _jsonResponse($httpClient, $response,
+                        { status => 'ok', accountId => $accountId, connectReady => 0,
+                          warning => string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED') });
+                } else {
+                    _renderPkceResultPage($httpClient, $response,
+                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                        string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED'), 1);
+                }
+            }
+        });
+    });
+}
+
+# ============================================================
+# _pkceClientId()
+# Resolves the Client-ID to use for PKCE requests: the user's own Spotify
+# Developer App Client-ID if configured, otherwise SpotOn's bundled default
+# (same fallback logic as the rest of the codebase, e.g. TokenManager.pm).
+# ============================================================
+sub _pkceClientId {
+    my $custom = $prefs->get('clientId');
+    return $custom if $custom;
+
+    require Plugins::SpotOn::API::Client;
+    return Plugins::SpotOn::API::Client::SPOTON_DEFAULT_CLIENT_ID();
+}
+
+# ============================================================
+# _isPkceConfigured()
+# True if any known account has completed the PKCE OAuth flow (has a
+# pkce_tokens.json). Drives which setup guide/CTA the template shows.
+# ============================================================
+sub _isPkceConfigured {
+    require Plugins::SpotOn::API::TokenManager;
+    require Plugins::SpotOn::API::PKCE;
+
+    for my $id (Plugins::SpotOn::API::TokenManager->getAccountIds()) {
+        return 1 if Plugins::SpotOn::API::PKCE::loadTokens($id);
     }
-
-    _jsonResponse($httpClient, $response, $result);
+    return 0;
 }
 
 # ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discovery/start
-# Starts ZeroConf discovery without form POST (no "changes saved" banner).
+# _collectAuthHealth($accountId)
+# D-01/D-02/D-03: passive, read-only aggregation of the 5 per-account auth
+# chain health indicators consumed by the Settings page's Auth Health
+# Dashboard (basic.html). Every value here comes from a cache/prefs/accessor
+# query -- this helper NEVER makes an outbound HTTP/API call (T-54-02/T-54-06
+# threat mitigation). Returns a hashref with keys: pkce, spDc, connect,
+# migration, audioKey. Self-contained (require's its own collaborators)
+# rather than relying on handler()'s existing requires.
 # ============================================================
-sub _discoveryStartHandler {
-    my ($httpClient, $response) = @_;
+sub _collectAuthHealth {
+    my ($accountId) = @_;
 
-    return unless _csrfCheck($httpClient, $response);
-
+    require Plugins::SpotOn::API::PKCE;
     require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->startDiscovery();
+    require Plugins::SpotOn::API::WebPlayer;
+    require Plugins::SpotOn::Unified::DaemonManager;
 
-    _jsonResponse($httpClient, $response, { status => 'ok' });
+    my %health;
+
+    # 1. PKCE Status (D-01) -- token present, refresh valid, last API call time.
+    $health{pkce} = {
+        hasToken    => Plugins::SpotOn::API::PKCE::loadTokens($accountId) ? 1 : 0,
+        needsReauth => Plugins::SpotOn::API::TokenManager->needsReauth($accountId),
+        lastApiCall => $cache->get("spoton_last_api_call_" . $accountId) || undef,
+    };
+
+    # 2. sp_dc Cookie Status (Made For You, D-04/D-08) -- masked preview only,
+    # never the raw cookie (T-54-02).
+    $health{spDc} = {
+        state         => Plugins::SpotOn::API::WebPlayer->state($accountId),
+        maskedPreview => Plugins::SpotOn::API::WebPlayer->spDcMaskedPreview($accountId),
+    };
+
+    # 3. Connect Status -- a single account may drive multiple daemons
+    # (multi-player setups). Report the first alive helper for this account,
+    # falling back to the first helper found at all if none are alive.
+    my @matching = grep { ($_->_accountId || '') eq $accountId }
+        Plugins::SpotOn::Unified::DaemonManager->helperInstances();
+    my ($chosen) = grep { $_->alive } @matching;
+    $chosen ||= $matching[0];
+
+    my %connect = (alive => 0, pid => 0, uptime => 0);
+    if ($chosen) {
+        %connect = (
+            alive  => $chosen->alive ? 1 : 0,
+            pid    => $chosen->pid || 0,
+            uptime => int($chosen->uptime || 0),
+        );
+    }
+    $health{connect} = \%connect;
+
+    # 4. Migration Status (D-05) -- v2.x ZeroConf accounts without PKCE tokens.
+    $health{migration} = {
+        needed => Plugins::SpotOn::API::TokenManager->accountNeedsMigration($accountId),
+    };
+
+    # 5. Audio-Key Cohort (D-02, passive) -- innocent-until-proven-guilty
+    # default 'ok' (matches needsReauth/WebPlayer::state defaults). 'throttled'
+    # has a 600s TTL and auto-clears back to 'ok' (absence = ok); 'denied'
+    # persists permanently (TTL 'never', written by DaemonManager Plan 54-01).
+    $health{audioKey} = {
+        state => $cache->get("spoton_audiokey_state_" . $accountId) || 'ok',
+    };
+
+    return \%health;
 }
 
 # ============================================================
-# AJAX endpoint: /plugins/SpotOn/settings/discovery/stop
-# Stops ZeroConf discovery without form POST.
+# _postParam($request, $key)
+# Extracts a single application/x-www-form-urlencoded POST body parameter.
+# Returns undef if the request/body is missing or the key is absent.
 # ============================================================
-sub _discoveryStopHandler {
-    my ($httpClient, $response) = @_;
+sub _postParam {
+    my ($request, $key) = @_;
+    return undef unless $request;
 
-    return unless _csrfCheck($httpClient, $response);
+    my $body = $request->content;
+    return undef unless defined $body && length $body;
 
-    require Plugins::SpotOn::API::TokenManager;
-    Plugins::SpotOn::API::TokenManager->stopDiscovery();
+    my %params = eval { URI->new("?$body")->query_form };
+    return undef if $@;
+    return $params{$key};
+}
 
-    _jsonResponse($httpClient, $response, { status => 'ok' });
+# ============================================================
+# _htmlEscape($str)
+# Minimal HTML entity escaping for values interpolated into
+# _renderPkceResultPage — the OAuth 'error' query parameter is attacker/
+# Spotify controlled and must not be reflected unescaped (Rule 2, XSS).
+# ============================================================
+sub _htmlEscape {
+    my ($s) = @_;
+    return '' unless defined $s;
+    $s =~ s/&/&amp;/g;
+    $s =~ s/</&lt;/g;
+    $s =~ s/>/&gt;/g;
+    $s =~ s/"/&quot;/g;
+    return $s;
+}
+
+# ============================================================
+# _renderPkceResultPage($httpClient, $response, $title, $message, $isError)
+# Renders a minimal centered-card HTML result page for the /pkce/callback
+# browser redirect flow. Success pages meta-refresh back to Settings after
+# 3 seconds; error pages show a link back to Settings instead (the user may
+# need to read the error before leaving).
+# ============================================================
+sub _renderPkceResultPage {
+    my ($httpClient, $response, $title, $message, $isError) = @_;
+
+    my $safeTitle   = _htmlEscape($title);
+    my $safeMessage = _htmlEscape($message);
+    my $settingsUrl = '/' . SETTINGS_URL;
+
+    my $action = $isError
+        ? qq{<p><a href="$settingsUrl">} . _htmlEscape(string('PLUGIN_SPOTON_NAME')) . qq{</a></p>}
+        : qq{<meta http-equiv="refresh" content="3;url=$settingsUrl">};
+
+    my $html = qq{<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$safeTitle</title>
+$action
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #191414;
+         color: #fff; display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; }
+  .card { background: #282828; border-radius: 12px; padding: 2em 2.5em; max-width: 420px;
+          text-align: center; }
+  a { color: #1db954; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>$safeTitle</h2>
+    <p>$safeMessage</p>
+  </div>
+</body>
+</html>
+};
+
+    my $bytes = encode('UTF-8', $html);
+    $response->header('Content-Length' => length($bytes));
+    $response->code($isError ? 400 : 200);
+    $response->header('Connection' => 'close');
+    $response->content_type('text/html; charset=utf-8');
+    Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$bytes);
 }
 
 # ============================================================
@@ -420,12 +922,11 @@ sub _diagnosticBundleHandler {
         push @tokenStatus, "  Display name: $displayName";
         push @tokenStatus, "  API requests: " . ($snapshot->{apiRequestCount} || 0);
         push @tokenStatus, "  429 responses: " . ($snapshot->{api429Count} || 0);
-        push @tokenStatus, "  Rate limited (own): " . ($snapshot->{rateLimitedOwn} ? 'YES' : 'no');
-        push @tokenStatus, "  Rate limited (bundled): " . ($snapshot->{rateLimitedBundled} ? 'YES' : 'no');
+        push @tokenStatus, "  Rate limited: " . ($snapshot->{rateLimited} ? 'YES' : 'no');
 
         if ($INC{'Plugins/SpotOn/Status.pm'}) {
             my $errors = Plugins::SpotOn::Status->getErrorHistory() || [];
-            my @tokenErrors = grep { $_->{module} && $_->{module} eq 'Token' } @$errors;
+            my @tokenErrors = grep { $_->{module} && ($_->{module} eq 'Token' || $_->{module} eq 'Auth') } @$errors;
             if (@tokenErrors) {
                 push @tokenStatus, '';
                 push @tokenStatus, '  Recent token errors (' . scalar(@tokenErrors) . '):';
@@ -535,17 +1036,12 @@ sub _jsonResponse {
 # Helper: check degraded mode (D-03)
 # Degraded = no custom Client-ID configured.
 # Shows a hint in Settings so the user can enter their own Spotify Developer App.
-# Analogous to _isDiscoveryRunning below.
 # ============================================================
 sub _isDegradedMode {
     my $customId = $prefs->get('clientId') || '';
     return $customId ? 0 : 1;
 }
 
-# ============================================================
-# Helper: check if ZeroConf discovery process is alive
-# Delegates to TokenManager which owns the $discoveryProc package var
-# ============================================================
 sub _readLogTail {
     my ($path, $maxBytes) = @_;
     if (open my $fh, '<', $path) {
@@ -562,13 +1058,6 @@ sub _readLogTail {
         return $content;
     }
     return "(could not read " . basename($path) . ": $!)\n";
-}
-
-sub _isDiscoveryRunning {
-    # Lazy-load TokenManager to avoid circular dependency issues at startup
-    # If TokenManager is not loaded yet, discovery is not running
-    return 0 unless $INC{'Plugins/SpotOn/API/TokenManager.pm'};
-    return Plugins::SpotOn::API::TokenManager->isDiscoveryRunning();
 }
 
 # ============================================================

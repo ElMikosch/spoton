@@ -2,16 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
-status: ready_to_plan
-stopped_at: v2.3.14 released, auth research done
-last_updated: 2026-07-13
-last_activity: 2026-07-13 -- woorszt confirms PKCE restores full playback, dead-end retracted
+current_phase: 54
+current_phase_name: auth-health-dashboard
+status: executing
+stopped_at: Completed 54-04-PLAN.md
+last_updated: "2026-07-16T16:38:13.423Z"
+last_activity: 2026-07-16
+last_activity_desc: Phase 54 execution started
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 1
-  completed_plans: 1
-  percent: 0
+  total_phases: 11
+  completed_phases: 5
+  total_plans: 25
+  completed_plans: 22
 ---
 
 # Project State: SpotOn
@@ -26,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** v3.0 Auth Overhaul — PKCE validated (woorszt confirms full playback), ready for Phase 49-00 (slim audit) then Phase 49
+**Current Focus:** Phase 54 — auth-health-dashboard
 
 ## Current Position
 
-Phase: 48 SUPERSEDED → v3.0 planned (Phases 49-53)
-Plan: Spike findings packaged, phases defined, branch pending
-Status: Ready to create v3.0-auth branch, slim audit (49-00), then Phase 49 PKCE
-Last activity: 2026-07-13
+Phase: 54 (auth-health-dashboard) — EXECUTING
+Plan: 5 of 5
+Status: Ready to execute
+Last activity: 2026-07-16 — Phase 54 execution started
 
 ## Progress Bar
 
@@ -70,6 +72,18 @@ Phase 53: [ ] Keymaster Removal + Migration (AUTH-06, AUTH-07)
 - v1.5: 4 phases, 6 plans in 2 days (~3 plans/day)
 - v1.0: 15 phases, 50 plans in 9 days (~5-6 plans/day)
 
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 53 P01 | 10min | 2 tasks | 2 files |
+| Phase 53 P02 | 8min | 2 tasks | 4 files |
+| Phase 53 P03 | 14min | 3 tasks | 6 files |
+| Phase 54 P01 | 12min | 2 tasks | 3 files |
+| Phase 54 P03 | 15min | 2 tasks | 1 files |
+| Phase 54 P02 | 15min | 2 tasks | 4 files |
+| Phase 54 P04 | 3min | 2 tasks | 1 files |
+
 ## Deferred Items
 
 Items carried forward from previous milestones:
@@ -78,6 +92,20 @@ Items carried forward from previous milestones:
 |----------|------|--------|
 | debug | connect-reconnect-no-audio | awaiting_human_verify |
 | uat | Phase 16 macOS Binary (3 scenarios) | deferred (no macOS test env) |
+| Phase 49 P01 | 18min | 2 tasks | 3 files |
+| Phase 49 P02 | 18min | 2 tasks | 5 files |
+| Phase 50 P01 | 25min | 2 tasks | 3 files |
+| Phase 50 P02 | 12min | 2 tasks | 5 files |
+| Phase 50 P03 | 20min | 2 tasks | 6 files |
+| Phase 51 P01 | 8min | 2 tasks | 3 files |
+| Phase 51 P02 | 9min | 3 tasks | 3 files |
+| Phase 51 P03 | 13min | 2 tasks | 4 files |
+| Phase 52 P01 | 4min | 3 tasks | 5 files |
+| Phase 52 P02 | 12min | 2 tasks | 3 files |
+| Phase 52 P03 | 4min | 3 tasks | 6 files |
+| Phase 52 P04 | 3min | 2 tasks | 2 files |
+| Phase 52 P05 | 3min | 2 tasks | 3 files |
+| Phase 52 P06 | 12min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -112,6 +140,50 @@ Items carried forward from previous milestones:
 - [v3.0]: Phase 49-00 Audit slim — Grep+Klassifikation der 4 Keymaster-Buckets, kein Research. Direkt danach Phase 49 PKCE.
 - [v3.0]: Audio key denial (newest cohort) tracked in #91, kein eigenes Issue — Population noch unklar
 - [v3.0]: **librespot Audio Pipeline analysiert (2026-07-13):** Kein Branching — BEIDE Pfade (CDN storage-resolve + AudioKeyManager RequestKey 0x0c) werden IMMER für jeden Track aufgerufen. CDN liefert AES-128-CTR-verschlüsselte Bytes, Audio Key ist der Entschlüsselungsschlüssel. Kein client-seitiger Workaround möglich — AP entscheidet serverseitig ob Key rausgegeben wird. Newest-cohort-Fix erfordert komplett anderes Audio-Backend (v4.0/spoton-private).
+- [Phase 49]: Added PKCE.pm to t/05_perl_syntax.t syntax-check list to keep CI coverage consistent with sibling API modules (TokenManager.pm, Client.pm)
+- [Phase 49]: Reused TokenManager::_storeAccountPrefs for PKCE account creation instead of duplicating prefs-writing logic in Settings.pm
+- [Phase 49]: Fallback userId on /me lookup failure derived from access_token hash, not a fixed literal, to avoid account-collision across concurrent failed lookups
+- [Phase 49]: PKCE OAuth result page HTML-escapes all interpolated values (attacker-controlled error query param reflected into HTML)
+- [Phase 50]: [Phase 50-01]: getToken loses the $flavor parameter entirely (D-04) -- single PKCE token per account
+- [Phase 50]: [Phase 50-01]: needsReauth cache flag uses explicit 'never' TTL (M-1) -- DbCache defaults to 1h, would otherwise silently expire
+- [Phase 50]: [Phase 50-01]: refreshAllTokens calls _refreshToken directly, not getToken (M-5) -- forces real refresh, keeps refresh_token alive against Spotify 6-month expiry
+- [Phase 50]: [Phase 50-02]: D-04 completion -- Client.pm flavor system deleted entirely (single PKCE token per account, single spoton_rate_limit cache key, 2-arg getToken call site)
+- [Phase 50]: [Phase 50-02]: M-7 (Settings.pm still reads old rateLimitedOwn/rateLimitedBundled keys) intentionally deferred to Plan 03, not fixed here
+- [Phase 50]: [Phase 50-03]: D-08 completion -- OPML (Channel 1) + Settings (Channel 2) re-auth warnings wired via anyAccountNeedsReauth(); all ZeroConf discovery-as-auth code removed from Plugin.pm/Settings.pm/basic.html (D-01), including _autoSetupAccount + __DISCOVER__ fallback (M-3); Add Another Account repointed to spotonPkceStart() XHR (M-2)
+- [Phase 51]: [51-01] D-05 rate-limit counter only counts real derivation-attempt failures (spawn_failed/derivation_failed), not pre-flight gate skips (no_token/no_binary/binary_too_old)
+- [Phase 51]: [51-01] accountMismatch reads credentials.json via a raw parse independent of verifyCredentials's auth_type==1 validation
+- [Phase 51]: [51-02] diagnosticMode OFF now truncates the same per-daemon stderr file on every start instead of routing to devnull -- simplest fix for Pitfall 1 (stderr must be readable for D-03 crash classification in the default configuration)
+- [Phase 51]: [51-02] D-08 mismatch repair and D-01 lazy safety-net both gated on non-empty activeAccountId (Pitfall 4) -- legacy flat-dir credential setups untouched, D-10 cleanup deferred to Phase 53
+- [Phase 51]: [51-02] _handleCredentialCrash only escalates markNeedsReauth for 'derivation_failed' -- 'no_token' is already flagged internally by TokenManager, avoiding a duplicate 4-channel warning
+- [Phase 51]: [51-03] D-06 daemon start is unconditional on derivation success, deliberately bypassing _storeAccountPrefs's first-account-only $needsDaemonStart conditional -- closes Pitfall 6 for Add Another Account / re-auth flows
+- [Phase 51]: [51-03] Failure branch never reflects the raw derivation $reason into the user-facing page (T-51-10) -- only the fixed PLUGIN_SPOTON_CONNECT_DERIVE_FAILED string is rendered, masked accountId in logs
+- [Phase 51]: [51-03] Success messaging deferred until after derivation completes -- one unified D-02 signal, resolving RESEARCH Open Question 2
+- [Phase 52]: [52-01] state()/statusSnapshot() default to 'valid' when sp_dc is present and no negative state is cached -- mirrors TokenManager::needsReauth's innocent-until-proven-guilty default
+- [Phase 52]: [52-01] SecretSource validation is fail-closed on the WHOLE xyloflake payload -- any single anomaly anywhere rejects everything, never a partial fallback to a lower valid version
+- [Phase 52]: [52-02] pathfinderHome() and getWebPlayerPlaylistItems() bypass the shared _request/_doFlavouredRequest pipeline entirely -- dedicated SimpleAsyncHTTP calls keep the WebPlayer->getToken-not-TokenManager source assertion literally true and avoid touching the 40+ existing PKCE call sites
+- [Phase 52]: [52-02] PATHFINDER_HOME_HASH_DEFAULT ships as an explicit UNVERIFIED PLACEHOLDER, not a fabricated-looking SHA256 -- degrades cleanly (Pitfall 4) until a real hash is captured during manual UAT
+- [Phase 52]: [52-03] sp_dc unchanged-resubmit check compares the raw trimmed submitted value against the masked preview BEFORE charset sanitization strips the placeholder's asterisks -- sanitizing first would make every resubmit look changed and overwrite the stored cookie
+- [Phase 52]: [52-03] sp_dc save reuses the standard saveSettings form POST (like pref_clientId), not a dedicated AJAX endpoint -- no new _csrfCheck surface needed
+- [Phase 52]: [52-04] _playlistItem/_playlistFeed gained an opts/passthrough webPlayer flag rather than a duplicate _madeForYouPlaylistFeed sibling -- single-sources the play-all/pagination/cache/_trackItem pipeline for both PKCE and Web-Player playlist access (Pitfall 3)
+- [Phase 52]: [52-04] Made For You playlist items are labelled by raw Spotify ID, not a human-readable name -- pathfinderHome (Plan 02) only extracts/validates IDs, no name/image metadata; documented as a Known Stub, out of this plan's Plugin.pm-only file scope
+- [Phase 52]: [Phase 52] [52-05] Left previously cached state untouched on transient mint failure rather than introducing a 5th state enum value -- simplest CR-02 fix, no downstream consumer needs new handling
+- [Phase 52]: [52-06] Hash resolution is prefs-first; WP_GQL_HASH_CACHE_KEY left unused (reserved for future auto-scrape, not this plan's scope)
+- [Phase 52]: [52-06] sp_dc clear guarded by hasSpDc() check to avoid pointless storeSpDc('', '') calls on accounts that never had a cookie
+- [Phase ?]: [Phase 53]: [53-01] D-07/D-08 confirmed as planned — Mode::GetToken/run_get_token clean-cut removal, KEYMASTER_CLIENT_ID cosmetic rename to DISCOVERY_CLIENT_ID in both main.rs and unified.rs, no deviations
+- [Phase ?]: [Phase 53]: [53-02] _doRequest kept (not _executeRequest) -- matches existing _request naming pair already in Client.pm
+- [Phase ?]: [Phase 53]: [53-02] New i18n keys placed adjacent to nearest thematic sibling block in strings.txt rather than a single new trailing block -- easier future discoverability
+- [Phase ?]: [Phase 53]: [53-02] AUTH-06 (Login5 fallback) marked dropped in REQUIREMENTS.md -- Login5 gets immediate 429 on api.spotify.com, PKCE is sole API auth path; AUTH-07 left open pending Plan 03
+- [Phase ?]: [Phase 53]: [53-03] accountNeedsMigration composes Credentials::credentialsPathFor + PKCE::loadTokens per D-05's literal formula, not the stricter verifyCredentials check
+- [Phase ?]: [Phase 53]: [53-03] OPML migration hint checks only the active account; Settings banner checks anyAccountNeedsMigration (all accounts) -- deliberate asymmetry, migration hint takes precedence over the reactive reauth hint
+- [Phase ?]: [Phase 53]: [53-03] Propagated $err through 2 internal pagination helpers (_fetchAllFollowedArtists, _fetchAllPages) with no inline NO_RESULTS construction of their own, so their 4 outer done-consumers call _authRequiredItem instead
+- [Phase ?]: [Phase 54]: [54-01] classifyAudioKeyError placed directly after isCredentialError, denial signature checked before throttle signature so denial wins when both present
+- [Phase ?]: [Phase 54]: [54-01] DaemonManager audio-key cache write only on state change (write-guard) and never on undef classification -- preserves a denied state that scrolled out of the bounded stderr tail
+- [Phase ?]: [Phase 54]: [54-01] last-API-call timestamp written only in getToken's cache-hit branch (single write site), deliberately excluding _refreshToken's success path to avoid conflating token-refresh-cycle-alive with actual API usage
+- [Phase ?]: [Phase 54]: [54-03] Playlist Play-All root cause confirmed via runtime DIAG logging — LMS core leaves quantity=undef for CLI-driven play commands (Material Skin), heuristic >=500 unreachable on that path; user chose Option D (broaden heuristic to !defined(quantity) || quantity>=500) for Plan 04 to implement
+- [Phase ?]: [Phase 54]: [54-02] _collectAuthHealth is self-contained (requires own collaborators) so it can be unit-tested directly without a full handler() invocation
+- [Phase ?]: [Phase 54]: [54-02] Connect indicator prefers the first alive daemon helper matching an account, falling back to the first helper found at all if none are alive
+- [Phase ?]: [Phase 54]: [54-02] lastApiCall rendered as relative time entirely client-side (data-epoch attribute + inline JS) rather than server-formatted, avoiding a new date-formatting dependency in the TT template
+- [Phase ?]: [Phase 54]: [54-04] Option D implemented exactly as specified: isPlayAll = !defined(quantity) || quantity>=500, applied uniformly across all 4 feed functions (_savedTracksFeed, _showFeed, _albumFeed, _playlistFeed); index/quantity defaults switched from || to // (defined-or)
 
 ### Blockers/Concerns
 
@@ -128,18 +200,24 @@ Items carried forward from previous milestones:
 |---|-------------|------|--------|-----------|
 | 260709-bsx | Diagnostik + Daemon-Stabilität Verbesserungen | 2026-07-09 | e714019 | [260709-bsx](./quick/260709-bsx-diagnostik-daemon-stabilitaet-verbesseru/) |
 | 260713-bg4 | Keymaster 403 account check script for affected users | 2026-07-13 | 9aef195 | [260713-bg4](./quick/260713-bg4-keymaster-403-account-check-script-for-a/) |
+| 3 | Keymaster Token Usage Audit (4-bucket classification) | 2026-07-13 | e50fc26 | — |
 
 ## Session Continuity
 
-**Last session:** 2026-07-13
-**Stopped at:** Dead-end retracted — woorszt confirms PKCE restores full playback for mid-cohort accounts
+**Resume file:** None
+
+**Last session:** 2026-07-16T16:38:13.415Z
+**Stopped at:** Completed 54-04-PLAN.md
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
+
 - Posted #115 reply (woorszt confirmation, 3-cohort model)
 - Posted #91 correction (retracted dead-end, updated assessment)
 - Fixed #60 label (waiting-user re-set, warminskimarcin hasn't run script)
 - Updated STATE.md decisions
+
 **Next action:**
+
 1. Create v3.0-auth branch from main
 2. Slim Phase 49-00 audit (Grep + 4-bucket classification)
 3. Plan Phase 49 PKCE OAuth

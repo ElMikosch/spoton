@@ -106,6 +106,19 @@ sub _statusDataHandler {
         main::INFOLOG && $log->is_info && $log->info("Status: _collectTokens failed: $@");
     }
 
+    # --- Made For You (Web-Player) state (D-04 channel 3) ---
+    require Plugins::SpotOn::API::WebPlayer;
+    $data{madeForYou} = eval { Plugins::SpotOn::API::WebPlayer->statusSnapshot() } // {};
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: WebPlayer statusSnapshot failed: $@");
+    }
+
+    # CR-01 gap closure (Plan 52-06): hashConfigured lets the Status page
+    # distinguish "Pathfinder hash not set" (admin action needed) from other
+    # Made For You degradation states. Reads the pref directly -- no need to
+    # require Client.pm for this.
+    $data{madeForYou}{hashConfigured} = (length($prefs->get('pathfinderHash') || '') > 0) ? 1 : 0;
+
     # --- System info (D-05: cached, computed once) ---
     $data{system} = eval { _systemInfo() } // {};
     if ($@) {
@@ -178,8 +191,7 @@ sub _collectDaemons {
 sub _collectTokens {
     require Plugins::SpotOn::API::TokenManager;
     return {
-        accountCount     => scalar(Plugins::SpotOn::API::TokenManager->getAccountIds()),
-        discoveryRunning => Plugins::SpotOn::API::TokenManager->isDiscoveryRunning() ? 1 : 0,
+        accountCount => scalar(Plugins::SpotOn::API::TokenManager->getAccountIds()),
     };
 }
 
