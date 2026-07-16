@@ -308,8 +308,10 @@ our %needs_reauth;
 our @clear_reauth_calls = ();
 our @store_account_prefs_calls = ();
 our $needs_migration = 0;    # Plan 03 Task 3: Settings.pm migration banner (D-04 Channel 2)
+our %account_needs_migration;    # Plan 54-02: per-account override for _collectAuthHealth tests
 sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
 sub anyAccountNeedsMigration { return $needs_migration ? 1 : 0 }
+sub accountNeedsMigration { my ($class, $id) = @_; return $account_needs_migration{$id} ? 1 : 0 }
 sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
 sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
@@ -332,6 +334,7 @@ sub reset_calls {
     %needs_reauth = ();
     @clear_reauth_calls = ();
     @store_account_prefs_calls = ();
+    %account_needs_migration = ();
 }
 1;
 END
@@ -358,12 +361,28 @@ sub reset_calls {
 1;
 END
 
-# Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref save)
+# Stub: Plugins::SpotOn::Unified::DaemonManager (scheduleInit called on pref
+# save; helperInstances + FakeHelper added for Plan 54-02's Auth Health
+# Dashboard aggregation test -- a controllable fixture list of fake daemon
+# helper objects exposing the same _accountId/alive/pid/uptime accessors as
+# the real Unified::Daemon.pm).
 write_stub($stub_dir, 'Plugins::SpotOn::Unified::DaemonManager', <<'END');
 package Plugins::SpotOn::Unified::DaemonManager;
 our $schedule_init_calls = 0;
-sub scheduleInit { $schedule_init_calls++ }
-sub reset_calls { $schedule_init_calls = 0 }
+our @fake_helpers = ();
+sub scheduleInit    { $schedule_init_calls++ }
+sub helperInstances { return @fake_helpers }
+sub reset_calls     { $schedule_init_calls = 0; @fake_helpers = () }
+
+package Plugins::SpotOn::Unified::DaemonManager::FakeHelper;
+sub new {
+    my ($class, %args) = @_;
+    return bless { %args }, $class;
+}
+sub _accountId { return $_[0]->{_accountId} }
+sub alive      { return $_[0]->{alive} }
+sub pid        { return $_[0]->{pid} }
+sub uptime     { return $_[0]->{uptime} }
 1;
 END
 
@@ -1064,6 +1083,98 @@ SKIP: {
         'Plan52-03: template param spDcMasked populated from WebPlayer->spDcMaskedPreview');
     is($param_ref->{madeForYouState}, 'valid',
         'Plan52-03: template param madeForYouState populated from WebPlayer->state');
+}
+
+# ============================================================
+# Plan 54-02: Auth Health Dashboard -- structural wiring (Settings.pm + basic.html)
+# ============================================================
+{
+    my $html_file = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
+
+    SKIP: {
+        skip "basic.html not found", 7 unless -f $html_file;
+
+        open(my $fh, '<', $html_file) or die $!;
+        my $html = do { local $/; <$fh> };
+        close($fh);
+
+        ok($html =~ /authHealth/, 'Plan54-02: basic.html references authHealth');
+        ok($html =~ /PLUGIN_SPOTON_DASHBOARD_TITLE/,
+            'Plan54-02: basic.html references PLUGIN_SPOTON_DASHBOARD_TITLE');
+
+        for my $group (qw(pkce spDc connect migration audioKey)) {
+            ok($html =~ /authHealth\.\$id\.\Q$group\E/,
+                "Plan54-02: basic.html iterates authHealth.\$id.$group");
+        }
+    }
+
+    SKIP: {
+        skip "Settings.pm not found", 2 unless -f $settings_module;
+
+        open(my $fh, '<', $settings_module) or die $!;
+        my $src = do { local $/; <$fh> };
+        close($fh);
+
+        ok($src =~ /sub _collectAuthHealth\b/,
+            'Plan54-02: Settings.pm defines _collectAuthHealth');
+        ok($src =~ /paramRef->\{authHealth\}/,
+            'Plan54-02: Settings.pm wires authHealth into paramRef');
+    }
+}
+
+# ============================================================
+# Plan 54-02: Auth Health Dashboard -- _collectAuthHealth fixture test
+# Exercises the real helper directly against a single mocked account with
+# known states across all 5 indicator groups (review-suggested minimal
+# aggregation test).
+# ============================================================
+SKIP: {
+    skip "Settings.pm module required for Auth Health Dashboard test", 6
+        unless eval { require Plugins::SpotOn::Settings; 1 };
+
+    require Slim::Utils::Cache;
+    require Plugins::SpotOn::Unified::DaemonManager;
+    require Plugins::SpotOn::API::WebPlayer;
+    require Plugins::SpotOn::API::TokenManager;
+
+    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+    $spotonPrefs->set('accounts', { authhealth1 => { displayName => 'AuthHealth Test' } });
+
+    # Fixture: exactly one alive daemon helper for this account.
+    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = (
+        Plugins::SpotOn::Unified::DaemonManager::FakeHelper->new(
+            _accountId => 'authhealth1', alive => 1, pid => 4242, uptime => 99,
+        ),
+    );
+
+    # sp_dc state via the shared WebPlayer stub (Plan 52-03 pattern).
+    Plugins::SpotOn::API::WebPlayer::reset_calls();
+    $Plugins::SpotOn::API::WebPlayer::next_state          = 'valid';
+    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
+
+    # Cache-backed indicators (spoton_last_api_call_/spoton_audiokey_state_,
+    # Plan 54-01 keys) -- written via a fresh Slim::Utils::Cache instance that
+    # shares the stub's package-level store (keyed by cache key string, not
+    # by instance), matching how Settings.pm's own private $cache reads them.
+    my $cache = Slim::Utils::Cache->new('spoton', 4);
+    $cache->set('spoton_last_api_call_authhealth1', 1700000000, 86400);
+    $cache->set('spoton_audiokey_state_authhealth1', 'throttled', 600);
+
+    my $health = Plugins::SpotOn::Settings::_collectAuthHealth('authhealth1');
+
+    ok(ref($health) eq 'HASH', 'Plan54-02: _collectAuthHealth returns a hashref');
+    is_deeply([ sort keys %$health ], [ sort qw(pkce spDc connect migration audioKey) ],
+        'Plan54-02: _collectAuthHealth returns exactly the 5 expected indicator groups');
+    is($health->{spDc}{state}, 'valid',
+        'Plan54-02: spDc.state sourced from WebPlayer->state');
+    is($health->{connect}{alive}, 1,
+        'Plan54-02: connect.alive reflects the matching alive helper');
+    is($health->{connect}{pid}, 4242,
+        'Plan54-02: connect.pid sourced from the matching helper');
+    is($health->{audioKey}{state}, 'throttled',
+        'Plan54-02: audioKey.state sourced from cache');
+
+    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = ();
 }
 
 done_testing();
