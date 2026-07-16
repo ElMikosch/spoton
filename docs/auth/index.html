@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpotOn — Spotify Authorization</title>
+<style>
+  :root {
+    color-scheme: light;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4f5f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a1a;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 520px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+    padding: 32px;
+  }
+  .brand {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1db954;
+    margin: 0 0 8px 0;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 20px 0;
+    line-height: 1.3;
+  }
+  #status {
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0 0 16px 0;
+  }
+  #status.error {
+    color: #c0392b;
+    font-weight: 600;
+  }
+  .fallback {
+    display: none;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e5e5;
+  }
+  .fallback.visible {
+    display: block;
+  }
+  .fallback p {
+    font-size: 13px;
+    color: #555;
+    margin: 0 0 8px 0;
+  }
+  .url-row {
+    display: flex;
+    gap: 8px;
+  }
+  #redirectUrlField {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid #d5d5d5;
+    border-radius: 6px;
+    background: #fafafa;
+    color: #333;
+  }
+  #copyBtn {
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #1db954;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #copyBtn:active {
+    background: #169c46;
+  }
+  #copyBtn.copied {
+    background: #169c46;
+  }
+  noscript p {
+    color: #c0392b;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <p class="brand">SpotOn</p>
+    <h1>Spotify Authorization</h1>
+
+    <noscript>
+      <p>JavaScript is required to complete Spotify authorization. Please enable JavaScript in your browser and reload this page.</p>
+    </noscript>
+
+    <p id="status">Processing authorization response&hellip;</p>
+
+    <div id="fallback" class="fallback">
+      <p>If you are not redirected automatically, copy this URL and open it in a browser that can reach your LMS server:</p>
+      <div class="url-row">
+        <input id="redirectUrlField" type="text" readonly>
+        <button id="copyBtn" type="button">Copy</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  var statusEl   = document.getElementById('status');
+  var fallbackEl = document.getElementById('fallback');
+  var urlField   = document.getElementById('redirectUrlField');
+  var copyBtn    = document.getElementById('copyBtn');
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.className = isError ? 'error' : '';
+  }
+
+  function showFallback(url) {
+    urlField.value = url;
+    fallbackEl.classList.add('visible');
+  }
+
+  copyBtn.addEventListener('click', function () {
+    urlField.select();
+    urlField.setSelectionRange(0, urlField.value.length);
+    try {
+      document.execCommand('copy');
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(function () {
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    } catch (e) {
+      // Clipboard copy is best-effort; the field remains selected for manual copy.
+    }
+  });
+
+  // 1. Parse query parameters from the OAuth redirect.
+  var params = new URLSearchParams(window.location.search);
+  var code             = params.get('code');
+  var state             = params.get('state');
+  var error             = params.get('error');
+  var errorDescription = params.get('error_description');
+
+  // 2. Handle OAuth error responses.
+  if (error) {
+    setStatus('Authorization was denied: ' + (errorDescription || error), true);
+    return;
+  }
+
+  // 3. Handle missing authorization code.
+  if (!code) {
+    setStatus('Invalid callback — no authorization code received.', true);
+    return;
+  }
+
+  if (!state) {
+    setStatus('Invalid callback — no state parameter received.', true);
+    return;
+  }
+
+  // 4. Decode the state parameter: base64url(JSON({ callback_url, nonce })).
+  // The PKCE verifier secret is NEVER included here — it stays exclusively
+  // in the LMS Settings handler (edge case A). This page only forwards the
+  // authorization code and state parameter onward.
+  function base64UrlDecode(str) {
+    var b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    var pad = b64.length % 4;
+    if (pad === 2) { b64 += '=='; }
+    else if (pad === 3) { b64 += '='; }
+    else if (pad !== 0) { throw new Error('invalid base64url length'); }
+    return atob(b64);
+  }
+
+  var stateData;
+  try {
+    stateData = JSON.parse(base64UrlDecode(state));
+  } catch (e) {
+    setStatus('Invalid callback — could not decode state parameter.', true);
+    return;
+  }
+
+  var callbackUrl = stateData && stateData.callback_url;
+  if (!callbackUrl) {
+    setStatus('Invalid callback — state parameter missing callback_url.', true);
+    return;
+  }
+
+  // 5. Validate callback_url is a local/private address (edge case C).
+  // Only RFC1918, loopback, .local (mDNS), or localhost hostnames are allowed
+  // as a redirect target. This prevents an open-redirect via a tampered state
+  // parameter (T-49-07).
+  function isAllowedLocalHost(hostname) {
+    if (!hostname) { return false; }
+
+    hostname = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    if (hostname === 'localhost') { return true; }
+
+    // mDNS (.local) and common LAN suffixes
+    if (/\.(local|lan|home|internal|fritz\.box|box|localdomain)$/.test(hostname)) { return true; }
+
+    // Plain hostname without any dot — always local (e.g. nb-marek, lms-server)
+    if (hostname.indexOf('.') === -1 && /^[a-z0-9][a-z0-9\-]*$/.test(hostname)) { return true; }
+
+    // IPv6 loopback
+    if (hostname === '::1') { return true; }
+
+    // IPv6 ULA (fd00::/8) and link-local (fe80::/10)
+    if (/^fd[0-9a-f]{2}:/.test(hostname) || /^fe[89ab][0-9a-f]:/.test(hostname)) { return true; }
+
+    // IPv4: loopback (127/8), RFC1918 (10/8, 172.16/12, 192.168/16), link-local (169.254/16)
+    var ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      var a = parseInt(ipv4Match[1], 10);
+      var b = parseInt(ipv4Match[2], 10);
+
+      if (a === 127) { return true; }
+      if (a === 10) { return true; }
+      if (a === 172 && b >= 16 && b <= 31) { return true; }
+      if (a === 192 && b === 168) { return true; }
+      if (a === 169 && b === 254) { return true; }
+
+      return false;
+    }
+
+    return false;
+  }
+
+  var callbackUrlObj;
+  try {
+    callbackUrlObj = new URL(callbackUrl);
+  } catch (e) {
+    setStatus('Security error: callback target could not be parsed.', true);
+    showFallback(callbackUrl);
+    return;
+  }
+
+  // 6. Build the redirect URL, forwarding code + state to the LMS callback.
+  callbackUrlObj.searchParams.set('code', code);
+  callbackUrlObj.searchParams.set('state', state);
+  var redirectUrl = callbackUrlObj.toString();
+
+  if (!isAllowedLocalHost(callbackUrlObj.hostname)) {
+    setStatus('Security error: callback target is not a local address.', true);
+    showFallback(redirectUrl);
+    return;
+  }
+
+  // 7. Show the redirect URL and copy-paste fallback simultaneously
+  // (edge case D) — the redirect may not complete if the browser cannot
+  // reach the LMS host (e.g. authorizing from a phone on a different network).
+  setStatus('Redirecting to your LMS server…');
+  showFallback(redirectUrl);
+
+  // 8. Attempt redirect via window.location navigation (edge case B) — not
+  // fetch/XMLHttpRequest, so cross-origin restrictions do not apply.
+  setTimeout(function () {
+    window.location.href = redirectUrl;
+  }, 1000);
+
+  // 9. If still on this page after 5 seconds, the redirect did not complete.
+  setTimeout(function () {
+    setStatus('Redirect did not complete. Please use the URL above to complete authorization manually.', true);
+  }, 5000);
+})();
+</script>
+</body>
+</html>
