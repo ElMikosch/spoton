@@ -467,14 +467,16 @@ async fn run_discover_once(
         format!("{:016x}", h)
     };
 
-    // KEYMASTER_CLIENT_ID — standard librespot client ID
+    // DISCOVERY_CLIENT_ID — standard librespot client ID used for mDNS
+    // Discovery identity (not a Web API OAuth client — this is librespot-core's
+    // built-in ZeroConf/Spotify-Connect discovery identity).
     // Source: librespot-core-0.8.0/src/config.rs line 6
-    const KEYMASTER_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+    const DISCOVERY_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
 
     // Build Discovery: starts mDNS announcement and HTTP server for Spotify Connect
     // builder() requires T: Into<String> + 'static; use owned Strings
     let device_name_owned = device_name.to_string();
-    let mut discovery = Discovery::builder(device_id, KEYMASTER_CLIENT_ID.to_string())
+    let mut discovery = Discovery::builder(device_id, DISCOVERY_CLIENT_ID.to_string())
         .name(device_name_owned)
         .device_type(DeviceType::Speaker)
         .launch()?;
