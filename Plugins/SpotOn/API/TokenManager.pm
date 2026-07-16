@@ -170,6 +170,41 @@ sub anyAccountNeedsReauth {
     return 0;
 }
 
+# accountNeedsMigration($class, $accountId)
+# Public query (D-05, AUTH-07): proactive, filesystem-based detection of
+# v2.x ZeroConf accounts that have never completed PKCE auth -- distinct
+# from needsReauth (which only fires reactively after a failed refresh).
+# Formula: credentials.json exists AND pkce_tokens.json does not. Composes
+# two existing primitives (never adds a new raw -f/stat call, per
+# PATTERNS.md): Credentials->credentialsPathFor() for the existence check,
+# PKCE::loadTokens() for the absence check (falsy on any absence/parse
+# failure). Deliberately does NOT use Credentials->verifyCredentials() --
+# a credentials.json with a non-standard auth_type still indicates a v2.x
+# user who needs to migrate.
+sub accountNeedsMigration {
+    my ($class, $accountId) = @_;
+    require Plugins::SpotOn::API::Credentials;
+    require Plugins::SpotOn::API::PKCE;
+
+    return 0 unless -f Plugins::SpotOn::API::Credentials->credentialsPathFor($accountId);
+    return Plugins::SpotOn::API::PKCE::loadTokens($accountId) ? 0 : 1;
+}
+
+# anyAccountNeedsMigration($class)
+# Public query: returns 1 if ANY known account needs migration (D-05).
+# Convenience aggregate for Settings.pm's global migration banner (Channel 2,
+# checks all accounts) -- mirrors anyAccountNeedsReauth's shape. OPML's
+# per-render migration hint (Channel 1) calls accountNeedsMigration directly
+# for the single active account instead (deliberate asymmetry, see 53-03
+# review finding: OPML always operates on the active account).
+sub anyAccountNeedsMigration {
+    my ($class) = @_;
+    for my $id ($class->getAccountIds()) {
+        return 1 if $class->accountNeedsMigration($id);
+    }
+    return 0;
+}
+
 # clearNeedsReauth($class, $accountId)
 # PUBLIC method (no underscore prefix, L-6) -- cross-module API. Called from
 # _refreshToken() on successful refresh, and from Settings.pm's
@@ -357,9 +392,8 @@ sub _refreshToken {
 
 # _fetchDisplayName($class, $accountId, $spotifyUserId, $cb)
 # L-1: 3-arg signature preserved -- callers (refreshAllTokens, Settings.pm)
-# pass $spotifyUserId as a fallback display name. Gets a token via the new
-# getToken (2-arg, cache-or-refresh) instead of the deleted
-# _fetchKeymasterToken, then GET /me for display_name.
+# pass $spotifyUserId as a fallback display name. Gets a token via getToken
+# (2-arg, cache-or-refresh), then GET /me for display_name.
 sub _fetchDisplayName {
     my ($class, $accountId, $spotifyUserId, $cb) = @_;
 
