@@ -62,6 +62,12 @@ sub getToken {
     my $cacheKey = "spoton_token_${accountId}";
     if (my $cached = $cache->get($cacheKey)) {
         main::INFOLOG && $log->info("TokenManager: cache hit for account " . _mask($accountId));
+        # D-01: getToken is the single choke point every real API call passes
+        # through (all Client.pm call sites obtain a token here before making
+        # a request) -- the correct measurement point for "last API call".
+        # 24h TTL: a dormant account's timestamp naturally expires rather than
+        # showing stale "recent activity" forever.
+        $cache->set("spoton_last_api_call_${accountId}", time(), 86400);
         $cb->($cached);
         return;
     }

@@ -9,6 +9,7 @@ use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 
 use JSON::XS::VersionOneAndTwo;
+use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
@@ -40,6 +41,11 @@ use constant STDERR_TAIL_BYTES => 8192;
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
 my $log         = logger('plugin.spoton');
+
+# D-02: cache instance for audio-key cohort state, keyed by accountId.
+# Mirrors TokenManager.pm's own $cache instantiation pattern (single source
+# of truth for the version number: Plugin.pm's SPOTON_CACHE_VERSION).
+my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
 my %helperInstances;
 
@@ -352,6 +358,38 @@ sub _streamAlivePoll {
         }
         elsif (main::DEBUGLOG && $log->is_debug) {
             $log->debug("SpotOn Unified daemon alive: " . $helper->mac . " pid=" . ($helper->pid || '?'));
+        }
+
+        # D-02: unconditional passive audio-key cohort classification on every
+        # alive daemon's stderr tail. Never triggers a new process spawn --
+        # purely reads the existing stderrTail buffer. Cache write is guarded
+        # against redundant writes (same classified state every 5s poll).
+        if ($helper->alive && $helper->_accountId) {
+            require Plugins::SpotOn::API::Credentials;
+            my $tail  = $helper->stderrTail(STDERR_TAIL_BYTES);
+            my $state = Plugins::SpotOn::API::Credentials->classifyAudioKeyError($tail);
+
+            if (defined $state) {
+                my $cacheKey = "spoton_audiokey_state_" . $helper->_accountId;
+                my $cached   = $cache->get($cacheKey);
+
+                if (($cached // '') ne $state) {
+                    if ($state eq 'denied') {
+                        # Permanent cohort property -- persists until explicitly
+                        # cleared, mirrors _markNeedsReauth's 'never' TTL discipline.
+                        $cache->set($cacheKey, 'denied', 'never');
+                    }
+                    elsif ($state eq 'throttled') {
+                        # Transient rapid-skip state (~2min actual) -- 600s TTL
+                        # gives generous margin for auto-clear back to 'ok'.
+                        $cache->set($cacheKey, 'throttled', 600);
+                    }
+                }
+            }
+            # else: classifier returned undef -- do NOT write to cache. Preserve
+            # any existing 'denied' state that may have scrolled out of the
+            # stderr tail buffer; permanent denial is only ever set, never
+            # cleared by absence.
         }
 
         if ($helper->alive && $helper->_streamPort) {
