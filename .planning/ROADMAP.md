@@ -195,7 +195,14 @@
 
 - [ ] **Phase 53: Keymaster Removal + Migration**
   **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
+  **Plans:** 3 plans
   Depends on: Phase 49, Phase 50, Phase 51
+
+  Plans:
+
+  - [ ] 53-01-PLAN.md — Rust binary: remove --get-token/Mode::GetToken/run_get_token(), rename KEYMASTER_CLIENT_ID
+  - [ ] 53-02-PLAN.md — Perl naming cleanup (Client.pm), i18n string rewrite (22+), AUTH-06 disposition
+  - [ ] 53-03-PLAN.md — Migration detection + OPML/Settings/feed UX wiring + Client-ID setup wizard
 
 ### Phase 54: Auth Health Dashboard
 
