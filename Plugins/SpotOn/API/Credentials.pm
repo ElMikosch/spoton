@@ -255,6 +255,25 @@ sub isCredentialError {
         ? 1 : 0;
 }
 
+# classifyAudioKeyError($class, $stderrText) (D-02)
+# Passive stderr classifier for librespot's audio-key exchange, mirroring
+# isCredentialError's discipline: pure string-matching over bounded input,
+# returns only a symbolic enum value, never the raw stderr text. Called with
+# existing stderrTail output only -- never triggers a new process spawn.
+#
+# Two known signatures (vault/research/Audio Key Service.md):
+#   "error audio key 0 1" -- permanent denial (account-cohort key-service wall)
+#   "error audio key 0 2" -- transient rapid-skip throttle (~2min, auto-clears)
+# Permanent denial takes priority when both are present in the same tail.
+sub classifyAudioKeyError {
+    my ($class, $stderrText) = @_;
+    return undef unless defined $stderrText && length $stderrText;
+
+    return 'denied'   if $stderrText =~ /error audio key 0 1/;
+    return 'throttled' if $stderrText =~ /error audio key 0 2/;
+    return undef;
+}
+
 # ============================================================
 # Private helpers
 # ============================================================
