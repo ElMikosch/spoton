@@ -193,22 +193,31 @@
 
 ### Phase 53: Keymaster Removal + Migration
 
-- [ ] **Phase 53: Keymaster Removal + Migration**
+- [x] **Phase 53: Keymaster Removal + Migration** (completed 2026-07-16)
   **Goal**: Remove all hm://keymaster/token/authenticated code paths. Migration UX for existing ZeroConf users to PKCE. UAT gate: no Keymaster service calls in normal logs. AUTH-06, AUTH-07.
-  **Plans:** 3 plans
+  **Plans:** 3/3 plans complete
   Depends on: Phase 49, Phase 50, Phase 51
 
   Plans:
 
-  - [ ] 53-01-PLAN.md — Rust binary: remove --get-token/Mode::GetToken/run_get_token(), rename KEYMASTER_CLIENT_ID
-  - [ ] 53-02-PLAN.md — Perl naming cleanup (Client.pm), i18n string rewrite (22+), AUTH-06 disposition
-  - [ ] 53-03-PLAN.md — Migration detection + OPML/Settings/feed UX wiring + Client-ID setup wizard
+  - [x] 53-01-PLAN.md — Rust binary: remove --get-token/Mode::GetToken/run_get_token(), rename KEYMASTER_CLIENT_ID
+  - [x] 53-02-PLAN.md — Perl naming cleanup (Client.pm), i18n string rewrite (22+), AUTH-06 disposition
+  - [x] 53-03-PLAN.md — Migration detection + OPML/Settings/feed UX wiring + Client-ID setup wizard
 
 ### Phase 54: Auth Health Dashboard
 
-- [ ] **Phase 54: Auth Health Dashboard**
-  **Goal**: Status page shows auth health at a glance — TOTP secret freshness, sp_dc cookie validity, Pathfinder hash state, and whether the account is affected by the Keymaster 403 issue. Cached probe results, no extra requests on page load.
+- [ ] **Phase 54: Auth Health Dashboard + v3.0 Release Prep**
+  **Goal**: Auth Health Dashboard on Settings page (5 indicators per account, passive reads only), Playlist Play-All bug fix, v2-legacy fallback branch, v3.0.0 merge to main, PKCE Migration E2E verification.
+  **Plans:** 5 plans
   Depends on: Phase 52, Phase 53
+
+  Plans:
+
+  - [ ] 54-01-PLAN.md — Audio-key classifier + dashboard backend state (last-API-call timestamp, unconditional stderr scan)
+  - [ ] 54-02-PLAN.md — Auth Health Dashboard UI (Settings.pm aggregation + basic.html template + i18n)
+  - [ ] 54-03-PLAN.md — Playlist play-all investigation (debug logging + fix decision checkpoint)
+  - [ ] 54-04-PLAN.md — Playlist play-all fix (implement chosen approach + cleanup)
+  - [ ] 54-05-PLAN.md — v2-legacy branch + v3.0 merge + version bump + PKCE E2E verification
 
 ## Progress Table
 
