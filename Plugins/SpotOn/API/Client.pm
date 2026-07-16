@@ -242,7 +242,7 @@ sub getSavedShows {
 # saveTracks($class, $accountId, $uris, $cb)
 # Saves tracks to the user's library (PUT /me/library?uris=...).
 # D-12: Uses unified library endpoint with full Spotify URIs (e.g. spotify:track:ID).
-# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Response: 200 OK with empty body — handled by empty-body guard in _doRequest.
 # Scope: user-library-modify
 sub saveTracks {
     my ($class, $accountId, $uris, $cb) = @_;
@@ -256,7 +256,7 @@ sub saveTracks {
 # removeTracks($class, $accountId, $uris, $cb)
 # Removes tracks from the user's library (DELETE /me/library?uris=...).
 # D-13: Uses unified library endpoint with full Spotify URIs.
-# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Response: 200 OK with empty body — handled by empty-body guard in _doRequest.
 # Scope: user-library-modify
 sub removeTracks {
     my ($class, $accountId, $uris, $cb) = @_;
@@ -289,7 +289,7 @@ sub _extractShowIds {
 # Saves shows to the user's library (PUT /me/shows?ids=...).
 # Uses old-style endpoint consistent with GET /me/shows listing.
 # The unified PUT /me/library saves to a different store that GET /me/shows does not read.
-# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Response: 200 OK with empty body — handled by empty-body guard in _doRequest.
 # Scope: user-library-modify
 sub saveShows {
     my ($class, $accountId, $uris, $cb) = @_;
@@ -303,7 +303,7 @@ sub saveShows {
 # removeShows($class, $accountId, $uris, $cb)
 # Removes shows from the user's library (DELETE /me/shows?ids=...).
 # Uses old-style endpoint consistent with GET /me/shows listing.
-# Response: 200 OK with empty body — handled by empty-body guard in _doFlavouredRequest.
+# Response: 200 OK with empty body — handled by empty-body guard in _doRequest.
 # Scope: user-library-modify
 sub removeShows {
     my ($class, $accountId, $uris, $cb) = @_;
@@ -1014,7 +1014,7 @@ sub playerSeek {
 #   3. Response cache check (unless _noCache) (API-03)
 #   4. Concurrency cap (API-02) — defer via timer
 #   5. Increment inflight counter; wrap $cb in double-callback guard
-#   6. Dispatch to _doFlavouredRequest
+#   6. Dispatch to _doRequest
 sub _request {
     my ($class, $method, $path, $params, $cb) = @_;
 
@@ -1054,7 +1054,7 @@ sub _request {
     # (the single decrement point with double-call guard), or the counter leaks
     # until MAX_CONCURRENT_REQUESTS is reached and all API traffic deadlocks.
     eval {
-        $class->_doFlavouredRequest($method, $cleanPath, $params, $userCb);
+        $class->_doRequest($method, $cleanPath, $params, $userCb);
         1;
     } or do {
         $log->error("Client: dispatch failed for $cleanPath: $@");
@@ -1062,11 +1062,13 @@ sub _request {
     };
 }
 
-# _doFlavouredRequest($class, $method, $cleanPath, $params, $userCb)
-# Executes a single-flavor HTTP request with optional bundled fallback on 403/410/deprecated-404.
-# Called from _request(); also called recursively for the bundled retry (isRetry=1).
-# Source: Spotty-NG API.pm:1595-1703 adapted
-sub _doFlavouredRequest {
+# _doRequest($class, $method, $cleanPath, $params, $userCb)
+# Executes a single PKCE-token-authenticated HTTP request: builds the request URL
+# and cache key, checks the response cache, fetches/refreshes the account's PKCE
+# token, issues the HTTP call, normalizes the response/error, and invokes $userCb.
+# Source: Spotty-NG API.pm:1595-1703 adapted (flavor/bundled-retry dispatch removed
+# by Phase 50 D-04 — single PKCE token per account, no fallback recursion).
+sub _doRequest {
     my ($class, $method, $cleanPath, $params, $userCb) = @_;
 
     my $accountId = $params->{_accountId};
