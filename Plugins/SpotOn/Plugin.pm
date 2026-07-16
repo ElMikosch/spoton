@@ -417,9 +417,33 @@ sub handleFeed {
 
     my @items;
 
-    # D-08 Channel 1: OPML re-auth warning — show when any account needs re-authentication.
+    # D-04 Channel 1: OPML proactive migration hint — show when the ACTIVE
+    # account is a v2.x ZeroConf user who has never completed PKCE auth
+    # (accountNeedsMigration: credentials.json present, pkce_tokens.json
+    # absent). Proactive and filesystem-based, independent of the reactive
+    # needsReauth flag checked below. OPML checks only the active account
+    # (via _getAccountId) since Browse/Library always operates on it --
+    # deliberate asymmetry vs. Settings.pm's anyAccountNeedsMigration() global
+    # check (RESEARCH.md, review finding: hint scope asymmetry).
     require Plugins::SpotOn::API::TokenManager;
-    if (Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth()) {
+    my $activeAccountId = _getAccountId($client);
+    my $showingMigrationHint =
+        Plugins::SpotOn::API::TokenManager->accountNeedsMigration($activeAccountId);
+    if ($showingMigrationHint) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_MIGRATION_REQUIRED'),
+            type => 'textarea',
+        };
+    }
+
+    # D-08 Channel 1: OPML re-auth warning — show when any account needs
+    # re-authentication. Precedence rule (RESEARCH.md Open Question 1
+    # resolution): only shown when the migration hint above is NOT showing,
+    # since a migration account cannot yet have hit the reactive reauth path
+    # -- avoids double-stacking two warning items for the same account.
+    if ( !$showingMigrationHint
+        && Plugins::SpotOn::API::TokenManager->anyAccountNeedsReauth())
+    {
         push @items, {
             name => cstring($client, 'PLUGIN_SPOTON_REAUTH_REQUIRED'),
             type => 'textarea',
@@ -1061,6 +1085,29 @@ sub _trackItem {
     return \%item;
 }
 
+# _authRequiredItem($client, $accountId, $err)
+# Shared OPML error-branch helper (D-04 Channel 3, AUTH-07, Plan 03 Task 2).
+# Called from the ~17 feed-function `unless ($data)` sites in place of the
+# old hardcoded PLUGIN_SPOTON_NO_RESULTS item construction. Distinguishes
+# "authentication required" (v2.x migration pending OR PKCE refresh
+# rejected) from a genuine empty result set.
+# SECURITY (T-53-05, mirrors T-51-10/T-52-02): $err is accepted but NEVER
+# interpolated into the returned name/string -- only fixed, pre-translated
+# cstring() keys are returned. $err is reserved for future server-side
+# logging only.
+sub _authRequiredItem {
+    my ($client, $accountId, $err) = @_;
+    require Plugins::SpotOn::API::TokenManager;
+
+    my $needsAuth = Plugins::SpotOn::API::TokenManager->accountNeedsMigration($accountId)
+                 || Plugins::SpotOn::API::TokenManager->needsReauth($accountId);
+
+    return {
+        name => cstring($client, $needsAuth ? 'PLUGIN_SPOTON_AUTH_REQUIRED' : 'PLUGIN_SPOTON_NO_RESULTS'),
+        type => 'textarea',
+    };
+}
+
 # _albumItem($client, $album)
 # Builds an OPML link item for album navigation.
 # url => \&_albumFeed is defined in Plan 03-03 (resolved at runtime by Perl).
@@ -1218,9 +1265,9 @@ sub _recentlyPlayedFeed {
     my $accountId = _getAccountId($client);
 
     Plugins::SpotOn::API::Client->getRecentlyPlayed($accountId, { limit => 50 }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
@@ -1320,9 +1367,9 @@ sub _topTracksFeed {
         time_range => 'medium_term',
         limit      => 50,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _trackItem($client, $_) } @{ $data->{items} || [] };
@@ -1394,7 +1441,7 @@ sub _savedTracksFeed {
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 # FIX-01: defer metadata cache writes to avoid blocking event loop
                 # with N synchronous SQLite INSERTs before callback fires.
                 my @deferredMeta;
@@ -1402,7 +1449,7 @@ sub _savedTracksFeed {
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -1425,9 +1472,9 @@ sub _savedTracksFeed {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
             my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
@@ -1451,9 +1498,9 @@ sub _savedAlbumsFeed {
         offset => $offset,
         limit  => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _albumItem($client, $_->{album}) } @{ $data->{items} || [] };
@@ -1471,15 +1518,21 @@ sub _followedArtistsFeed {
     my $accountId = _getAccountId($client);
 
     _fetchAllFollowedArtists($client, $accountId, undef, [], sub {
-        my ($allArtists) = @_;
+        my ($allArtists, $err) = @_;
         my @items = map { _artistItem($client, $_) } @{$allArtists};
         if (!@items) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            push @items, _authRequiredItem($client, $accountId, $err);
         }
         $callback->({ items => \@items });
     });
 }
 
+# _fetchAllFollowedArtists: on a fetch failure, $err is propagated up to
+# $done (as the 2nd arg) so the caller's empty-result branch can distinguish
+# "authentication required" from a genuine empty followed-artists list
+# (Plan 03 Task 2 -- one of the 2 non-standard sites among the 17
+# unless($data) call sites, since this internal paginator has no inline
+# NO_RESULTS item of its own to substitute).
 sub _fetchAllFollowedArtists {
     my ($client, $accountId, $after, $accumulated, $done) = @_;
 
@@ -1487,9 +1540,9 @@ sub _fetchAllFollowedArtists {
     $params{after} = $after if defined $after;
 
     Plugins::SpotOn::API::Client->getFollowedArtists($accountId, \%params, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $done->($accumulated);
+            $done->($accumulated, $err);
             return;
         }
         my $artists = $data->{artists}{items} || [];
@@ -1523,6 +1576,11 @@ sub _fetchAllFollowedArtists {
 #
 # T-25-01: Guards against infinite recursion — stops when current page returns 0 items,
 # regardless of what the total field says. Prevents infinite loop on API inconsistencies.
+# On a fetch failure, $err is propagated up to $done (as the 2nd arg) so
+# callers' empty-result branch can distinguish "authentication required"
+# from a genuine empty result set (Plan 03 Task 2 -- this shared paginator
+# has no inline NO_RESULTS item of its own to substitute at its unless($data)
+# site, unlike the 15 standard call sites).
 sub _fetchAllPages {
     my ($args) = @_;
 
@@ -1540,10 +1598,10 @@ sub _fetchAllPages {
     $fetchPage = sub {
         my ($offset) = @_;
         $apiFn->($accountId, { offset => $offset, limit => $pageLimit }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
                 undef $fetchPage;
-                $done->(\@accumulated);
+                $done->(\@accumulated, $err);
                 return;
             }
             my $items = $extractItems->($data);
@@ -1580,9 +1638,9 @@ sub _userPlaylistsFeed {
         offset => $offset,
         limit  => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         # D-03: Exclude Made-For-You playlists from Library Playlists
@@ -1637,9 +1695,9 @@ sub _savedShowsFeed {
         limit    => $limit,
         _noCache => 1,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
@@ -1710,10 +1768,10 @@ sub _showFeed {
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 my @items = map { _episodeItem($client, $_, $showCtx) } @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$showCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -1738,9 +1796,9 @@ sub _showFeed {
             offset => $apiOffset,
             limit  => $apiLimit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
             my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
@@ -2061,9 +2119,9 @@ sub _podcastSearchFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2117,9 +2175,9 @@ sub _podcastSearchTypeFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2169,9 +2227,9 @@ sub _searchFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2256,9 +2314,9 @@ sub _searchTypeFeed {
         limit  => 50,
         offset => 0,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
@@ -2356,9 +2414,9 @@ sub _artistAlbumsFeed {
         offset         => $offset,
         limit          => $limit,
     }, sub {
-        my $data = shift;
+        my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
         my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
@@ -2438,14 +2496,19 @@ sub _albumFeed {
                     offset => $pageOffset,
                     limit  => 50,
                 }, sub {
-                    my $data = shift;
+                    # NON-UNIFORM site (review finding #4): on fetch failure, fall back to
+                    # any accumulated tracks from prior pages -- only replace the inner
+                    # if (!@items) NO_RESULTS push with _authRequiredItem; the outer
+                    # unless($data) block and the partial-result fallback itself are
+                    # preserved exactly as before.
+                    my ($data, $err) = @_;
                     unless ($data) {
                         undef $fetchPage;
                         # FIX-01: defer metadata cache writes.
                         my @deferredMeta;
                         my @items = map { _albumTrackItem($client, $_, $images, $artist0, $albumNm, { defer_cache => \@deferredMeta, albumReleaseDate => $albumRd }) } @accumulated;
                         if (!@items) {
-                            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                            push @items, _authRequiredItem($client, $accountId, $err);
                         }
                         $_playAllItemCache{$albumCacheKey} = { items => \@items, ts => time() };
                         $callback->({ items => \@items });
@@ -2511,9 +2574,9 @@ sub _albumFeed {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            my ($data, $err) = @_;
             unless ($data) {
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
 
@@ -2692,7 +2755,7 @@ sub _playlistFeed {
             pageLimit    => 100,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
-                my ($allItems) = @_;
+                my ($allItems, $err) = @_;
                 # T-03-10: Skip null track entries (local files in playlists return null track objects).
                 # FIX-01: defer metadata cache writes to avoid blocking event loop with N SQLite INSERTs.
                 my @deferredMeta;
@@ -2700,7 +2763,7 @@ sub _playlistFeed {
                             grep { defined $_->{track} }
                             @{$allItems};
                 if (!@items) {
-                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    push @items, _authRequiredItem($client, $accountId, $err);
                 }
                 $_playAllItemCache{$plCacheKey} = { items => \@items, ts => time() };
                 $callback->({ items => \@items });
@@ -2722,10 +2785,15 @@ sub _playlistFeed {
             offset => $offset,
             limit  => $limit,
         }, sub {
-            my $data = shift;
+            # NON-UNIFORM site (review finding #4): error source may be
+            # sp_dc/Pathfinder (webPlayer mode) rather than PKCE.
+            # _authRequiredItem still works correctly here -- it checks
+            # accountNeedsMigration/needsReauth state, not the error source.
+            # Existing graceful-degradation behavior (no partial-cache
+            # fallback at this site) is otherwise unchanged.
+            my ($data, $err) = @_;
             unless ($data) {
-                # Made-For-You 403 or other error — graceful fallback per RESEARCH Open Question 2.
-                $callback->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
 
