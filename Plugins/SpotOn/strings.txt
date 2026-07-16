@@ -180,6 +180,227 @@ PLUGIN_SPOTON_MIGRATION_SETTINGS_HINT
 	PL	Twoje konto Spotify musi zostać ponownie połączone, aby uzyskać dostęp do Przeglądania i Biblioteki. Kliknij poniżej „Połącz konto Spotify".
 	SV	Ditt Spotify-konto måste anslutas igen för åtkomst till Bläddra och Bibliotek. Klicka på 'Anslut Spotify-konto' nedan.
 
+PLUGIN_SPOTON_DASHBOARD_TITLE
+	CS	Stav ověření
+	DA	Godkendelsesstatus
+	DE	Auth-Status
+	EN	Auth Health
+	ES	Estado de autenticación
+	FR	État de l'authentification
+	IT	Stato autenticazione
+	NL	Auth-status
+	NO	Autentiseringsstatus
+	PL	Stan uwierzytelniania
+	SV	Autentiseringsstatus
+
+PLUGIN_SPOTON_DASHBOARD_PKCE
+	CS	API token
+	DA	API-token
+	DE	API-Token
+	EN	API Token
+	ES	Token de API
+	FR	Jeton API
+	IT	Token API
+	NL	API-token
+	NO	API-token
+	PL	Token API
+	SV	API-token
+
+PLUGIN_SPOTON_DASHBOARD_PKCE_OK
+	CS	Platný
+	DA	Gyldig
+	DE	Gültig
+	EN	Valid
+	ES	Válido
+	FR	Valide
+	IT	Valido
+	NL	Geldig
+	NO	Gyldig
+	PL	Ważny
+	SV	Giltig
+
+PLUGIN_SPOTON_DASHBOARD_PKCE_REAUTH
+	CS	Vyžadována opětovná autentizace
+	DA	Godkendelse påkrævet igen
+	DE	Erneute Auth erforderlich
+	EN	Re-auth required
+	ES	Se requiere volver a autenticar
+	FR	Nouvelle authentification requise
+	IT	Richiesta nuova autenticazione
+	NL	Opnieuw verifiëren vereist
+	NO	Ny autentisering kreves
+	PL	Wymagane ponowne uwierzytelnienie
+	SV	Ny autentisering krävs
+
+PLUGIN_SPOTON_DASHBOARD_SPDC
+	CS	Made For You
+	DA	Made For You
+	DE	Made For You
+	EN	Made For You
+	ES	Made For You
+	FR	Made For You
+	IT	Made For You
+	NL	Made For You
+	NO	Made For You
+	PL	Made For You
+	SV	Made For You
+
+PLUGIN_SPOTON_DASHBOARD_CONNECT
+	CS	Connect
+	DA	Connect
+	DE	Connect
+	EN	Connect
+	ES	Connect
+	FR	Connect
+	IT	Connect
+	NL	Connect
+	NO	Connect
+	PL	Connect
+	SV	Connect
+
+PLUGIN_SPOTON_DASHBOARD_CONNECT_ALIVE
+	CS	Běží
+	DA	Kører
+	DE	Läuft
+	EN	Running
+	ES	En ejecución
+	FR	En cours d'exécution
+	IT	In esecuzione
+	NL	Actief
+	NO	Kjører
+	PL	Uruchomiony
+	SV	Kör
+
+PLUGIN_SPOTON_DASHBOARD_CONNECT_DEAD
+	CS	Zastaveno
+	DA	Stoppet
+	DE	Gestoppt
+	EN	Stopped
+	ES	Detenido
+	FR	Arrêté
+	IT	Fermato
+	NL	Gestopt
+	NO	Stoppet
+	PL	Zatrzymany
+	SV	Stoppad
+
+PLUGIN_SPOTON_DASHBOARD_MIGRATION
+	CS	Migrace
+	DA	Migrering
+	DE	Migration
+	EN	Migration
+	ES	Migración
+	FR	Migration
+	IT	Migrazione
+	NL	Migratie
+	NO	Migrering
+	PL	Migracja
+	SV	Migrering
+
+PLUGIN_SPOTON_DASHBOARD_MIGRATION_NEEDED
+	CS	Je nutné znovu připojit
+	DA	Skal tilsluttes igen
+	DE	Erneute Verbindung erforderlich
+	EN	Reconnect required
+	ES	Es necesario volver a conectar
+	FR	Reconnexion requise
+	IT	Ricollegamento richiesto
+	NL	Opnieuw verbinden vereist
+	NO	Må kobles til på nytt
+	PL	Wymagane ponowne połączenie
+	SV	Återanslutning krävs
+
+PLUGIN_SPOTON_DASHBOARD_MIGRATION_DONE
+	CS	Dokončeno
+	DA	Fuldført
+	DE	Abgeschlossen
+	EN	Complete
+	ES	Completado
+	FR	Terminé
+	IT	Completato
+	NL	Voltooid
+	NO	Fullført
+	PL	Ukończono
+	SV	Slutförd
+
+PLUGIN_SPOTON_DASHBOARD_AUDIOKEY
+	CS	Audio klíče
+	DA	Lydnøgler
+	DE	Audio-Keys
+	EN	Audio Keys
+	ES	Claves de audio
+	FR	Clés audio
+	IT	Chiavi audio
+	NL	Audiosleutels
+	NO	Lydnøkler
+	PL	Klucze audio
+	SV	Ljudnycklar
+
+PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_OK
+	CS	OK
+	DA	OK
+	DE	OK
+	EN	OK
+	ES	OK
+	FR	OK
+	IT	OK
+	NL	OK
+	NO	OK
+	PL	OK
+	SV	OK
+
+PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_DENIED
+	CS	Odepřeno (kohorta účtu)
+	DA	Nægtet (kontokohorte)
+	DE	Verweigert (Account-Kohorte)
+	EN	Denied (account cohort)
+	ES	Denegado (cohorte de cuenta)
+	FR	Refusé (cohorte de compte)
+	IT	Negato (coorte account)
+	NL	Geweigerd (accountcohort)
+	NO	Nektet (kontokohort)
+	PL	Odmówiono (kohorta konta)
+	SV	Nekad (kontokohort)
+
+PLUGIN_SPOTON_DASHBOARD_AUDIOKEY_THROTTLED
+	CS	Omezeno (dočasně)
+	DA	Begrænset (midlertidigt)
+	DE	Gedrosselt (temporär)
+	EN	Throttled (temporary)
+	ES	Limitado (temporal)
+	FR	Limité (temporaire)
+	IT	Limitato (temporaneo)
+	NL	Beperkt (tijdelijk)
+	NO	Struping (midlertidig)
+	PL	Ograniczono (tymczasowo)
+	SV	Strypt (tillfälligt)
+
+PLUGIN_SPOTON_DASHBOARD_LAST_API
+	CS	Poslední volání API
+	DA	Sidste API-kald
+	DE	Letzter API-Aufruf
+	EN	Last API call
+	ES	Última llamada a la API
+	FR	Dernier appel API
+	IT	Ultima chiamata API
+	NL	Laatste API-aanroep
+	NO	Siste API-kall
+	PL	Ostatnie wywołanie API
+	SV	Senaste API-anrop
+
+PLUGIN_SPOTON_DASHBOARD_NEVER
+	CS	Nikdy
+	DA	Aldrig
+	DE	Nie
+	EN	Never
+	ES	Nunca
+	FR	Jamais
+	IT	Mai
+	NL	Nooit
+	NO	Aldri
+	PL	Nigdy
+	SV	Aldrig
+
 PLUGIN_SPOTON_ACCOUNT_NONE
 	CS	Žádný účet není nakonfigurován
 	DA	Ingen konto konfigureret
