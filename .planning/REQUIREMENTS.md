@@ -58,7 +58,7 @@ Deferred to future release. Tracked but not in current roadmap.
 - [x] **AUTH-04**: librespot starts with stored credentials + `--disable-discovery` — Connect device appears via cloud/Spirc registration, no mDNS needed
 - [x] **AUTH-05**: TokenManager.pm refreshes Web API tokens via standard OAuth refresh flow — no binary spawn (`--get-token`) needed for API calls
 - [x] **AUTH-06**: ~~Login5 fallback~~ (dropped — Login5 gets immediate 429 on api.spotify.com, not viable as API token source. PKCE is the sole API auth path. See Phase 53 D-01/D-02)
-- [ ] **AUTH-07**: Keymaster code removed from TokenManager.pm after PKCE is stable
+- [x] **AUTH-07**: Keymaster code removed from TokenManager.pm after PKCE is stable (Plan 01 Rust removal, Plan 02 Client.pm/i18n cleanup, Plan 03 TokenManager.pm D-16 comment fix + migration detection/UX all complete — zero case-insensitive "keymaster" references remain, permanently guarded by test)
 
 ## Out of Scope
 

@@ -208,15 +208,15 @@
 
 - [ ] **Phase 54: Auth Health Dashboard + v3.0 Release Prep**
   **Goal**: Auth Health Dashboard on Settings page (5 indicators per account, passive reads only), Playlist Play-All bug fix, v2-legacy fallback branch, v3.0.0 merge to main, PKCE Migration E2E verification.
-  **Plans:** 5 plans
+  **Plans:** 4/5 plans executed
   Depends on: Phase 52, Phase 53
 
   Plans:
 
-  - [ ] 54-01-PLAN.md — Audio-key classifier + dashboard backend state (last-API-call timestamp, unconditional stderr scan)
-  - [ ] 54-02-PLAN.md — Auth Health Dashboard UI (Settings.pm aggregation + basic.html template + i18n)
-  - [ ] 54-03-PLAN.md — Playlist play-all investigation (debug logging + fix decision checkpoint)
-  - [ ] 54-04-PLAN.md — Playlist play-all fix (implement chosen approach + cleanup)
+  - [x] 54-01-PLAN.md — Audio-key classifier + dashboard backend state (last-API-call timestamp, unconditional stderr scan)
+  - [x] 54-02-PLAN.md — Auth Health Dashboard UI (Settings.pm aggregation + basic.html template + i18n)
+  - [x] 54-03-PLAN.md — Playlist play-all investigation (debug logging + fix decision checkpoint)
+  - [x] 54-04-PLAN.md — Playlist play-all fix (implement chosen approach + cleanup)
   - [ ] 54-05-PLAN.md — v2-legacy branch + v3.0 merge + version bump + PKCE E2E verification
 
 ## Progress Table

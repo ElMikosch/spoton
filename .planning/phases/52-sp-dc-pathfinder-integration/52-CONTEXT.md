@@ -33,10 +33,9 @@ This phase adds "Made for You" content (Daily Mix, Discover Weekly, Release Rada
 ### sp_dc Input & Security
 - **D-08:** Dedicated "Made for You" section in Settings page — sp_dc text field with collapsible how-to instructions (browser DevTools screenshot/steps), status indicator (valid/expired/empty).
 - **D-09:** sp_dc stored in LMS prefs under the account key (consistent with PKCE tokens). Masked in all logs: `sp_dc=AQDx****`.
-- **D-10:** sp_dc is ~1 year valid, no programmatic refresh. User re-extracts from browser on expiry.
-
 ### Claude's Discretion
 - sp_dc storage location within prefs structure (D-09 sets the pattern, exact key name is implementation detail)
+- D-10: sp_dc is ~1 year valid, no programmatic refresh. User re-extracts from browser on expiry. (informational constraint, no implementation action)
 - GraphQL hash caching strategy (in-memory vs. prefs vs. cache DB)
 - Pathfinder response parsing and playlist filtering logic
 - Web-Player token caching TTL and refresh strategy
