@@ -213,6 +213,22 @@ SKIP: {
         }
     }
     is($bad_indent, 0, "All translation lines use Tab indentation (not spaces)");
+
+    # Permanent regression test (Phase 53 D-15/D-16): the Keymaster HTTP
+    # service is fully removed from the auth architecture (PKCE-only). No
+    # translation value may reintroduce a "keymaster" reference. This checks
+    # translation VALUES only (lines matching \tLANG\ttext), not key names,
+    # so a future Keymaster-named key would not itself trip this assertion --
+    # it targets user-facing string content specifically.
+    my @keymaster_hits;
+    for my $line (split /\n/, $content) {
+        if ($line =~ /^\t[A-Z]{2}\t(.+)$/ && $1 =~ /keymaster/i) {
+            push @keymaster_hits, $line;
+        }
+    }
+    is(scalar(@keymaster_hits), 0,
+        "No translation value references 'keymaster' (Phase 53 permanent regression guard)")
+        or diag("Found keymaster reference(s): " . join("; ", @keymaster_hits));
 }
 
 done_testing();

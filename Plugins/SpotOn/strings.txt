@@ -141,6 +141,45 @@ PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS
 	PL	Jedno lub więcej kont Spotify wymaga ponownej autoryzacji. Kliknij "Połącz konto Spotify", aby ją odnowić.
 	SV	Ett eller flera Spotify-konton kräver förnyad autentisering. Klicka på "Anslut Spotify-konto" för att förnya.
 
+PLUGIN_SPOTON_MIGRATION_REQUIRED
+	CS	Pro zapnutí Procházení, Vyhledávání a Knihovny znovu připojte svůj účet Spotify v Nastavení. Přehrávání přes Connect funguje i nadále.
+	DA	Tilslut din Spotify-konto igen i Indstillinger for at aktivere Gennemse, Søg og Bibliotek. Connect-afspilning fortsætter med at fungere.
+	DE	Verbinde dein Spotify-Konto erneut in den Einstellungen, um Durchsuchen, Suche und Bibliothek zu aktivieren. Die Wiedergabe über Connect funktioniert weiterhin.
+	EN	Please reconnect your Spotify account in Settings to enable Browse, Search, and Library. Connect playback continues to work.
+	ES	Vuelve a conectar tu cuenta de Spotify en Ajustes para habilitar Explorar, Buscar y Biblioteca. La reproducción por Connect sigue funcionando.
+	FR	Reconnectez votre compte Spotify dans les Paramètres pour activer Parcourir, Rechercher et Bibliothèque. La lecture via Connect continue de fonctionner.
+	IT	Ricollega il tuo account Spotify nelle Impostazioni per abilitare Esplora, Ricerca e Libreria. La riproduzione tramite Connect continua a funzionare.
+	NL	Verbind uw Spotify-account opnieuw in Instellingen om Bladeren, Zoeken en Bibliotheek in te schakelen. Afspelen via Connect blijft werken.
+	NO	Koble Spotify-kontoen din til på nytt under Innstillinger for å aktivere Bla gjennom, Søk og Bibliotek. Avspilling via Connect fungerer fortsatt.
+	PL	Połącz ponownie swoje konto Spotify w Ustawieniach, aby włączyć Przeglądanie, Wyszukiwanie i Bibliotekę. Odtwarzanie przez Connect nadal działa.
+	SV	Anslut ditt Spotify-konto igen i Inställningar för att aktivera Bläddra, Sök och Bibliotek. Uppspelning via Connect fortsätter att fungera.
+
+PLUGIN_SPOTON_AUTH_REQUIRED
+	CS	Je vyžadována autentizace. Zkontrolujte prosím svůj účet Spotify v Nastavení SpotOn.
+	DA	Godkendelse påkrævet. Tjek venligst din Spotify-konto i SpotOn-indstillinger.
+	DE	Authentifizierung erforderlich. Bitte überprüfe dein Spotify-Konto in den SpotOn-Einstellungen.
+	EN	Authentication required. Please check your Spotify account in SpotOn Settings.
+	ES	Se requiere autenticación. Comprueba tu cuenta de Spotify en los Ajustes de SpotOn.
+	FR	Authentification requise. Veuillez vérifier votre compte Spotify dans les Paramètres de SpotOn.
+	IT	Autenticazione richiesta. Controlla il tuo account Spotify nelle Impostazioni di SpotOn.
+	NL	Verificatie vereist. Controleer uw Spotify-account in de SpotOn-instellingen.
+	NO	Autentisering kreves. Sjekk Spotify-kontoen din i SpotOn-innstillingene.
+	PL	Wymagane uwierzytelnienie. Sprawdź swoje konto Spotify w Ustawieniach SpotOn.
+	SV	Autentisering krävs. Kontrollera ditt Spotify-konto i SpotOns inställningar.
+
+PLUGIN_SPOTON_MIGRATION_SETTINGS_HINT
+	CS	Pro přístup k Procházení a Knihovně je nutné znovu připojit účet Spotify. Klikněte níže na „Připojit účet Spotify".
+	DA	Din Spotify-konto skal tilsluttes igen for adgang til Gennemse og Bibliotek. Klik på 'Tilslut Spotify-konto' nedenfor.
+	DE	Dein Spotify-Konto muss für den Zugriff auf Durchsuchen und Bibliothek erneut verbunden werden. Klicke unten auf „Spotify-Konto verbinden".
+	EN	Your Spotify account needs to be reconnected for Browse and Library access. Click 'Connect Spotify Account' below.
+	ES	Tu cuenta de Spotify debe volver a conectarse para acceder a Explorar y Biblioteca. Haz clic en 'Conectar cuenta de Spotify' abajo.
+	FR	Votre compte Spotify doit être reconnecté pour accéder à Parcourir et à la Bibliothèque. Cliquez sur « Connecter un compte Spotify » ci-dessous.
+	IT	Il tuo account Spotify deve essere ricollegato per accedere a Esplora e Libreria. Fai clic su "Connetti account Spotify" qui sotto.
+	NL	Uw Spotify-account moet opnieuw worden verbonden voor toegang tot Bladeren en Bibliotheek. Klik hieronder op 'Spotify-account verbinden'.
+	NO	Spotify-kontoen din må kobles til på nytt for tilgang til Bla gjennom og Bibliotek. Klikk på «Koble til Spotify-konto» nedenfor.
+	PL	Twoje konto Spotify musi zostać ponownie połączone, aby uzyskać dostęp do Przeglądania i Biblioteki. Kliknij poniżej „Połącz konto Spotify".
+	SV	Ditt Spotify-konto måste anslutas igen för åtkomst till Bläddra och Bibliotek. Klicka på 'Anslut Spotify-konto' nedan.
+
 PLUGIN_SPOTON_ACCOUNT_NONE
 	CS	Žádný účet není nakonfigurován
 	DA	Ingen konto konfigureret
@@ -727,17 +766,17 @@ PLUGIN_SPOTON_CLIENT_ID_SETTINGS
 	SV	Anpassad Spotify App
 
 PLUGIN_SPOTON_CLIENT_ID_DESC
-	CS	Volitelné — funguje pouze s existujícími (staršími) Spotify Developer App. Nově vytvořené aplikace budou odmítnuty serverem Spotify Keymaster.
-	DA	Valgfrit — virker kun med eksisterende (ældre) Spotify Developer Apps. Nyoprettede apps afvises af Spotifys Keymaster-server.
-	DE	Optional — funktioniert nur mit bestehenden (älteren) Spotify Developer Apps. Neu erstellte Apps werden von Spotifys Keymaster-Server abgelehnt.
-	EN	Optional — only works with existing (older) Spotify Developer Apps. Newly created apps are rejected by Spotify's Keymaster server.
-	ES	Opcional — solo funciona con Spotify Developer Apps existentes (antiguas). Las apps recién creadas son rechazadas por el servidor Keymaster de Spotify.
-	FR	Optionnel — fonctionne uniquement avec les Spotify Developer Apps existantes (anciennes). Les apps nouvellement créées sont rejetées par le serveur Keymaster de Spotify.
-	IT	Opzionale — funziona solo con Spotify Developer App esistenti (più vecchie). Le app appena create vengono rifiutate dal server Keymaster di Spotify.
-	NL	Optioneel — werkt alleen met bestaande (oudere) Spotify Developer Apps. Nieuw aangemaakte apps worden geweigerd door Spotify's Keymaster-server.
-	NO	Valgfritt — fungerer kun med eksisterende (eldre) Spotify Developer Apps. Nyopprettede apper avvises av Spotifys Keymaster-server.
-	PL	Opcjonalnie — działa tylko z istniejącymi (starszymi) Spotify Developer App. Nowo utworzone aplikacje są odrzucane przez serwer Keymaster Spotify.
-	SV	Valfritt — fungerar bara med befintliga (äldre) Spotify Developer Apps. Nyligen skapade appar avvisas av Spotifys Keymaster-server.
+	CS	Pro přihlášení přes PKCE (Procházení, Vyhledávání a Knihovna) je vyžadováno Client-ID Spotify Developer App. Umožňuje přímou OAuth autentizaci s vlastním vyhrazeným limitem API požadavků, odděleným od ostatních uživatelů SpotOn.
+	DA	Et Spotify Developer App Client-ID er påkrævet for PKCE-login (Gennemse, Søg og Bibliotek). Det muliggør direkte OAuth-godkendelse med din egen dedikerede API-hastighedsgrænse, adskilt fra andre SpotOn-brugere.
+	DE	Für die PKCE-Anmeldung (Durchsuchen, Suche und Bibliothek) wird eine Spotify Developer App Client-ID benötigt. Sie ermöglicht die direkte OAuth-Authentifizierung mit einem eigenen, dedizierten API-Ratenlimit, getrennt von anderen SpotOn-Nutzern.
+	EN	A Spotify Developer App Client ID is required for PKCE login (Browse, Search, and Library). It enables direct OAuth authentication with your own dedicated API rate limit, separate from other SpotOn users.
+	ES	Se requiere un Client ID de Spotify Developer App para el inicio de sesión PKCE (Explorar, Buscar y Biblioteca). Permite la autenticación OAuth directa con tu propio límite de solicitudes de API dedicado, independiente de otros usuarios de SpotOn.
+	FR	Un Client ID Spotify Developer App est requis pour la connexion PKCE (Parcourir, Rechercher et Bibliothèque). Il permet une authentification OAuth directe avec votre propre limite de requêtes API dédiée, distincte des autres utilisateurs de SpotOn.
+	IT	Per l'accesso PKCE (Esplora, Ricerca e Libreria) è richiesto un Client ID di una Spotify Developer App. Consente l'autenticazione OAuth diretta con un limite di richieste API dedicato e separato dagli altri utenti di SpotOn.
+	NL	Voor PKCE-aanmelding (Bladeren, Zoeken en Bibliotheek) is een Spotify Developer App Client-ID vereist. Dit maakt directe OAuth-authenticatie mogelijk met een eigen, toegewezen API-snelheidslimiet, gescheiden van andere SpotOn-gebruikers.
+	NO	Et Spotify Developer App Client-ID kreves for PKCE-innlogging (Bla gjennom, Søk og Bibliotek). Det muliggjør direkte OAuth-autentisering med din egen dedikerte API-hastighetsgrense, atskilt fra andre SpotOn-brukere.
+	PL	Client ID aplikacji Spotify Developer App jest wymagane do logowania PKCE (Przeglądanie, Wyszukiwanie i Biblioteka). Umożliwia bezpośrednie uwierzytelnianie OAuth z własnym, dedykowanym limitem zapytań API, oddzielnym od innych użytkowników SpotOn.
+	SV	Ett Spotify Developer App Client-ID krävs för PKCE-inloggning (Bläddra, Sök och Bibliotek). Det möjliggör direkt OAuth-autentisering med en egen dedikerad API-hastighetsgräns, separat från andra SpotOn-användare.
 
 PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
 	CS	Spotify Client-ID (32 znaků, alfanumerické)
@@ -1220,6 +1259,19 @@ PLUGIN_SPOTON_RECOMMENDATIONS
 	PL	Rekomendacje SpotOn
 	SV	SpotOn-rekommendationer
 
+PLUGIN_SPOTON_CLIENT_ID_WIZARD_TITLE
+	CS	Jak nastavit vlastní Spotify Developer App
+	DA	Sådan opsætter du din Spotify Developer App
+	DE	So richtest du deine Spotify Developer App ein
+	EN	How to set up your Spotify Developer App
+	ES	Cómo configurar tu Spotify Developer App
+	FR	Comment configurer votre Spotify Developer App
+	IT	Come configurare la tua Spotify Developer App
+	NL	Zo stelt u uw Spotify Developer App in
+	NO	Slik setter du opp din Spotify Developer App
+	PL	Jak skonfigurować własną Spotify Developer App
+	SV	Så här konfigurerar du din Spotify Developer App
+
 PLUGIN_SPOTON_SETUP_GUIDE_TITLE
 	CS	Začínáme se SpotOn
 	DA	Kom godt i gang med SpotOn
@@ -1364,17 +1416,17 @@ PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
 	SV	Anpassat Developer App-ID (valfritt, bara äldre appar)
 
 PLUGIN_SPOTON_SETUP_DEVAPP_DESC
-	CS	Pokud již máte starší Spotify Developer App, můžete její Client-ID zadat níže. Nově vytvořené aplikace nefungují — Spotify Keymaster odmítá novější Client-ID. SpotOn funguje plně bez vlastního Client-ID.
-	DA	Hvis du allerede har en ældre Spotify Developer App, kan du indtaste dens Client-ID nedenfor. Nyoprettede apps virker ikke — Spotify Keymaster afviser nyere Client-ID'er. SpotOn fungerer fuldt ud uden et brugerdefineret Client-ID.
-	DE	Falls du bereits eine ältere Spotify Developer App hast, kannst du ihre Client-ID unten eintragen. Neu erstellte Apps funktionieren nicht — Spotify Keymaster lehnt neuere Client-IDs ab. SpotOn funktioniert vollständig ohne eigene Client-ID.
-	EN	If you already have an older Spotify Developer App, you can enter its Client ID below. Newly created apps do not work — Spotify Keymaster rejects newer Client IDs. SpotOn works fully without a custom Client ID.
-	ES	Si ya tienes una Spotify Developer App antigua, puedes introducir su Client ID abajo. Las apps recién creadas no funcionan — Spotify Keymaster rechaza Client IDs más nuevos. SpotOn funciona completamente sin un Client ID personalizado.
-	FR	Si vous avez déjà une ancienne Spotify Developer App, vous pouvez saisir son Client ID ci-dessous. Les apps nouvellement créées ne fonctionnent pas — Spotify Keymaster rejette les Client ID plus récents. SpotOn fonctionne pleinement sans Client ID personnalisé.
-	IT	Se hai già una Spotify Developer App più vecchia, puoi inserire il suo Client ID qui sotto. Le app appena create non funzionano — Spotify Keymaster rifiuta i Client ID più recenti. SpotOn funziona completamente senza un Client ID personalizzato.
-	NL	Als u al een oudere Spotify Developer App heeft, kunt u het Client-ID hieronder invoeren. Nieuw aangemaakte apps werken niet — Spotify Keymaster weigert nieuwere Client-ID's. SpotOn werkt volledig zonder een aangepast Client-ID.
-	NO	Hvis du allerede har en eldre Spotify Developer App, kan du skrive inn Client-ID nedenfor. Nyopprettede apper fungerer ikke — Spotify Keymaster avviser nyere Client-ID-er. SpotOn fungerer fullt ut uten en egendefinert Client-ID.
-	PL	Jeśli masz już starszą Spotify Developer App, możesz wpisać jej Client ID poniżej. Nowo utworzone aplikacje nie działają — Spotify Keymaster odrzuca nowsze Client ID. SpotOn działa w pełni bez własnego Client ID.
-	SV	Om du redan har en äldre Spotify Developer App kan du ange dess Client-ID nedan. Nyligen skapade appar fungerar inte — Spotify Keymaster avvisar nyare Client-ID:n. SpotOn fungerar fullt ut utan ett anpassat Client-ID.
+	CS	1. Otevřete developer.spotify.com/dashboard a přihlaste se. 2. Vytvořte novou aplikaci (na názvu nezáleží). 3. V nastavení aplikace přidejte Redirect URI zobrazené na stránce Nastavení SpotOn. 4. Zkopírujte Client-ID a vložte jej do pole Client-ID v Nastavení SpotOn.
+	DA	1. Gå til developer.spotify.com/dashboard og log ind. 2. Opret en ny app (navnet er ligegyldigt). 3. Tilføj i appens indstillinger den Redirect URI, der vises på SpotOns indstillingsside. 4. Kopiér Client-ID'et, og indsæt det i Client-ID-feltet i SpotOns indstillinger.
+	DE	1. Öffne developer.spotify.com/dashboard und melde dich an. 2. Erstelle eine neue App (der Name spielt keine Rolle). 3. Füge in den App-Einstellungen die Redirect-URI hinzu, die auf der SpotOn-Einstellungsseite angezeigt wird. 4. Kopiere die Client-ID und füge sie in das Client-ID-Feld in den SpotOn-Einstellungen ein.
+	EN	1. Go to developer.spotify.com/dashboard and log in. 2. Create a new app (any name works). 3. In the app's settings, add the Redirect URI shown in the SpotOn Settings page. 4. Copy the Client ID and paste it into the Client ID field in SpotOn Settings.
+	ES	1. Ve a developer.spotify.com/dashboard e inicia sesión. 2. Crea una nueva app (el nombre no importa). 3. En la configuración de la app, añade el Redirect URI que se muestra en la página de Ajustes de SpotOn. 4. Copia el Client ID y pégalo en el campo Client ID de los Ajustes de SpotOn.
+	FR	1. Rendez-vous sur developer.spotify.com/dashboard et connectez-vous. 2. Créez une nouvelle application (le nom importe peu). 3. Dans les paramètres de l'application, ajoutez le Redirect URI affiché sur la page Paramètres de SpotOn. 4. Copiez le Client ID et collez-le dans le champ Client ID des Paramètres de SpotOn.
+	IT	1. Vai su developer.spotify.com/dashboard ed effettua l'accesso. 2. Crea una nuova app (il nome non è importante). 3. Nelle impostazioni dell'app, aggiungi il Redirect URI mostrato nella pagina Impostazioni di SpotOn. 4. Copia il Client ID e incollalo nel campo Client ID nelle Impostazioni di SpotOn.
+	NL	1. Ga naar developer.spotify.com/dashboard en log in. 2. Maak een nieuwe app aan (de naam maakt niet uit). 3. Voeg in de app-instellingen de Redirect URI toe die wordt weergegeven op de SpotOn-instellingenpagina. 4. Kopieer het Client-ID en plak het in het Client-ID-veld in de SpotOn-instellingen.
+	NO	1. Gå til developer.spotify.com/dashboard og logg inn. 2. Opprett en ny app (navnet spiller ingen rolle). 3. Legg til Redirect URI-en som vises på SpotOn-innstillingssiden, i appens innstillinger. 4. Kopier Client-ID-en og lim den inn i Client-ID-feltet i SpotOn-innstillingene.
+	PL	1. Wejdź na developer.spotify.com/dashboard i zaloguj się. 2. Utwórz nową aplikację (nazwa nie ma znaczenia). 3. W ustawieniach aplikacji dodaj Redirect URI pokazany na stronie Ustawienia SpotOn. 4. Skopiuj Client ID i wklej je w pole Client ID w Ustawieniach SpotOn.
+	SV	1. Gå till developer.spotify.com/dashboard och logga in. 2. Skapa en ny app (namnet spelar ingen roll). 3. Lägg till den Redirect URI som visas på SpotOns inställningssida i appens inställningar. 4. Kopiera Client-ID och klistra in det i Client-ID-fältet i SpotOns inställningar.
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".

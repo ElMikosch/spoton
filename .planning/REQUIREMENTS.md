@@ -57,7 +57,7 @@ Deferred to future release. Tracked but not in current roadmap.
 - [x] **AUTH-03**: PKCE access token is used once to obtain non-expiring librespot stored credentials (PR #1309 pattern: token → AP session → credential blob)
 - [x] **AUTH-04**: librespot starts with stored credentials + `--disable-discovery` — Connect device appears via cloud/Spirc registration, no mDNS needed
 - [x] **AUTH-05**: TokenManager.pm refreshes Web API tokens via standard OAuth refresh flow — no binary spawn (`--get-token`) needed for API calls
-- [ ] **AUTH-06**: Fallback path: login5 with default librespot ID for users who skip browser flow (shared rate pool, functional but limited)
+- [x] **AUTH-06**: ~~Login5 fallback~~ (dropped — Login5 gets immediate 429 on api.spotify.com, not viable as API token source. PKCE is the sole API auth path. See Phase 53 D-01/D-02)
 - [ ] **AUTH-07**: Keymaster code removed from TokenManager.pm after PKCE is stable
 
 ## Out of Scope
