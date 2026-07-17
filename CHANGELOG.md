@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [3.0.0]
+## [3.0.0] - 2026-07-17
 ### Changed
 - **Authentication**: PKCE OAuth replaces ZeroConf/Keymaster as the primary auth mechanism
 - **Token management**: PKCE-native TokenManager with refresh token rotation
