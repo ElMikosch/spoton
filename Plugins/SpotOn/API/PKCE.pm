@@ -274,7 +274,7 @@ sub storeTokens {
     my $dir = _accountDir($accountId);
     unless (-d $dir) {
         require File::Path;
-        File::Path::make_path($dir);
+        File::Path::make_path($dir, { mode => 0700 });
     }
 
     my $target = catfile($dir, PKCE_TOKEN_FILE);
@@ -283,10 +283,12 @@ sub storeTokens {
     my $maskedAccount = substr($accountId, 0, 4) . '****';
 
     my $ok = eval {
-        open(my $fh, '>', $tmp) or die "open failed: $!";
+        require Fcntl;
+        unlink($tmp) if -e $tmp;
+        sysopen(my $fh, $tmp, Fcntl::O_WRONLY()|Fcntl::O_CREAT()|Fcntl::O_EXCL(), 0600)
+            or die "sysopen failed: $!";
         print $fh to_json($tokenData);
         close($fh) or die "close failed: $!";
-        chmod(0600, $tmp);
         rename($tmp, $target) or die "rename failed: $!";
         1;
     };
