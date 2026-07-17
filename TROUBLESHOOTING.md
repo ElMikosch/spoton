@@ -41,63 +41,44 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 - If you experience slow track changes on hardware players (10-20s delay), this is typically caused by the player's audio buffer draining. PCM/FLAC reduces this significantly
 - Collect a diagnostic bundle during the issue and open a ticket
 
-### Spotify app shows "Connecting" forever during ZeroConf auth
+### PKCE authorization fails or never completes
 
-**Symptoms:** When you tap your LMS player name in the Spotify app to authorize SpotOn, the app shows a blinking speaker icon and "Connecting..." that never resolves. It looks like the connection failed, but the authorization actually succeeded.
+**Symptoms:** Clicking "Connect to Spotify" in SpotOn Settings opens a popup that closes without finishing, or the Settings page never picks up the new account after you approve access on Spotify's authorization page.
 
-**Cause:** This is expected behavior with ZeroConf authentication. The Spotify app expects a Spotify Connect playback session, but SpotOn only uses the ZeroConf handshake to receive credentials — it doesn't start a playback session at that point. The app never gets a "connected" confirmation and eventually times out.
+**Common causes and fixes:**
+- **Popup blocked** — browsers block `window.open()` popups unless they're triggered directly by a click. Allow pop-ups for your LMS host and try again (SpotOn shows a reminder about this next to the auth button).
+- **No Client ID configured** — PKCE requires your own Spotify Developer App Client ID (see [README Requirements](README.md#requirements)). Enter it in SpotOn Settings before starting the auth flow; the setup wizard walks you through creating one.
+- **Redirect doesn't reach LMS** — SpotOn bounces the browser back to your LMS server via a GitHub Pages relay (`https://stiefenm.github.io/spoton/auth/`). If your phone/browser can't reach your LMS host directly (different network, VPN, restrictive firewall), the relay page falls back to a "copy this URL" box — paste it into the manual auth field on the SpotOn Settings page to complete the flow.
+- **Redirect URI mismatch** — the Client ID's app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) must have `https://stiefenm.github.io/spoton/auth/` registered as an allowed Redirect URI, exactly as shown by the setup wizard.
 
-**What to do:**
-1. After tapping your player in the Spotify app, wait a few seconds
-2. If you have the SpotOn Settings page open in your browser, it will detect the successful authentication automatically and reload — your Spotify username should appear under **Account Settings**
-3. If it doesn't update, refresh the page manually
-4. If the username is there, authentication was successful. You can now browse Spotify and use Connect normally.
+### Re-authentication needed / token refresh fails
 
-### Search or Browse return "No results" with custom Client ID
+**Symptoms:** The Auth Health Dashboard (Status page) shows a warning for an account, Browse/Search return errors, or Connect stops working, with a token or credential error in the daemon log.
 
-**Symptoms:** SpotOn search returns "No results" for any query. Browse menus may also show as empty. Removing the custom Client ID from SpotOn settings fixes the issue. Spotify Connect continues to work normally.
+**Cause:** SpotOn refreshes your PKCE access token automatically in the background using the stored refresh token. If that refresh token becomes invalid (access revoked in your Spotify account, a corrupted token file, or an old v2.x account that never migrated), SpotOn can no longer refresh it and flags the account for re-authentication.
 
-**Cause:** Spotify's internal Keymaster server maintains a whitelist of Client IDs. Newly created Developer Apps (especially after the Nov 2024 / Feb 2026 API changes) are **not on this whitelist** and get rejected with HTTP 403 or 404. The standard OAuth flow (`client_credentials` via accounts.spotify.com) still works with these IDs, but the Keymaster/Mercury path used by librespot does not. This affects all librespot-based projects ([librespot #754](https://github.com/librespot-org/librespot/issues/754), [#1532](https://github.com/librespot-org/librespot/issues/1532)).
+**What SpotOn already does automatically:** if the *Connect* credentials (used by librespot) get corrupted — e.g. after a crash or an abrupt Docker restart — SpotOn deletes and re-derives them from the stored PKCE tokens on its own, no action needed. Only a genuinely invalid/expired refresh token escalates to "needs re-authentication."
 
-**Solutions:**
-- **Remove the custom Client ID** from SpotOn settings (recommended). SpotOn's built-in authentication provides full API access via a bundled token — no Developer App needed.
-- **Update to v2.1.8+** — SpotOn now automatically falls back to the bundled token when a custom Client ID fails at Keymaster. Search and Browse work regardless.
-- If you have an **older (pre-2025) Developer App** that already works, you can keep using it.
-
-**Background:** SpotOn uses three token sources from a single ZeroConf authentication: a **Keymaster token** for Connect, a **bundled Client ID** for API access out of the box, and an optional **custom Client ID** for users with Extended Quota. Only older/grandfathered Client IDs work with Keymaster — creating a new Developer App will not help.
-
-### Keymaster 403 after Docker issues or daemon crashes
-
-**Symptoms:** Log shows `error 403 for uri hm://keymaster/token/authenticated`, Browse/Search return "No results" or fail silently. Spotify Connect may still work.
-
-**Cause:** There are two different causes for this error:
-
-1. **Corrupted session** — network instability (Docker port conflicts, daemon crashes, mDNS failures) can corrupt the Mercury session that librespot uses internally. This is fixable by clearing the cache and re-authenticating.
-2. **Account cohort** — Spotify is gradually disabling Keymaster for newer accounts. This is permanent and tracked in [#91](https://github.com/stiefenm/spoton/issues/91). Browse/Search still work via the bundled fallback token.
-
-If the 403 started after Docker networking changes, daemon crash loops, or mDNS issues, it's likely case 1.
-
-**Solution for corrupted sessions:**
+**Solution:**
+1. Open **SpotOn Settings** and check the Auth Health Dashboard (also shown on the Status page) for the affected account
+2. If it shows "needs re-authentication," follow the reconnect prompt and complete the PKCE flow again (see above)
+3. If the account still fails after re-auth, clear its cache and start fresh:
 
 ```bash
 # 1. Stop LMS
 
-# 2. Clear SpotOn's credential and token cache:
+# 2. Remove the account's cache directory (find the account ID hash in
+#    SpotOn Settings, or remove all account directories to reset everything):
 #    Linux (typical path — adjust for your setup):
-rm -rf /var/lib/squeezeboxserver/cache/spoton/*/
-rm -f /var/lib/squeezeboxserver/cache/spoton.db
+rm -rf /var/lib/squeezeboxserver/cache/spoton/<accountId>/
 
-#    Docker (typical paths):
-rm -rf /config/cache/spoton/*/
-rm -f /config/cache/spoton.db
+#    Docker (typical path):
+rm -rf /config/cache/spoton/<accountId>/
 
-# 3. Start LMS
-
-# 4. Re-authenticate via ZeroConf:
-#    Open the Spotify app → device list → tap your player name
+# 3. Start LMS, then re-add the account via SpotOn Settings
 ```
 
-If the 403 persists after a fresh authentication, it's case 2 (account cohort). In that case, Browse and Search work via the bundled fallback token, and Connect playback works normally. A permanent fix (PKCE OAuth) is planned for v3.0.
+4. If the issue persists, collect a diagnostic bundle and open an issue.
 
 ### Tracks skip or fail with "404" in logs (CDN errors)
 
@@ -109,51 +90,18 @@ If the 403 persists after a fresh authentication, it's case 2 (account cohort). 
 - **Update to v2.1.6 or later** — includes an upgraded librespot with CDN fallback (automatically tries the next CDN URL on 404) plus SpotOn's own 404 retry layer (3 attempts with 2s delay)
 - If errors persist after updating, you can block specific bad CDN hosts via `/etc/hosts` — see the [forum thread](https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton) for known problematic hosts
 
-## mDNS Discovery Not Working (Docker, VLANs, Remote LMS)
+## mDNS / ZeroConf: Guest Connect Discovery Only
 
-SpotOn uses mDNS (ZeroConf) for initial authentication: the Spotify app on your phone discovers the SpotOn daemon on your LMS server via local network broadcast. This requires both devices to be on the **same network segment**.
+Since v3.0, account authentication no longer uses mDNS at all — the PKCE flow runs entirely through the browser and SpotOn Settings, with no local-network requirement. This means setup behind Docker, VLANs, or a remote LMS install now just works, without the manual credential-transfer steps older SpotOn versions required.
 
-This won't work if:
-- LMS runs in a **Docker container** (isolated network namespace)
-- LMS and your phone are on **different VLANs/subnets**
+mDNS (ZeroConf) is only still used for **guest Spotify Connect discovery**: it lets someone else on your LAN see your LMS player in their Spotify app's device list and hand off playback to it, without needing a SpotOn account of their own. This is optional and unrelated to your own account setup or normal Connect control, both of which go through Spotify's cloud regardless of network topology.
+
+Guest discovery via mDNS won't work if:
+- LMS runs in a **Docker container** (isolated network namespace) — use `--network host` if you want guest discovery to work
+- LMS and the guest's phone are on **different VLANs/subnets**
 - A **firewall** blocks mDNS (UDP port 5353)
 
-Note: this only affects the initial setup. Once credentials are stored, Spotify Connect works through any network (it uses Spotify's cloud servers, not mDNS).
-
-### Solution: Manual Credential Transfer
-
-You can run the discovery step on any machine that IS on the same network as your phone, then transfer the credentials to your LMS server.
-
-**Step 1:** Download the SpotOn binary for your platform from the [latest release](https://github.com/stiefenm/spoton/releases/latest).
-
-**Step 2:** Run discovery on a machine on the same network as your phone:
-
-```
-spoton --discover-once --name "SpotOn Setup" -c /tmp/spoton-auth
-```
-
-**Step 3:** Open the Spotify app on your phone, tap the device icon, and select "SpotOn Setup" from the list.
-
-**Step 4:** Copy the `credentials.json` from `/tmp/spoton-auth/` into SpotOn's `__DISCOVER__` directory on your LMS server. LMS must be running (do NOT restart between this step and the next):
-
-```bash
-# Linux (typical path — adjust if your cache directory differs)
-sudo -u squeezeboxserver mkdir -p /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__
-sudo cp /tmp/spoton-auth/credentials.json /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__/
-sudo chown -R squeezeboxserver:nogroup /var/lib/squeezeboxserver/cache/spoton/__DISCOVER__/
-```
-
-On Windows, the cache directory is typically `C:\ProgramData\Lyrion\Cache\spoton\`.
-
-**Step 5:** Open the SpotOn Settings page in your browser (LMS → Settings → Plugins → SpotOn). The page load automatically detects the credentials, creates the account directory, registers the account, and starts the daemon. Your Spotify username should appear under Account Settings.
-
-> **Important:** Do NOT restart LMS between steps 4 and 5. The startup sequence cleans up `__DISCOVER__/` before you can visit the Settings page. Always place the file while LMS is running, then load the Settings page.
-
-### Docker / Kubernetes Notes
-
-- The `__DISCOVER__` directory must be a **writable volume**, not a ConfigMap or read-only mount. SpotOn needs to rename it during account setup.
-- Do not place `credentials.json` directly in a hash-named directory (e.g. `e20xxxxx/`). SpotOn only checks directories registered in its preferences — manual file placement skips that registration.
-- If you previously created hash directories manually, remove them before following the steps above.
+None of the above affects setting up or using your own SpotOn account — only a guest trying to spontaneously discover your player via ZeroConf.
 
 ## Windows: Daemon Timeout or "Binary not found"
 
