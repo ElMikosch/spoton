@@ -155,6 +155,16 @@ sub initPlugin {
         );
     }
 
+    # Probe API limits after token refresh has had time to populate cache
+    if ( !main::SCANNER ) {
+        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 15, sub {
+            my $accountId = $prefs->get('activeAccount') || '';
+            if ($accountId) {
+                Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
+            }
+        });
+    }
+
     $VERSION = $class->_pluginDataFor('version');
 
     Slim::Player::ProtocolHandlers->registerHandler(
@@ -859,7 +869,7 @@ sub SpotOnAddToPlaylist {
 
     my $offset = $params->{index} || 0;
     my $qty    = $params->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
         offset => $offset,
@@ -1264,7 +1274,7 @@ sub _recentlyPlayedFeed {
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getRecentlyPlayed($accountId, { limit => 50 }, sub {
+    Plugins::SpotOn::API::Client->getRecentlyPlayed($accountId, { limit => Plugins::SpotOn::API::Client->getLimit('library') }, sub {
         my ($data, $err) = @_;
         unless ($data) {
             $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
@@ -1298,7 +1308,8 @@ sub _madeForYouPriority {
 # Calls $cb->(\@playlists) with valid (non-null) items from all pages.
 sub _fetchAllPersonalMixes {
     my ($accountId, $locale, $cb) = @_;
-    my %params = (limit => 50);
+    my $lim = Plugins::SpotOn::API::Client->getLimit('library');
+    my %params = (limit => $lim);
     $params{_locale} = $locale if $locale;
 
     Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%params, sub {
@@ -1307,8 +1318,8 @@ sub _fetchAllPersonalMixes {
         my @valid = grep { $_ && $_->{id} && ($_->{name} // '') =~ /\S/ } @$items;
         my $total = $data && $data->{playlists} ? ($data->{playlists}{total} || 0) : 0;
 
-        if ($total > 50) {
-            my %p2 = (limit => 50, offset => 50);
+        if ($total > $lim) {
+            my %p2 = (limit => $lim, offset => $lim);
             $p2{_locale} = $locale if $locale;
             Plugins::SpotOn::API::Client->getPersonalMixes($accountId, \%p2, sub {
                 my $page2 = shift;
@@ -1427,7 +1438,7 @@ sub _savedTracksFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify Library max = 50
 
     my $accountId = _getAccountId($client);
 
@@ -1493,7 +1504,7 @@ sub _savedAlbumsFeed {
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
@@ -1539,7 +1550,7 @@ sub _followedArtistsFeed {
 sub _fetchAllFollowedArtists {
     my ($client, $accountId, $after, $accumulated, $done) = @_;
 
-    my %params = (limit => 50);
+    my %params = (limit => Plugins::SpotOn::API::Client->getLimit('library'));
     $params{after} = $after if defined $after;
 
     Plugins::SpotOn::API::Client->getFollowedArtists($accountId, \%params, sub {
@@ -1633,7 +1644,7 @@ sub _userPlaylistsFeed {
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
@@ -1689,7 +1700,7 @@ sub _savedShowsFeed {
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;    # Spotify /me/shows max = 50
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify /me/shows max = 50
 
     my $accountId = _getAccountId($client);
 
@@ -1755,7 +1766,7 @@ sub _showFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > 50 ? 50 : $qty;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
@@ -2122,7 +2133,7 @@ sub _podcastSearchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'show,episode',
-        limit  => 10,
+        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2178,7 +2189,7 @@ sub _podcastSearchTypeFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 10,
+        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2230,7 +2241,7 @@ sub _searchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'track,album,artist,playlist',
-        limit  => 10,
+        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2317,7 +2328,7 @@ sub _searchTypeFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 10,
+        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2411,7 +2422,7 @@ sub _artistAlbumsFeed {
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > 50 ? 50 : $qty;
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
@@ -2459,7 +2470,7 @@ sub _albumFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > 50 ? 50 : $qty;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
@@ -2503,7 +2514,7 @@ sub _albumFeed {
                 my ($pageOffset) = @_;
                 Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
                     offset => $pageOffset,
-                    limit  => 50,
+                    limit  => Plugins::SpotOn::API::Client->getLimit('library'),
                 }, sub {
                     # NON-UNIFORM site (review finding #4): on fetch failure, fall back to
                     # any accumulated tracks from prior pages -- only replace the inner

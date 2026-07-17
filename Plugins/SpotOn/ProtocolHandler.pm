@@ -597,7 +597,7 @@ sub explodePlaylist {
                 my ($offset) = @_;
                 Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
                     offset => $offset,
-                    limit  => 50,
+                    limit  => Plugins::SpotOn::API::Client->getLimit('library'),
                 }, sub {
                     my ($data, $err) = @_;
                     unless ($data && $data->{items}) {
@@ -641,7 +641,7 @@ sub explodePlaylist {
             my ($offset) = @_;
             Plugins::SpotOn::API::Client->getPlaylistItems($accountId, $playlistId, {
                 offset => $offset,
-                limit  => 100,
+                limit  => Plugins::SpotOn::API::Client->getLimit('playlist_items'),
             }, sub {
                 my ($data, $err) = @_;
                 unless ($data && $data->{items}) {
@@ -693,7 +693,7 @@ sub explodePlaylist {
             my ($offset) = @_;
             Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
                 offset => $offset,
-                limit  => 50,
+                limit  => Plugins::SpotOn::API::Client->getLimit('library'),
             }, sub {
                 my ($data, $err) = @_;
                 unless ($data && $data->{items}) {

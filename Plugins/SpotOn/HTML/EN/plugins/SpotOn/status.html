@@ -301,6 +301,13 @@ footer {
         body.appendChild(createMetricRow('Rate Limited', rlVal, rlClass));
 
         body.appendChild(createMetricRow('Active Accounts', val(tokens.accountCount)));
+
+        if (api.apiLimits) {
+            var lim = api.apiLimits;
+            var limStr = 'Search ' + val(lim.search) + ' | Library ' + val(lim.library) + ' | Playlists ' + val(lim.playlist_items);
+            var limClass = api.limitsProbed ? '' : 'pending';
+            body.appendChild(createMetricRow('API Limits', api.limitsProbed ? limStr : limStr + ' (probing...)', limClass));
+        }
     }
 
     function renderErrors(data) {

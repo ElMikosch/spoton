@@ -68,6 +68,15 @@ my $inflightCount = 0;
 my $apiRequestCount = 0;
 my $api429Count     = 0;
 
+# API limit detection — probed once per startup, conservative defaults until then.
+# Spotify enforces per-app maximums that vary by Client ID (Dev Mode).
+my %_detectedLimits = (
+    search         => 10,
+    library        => 50,
+    playlist_items => 100,
+);
+my $_limitsProbed = 0;
+
 # ============================================================
 # Public class methods
 # ============================================================
@@ -79,7 +88,105 @@ sub reset {
     $inflightCount  = 0;
     $apiRequestCount = 0;
     $api429Count     = 0;
-    main::INFOLOG && $log->info("Client: inflightCount, apiRequestCount, api429Count reset to 0");
+    %_detectedLimits = (search => 10, library => 50, playlist_items => 100);
+    $_limitsProbed   = 0;
+    main::INFOLOG && $log->info("Client: counters and limit detection reset");
+}
+
+sub getLimit {
+    my ($class, $endpointClass) = @_;
+    return $_detectedLimits{$endpointClass} // 50;
+}
+
+sub limitsProbed { return $_limitsProbed }
+
+sub probeEndpointLimits {
+    my ($class, $accountId, $doneCb) = @_;
+    return $doneCb->() if $_limitsProbed;
+
+    my @classes = (
+        { name => 'search',         path => 'search?q=test&type=track', doc_max => 50 },
+        { name => 'library',        path => 'me/tracks',                doc_max => 50 },
+        { name => 'playlist_items', path => undef,                      doc_max => 100 },
+    );
+
+    my $probeIdx = 0;
+    my $probeNext;
+    $probeNext = sub {
+        if ($probeIdx >= scalar @classes) {
+            $_limitsProbed = 1;
+            main::INFOLOG && $log->info(sprintf(
+                "Client: API limits detected — search=%d library=%d playlist_items=%d",
+                $_detectedLimits{search}, $_detectedLimits{library}, $_detectedLimits{playlist_items}
+            ));
+            $doneCb->();
+            return;
+        }
+
+        my $cls = $classes[$probeIdx++];
+
+        if (!$cls->{path}) {
+            $_detectedLimits{$cls->{name}} = $_detectedLimits{library} * 2;
+            my $cap = $cls->{doc_max};
+            $_detectedLimits{$cls->{name}} = $cap if $_detectedLimits{$cls->{name}} > $cap;
+            $probeNext->();
+            return;
+        }
+
+        _binarySearchLimit($accountId, $cls->{path}, 1, $cls->{doc_max}, sub {
+            my $limit = shift;
+            $_detectedLimits{$cls->{name}} = $limit;
+            main::INFOLOG && $log->info("Client: limit probe $cls->{name} = $limit");
+            $probeNext->();
+        });
+    };
+
+    $probeNext->();
+}
+
+sub _binarySearchLimit {
+    my ($accountId, $basePath, $low, $high, $doneCb) = @_;
+
+    __PACKAGE__->_request('get', $basePath, {
+        _accountId => $accountId,
+        _noCache   => 1,
+        limit      => $high,
+    }, sub {
+        my ($result, $err) = @_;
+        if ($result && !$err) {
+            $doneCb->($high);
+            return;
+        }
+        if ($high <= $low) {
+            $doneCb->($low);
+            return;
+        }
+        _doBinarySearch($accountId, $basePath, $low, $high, $doneCb);
+    });
+}
+
+sub _doBinarySearch {
+    my ($accountId, $basePath, $low, $high, $doneCb) = @_;
+
+    if ($high - $low <= 1) {
+        $doneCb->($low);
+        return;
+    }
+
+    my $mid = int(($low + $high) / 2);
+
+    __PACKAGE__->_request('get', $basePath, {
+        _accountId => $accountId,
+        _noCache   => 1,
+        limit      => $mid,
+    }, sub {
+        my ($result, $err) = @_;
+        if ($result && !$err) {
+            _doBinarySearch($accountId, $basePath, $mid, $high, $doneCb);
+        } else {
+            _doBinarySearch($accountId, $basePath, $low, $mid, $doneCb);
+        }
+    });
 }
 
 # statusSnapshot($class)
@@ -92,6 +199,8 @@ sub statusSnapshot {
         api429Count     => $api429Count,
         rateLimited     => $cache->get('spoton_rate_limit') ? 1 : 0,
         wpRateLimited   => $cache->get(WP_RATE_LIMIT_KEY) ? 1 : 0,
+        apiLimits       => { %_detectedLimits },
+        limitsProbed    => $_limitsProbed,
     };
 }
 
@@ -110,12 +219,12 @@ sub getMe {
 
 # search($class, $accountId, $params, $cb)
 # Searches Spotify. q is the search query; type defaults to "track,album,artist,playlist";
-# limit capped at 10 (Dev Mode maximum since Feb 2026 — enforced per-app, causes HTTP 400
-# for some Client IDs when exceeded).
+# limit capped at detected maximum (probed on startup, conservative default 10).
 sub search {
     my ($class, $accountId, $params, $cb) = @_;
-    my $limit = $params->{limit} // 10;
-    $limit = 10 if $limit > 10;
+    my $max = $_detectedLimits{search};
+    my $limit = $params->{limit} // $max;
+    $limit = $max if $limit > $max;
     $class->_request('get', 'search', {
         _accountId => $accountId,
         q          => $params->{q} // '',

@@ -474,9 +474,9 @@ is($sys1, $sys2, '_systemInfo returns same reference (cached)');
 # Test 8: Client->statusSnapshot returns expected keys
 require Plugins::SpotOn::API::Client;
 my $snapshot = Plugins::SpotOn::API::Client->statusSnapshot();
-my @expected_keys = sort qw(inflightCount apiRequestCount api429Count rateLimited wpRateLimited);
+my @expected_keys = sort qw(inflightCount apiRequestCount api429Count rateLimited wpRateLimited apiLimits limitsProbed);
 my @actual_keys   = sort keys %$snapshot;
-is_deeply(\@actual_keys, \@expected_keys, 'statusSnapshot has all 5 expected keys');
+is_deeply(\@actual_keys, \@expected_keys, 'statusSnapshot has all 7 expected keys');
 
 # Test 9: Client->reset resets new counters
 Plugins::SpotOn::API::Client->reset();

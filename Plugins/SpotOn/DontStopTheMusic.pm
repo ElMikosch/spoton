@@ -224,7 +224,7 @@ sub _searchFallback {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => sprintf('artist:"%s"', $seedArtist),
         type   => 'track',
-        limit  => 10,
+        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
         offset => $offset,
     }, sub {
         my $result = shift;
