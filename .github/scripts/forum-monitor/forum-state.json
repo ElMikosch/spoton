@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-17T18:16:59.815Z",
+  "lastChecked": "2026-07-17T19:36:37.992Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -207,10 +207,23 @@
         "1828656",
         "1828661",
         "1828970",
-        "1828974"
+        "1828974",
+        "1829036",
+        "1829039"
       ],
-      "lastPostCount": 205
+      "lastPostCount": 207
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1829039",
+      "postNumber": 207,
+      "author": "CJS",
+      "timestamp": "2026-07-17T12:09:39-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tMaybe I first need to remove my existing account under \"Made For You Setup\" by clicking the Remove button? \t",
+      "draft": "Thanks for circling back and sharing the solution, CJS — this is exactly the kind of follow-up that helps other users get unstuck!\n\nTo summarise what worked for you, for anyone who finds this thread:\n\n[B]Quick setup checklist for SpotOn v3.x PKCE auth:[/B]\n\n[CODE]\n1. Go to https://developer.spotify.com/dashboard and create an app\n2. Add the Redirect URI shown on the SpotOn Settings page\n   (https://stiefenm.github.io/spoton/auth/) to your Developer App\n3. Copy the generated Client ID into the Client ID field in SpotOn Settings\n4. Click \"Connect Spotify Account\" and complete the browser login\n5. No need to remove an existing account first\n[/CODE]\n\nThe Redirect URI step is the one that catches most people — Spotify will silently reject the auth flow if it doesn't exactly match what's registered in your Developer App, so it's worth double-checking for trailing slashes or typos.\n\nGlad v3.0.3 is up and running for you! If you run into anything else, feel free to post here or open a ticket at [URL]https://github.com/stiefenm/spoton/issues[/URL].",
+      "scrapedAt": "2026-07-17T19:36:37.992Z"
+    }
+  ]
 }
