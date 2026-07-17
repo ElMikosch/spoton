@@ -10,7 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Authentication**: PKCE OAuth replaces ZeroConf/Keymaster as the primary auth mechanism
 - **Token management**: PKCE-native TokenManager with refresh token rotation
 - **Connect**: Stored credentials derived from PKCE tokens (no ZeroConf needed for Connect)
-- **Auth Health Dashboard**: Per-account status indicators on the Settings page
+- **Auth Health Dashboard**: Per-account status indicators, shown on the Status page
 
 ### Added
 - **PKCE OAuth flow** via GitHub Pages static relay (one-click browser auth)
