@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-07-17
+### Fixed
+- **Search returns HTTP 400 for some Client IDs** — search calls sent `limit=50`, but the Feb 2026 Dev Mode changes cap `/v1/search` at `limit=10`. Spotify enforces this per-app; now hard-clamped to 10 across all search call sites. ([#118](https://github.com/stiefenm/spoton/issues/118))
+- **DSTM causes API throttling under PKCE** — Don't Stop The Music fired up to 12 API calls in a ~100ms burst, risking 429 rate limiting that could disrupt playback. Removed dead `/recommendations` endpoint (removed by Spotify Nov 2024), staggered seed searches with 200ms delays, reduced seed count from 5 to 3. Worst case now 7 calls over ~1.4s.
+- **HTTP 400 errors show no detail on Status page** — 400 responses now include Spotify's error message (e.g. "HTTP 400 for search: Invalid limit") instead of just the status code.
+
 ## [3.0.1] - 2026-07-17
 ### Fixed
 - **Windows: Clear Logs blocked by open stderr handle** — v3.0 made stderr capture always-on, which held a file lock on Windows preventing log deletion. Handle is now closed immediately on Windows (read-by-path still works).
