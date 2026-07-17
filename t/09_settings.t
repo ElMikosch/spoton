@@ -1086,28 +1086,13 @@ SKIP: {
 }
 
 # ============================================================
-# Plan 54-02: Auth Health Dashboard -- structural wiring (Settings.pm + basic.html)
+# Auth Health Dashboard -- moved to Status.pm (260717 quick task). The
+# dashboard's runtime behavior (JSON wiring, _collectAuthHealth fixture
+# coverage) now lives in t/13_status_page.t alongside the rest of the
+# Status page. This is just a regression guard confirming Settings.pm no
+# longer owns any of it, and that Status.pm picked up _collectAuthHealth.
 # ============================================================
 {
-    my $html_file = "$project_dir/Plugins/SpotOn/HTML/EN/plugins/SpotOn/settings/basic.html";
-
-    SKIP: {
-        skip "basic.html not found", 7 unless -f $html_file;
-
-        open(my $fh, '<', $html_file) or die $!;
-        my $html = do { local $/; <$fh> };
-        close($fh);
-
-        ok($html =~ /authHealth/, 'Plan54-02: basic.html references authHealth');
-        ok($html =~ /PLUGIN_SPOTON_DASHBOARD_TITLE/,
-            'Plan54-02: basic.html references PLUGIN_SPOTON_DASHBOARD_TITLE');
-
-        for my $group (qw(pkce spDc connect migration audioKey)) {
-            ok($html =~ /authHealth\.\$id\.\Q$group\E/,
-                "Plan54-02: basic.html iterates authHealth.\$id.$group");
-        }
-    }
-
     SKIP: {
         skip "Settings.pm not found", 2 unless -f $settings_module;
 
@@ -1115,66 +1100,23 @@ SKIP: {
         my $src = do { local $/; <$fh> };
         close($fh);
 
-        ok($src =~ /sub _collectAuthHealth\b/,
-            'Plan54-02: Settings.pm defines _collectAuthHealth');
-        ok($src =~ /paramRef->\{authHealth\}/,
-            'Plan54-02: Settings.pm wires authHealth into paramRef');
+        ok($src !~ /sub _collectAuthHealth\b/,
+            'Settings.pm no longer defines _collectAuthHealth (moved to Status.pm)');
+        ok($src !~ /authHealth/,
+            'Settings.pm no longer references authHealth (moved to Status.pm)');
     }
-}
 
-# ============================================================
-# Plan 54-02: Auth Health Dashboard -- _collectAuthHealth fixture test
-# Exercises the real helper directly against a single mocked account with
-# known states across all 5 indicator groups (review-suggested minimal
-# aggregation test).
-# ============================================================
-SKIP: {
-    skip "Settings.pm module required for Auth Health Dashboard test", 6
-        unless eval { require Plugins::SpotOn::Settings; 1 };
+    my $status_module = "$project_dir/Plugins/SpotOn/Status.pm";
+    SKIP: {
+        skip "Status.pm not found", 1 unless -f $status_module;
 
-    require Slim::Utils::Cache;
-    require Plugins::SpotOn::Unified::DaemonManager;
-    require Plugins::SpotOn::API::WebPlayer;
-    require Plugins::SpotOn::API::TokenManager;
+        open(my $fh, '<', $status_module) or die $!;
+        my $src = do { local $/; <$fh> };
+        close($fh);
 
-    my $spotonPrefs = Slim::Utils::Prefs::preferences('plugin.spoton');
-    $spotonPrefs->set('accounts', { authhealth1 => { displayName => 'AuthHealth Test' } });
-
-    # Fixture: exactly one alive daemon helper for this account.
-    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = (
-        Plugins::SpotOn::Unified::DaemonManager::FakeHelper->new(
-            _accountId => 'authhealth1', alive => 1, pid => 4242, uptime => 99,
-        ),
-    );
-
-    # sp_dc state via the shared WebPlayer stub (Plan 52-03 pattern).
-    Plugins::SpotOn::API::WebPlayer::reset_calls();
-    $Plugins::SpotOn::API::WebPlayer::next_state          = 'valid';
-    $Plugins::SpotOn::API::WebPlayer::next_masked_preview = 'AQDx****';
-
-    # Cache-backed indicators (spoton_last_api_call_/spoton_audiokey_state_,
-    # Plan 54-01 keys) -- written via a fresh Slim::Utils::Cache instance that
-    # shares the stub's package-level store (keyed by cache key string, not
-    # by instance), matching how Settings.pm's own private $cache reads them.
-    my $cache = Slim::Utils::Cache->new('spoton', 4);
-    $cache->set('spoton_last_api_call_authhealth1', 1700000000, 86400);
-    $cache->set('spoton_audiokey_state_authhealth1', 'throttled', 600);
-
-    my $health = Plugins::SpotOn::Settings::_collectAuthHealth('authhealth1');
-
-    ok(ref($health) eq 'HASH', 'Plan54-02: _collectAuthHealth returns a hashref');
-    is_deeply([ sort keys %$health ], [ sort qw(pkce spDc connect migration audioKey) ],
-        'Plan54-02: _collectAuthHealth returns exactly the 5 expected indicator groups');
-    is($health->{spDc}{state}, 'valid',
-        'Plan54-02: spDc.state sourced from WebPlayer->state');
-    is($health->{connect}{alive}, 1,
-        'Plan54-02: connect.alive reflects the matching alive helper');
-    is($health->{connect}{pid}, 4242,
-        'Plan54-02: connect.pid sourced from the matching helper');
-    is($health->{audioKey}{state}, 'throttled',
-        'Plan54-02: audioKey.state sourced from cache');
-
-    @Plugins::SpotOn::Unified::DaemonManager::fake_helpers = ();
+        ok($src =~ /sub _collectAuthHealth\b/,
+            'Status.pm defines _collectAuthHealth (moved from Settings.pm)');
+    }
 }
 
 done_testing();
