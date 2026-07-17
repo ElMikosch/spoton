@@ -715,9 +715,12 @@ sub _htmlEscape {
 # ============================================================
 # _renderPkceResultPage($httpClient, $response, $title, $message, $isError)
 # Renders a minimal centered-card HTML result page for the /pkce/callback
-# browser redirect flow. Success pages meta-refresh back to Settings after
-# 3 seconds; error pages show a link back to Settings instead (the user may
-# need to read the error before leaving).
+# browser redirect flow. This page is opened via window.open() as a popup/
+# new tab and has no LMS navigation frame, so on success it self-closes
+# (window.close()) after 3 seconds instead of redirecting to Settings --
+# a redirect here would strand the user on a bare Settings page without the
+# Material Skin wrapper. Error pages show a link back to Settings instead
+# (the user may need to read the error before leaving).
 # ============================================================
 sub _renderPkceResultPage {
     my ($httpClient, $response, $title, $message, $isError) = @_;
@@ -728,7 +731,8 @@ sub _renderPkceResultPage {
 
     my $action = $isError
         ? qq{<p><a href="$settingsUrl">} . _htmlEscape(string('PLUGIN_SPOTON_NAME')) . qq{</a></p>}
-        : qq{<meta http-equiv="refresh" content="3;url=$settingsUrl">};
+        : qq{<script>setTimeout(function(){ try { window.close(); } catch(e) {} }, 3000);</script>
+<p style="color:#b3b3b3; font-size:0.9em">This tab will close automatically. If not, close it manually and refresh your SpotOn Settings page.</p>};
 
     my $html = qq{<!DOCTYPE html>
 <html>
