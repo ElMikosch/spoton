@@ -105,9 +105,9 @@ sub probeEndpointLimits {
     return $doneCb->() if $_limitsProbed;
 
     my @classes = (
-        { name => 'search',         path => 'search?q=test&type=track', doc_max => 50 },
-        { name => 'library',        path => 'me/tracks',                doc_max => 50 },
-        { name => 'playlist_items', path => undef,                      doc_max => 100 },
+        { name => 'search',         path => 'search', extra => { q => 'test', type => 'track' }, doc_max => 50 },
+        { name => 'library',        path => 'me/tracks', extra => {},                             doc_max => 50 },
+        { name => 'playlist_items', path => undef,                                                doc_max => 100 },
     );
 
     my $probeIdx = 0;
@@ -119,6 +119,7 @@ sub probeEndpointLimits {
                 "Client: API limits detected — search=%d library=%d playlist_items=%d",
                 $_detectedLimits{search}, $_detectedLimits{library}, $_detectedLimits{playlist_items}
             ));
+            undef $probeNext;
             $doneCb->();
             return;
         }
@@ -133,8 +134,14 @@ sub probeEndpointLimits {
             return;
         }
 
-        _binarySearchLimit($accountId, $cls->{path}, 1, $cls->{doc_max}, sub {
-            my $limit = shift;
+        _binarySearchLimit($accountId, $cls->{path}, $cls->{extra}, 1, $cls->{doc_max}, sub {
+            my ($limit, $aborted) = @_;
+            if ($aborted) {
+                main::INFOLOG && $log->info("Client: limit probe aborted (non-400 error), keeping defaults");
+                undef $probeNext;
+                $doneCb->();
+                return;
+            }
             $_detectedLimits{$cls->{name}} = $limit;
             main::INFOLOG && $log->info("Client: limit probe $cls->{name} = $limit");
             $probeNext->();
@@ -145,28 +152,35 @@ sub probeEndpointLimits {
 }
 
 sub _binarySearchLimit {
-    my ($accountId, $basePath, $low, $high, $doneCb) = @_;
+    my ($accountId, $path, $extra, $low, $high, $doneCb) = @_;
 
-    __PACKAGE__->_request('get', $basePath, {
-        _accountId => $accountId,
-        _noCache   => 1,
-        limit      => $high,
+    __PACKAGE__->_request('get', $path, {
+        _accountId  => $accountId,
+        _noCache    => 1,
+        _probeCall  => 1,
+        limit       => $high,
+        %{ $extra || {} },
     }, sub {
         my ($result, $err) = @_;
         if ($result && !$err) {
             $doneCb->($high);
             return;
         }
+        my $code = ($err && ref $err eq 'HASH') ? ($err->{code} || 0) : 0;
+        if ($code != 400) {
+            $doneCb->($low, 'aborted');
+            return;
+        }
         if ($high <= $low) {
             $doneCb->($low);
             return;
         }
-        _doBinarySearch($accountId, $basePath, $low, $high, $doneCb);
+        _doBinarySearch($accountId, $path, $extra, $low, $high, $doneCb);
     });
 }
 
 sub _doBinarySearch {
-    my ($accountId, $basePath, $low, $high, $doneCb) = @_;
+    my ($accountId, $path, $extra, $low, $high, $doneCb) = @_;
 
     if ($high - $low <= 1) {
         $doneCb->($low);
@@ -175,17 +189,24 @@ sub _doBinarySearch {
 
     my $mid = int(($low + $high) / 2);
 
-    __PACKAGE__->_request('get', $basePath, {
-        _accountId => $accountId,
-        _noCache   => 1,
-        limit      => $mid,
+    __PACKAGE__->_request('get', $path, {
+        _accountId  => $accountId,
+        _noCache    => 1,
+        _probeCall  => 1,
+        limit       => $mid,
+        %{ $extra || {} },
     }, sub {
         my ($result, $err) = @_;
         if ($result && !$err) {
-            _doBinarySearch($accountId, $basePath, $mid, $high, $doneCb);
-        } else {
-            _doBinarySearch($accountId, $basePath, $low, $mid, $doneCb);
+            _doBinarySearch($accountId, $path, $extra, $mid, $high, $doneCb);
+            return;
         }
+        my $code = ($err && ref $err eq 'HASH') ? ($err->{code} || 0) : 0;
+        if ($code != 400) {
+            $doneCb->($low, 'aborted');
+            return;
+        }
+        _doBinarySearch($accountId, $path, $extra, $low, $mid, $doneCb);
     });
 }
 
@@ -1279,13 +1300,15 @@ sub _doRequest {
                     my $body = eval { from_json($response->content) };
                     $detail = $body->{error}{message} // '' if $body && $body->{error};
                 }
-                $log->error("Client: HTTP $code error for $cleanPath: $error" . ($detail ? " ($detail)" : ''));
-                if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                    my $msg = "HTTP $code for $cleanPath";
-                    $msg .= ": $detail" if $detail;
-                    Plugins::SpotOn::Status->recordError('error', 'API', $msg);
+                unless ($params->{_probeCall}) {
+                    $log->error("Client: HTTP $code error for $cleanPath: $error" . ($detail ? " ($detail)" : ''));
+                    if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                        my $msg = "HTTP $code for $cleanPath";
+                        $msg .= ": $detail" if $detail;
+                        Plugins::SpotOn::Status->recordError('error', 'API', $msg);
+                    }
+                    $log->warn("[DIAG] api_error: endpoint=$cleanPath code=$code error=$error detail=$detail") if $prefs->get('diagnosticMode');
                 }
-                $log->warn("[DIAG] api_error: endpoint=$cleanPath code=$code error=$error detail=$detail") if $prefs->get('diagnosticMode');
                 $userCb->(undef, { error => $error, code => $code });
             },
             { timeout => REQUEST_TIMEOUT, cache => 0 }

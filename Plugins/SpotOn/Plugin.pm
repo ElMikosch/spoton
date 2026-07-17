@@ -155,14 +155,23 @@ sub initPlugin {
         );
     }
 
-    # Probe API limits after token refresh has had time to populate cache
+    # Probe API limits after token refresh has had time to populate cache.
+    # Retries once at +60s if no account is available at +15s (fresh installs).
     if ( !main::SCANNER ) {
-        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 15, sub {
-            my $accountId = $prefs->get('activeAccount') || '';
-            if ($accountId) {
-                Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
-            }
-        });
+        my $probeLimits;
+        $probeLimits = sub {
+            my $delay = shift;
+            Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $delay, sub {
+                return if Plugins::SpotOn::API::Client->limitsProbed();
+                my $accountId = $prefs->get('activeAccount') || '';
+                if ($accountId) {
+                    Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
+                } elsif ($delay < 60) {
+                    $probeLimits->(60);
+                }
+            });
+        };
+        $probeLimits->(15);
     }
 
     $VERSION = $class->_pluginDataFor('version');
