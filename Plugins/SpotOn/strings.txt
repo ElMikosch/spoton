@@ -2560,8 +2560,17 @@ PLUGIN_SPOTON_PKCE_ERROR
 	SV	Auktoriseringen misslyckades. Försök igen.
 
 PLUGIN_SPOTON_PKCE_POPUP_NOTE
+	CS	Poznámka: Váš prohlížeč musí povolit vyskakovací okna pro tuto stránku. Pokud se nic nestane, zkontrolujte blokování vyskakovacích oken.
+	DA	Bemærk: Din browser skal tillade pop-ups for denne side. Hvis der ikke sker noget, skal du kontrollere din pop-up-blokering.
 	DE	Hinweis: Ihr Browser muss Pop-ups für diese Seite erlauben. Wenn nichts passiert, prüfen Sie den Pop-up-Blocker.
 	EN	Note: Your browser must allow pop-ups for this page. If nothing happens when you click, check your browser's pop-up blocker.
+	ES	Nota: Su navegador debe permitir ventanas emergentes para esta página. Si no pasa nada, compruebe el bloqueador de ventanas emergentes.
+	FR	Remarque : votre navigateur doit autoriser les pop-ups pour cette page. Si rien ne se passe, vérifiez le bloqueur de pop-ups.
+	IT	Nota: il browser deve consentire i pop-up per questa pagina. Se non succede nulla, controllare il blocco dei pop-up.
+	NL	Opmerking: uw browser moet pop-ups toestaan voor deze pagina. Als er niets gebeurt, controleer dan uw pop-upblokkering.
+	NO	Merk: Nettleseren din må tillate popup-vinduer for denne siden. Hvis ingenting skjer, sjekk popup-blokkeringen.
+	PL	Uwaga: przeglądarka musi zezwalać na wyskakujące okna dla tej strony. Jeśli nic się nie dzieje, sprawdź blokowanie wyskakujących okien.
+	SV	Observera: din webbläsare måste tillåta popup-fönster för denna sida. Om inget händer, kontrollera din popup-blockerare.
 
 PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
 	CS	Účet byl připojen, ale Spotify Connect zatím není k dispozici — zkuste to prosím znovu na stránce nastavení SpotOnu.
