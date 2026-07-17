@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-17T21:35:16.710Z",
+  "lastChecked": "2026-07-17T22:32:51.455Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -209,9 +209,10 @@
         "1828970",
         "1828974",
         "1829036",
-        "1829039"
+        "1829039",
+        "1829052"
       ],
-      "lastPostCount": 207
+      "lastPostCount": 208
     }
   },
   "pendingTriage": [
@@ -224,6 +225,16 @@
       "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tMaybe I first need to remove my existing account under \"Made For You Setup\" by clicking the Remove button? \t",
       "draft": "Thanks for circling back and sharing the solution, CJS — this is exactly the kind of follow-up that helps other users get unstuck!\n\nTo summarise what worked for you, for anyone who finds this thread:\n\n[B]Quick setup checklist for SpotOn v3.x PKCE auth:[/B]\n\n[CODE]\n1. Go to https://developer.spotify.com/dashboard and create an app\n2. Add the Redirect URI shown on the SpotOn Settings page\n   (https://stiefenm.github.io/spoton/auth/) to your Developer App\n3. Copy the generated Client ID into the Client ID field in SpotOn Settings\n4. Click \"Connect Spotify Account\" and complete the browser login\n5. No need to remove an existing account first\n[/CODE]\n\nThe Redirect URI step is the one that catches most people — Spotify will silently reject the auth flow if it doesn't exactly match what's registered in your Developer App, so it's worth double-checking for trailing slashes or typos.\n\nGlad v3.0.3 is up and running for you! If you run into anything else, feel free to post here or open a ticket at [URL]https://github.com/stiefenm/spoton/issues[/URL].",
       "scrapedAt": "2026-07-17T19:36:37.992Z"
+    },
+    {
+      "postId": "1829052",
+      "postNumber": 208,
+      "author": "CJS",
+      "timestamp": "2026-07-17T15:03:54-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Question on how to find the \"Pathfinder Query Hash\". Instructions on the SpotOn settings page say:   \t \t\t \t\t\t \t\t\t \t\t\t \t\t\t\t1) Open open.spotify.com in your browser and log in. 2) Open Developer Tools (F12), go to the Network tab. 3) Filter for 'pathfinder'. 4) Find the request whose Payload contains ",
+      "draft": "Hey CJS,\n\nGreat question — the \"Payload\" terminology can be confusing depending on which browser you're using. Here's a clearer breakdown for Edge (and Firefox, which is very similar):\n\n[B]In Microsoft Edge:[/B]\n\n1. Click on any of the [B]pathfinder[/B] requests listed in the Network tab\n2. In the panel that opens on the right, look for a tab called [B]\"Payload\"[/B] (it sits alongside Headers, Preview, Response, etc.)\n3. Click [B]Payload[/B] — you'll see the request body, which is JSON\n4. Look for an [CODE]operationName[/CODE] field near the top. You want the request where this reads [CODE]\"operationName\": \"home\"[/CODE]\n5. Once you find that request, expand [CODE]extensions[/CODE] → [CODE]persistedQuery[/CODE] and you'll see [CODE]sha256Hash[/CODE] — that's the value to copy\n\n[B]In Firefox:[/B]\n\nThe equivalent tab is called [B]\"Request\"[/B] instead of \"Payload\" — same idea, just named differently.\n\n[B]Tip to speed this up:[/B] Rather than clicking each request one by one, you can use the Network tab's search/filter on the request body. In Edge, with a pathfinder request selected, use [B]Ctrl+F[/B] within the Payload panel to search for [CODE]home[/CODE]. Alternatively, just work through the list — there are usually only a handful of pathfinder requests and most will have obviously different [CODE]operationName[/CODE] values (like [CODE]fetchLibrary[/CODE], [CODE]searchDesktop[/CODE], etc.).\n\nIf you're still having trouble locating it, try navigating to the Spotify home page ([URL]https://open.spotify.com[/URL]) with the Network tab already open and the pathfinder filter active — this tends to trigger the [CODE]home[/CODE] query reliably.\n\nHope that clears it up! Let us know if you get stuck.",
+      "scrapedAt": "2026-07-17T22:32:51.454Z"
     }
   ]
 }
