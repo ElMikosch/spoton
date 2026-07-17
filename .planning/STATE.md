@@ -4,16 +4,16 @@ milestone: v2.3
 milestone_name: Library Integration
 current_phase: 54
 current_phase_name: auth-health-dashboard
-status: executing
-stopped_at: Completed 54-04-PLAN.md
-last_updated: "2026-07-16T16:38:13.423Z"
+status: verifying
+stopped_at: Completed 54-05-PLAN.md — Phase 54 done, v3.0.0 ready pending release approval
+last_updated: "2026-07-17T06:07:35.170Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 54 execution started
 progress:
   total_phases: 11
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State: SpotOn
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 Phase: 54 (auth-health-dashboard) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-16 — Phase 54 execution started
 
 ## Progress Bar
@@ -83,6 +83,7 @@ Phase 53: [ ] Keymaster Removal + Migration (AUTH-06, AUTH-07)
 | Phase 54 P03 | 15min | 2 tasks | 1 files |
 | Phase 54 P02 | 15min | 2 tasks | 4 files |
 | Phase 54 P04 | 3min | 2 tasks | 1 files |
+| Phase 54 P05 | ~2h | 3 tasks | 8 files |
 
 ## Deferred Items
 
@@ -184,6 +185,10 @@ Items carried forward from previous milestones:
 - [Phase ?]: [Phase 54]: [54-02] Connect indicator prefers the first alive daemon helper matching an account, falling back to the first helper found at all if none are alive
 - [Phase ?]: [Phase 54]: [54-02] lastApiCall rendered as relative time entirely client-side (data-epoch attribute + inline JS) rather than server-formatted, avoiding a new date-formatting dependency in the TT template
 - [Phase ?]: [Phase 54]: [54-04] Option D implemented exactly as specified: isPlayAll = !defined(quantity) || quantity>=500, applied uniformly across all 4 feed functions (_savedTracksFeed, _showFeed, _albumFeed, _playlistFeed); index/quantity defaults switched from || to // (defined-or)
+- [Phase ?]: [Phase 54][54-05] v2-legacy branched from main HEAD, not the v2.3.18 tag -- tag's repo.xml had stale SHA/URL pointing at v2.3.17 asset
+- [Phase ?]: [Phase 54][54-05] repo.xml version bumped to 3.0.0 with URL/SHA intentionally still pointing at v2.3.18 -- safe only because main stays unpushed until explicit release approval
+- [Phase ?]: [Phase 54][54-05] User decided post-checkpoint to relocate the Auth Health Dashboard from Settings page to Status page (3 follow-up commits: 16f5cde, c6eea81, 2b1ff22)
+- [Phase ?]: [Phase 54][54-05] CHANGELOG.md [3.0.0] Changed entry corrected from 'Settings page' to 'Status page' to match dashboard relocation (Rule 1 auto-fix)
 
 ### Blockers/Concerns
 
@@ -206,8 +211,8 @@ Items carried forward from previous milestones:
 
 **Resume file:** None
 
-**Last session:** 2026-07-16T16:38:13.415Z
-**Stopped at:** Completed 54-04-PLAN.md
+**Last session:** 2026-07-17T06:07:35.161Z
+**Stopped at:** Completed 54-05-PLAN.md — Phase 54 done, v3.0.0 ready pending release approval
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
 
