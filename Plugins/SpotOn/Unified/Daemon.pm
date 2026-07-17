@@ -222,6 +222,18 @@ sub start {
 	open($stderr_fh, $openMode, $stderrFile)
 		or do { $log->warn("Cannot open stderr log $stderrFile: $!"); undef $stderr_fh; undef $stderrFile; };
 
+	# WR-01: Windows open() doesn't share FILE_SHARE_DELETE, so a
+	# parent-held handle blocks unlink() of the daemon log file (Clear
+	# Logs in Settings would fail for every running daemon). Close the
+	# handle immediately after truncation/append — stderrTail() reads
+	# the file by path, not via this handle, so functionality is
+	# unaffected. Non-Windows keeps the handle open for Proc::Background
+	# stderr redirection.
+	if (main::ISWINDOWS && $stderr_fh) {
+		close($stderr_fh);
+		$stderr_fh = undef;
+	}
+
 	# T-29-09 / Pitfall 7 (MANDATORY): Temporarily untie STDERR before fork so
 	# Proc::Background can dup2 it in the child. LMS ties STDERR to
 	# Slim::Utils::Log::Trapper (no OPEN method) — the child would die on
