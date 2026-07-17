@@ -2122,7 +2122,7 @@ sub _podcastSearchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'show,episode',
-        limit  => 50,
+        limit  => 10,
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2178,7 +2178,7 @@ sub _podcastSearchTypeFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 50,
+        limit  => 10,
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2230,7 +2230,7 @@ sub _searchFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => 'track,album,artist,playlist',
-        limit  => 50,
+        limit  => 10,
         offset => 0,
     }, sub {
         my ($data, $err) = @_;
@@ -2317,7 +2317,7 @@ sub _searchTypeFeed {
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
-        limit  => 50,
+        limit  => 10,
         offset => 0,
     }, sub {
         my ($data, $err) = @_;

@@ -110,15 +110,17 @@ sub getMe {
 
 # search($class, $accountId, $params, $cb)
 # Searches Spotify. q is the search query; type defaults to "track,album,artist,playlist";
-# limit defaults to 50. Note: Spotify docs claim Dev Mode max is 10, but empirically
-# limit=50 works and returns full results. Intentional — do not reduce to 10.
+# limit capped at 10 (Dev Mode maximum since Feb 2026 — enforced per-app, causes HTTP 400
+# for some Client IDs when exceeded).
 sub search {
     my ($class, $accountId, $params, $cb) = @_;
+    my $limit = $params->{limit} // 10;
+    $limit = 10 if $limit > 10;
     $class->_request('get', 'search', {
         _accountId => $accountId,
         q          => $params->{q} // '',
         type       => $params->{type}   // 'track,album,artist,playlist',
-        limit      => $params->{limit}  // 50,
+        limit      => $limit,
         offset     => $params->{offset} // 0,
     }, $cb);
 }
