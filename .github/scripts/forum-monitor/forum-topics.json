@@ -123,7 +123,7 @@
         "CJS",
         "tontze"
       ],
-      "note": "CONFIRMED DEAD END (2026-07-13): Audio key denial is per-account cohort, independent of auth method. PKCE fixes Browse/Search/Library but NOT playback. Affects both new accounts AND old migrated accounts. librespot cannot obtain decryption keys for these accounts. No workaround exists."
+      "note": "Audio key denial is per-account cohort. PKCE fixes Browse/Search/Library and playback for mid-cohort accounts (woorszt confirmed). Newest-cohort accounts (Chezza, tontze) remain blocked at audio key layer — no client-side workaround."
     },
     "windows-token-capture-broken": {
       "status": "fix-shipped",
@@ -234,17 +234,16 @@
         "auth",
         "go-librespot",
         "token",
-        "audio key",
-        "dead end"
+        "audio key"
       ],
       "firstPost": 149,
-      "latestPost": 184,
+      "latestPost": 204,
       "participants": [
         "sti",
         "urknall",
         "mherger"
       ],
-      "note": "Multi-post architecture discussion. PKCE confirmed correct for API access. AUDIO KEY DEAD END confirmed 2026-07-13: PKCE-derived credentials cannot decrypt audio for cohort-migrated accounts. v3.0 scope reduced to Browse/Search/Library/Connect-control only. Audio backend research is now existential."
+      "note": "Multi-post architecture discussion. v3.0 shipped (PKCE replaces Keymaster). Audio key denial affects newest-cohort accounts only — mid-cohort (woorszt) fully restored by PKCE. v3.0 announcement in post #204."
     },
     "ubuntu-browse-empty-pete7874": {
       "status": "waiting-user",
