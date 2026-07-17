@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-07-17
+### Added
+- **API Limit Auto-Detection** — on startup, probes Spotify's enforced `limit` parameter maximum per endpoint class (Search, Library, Playlist Items) using binary search. Uses detected limits dynamically instead of hardcoded values. Displayed on the Status page under "API Limits". Apps with higher quotas automatically get better pagination; restricted apps stay within their enforced bounds.
+
 ## [3.0.2] - 2026-07-17
 ### Fixed
 - **Search returns HTTP 400 for some Client IDs** — search calls sent `limit=50`, but the Feb 2026 Dev Mode changes cap `/v1/search` at `limit=10`. Spotify enforces this per-app; now hard-clamped to 10 across all search call sites. ([#118](https://github.com/stiefenm/spoton/issues/118))
