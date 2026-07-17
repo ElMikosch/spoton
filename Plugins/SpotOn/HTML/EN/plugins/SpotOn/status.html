@@ -91,6 +91,7 @@ header p {
 .dot-alive { color: #1db954; }
 .dot-dead { color: #e53935; }
 .dot-unknown { color: rgba(224,224,224,0.3); }
+.dot-warn { color: #f5a623; }
 .error-row {
     padding: 4px 0;
     font-size: 13px;
@@ -153,6 +154,10 @@ footer {
         <div class="card" id="card-system">
             <h2>System Info</h2>
             <div class="card-body" id="system-body"></div>
+        </div>
+        <div class="card" id="card-auth-health">
+            <h2>Auth Health</h2>
+            <div class="card-body" id="auth-health-body"></div>
         </div>
     </div>
 
@@ -357,11 +362,93 @@ footer {
         footer.textContent = 'SpotOn v' + (sys.pluginVersion || '?') + ' — Lyrion Music Server plugin';
     }
 
+    function formatRelTime(epoch) {
+        if (!epoch) return 'never';
+        var diffSec = Math.floor(Date.now() / 1000) - epoch;
+        if (diffSec < 0)          return new Date(epoch * 1000).toLocaleString();
+        if (diffSec < 60)         return diffSec + 's ago';
+        if (diffSec < 3600)       return Math.floor(diffSec / 60) + 'm ago';
+        if (diffSec < 86400)      return Math.floor(diffSec / 3600) + 'h ago';
+        return Math.floor(diffSec / 86400) + 'd ago';
+    }
+
+    function renderAuthHealth(data) {
+        var body = document.getElementById('auth-health-body');
+        body.textContent = '';
+
+        var authHealth = data.authHealth || {};
+        var ids = Object.keys(authHealth);
+
+        if (ids.length === 0) {
+            var msg = document.createElement('div');
+            msg.className = 'muted';
+            msg.textContent = 'No accounts configured.';
+            body.appendChild(msg);
+            return;
+        }
+
+        for (var i = 0; i < ids.length; i++) {
+            if (i > 0) {
+                body.appendChild(document.createElement('hr'));
+            }
+            var id = ids[i];
+            var h = authHealth[id] || {};
+
+            var nameRow = document.createElement('div');
+            nameRow.className = 'metric-row';
+            var nameLbl = document.createElement('span');
+            nameLbl.className = 'metric-label mono';
+            nameLbl.textContent = 'Account ' + id;
+            nameRow.appendChild(nameLbl);
+            body.appendChild(nameRow);
+
+            // PKCE Status
+            var pkce = h.pkce || {};
+            var pkceOk = pkce.hasToken && !pkce.needsReauth;
+            body.appendChild(createMetricRow('PKCE Status', pkceOk ? 'Valid' : 'Re-auth required',
+                pkceOk ? 'dot-alive' : 'dot-dead'));
+            body.appendChild(createMetricRow('Last API Call', formatRelTime(pkce.lastApiCall)));
+
+            // sp_dc Status
+            var spDc = h.spDc || {};
+            var spDcLabel, spDcClass;
+            if (spDc.state === 'valid')             { spDcLabel = 'Valid'; spDcClass = 'dot-alive'; }
+            else if (spDc.state === 'expired')      { spDcLabel = 'Expired'; spDcClass = 'dot-warn'; }
+            else if (spDc.state === 'secrets_down') { spDcLabel = 'Secrets unavailable'; spDcClass = 'dot-warn'; }
+            else                                    { spDcLabel = 'Not configured'; spDcClass = 'dot-unknown'; }
+            if (spDc.state && spDc.state !== 'empty' && spDc.maskedPreview) {
+                spDcLabel += ' (' + spDc.maskedPreview + ')';
+            }
+            body.appendChild(createMetricRow('sp_dc Status', spDcLabel, spDcClass));
+
+            // Connect
+            var connect = h.connect || {};
+            var connectLabel = connect.alive
+                ? 'Running (PID ' + connect.pid + ', ' + formatUptime(connect.uptime) + ')'
+                : 'Stopped';
+            body.appendChild(createMetricRow('Connect', connectLabel, connect.alive ? 'dot-alive' : 'dot-dead'));
+
+            // Migration
+            var migration = h.migration || {};
+            body.appendChild(createMetricRow('Migration', migration.needed ? 'Reconnect required' : 'Complete',
+                migration.needed ? 'dot-warn' : 'dot-alive'));
+
+            // Audio Keys
+            var audioKey = h.audioKey || {};
+            var akLabel, akClass;
+            if (audioKey.state === 'denied')         { akLabel = 'Denied'; akClass = 'dot-dead'; }
+            else if (audioKey.state === 'throttled') { akLabel = 'Throttled'; akClass = 'dot-warn'; }
+            else                                     { akLabel = 'OK'; akClass = 'dot-alive'; }
+            body.appendChild(createMetricRow('Audio Keys', akLabel, akClass));
+        }
+    }
+
     function render(data) {
         renderDaemon(data);
         renderApi(data);
         renderErrors(data);
         renderSystem(data);
+        renderAuthHealth(data);
     }
 
     function poll() {
