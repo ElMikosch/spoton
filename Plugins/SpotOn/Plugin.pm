@@ -1426,7 +1426,7 @@ sub _savedTracksFeed {
 
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
-    my $qty       = $args->{quantity} // 200;
+    my $qty       = $args->{quantity} || 200;
     my $limit     = $qty > 50 ? 50 : $qty;    # Spotify Library max = 50
 
     my $accountId = _getAccountId($client);
@@ -1754,7 +1754,7 @@ sub _showFeed {
 
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
-    my $qty       = $args->{quantity} // 200;
+    my $qty       = $args->{quantity} || 200;
     my $limit     = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
@@ -2458,7 +2458,7 @@ sub _albumFeed {
 
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
-    my $qty       = $args->{quantity} // 200;
+    my $qty       = $args->{quantity} || 200;
     my $limit     = $qty > 50 ? 50 : $qty;
 
     my $accountId = _getAccountId($client);
@@ -2745,7 +2745,7 @@ sub _playlistFeed {
 
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
-    my $qty       = $args->{quantity} // 200;
+    my $qty       = $args->{quantity} || 200;
     my $limit     = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
 
     my $accountId = _getAccountId($client);
