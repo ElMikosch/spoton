@@ -209,6 +209,21 @@
     }
   },
   "active": {
+    "dstm-autoplay-override": {
+      "status": "acknowledged",
+      "keywords": [
+        "Don't Stop The Music",
+        "DSTM",
+        "Autoplay",
+        "SpotOn Recommendations",
+        "Disabled"
+      ],
+      "ghIssue": 117,
+      "firstPost": 201,
+      "latestPost": 203,
+      "participants": ["fanshawe", "CJS"],
+      "note": "SpotOn Autoplay overrides DSTM Disabled setting. CJS provided workaround. GH #117 tracks the UX fix."
+    },
     "auth-architecture-discussion": {
       "status": "active",
       "keywords": [
