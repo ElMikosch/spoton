@@ -228,16 +228,9 @@ sub sleep { CORE::sleep($_[1]) }
 1;
 END
 
-# Stub: File::Spec::Functions (delegates to real File::Spec)
-write_stub($stub_dir, 'File::Spec::Functions', <<'END');
-package File::Spec::Functions;
-use parent 'Exporter';
-use File::Spec ();
-our @EXPORT_OK = qw(catdir catfile);
-*catdir  = \&File::Spec::catdir;
-*catfile = \&File::Spec::catfile;
-1;
-END
+# File::Spec::Functions is a core module — no stub needed, use the real one.
+# A previous stub broke File::Spec::catdir resolution when Credentials.pm
+# was lazy-loaded after tests completed.
 
 # Stub: Slim::Plugin::OPMLBased (base class for Plugin.pm)
 write_stub($stub_dir, 'Slim::Plugin::OPMLBased', <<'END');
@@ -332,6 +325,7 @@ END
 # Client.pm (Plan 02, out of this plan's scope).
 write_stub($stub_dir, 'Plugins::SpotOn::API::Client', <<'END');
 package Plugins::SpotOn::API::Client;
+use constant SPOTON_DEFAULT_CLIENT_ID => 'test-client-id-stub';
 our $next_pathfinder_ids   = [];
 our $next_pathfinder_err   = undef;
 our $next_wp_items         = { items => [], total => 0 };
