@@ -448,10 +448,9 @@ sub _storeAccountPrefs {
     my ($class, $accountId, $spotifyUserId, $displayName, $cb) = @_;
 
     my $accounts = $prefs->get('accounts') || {};
-    $accounts->{$accountId} = {
-        displayName   => $displayName,
-        spotifyUserId => $spotifyUserId,
-    };
+    my $entry = $accounts->{$accountId} ||= {};
+    $entry->{displayName}   = $displayName;
+    $entry->{spotifyUserId} = $spotifyUserId;
     $prefs->set('accounts', $accounts);
 
     # Set as active account if none currently set
