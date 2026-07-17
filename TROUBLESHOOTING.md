@@ -80,6 +80,19 @@ rm -rf /config/cache/spoton/<accountId>/
 
 4. If the issue persists, collect a diagnostic bundle and open an issue.
 
+### Browse/Search return HTTP 400 or empty results
+
+**Symptoms:** Search returns no results, playlists show "No results", or the Status page shows `HTTP 400 for search` / `HTTP 400 for artists/.../albums`. The Auth Health Dashboard shows "Valid" for PKCE.
+
+**Likely cause:** Your Spotify Developer App enforces stricter API limits than expected. Spotify's Development Mode caps vary per app — some accept `limit=50`, others reject anything above `limit=10` with HTTP 400.
+
+**Solutions:**
+1. **Update to v3.0.3 or later** — SpotOn now auto-detects your app's enforced limits on startup and adapts all API calls accordingly. Check the Status page under "API Limits" to see the detected values.
+2. **Check User Management** — in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), open your app's **Settings → User Management** and make sure your own Spotify account is on the allowlist. Development Mode apps may restrict API access to listed users only. After adding yourself, re-authenticate in SpotOn Settings.
+3. **Check Redirect URI** — ensure `https://stiefenm.github.io/spoton/auth/` is listed as a Redirect URI in your app settings (the setup wizard shows this).
+
+If the Status page shows `API Limits: Search 10 | Library 10 | Playlists 20` (or similarly low values), your app has restricted limits — SpotOn will still work, just with smaller page sizes.
+
 ### Tracks skip or fail with "404" in logs (CDN errors)
 
 **Symptoms:** Tracks skip to the next song after a few seconds, or playback fails entirely. The LMS log shows `Browse daemon 404` or `attempts exhausted, skipping to next track`.
