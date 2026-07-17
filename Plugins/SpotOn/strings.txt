@@ -2559,6 +2559,10 @@ PLUGIN_SPOTON_PKCE_ERROR
 	PL	Autoryzacja nie powiodła się. Spróbuj ponownie.
 	SV	Auktoriseringen misslyckades. Försök igen.
 
+PLUGIN_SPOTON_PKCE_POPUP_NOTE
+	DE	Hinweis: Ihr Browser muss Pop-ups für diese Seite erlauben. Wenn nichts passiert, prüfen Sie den Pop-up-Blocker.
+	EN	Note: Your browser must allow pop-ups for this page. If nothing happens when you click, check your browser's pop-up blocker.
+
 PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
 	CS	Účet byl připojen, ale Spotify Connect zatím není k dispozici — zkuste to prosím znovu na stránce nastavení SpotOnu.
 	DA	Kontoen blev tilsluttet, men Spotify Connect er endnu ikke tilgængeligt — prøv venligst igen fra SpotOn-indstillingerne.
