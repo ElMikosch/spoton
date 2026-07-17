@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-07-17
+### Fixed
+- **Windows: Clear Logs blocked by open stderr handle** — v3.0 made stderr capture always-on, which held a file lock on Windows preventing log deletion. Handle is now closed immediately on Windows (read-by-path still works).
+- **PKCE success page opens without LMS navigation** — after auth, the popup tab now closes automatically instead of redirecting to a frameless Settings page.
+- **Status page card order** — Auth Health card moved to the top, followed by API & Tokens, Player, Errors, System Info.
+- **Popup-blocker awareness** — added a note near the PKCE auth button that browsers must allow pop-ups.
+
 ## [3.0.0] - 2026-07-17
 ### Changed
 - **Authentication**: PKCE OAuth replaces ZeroConf/Keymaster as the primary auth mechanism
