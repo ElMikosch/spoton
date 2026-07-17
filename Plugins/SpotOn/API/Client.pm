@@ -1163,11 +1163,18 @@ sub _doRequest {
                 }
 
                 # T-02-10: Log only status code and path, never token value
-                $log->error("Client: HTTP $code error for $cleanPath: $error");
-                if ($INC{'Plugins/SpotOn/Status.pm'}) {
-                    Plugins::SpotOn::Status->recordError('error', 'API', "HTTP $code for $cleanPath");
+                my $detail = '';
+                if ($code == 400 && $response && ref $response && $response->can('content')) {
+                    my $body = eval { from_json($response->content) };
+                    $detail = $body->{error}{message} // '' if $body && $body->{error};
                 }
-                $log->warn("[DIAG] api_error: endpoint=$cleanPath code=$code error=$error") if $prefs->get('diagnosticMode');
+                $log->error("Client: HTTP $code error for $cleanPath: $error" . ($detail ? " ($detail)" : ''));
+                if ($INC{'Plugins/SpotOn/Status.pm'}) {
+                    my $msg = "HTTP $code for $cleanPath";
+                    $msg .= ": $detail" if $detail;
+                    Plugins::SpotOn::Status->recordError('error', 'API', $msg);
+                }
+                $log->warn("[DIAG] api_error: endpoint=$cleanPath code=$code error=$error detail=$detail") if $prefs->get('diagnosticMode');
                 $userCb->(undef, { error => $error, code => $code });
             },
             { timeout => REQUEST_TIMEOUT, cache => 0 }
