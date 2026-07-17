@@ -414,6 +414,23 @@ sub reset_calls {
 END
 
 
+# Stub: URI — not Perl core, bundled by LMS. Settings.pm uses URI->new()->query_form
+# for PKCE callback query-string parsing.
+write_stub($stub_dir, 'URI', <<'END');
+package URI;
+sub new {
+    my ($class, $str) = @_;
+    return bless { _str => $str // '' }, $class;
+}
+sub query_form {
+    my ($self) = @_;
+    my $q = $self->{_str};
+    $q =~ s/^[^?]*\?//;  # strip everything before ?
+    return map { my ($k,$v) = split /=/, $_, 2; ($k // '', $v // '') } split /&/, ($q // '');
+}
+1;
+END
+
 # Stub: URI::Escape — not Perl core, bundled by LMS
 # uri_escape_utf8 is needed too: Settings.pm's PKCE handlers pull in the real
 # Plugins::SpotOn::API::Client (for SPOTON_DEFAULT_CLIENT_ID), which imports
