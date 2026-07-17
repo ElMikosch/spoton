@@ -4,12 +4,14 @@ use strict;
 use warnings;
 
 use Digest::MD5 qw(md5_hex);
+use Time::HiRes;
 
 use Slim::Plugin::DontStopTheMusic::Plugin;
 use Slim::Schema;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Timers;
 
 my $log   = Slim::Utils::Log->logger('plugin.spoton');
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
@@ -34,7 +36,7 @@ sub init {
 sub dontStopTheMusic {
     my ($client, $cb) = @_;
 
-    my $seedTracks = Slim::Plugin::DontStopTheMusic::Plugin->getMixableProperties($client, 5);
+    my $seedTracks = Slim::Plugin::DontStopTheMusic::Plugin->getMixableProperties($client, 3);
 
     # Only proceed if we have tracks to seed from (not radio, not empty queue)
     if (!$seedTracks || !ref $seedTracks || !scalar @$seedTracks) {
@@ -86,154 +88,143 @@ sub dontStopTheMusic {
         $seedData->{_firstArtistName} ||= $track->{artist} if $track->{artist};
     }
 
-    # Limit seed_tracks to max 5 (Spotify API limit)
-    if ($seedData->{seed_tracks} && scalar @{$seedData->{seed_tracks}} > 5) {
-        splice @{$seedData->{seed_tracks}}, 5;
+    # Limit seed_tracks to max 3 (reduced from 5 to lower API call burst)
+    if ($seedData->{seed_tracks} && scalar @{$seedData->{seed_tracks}} > 3) {
+        splice @{$seedData->{seed_tracks}}, 3;
     }
 
     if (@searchData) {
         _searchForSeeds($client, $accountId, \@searchData, $seedData, $cb);
     }
     else {
-        _getRecommendations($client, $accountId, $seedData, $cb);
-    }
-}
-
-# _searchForSeeds($client, $accountId, $searchDataRef, $seedData, $cb)
-# Iterates non-Spotify seed entries: first attempts track search, then artist search.
-# Uses a remaining-counter to chain async calls and then invokes _getRecommendations.
-sub _searchForSeeds {
-    my ($client, $accountId, $searchDataRef, $seedData, $cb) = @_;
-
-    my @items    = @$searchDataRef;
-    my $total    = scalar @items;
-    my $remaining = $total;
-
-    # Called when all async searches complete
-    my $done = sub {
-        # Cap seed_tracks and seed_artists to 5 each
-        if ($seedData->{seed_tracks} && scalar @{$seedData->{seed_tracks}} > 5) {
-            splice @{$seedData->{seed_tracks}}, 5;
-        }
-        if ($seedData->{seed_artists} && scalar @{$seedData->{seed_artists}} > 5) {
-            splice @{$seedData->{seed_artists}}, 5;
-        }
-        _getRecommendations($client, $accountId, $seedData, $cb);
-    };
-
-    foreach my $item (@items) {
-        my ($artist, $title) = @$item;
-
-        # T-06-07: URI extraction via regex — only alphanumeric track IDs pass
-        Plugins::SpotOn::API::Client->search($accountId, {
-            q     => sprintf('%s artist:"%s"', $title, $artist),
-            type  => 'track',
-            limit => 5,
-        }, sub {
-            my $result = shift;
-            my $tracks = ($result && $result->{tracks} && $result->{tracks}{items})
-                ? $result->{tracks}{items} : [];
-
-            my $matched = 0;
-            if (my ($match) = grep {
-                    $_->{name} =~ /^\Q$title\E/i
-                    && $_->{artists} && grep {
-                        $_->{name} =~ /\Q$artist\E/i
-                    } @{$_->{artists}}
-                } @$tracks)
-            {
-                $seedData->{seed_tracks} ||= [];
-                push @{$seedData->{seed_tracks}}, $match->{id};
-                $matched = 1;
-            }
-
-            if (!$matched) {
-                # Track not found — try artist search as fallback seed
-                Plugins::SpotOn::API::Client->search($accountId, {
-                    q     => sprintf('artist:"%s"', $artist),
-                    type  => 'artist',
-                    limit => 5,
-                }, sub {
-                    my $result = shift;
-                    my $artists = ($result && $result->{artists} && $result->{artists}{items})
-                        ? $result->{artists}{items} : [];
-
-                    if (my ($match) = grep {
-                            $_->{name} =~ /\Q$artist\E/i
-                        } @$artists)
-                    {
-                        $seedData->{seed_artists} ||= [];
-                        push @{$seedData->{seed_artists}}, $match->{id};
-                    }
-
-                    $remaining--;
-                    $done->() if $remaining <= 0;
-                });
-                return;  # don't decrement remaining here; artist search does it
-            }
-
-            $remaining--;
-            $done->() if $remaining <= 0;
-        });
-    }
-}
-
-# _getRecommendations($client, $accountId, $seedData, $cb)
-# Calls Client->recommendations with the collected seed data.
-# Falls back to search-based approach on empty result.
-sub _getRecommendations {
-    my ($client, $accountId, $seedData, $cb) = @_;
-
-    # Need at least one seed type to get recommendations
-    unless ($seedData->{seed_tracks} || $seedData->{seed_artists}) {
-        main::INFOLOG && $log->info("SpotOn DSTM: no seeds found, skipping");
-        $cb->($client);
-        return;
-    }
-
-    Plugins::SpotOn::API::Client->recommendations($accountId, $seedData, sub {
-        my $tracks = shift || [];
-
-        if ($tracks && ref $tracks && scalar @$tracks) {
-            my @uris = _cacheAndExtractUris($tracks);
-
-            if (@uris) {
-                $cb->($client, \@uris);
-                return;
-            }
-        }
-
-        # Recommendations returned empty or all URIs failed extraction —
-        # fall back to artist search with randomized offset (RESEARCH.md Pattern 5)
         my $seedArtist = $seedData->{_firstArtistName};
-
         if ($seedArtist) {
             _searchFallback($client, $accountId, $seedArtist, $cb);
         }
         else {
-            main::INFOLOG && $log->info("SpotOn DSTM: recommendations empty, no artist fallback available");
+            main::INFOLOG && $log->info("SpotOn DSTM: no artist seed available, skipping");
             $cb->($client);
         }
+    }
+}
+
+# _searchForSeeds($client, $accountId, $searchDataRef, $seedData, $cb)
+# Iterates non-Spotify seed entries sequentially with 200ms stagger between calls
+# to prevent API burst that triggers 429 under single-Client-ID PKCE architecture.
+# After all seeds processed, proceeds to _searchFallback for recommendations.
+sub _searchForSeeds {
+    my ($client, $accountId, $searchDataRef, $seedData, $cb) = @_;
+
+    my @items = @$searchDataRef;
+
+    my $done = sub {
+        if ($seedData->{seed_tracks} && scalar @{$seedData->{seed_tracks}} > 3) {
+            splice @{$seedData->{seed_tracks}}, 3;
+        }
+        if ($seedData->{seed_artists} && scalar @{$seedData->{seed_artists}} > 3) {
+            splice @{$seedData->{seed_artists}}, 3;
+        }
+        my $seedArtist = $seedData->{_firstArtistName};
+        if ($seedArtist) {
+            _searchFallback($client, $accountId, $seedArtist, $cb);
+        }
+        else {
+            main::INFOLOG && $log->info("SpotOn DSTM: no artist seed available after search, skipping");
+            $cb->($client);
+        }
+    };
+
+    _searchNextSeed($client, $accountId, \@items, 0, $seedData, $done);
+}
+
+# _searchNextSeed($client, $accountId, $itemsRef, $idx, $seedData, $done)
+# Processes one seed at a time, scheduling the next with a 200ms delay.
+# Prevents API burst by spreading calls across ~200ms intervals.
+use constant DSTM_SEARCH_STAGGER_MS => 0.2;
+
+sub _searchNextSeed {
+    my ($client, $accountId, $itemsRef, $idx, $seedData, $done) = @_;
+
+    if ($idx >= scalar @$itemsRef) {
+        $done->();
+        return;
+    }
+
+    my ($artist, $title) = @{$itemsRef->[$idx]};
+
+    Plugins::SpotOn::API::Client->search($accountId, {
+        q     => sprintf('%s artist:"%s"', $title, $artist),
+        type  => 'track',
+        limit => 5,
+    }, sub {
+        my $result = shift;
+        my $tracks = ($result && $result->{tracks} && $result->{tracks}{items})
+            ? $result->{tracks}{items} : [];
+
+        my $matched = 0;
+        if (my ($match) = grep {
+                $_->{name} =~ /^\Q$title\E/i
+                && $_->{artists} && grep {
+                    $_->{name} =~ /\Q$artist\E/i
+                } @{$_->{artists}}
+            } @$tracks)
+        {
+            $seedData->{seed_tracks} ||= [];
+            push @{$seedData->{seed_tracks}}, $match->{id};
+            $matched = 1;
+        }
+
+        my $scheduleNext = sub {
+            Slim::Utils::Timers::setTimer(
+                undef,
+                Time::HiRes::time() + DSTM_SEARCH_STAGGER_MS,
+                sub { _searchNextSeed($client, $accountId, $itemsRef, $idx + 1, $seedData, $done) }
+            );
+        };
+
+        if (!$matched) {
+            Plugins::SpotOn::API::Client->search($accountId, {
+                q     => sprintf('artist:"%s"', $artist),
+                type  => 'artist',
+                limit => 5,
+            }, sub {
+                my $result = shift;
+                my $artists = ($result && $result->{artists} && $result->{artists}{items})
+                    ? $result->{artists}{items} : [];
+
+                if (my ($match) = grep {
+                        $_->{name} =~ /\Q$artist\E/i
+                    } @$artists)
+                {
+                    $seedData->{seed_artists} ||= [];
+                    push @{$seedData->{seed_artists}}, $match->{id};
+                }
+
+                $scheduleNext->();
+            });
+            return;
+        }
+
+        $scheduleNext->();
     });
 }
 
 # _searchFallback($client, $accountId, $seedArtist, $cb)
-# Search-based fallback when recommendations returns 404/403 or empty.
+# Artist-search-based track discovery for DSTM.
 # Uses a random offset to vary results per invocation.
-# Per RESEARCH.md Pattern 5.
 sub _searchFallback {
     my ($client, $accountId, $seedArtist, $cb) = @_;
 
     my $offset = int(rand(40));
 
     main::INFOLOG && $log->info(
-        "SpotOn DSTM: falling back to artist search (artist=$seedArtist, offset=$offset)"
+        "SpotOn DSTM: artist search (artist=$seedArtist, offset=$offset)"
     );
 
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => sprintf('artist:"%s"', $seedArtist),
         type   => 'track',
-        limit  => 10,
+        limit  => 25,
         offset => $offset,
     }, sub {
         my $result = shift;

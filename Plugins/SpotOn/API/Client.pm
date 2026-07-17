@@ -123,47 +123,6 @@ sub search {
     }, $cb);
 }
 
-# recommendations($class, $accountId, $params, $cb)
-# Fetches track recommendations from Spotify (/recommendations).
-# Parameters: seed_tracks (arrayref), seed_artists (arrayref), seed_genres (arrayref),
-#             limit (default 25).
-# Requires at least one seed_track or seed_artist to avoid empty result.
-# Seed arrayrefs are converted to comma-separated strings for the query.
-# _noCache => 1: recommendations should always be fresh (DSTM use case).
-# Returns $cb->($result->{tracks}) (arrayref) or $cb->([]) on empty/failure.
-sub recommendations {
-    my ($class, $accountId, $params, $cb) = @_;
-
-    # Guard: require at least one seed_track or seed_artist (no-op otherwise)
-    my @seedTracks  = @{ $params->{seed_tracks}  || [] };
-    my @seedArtists = @{ $params->{seed_artists} || [] };
-    unless (@seedTracks || @seedArtists) {
-        $cb->([]);
-        return;
-    }
-
-    my %reqParams = (
-        _accountId => $accountId,
-        _noCache   => 1,
-        limit      => $params->{limit} // 25,
-    );
-
-    # Convert arrayrefs to comma-separated strings (Spotify API format)
-    $reqParams{seed_tracks}  = join(',', @seedTracks)                    if @seedTracks;
-    $reqParams{seed_artists} = join(',', @seedArtists)                   if @seedArtists;
-    $reqParams{seed_genres}  = join(',', @{ $params->{seed_genres} || [] })
-        if $params->{seed_genres} && @{ $params->{seed_genres} };
-
-    $class->_request('get', 'recommendations', \%reqParams, sub {
-        my ($result, $err) = @_;
-        if (!$result || $err) {
-            $cb->([]);
-            return;
-        }
-        $cb->($result->{tracks} || []);
-    });
-}
-
 # getRecentlyPlayed($class, $accountId, $params, $cb)
 # Fetches recently played tracks (/me/player/recently-played).
 # Cursor-based — no offset parameter (Pitfall 4).
