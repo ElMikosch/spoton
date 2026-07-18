@@ -1,40 +1,43 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-18T16:41:45.602Z",
+  "timestamp": "2026-07-18T19:03:59.967Z",
   "phase": "55",
   "phase_name": "bundled-client-id",
   "phase_dir": ".planning/phases/55-bundled-client-id",
   "status": "paused",
-  "stopped_at": "v3.1.0 released and announced. Phase 55 Plans 01-03 executed, code review done. Triage complete. TROUBLESHOOTING.md updated.",
+  "stopped_at": "v3.1.1 released. Dev Mode schema fix (#119) shipped, #91 closed, #120 filed, triage clean.",
   "completed_this_session": [
-    "Obsidian vault sync (v3.1.0 state, Phase 55, #118 closed, Token Architecture superseded)",
-    "Forum triage: 5 pending posts processed (CJS Pathfinder hash + empty playlist, woorszt/pilot000 community help)",
-    "Forum reply #212 drafted and posted (CJS: Pathfinder hash tip + v3.1.0 bundled ID for empty playlist)",
-    "GitHub #119 comment posted (v3.1.0 bundled ID as fix, CJS Spirc log clarification, woorszt test request)",
-    "#119 label updated (waiting-user)",
-    "TROUBLESHOOTING.md: new 'Made For You playlists missing or empty' section with sp_dc + hash instructions",
-    "forum-topics.json: 2 new topics added (cjs-v3-pkce-setup, cjs-empty-playlist-pathfinder-hash), auth-architecture-discussion updated",
-    "Committed and pushed: docs + forum-topics"
+    "Fixed Dev Mode playlist/library schema (#119): _normalizeLibraryItem helper at 8 consumer sites",
+    "Fable 5 plan review: APPROVE WITH CHANGES (saved albums/shows coverage, verify commands)",
+    "Locally tested both Client ID modes (Dev Mode + Extended Quota) — no regression",
+    "v3.1.1 released (Perl-only, CI binary reuse)",
+    "Closed #91 — woorszt confirmed PKCE resolves Keymaster 403",
+    "Filed #120 — bundled Client ID doesn't list foreign playlists",
+    "#119 reply posted to woorszt with fix details, waiting-user tagged",
+    "Obsidian vault synced (v3.1.1, #91 closed, #120, schema finding, Keymaster 403 resolved)",
+    "Triage: clean — 0 pending forum, all issues labeled correctly"
   ],
   "remaining": [
-    "Phase 55 Plan 01 (55-01-PLAN.md) — may need execution (Plans 02+03 executed out of order, but 55-01 commits exist)",
-    "v2.3 Library Integration Phases 38-41 — paused, not started",
-    "Phase 30 Plan 02 — legacy pipe cleanup, not executed"
+    "#119 awaiting woorszt test confirmation of v3.1.1",
+    "#120 investigation (bundled ID foreign playlists)",
+    "v2.3 Library Integration Phases 38-41 (paused, not started)"
   ],
   "decisions": [
-    {"what": "Pathfinder hash capture: log out + log in with DevTools open", "why": "operationName:home only fires during login redirect, easy to miss during normal browsing"},
-    {"what": "TROUBLESHOOTING.md gets Pathfinder/sp_dc section", "why": "CJS question revealed missing documentation for common setup step"},
-    {"what": "#119 waiting-user after v3.1.0 comment", "why": "Waiting for woorszt/CJS to test bundled Client ID as playlist 403 fix"}
+    {"what": "_normalizeLibraryItem as parametric helper (track/album/show)", "why": "Fable 5 found saved albums and shows are likely also affected by the generic item key"},
+    {"what": "grep guards added at 3 sites that lacked them", "why": "Fable 5 recommended: _trackItem(undef) produces garbage rows, guard is defensively correct"},
+    {"what": "v3.1.1 as patch release", "why": "Pure bugfix, no new features"}
   ],
   "blockers": [],
   "human_actions_pending": [
-    {"action": "Monitor #119 for woorszt/CJS feedback on bundled Client ID", "context": "v3.1.0 bundled ID may fix playlist 403", "blocking": false},
-    {"action": "Monitor Reiner feedback (~2 weeks vacation)", "context": "User Management allowlist theory, Telegram sent", "blocking": false}
+    {"action": "Monitor #119 for woorszt feedback on v3.1.1", "context": "Fix shipped, waiting for test confirmation", "blocking": false},
+    {"action": "Monitor Reiner feedback (~2 weeks vacation)", "context": "User Management allowlist theory", "blocking": false}
   ],
+  "uncommitted_files": [],
   "next_actions": [
-    "Check #119 for woorszt/CJS bundled ID test results",
-    "Verify Phase 55 completeness (Plan 01 commits exist but no SUMMARY — check if execution is needed)",
-    "Resume v2.3 Library Integration (Phase 38 Importer Foundation) or wrap up Phase 55",
+    "Check #119 for woorszt v3.1.1 test results",
+    "Investigate #120 (bundled ID foreign playlists — me/playlists response difference)",
+    "Resume v2.3 Library Integration (Phase 38 Importer Foundation)",
     "#117 DSTM/Autoplay-Override — enhancement, low priority"
-  ]
+  ],
+  "context_notes": "Productive session: woorszt found the exact root cause of #119 (Spotify serves different response schemas per quota mode). Fix was straightforward — schema normalization at all consumer sites. Fable 5 review added coverage for albums/shows. #91 is finally closed after months — PKCE confirmed working for mid-cohort. New finding #120 (bundled ID missing foreign playlists) is separate and lower priority."
 }
