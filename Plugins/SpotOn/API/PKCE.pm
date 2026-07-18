@@ -35,10 +35,16 @@ sub _decode_base64url {
 
 # GitHub Pages static relay — registered as the redirect_uri in the Spotify
 # Developer App. Bridges the OAuth callback back to the user's local LMS
-# instance (edge cases A-D from urknall #176).
+# instance (edge cases A-D from urknall #176). Used for custom (own) Client ID.
 use constant GITHUB_PAGES_REDIRECT_URI => 'https://stiefenm.github.io/spoton/auth/';
 
-# 13 OAuth scopes required for Browse/Library/Player + credential derivation.
+# Loopback redirect URI for the bundled (ncspot) Client ID — D-02. Mirrors
+# ncspot's own registered pattern (http://127.0.0.1:{port}/login). Spotify
+# allows any port for loopback IPs (RFC 8252). Fixed port 18764: high port,
+# no IANA registration, simpler for copy-paste UX and SSH tunnel docs.
+use constant LOOPBACK_REDIRECT_URI => 'http://127.0.0.1:18764/login';
+
+# 15 OAuth scopes required for Browse/Library/Player + credential derivation.
 # 'streaming' is CRITICAL — without it, credential derivation (token-login)
 # fails at the AP handshake (see credential-bridge.md).
 use constant PKCE_SCOPES => [qw(
@@ -55,6 +61,8 @@ use constant PKCE_SCOPES => [qw(
     playlist-read-private
     playlist-modify-public
     playlist-modify-private
+    user-read-email
+    user-read-private
 )];
 
 use constant PKCE_VERIFIER_TTL => 600;              # 10 minutes — generous for auth flow completion
@@ -118,17 +126,19 @@ sub parseState {
 # OAuth endpoints
 # ============================================================
 
-# buildAuthorizationUrl($clientId, $codeChallenge, $stateStr)
+# buildAuthorizationUrl($clientId, $codeChallenge, $stateStr, $redirectUri)
 # Returns the full Spotify authorization URL for the browser to open.
+# $redirectUri is caller-supplied (D-02): GITHUB_PAGES_REDIRECT_URI for a
+# custom Client ID, LOOPBACK_REDIRECT_URI for the bundled (ncspot) Client ID.
 sub buildAuthorizationUrl {
-    my ($clientId, $codeChallenge, $stateStr) = @_;
+    my ($clientId, $codeChallenge, $stateStr, $redirectUri) = @_;
 
     my $scope = join(' ', @{ PKCE_SCOPES() });
 
     my $url = 'https://accounts.spotify.com/authorize'
         . '?client_id=' . uri_escape($clientId)
         . '&response_type=code'
-        . '&redirect_uri=' . uri_escape(GITHUB_PAGES_REDIRECT_URI)
+        . '&redirect_uri=' . uri_escape($redirectUri)
         . '&scope=' . uri_escape($scope)
         . '&code_challenge_method=S256'
         . '&code_challenge=' . uri_escape($codeChallenge)
@@ -137,13 +147,16 @@ sub buildAuthorizationUrl {
     return $url;
 }
 
-# exchangeCode($code, $clientId, $codeVerifier, $cb)
+# exchangeCode($code, $clientId, $codeVerifier, $redirectUri, $cb)
 # POSTs to Spotify's token endpoint to exchange an authorization code for
 # access_token + refresh_token. No client_secret — PKCE replaces it with
-# the code_verifier proof. $cb->($tokenData) on success,
+# the code_verifier proof. $redirectUri MUST match the value used in
+# buildAuthorizationUrl for this flow (D-02/D-04 -- callers read it back
+# from the enriched verifier cache, not from live prefs, to stay race-free
+# across a mode switch mid-flow). $cb->($tokenData) on success,
 # $cb->(undef, $errorMsg) on failure.
 sub exchangeCode {
-    my ($code, $clientId, $codeVerifier, $cb) = @_;
+    my ($code, $clientId, $codeVerifier, $redirectUri, $cb) = @_;
 
     my $maskedClient = substr($clientId, 0, 8) . '...';
     main::INFOLOG && $log->info("PKCE: exchanging authorization code [client_id=$maskedClient]");
@@ -151,7 +164,7 @@ sub exchangeCode {
     my $body = join('&',
         'grant_type=authorization_code',
         'code=' . uri_escape($code),
-        'redirect_uri=' . uri_escape(GITHUB_PAGES_REDIRECT_URI),
+        'redirect_uri=' . uri_escape($redirectUri),
         'client_id=' . uri_escape($clientId),
         'code_verifier=' . uri_escape($codeVerifier),
     );
@@ -226,12 +239,14 @@ sub refreshAccessToken {
             my $code = ($response && ref $response && $response->can('code'))
                 ? ($response->code || 0) : 0;
 
-            # A 400 from the token endpoint carries a JSON body with the OAuth
-            # error type (RFC 6749), e.g. {"error":"invalid_grant",...}. Try the
-            # response object first (most likely to hold the body on a definitive
-            # HTTP error), then fall back to $http->content for robustness.
+            # A 400 or 401 from the token endpoint carries a JSON body with the
+            # OAuth error type (RFC 6749), e.g. {"error":"invalid_grant",...} or
+            # {"error":"invalid_client",...} (Spotify returns 401 for a revoked
+            # or unknown client_id -- D-06). Try the response object first (most
+            # likely to hold the body on a definitive HTTP error), then fall
+            # back to $http->content for robustness.
             my $oauthError;
-            if ($code == 400) {
+            if ($code == 400 || $code == 401) {
                 my $rawBody;
                 if ($response && ref $response && $response->can('content')) {
                     $rawBody = eval { $response->content };
@@ -334,19 +349,26 @@ sub loadTokens {
 # Verifier cache (bridges the /pkce/start -> /pkce/callback HTTP boundary)
 # ============================================================
 
-# storeVerifier($nonce, $verifier)
-# Caches the code_verifier under a nonce-keyed cache entry with a 10-minute
-# TTL. The verifier NEVER leaves LMS (edge case A) — it is retrieved again
-# only by loadAndDeleteVerifier() in the same process.
+# storeVerifier($nonce, $data)
+# Caches PKCE flow state under a nonce-keyed cache entry with a 10-minute
+# TTL. $data is a hashref { verifier, redirect_uri, client_id } (D-04) --
+# not a bare verifier string. Carrying redirect_uri and client_id alongside
+# the verifier makes exchangeCode() race-free if the user switches between
+# bundled/custom Client ID mode mid-flow (the callback/manual handler reads
+# these cached values instead of re-deriving them from live prefs at
+# callback time). The verifier NEVER leaves LMS (edge case A) — it is
+# retrieved again only by loadAndDeleteVerifier() in the same process.
+# $cache->set stores the hashref directly -- LMS DbCache serializes Perl
+# structures via Storable.
 sub storeVerifier {
-    my ($nonce, $verifier) = @_;
-    $cache->set("spoton_pkce_verifier_$nonce", $verifier, PKCE_VERIFIER_TTL);
+    my ($nonce, $data) = @_;
+    $cache->set("spoton_pkce_verifier_$nonce", $data, PKCE_VERIFIER_TTL);
 }
 
 # loadAndDeleteVerifier($nonce)
-# Retrieves the verifier for $nonce and immediately removes the cache entry
-# (one-time use — prevents replay, T-49-05). Returns the verifier string,
-# or undef if not found/expired.
+# Retrieves the { verifier, redirect_uri, client_id } hashref for $nonce and
+# immediately removes the cache entry (one-time use — prevents replay,
+# T-49-05). Returns the hashref, or undef if not found/expired.
 sub loadAndDeleteVerifier {
     my ($nonce) = @_;
     my $key      = "spoton_pkce_verifier_$nonce";
