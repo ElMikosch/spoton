@@ -93,6 +93,28 @@ rm -rf /config/cache/spoton/<accountId>/
 
 If the Status page shows `API Limits: Search 10 | Library 10 | Playlists 20` (or similarly low values), your app has restricted limits — SpotOn will still work, just with smaller page sizes.
 
+### "Made For You" playlists missing or empty
+
+**Symptoms:** The "Made For You" section under SpotOn > Home is empty or doesn't appear. Daily Mixes, Discover Weekly, and other algorithmic playlists are not shown.
+
+**Context:** Spotify blocks access to algorithmic playlists (`37i9...` IDs) for Development Mode apps. SpotOn uses a separate "Pathfinder" pathway with your browser's `sp_dc` cookie to access these playlists. This is best-effort — it depends on two values that Spotify rotates periodically.
+
+**Setup:**
+
+1. **sp_dc cookie** — Open [open.spotify.com](https://open.spotify.com) in your browser and log in. Open Developer Tools (F12) → Application → Cookies → `open.spotify.com` → find `sp_dc`. Copy the full value and paste it into SpotOn Settings under "Made For You Setup."
+
+2. **Pathfinder Query Hash** — This is the hardest part. The hash identifies a specific Spotify web player GraphQL query. To capture it:
+   - Open Developer Tools (F12) → Network tab
+   - Filter for `pathfinder`
+   - **Log out** of open.spotify.com, then **log back in** — the `home` query fires during the login redirect and is easy to miss during normal browsing
+   - Find the request whose Payload contains `operationName: "home"`
+   - In the Payload, copy `extensions.persistedQuery.sha256Hash`
+   - Paste it into SpotOn Settings under "Pathfinder Query Hash"
+
+**If you can't find the `home` query:** Spotify occasionally renames the operation (e.g. `homeSection`). If you see a different name, try its hash — but it may not return the right data format. This is a known fragility of the Pathfinder approach.
+
+**Note:** The hash and sp_dc cookie can expire or rotate when Spotify updates their web player. If Made For You stops working after it previously worked, repeat the capture process.
+
 ### Tracks skip or fail with "404" in logs (CDN errors)
 
 **Symptoms:** Tracks skip to the next song after a few seconds, or playback fails entirely. The LMS log shows `Browse daemon 404` or `attempts exhausted, skipping to next track`.

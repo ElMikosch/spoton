@@ -30,7 +30,7 @@
         "filetool.lst",
         "/opt/bootlocal"
       ],
-      "note": "piCorePlayer persistence \u2014 community helps each other"
+      "note": "piCorePlayer persistence — community helps each other"
     },
     "connect-volume-difference": {
       "status": "fixed",
@@ -84,7 +84,7 @@
         "Undefined subroutine",
         "ProtocolHandler.pm line 245"
       ],
-      "note": "Fixed in v2.1.3 \u2014 streamingSongIndex replaces non-existent shuffleIndex"
+      "note": "Fixed in v2.1.3 — streamingSongIndex replaces non-existent shuffleIndex"
     },
     "docker-mdns-port-conflict": {
       "status": "workaround-applied",
@@ -173,7 +173,7 @@
         "CJS",
         "sti"
       ],
-      "note": "trackGain() implemented in v2.3.12 \u2014 suppresses LMS Default Adjustment when SpotOn normalization active. GH #108. CJS confirmed fix in post #193.",
+      "note": "trackGain() implemented in v2.3.12 — suppresses LMS Default Adjustment when SpotOn normalization active. GH #108. CJS confirmed fix in post #193.",
       "ghIssue": 108
     },
     "mherger-ai-auth-comment": {
@@ -206,6 +206,20 @@
         "mccauls"
       ],
       "note": "mccauls confirms: new premium trial fails, old free->premium works. Account creation date is the criterion, not premium status."
+    },
+    "cjs-v3-pkce-setup": {
+      "status": "resolved",
+      "keywords": [
+        "Connect Spotify Account",
+        "Redirect URI",
+        "Developer App",
+        "PKCE",
+        "v3.0"
+      ],
+      "firstPost": 207,
+      "latestPost": 207,
+      "participants": ["CJS"],
+      "note": "CJS self-resolved: v3.0.3 PKCE setup works after configuring Redirect URI and Client ID. Screenshot of Developer App settings provided as example."
     }
   },
   "active": {
@@ -237,13 +251,13 @@
         "audio key"
       ],
       "firstPost": 149,
-      "latestPost": 204,
+      "latestPost": 213,
       "participants": [
         "sti",
         "urknall",
         "mherger"
       ],
-      "note": "Multi-post architecture discussion. v3.0 shipped (PKCE replaces Keymaster). Audio key denial affects newest-cohort accounts only — mid-cohort (woorszt) fully restored by PKCE. v3.0 announcement in post #204."
+      "note": "Multi-post architecture discussion. v3.0 shipped (PKCE replaces Keymaster). v3.1.0 shipped (bundled Client ID fallback). Audio key denial affects newest-cohort accounts only — mid-cohort (woorszt) fully restored by PKCE."
     },
     "ubuntu-browse-empty-pete7874": {
       "status": "waiting-user",
@@ -262,6 +276,24 @@
         "Pete7874"
       ],
       "note": "Pete7874: Browse/Library empty on Ubuntu + Squeezebox Touch, 6 players, old account recently upgraded to Premium. Diagnostic posted on GH #116 — daemon auth OK but crash-loop, likely Keymaster 403. Server.log + Status page requested."
+    },
+    "cjs-empty-playlist-pathfinder-hash": {
+      "status": "reply-pending",
+      "keywords": [
+        "empty playlist",
+        "playlist items",
+        "pathfinder",
+        "query hash",
+        "operationName",
+        "home",
+        "homeSection",
+        "sha256Hash"
+      ],
+      "ghIssue": 119,
+      "firstPost": 208,
+      "latestPost": 212,
+      "participants": ["CJS", "pilot000", "woOrszt"],
+      "note": "CJS: (1) Can't find Pathfinder hash operationName:home in DevTools. (2) Own playlist 'Test playlist' shows empty — likely #119 (playlist items 403, invisible at Warning log level). pilot000 helped clarify Daily Mixes location. woorszt pointed to #119. Forum reply drafted, v3.1.0 bundled ID suggested as fix."
     }
   }
 }
