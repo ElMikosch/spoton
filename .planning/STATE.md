@@ -210,29 +210,29 @@ Items carried forward from previous milestones:
 | 260709-bsx | Diagnostik + Daemon-Stabilität Verbesserungen | 2026-07-09 | e714019 | [260709-bsx](./quick/260709-bsx-diagnostik-daemon-stabilitaet-verbesseru/) |
 | 260713-bg4 | Keymaster 403 account check script for affected users | 2026-07-13 | 9aef195 | [260713-bg4](./quick/260713-bg4-keymaster-403-account-check-script-for-a/) |
 | 3 | Keymaster Token Usage Audit (4-bucket classification) | 2026-07-13 | e50fc26 | — |
+| 260718-rpy | Dev Mode playlist/library item schema fix (#119) | 2026-07-18 | 26e8c1a | [260718-rpy](./quick/260718-rpy-dev-mode-playlist-schema-fix/) |
 
 ## Session Continuity
 
 **Resume file:** None
 
-**Last session:** 2026-07-18T14:43:18.590Z
-**Stopped at:** Completed 55-02-PLAN.md
-**Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
+**Last session:** 2026-07-18
+**Stopped at:** Quick task 260718-rpy complete, #91 closed, #120 filed
 **Completed this session:**
 
-- Posted #115 reply (woorszt confirmation, 3-cohort model)
-- Posted #91 correction (retracted dead-end, updated assessment)
-- Fixed #60 label (waiting-user re-set, warminskimarcin hasn't run script)
-- Updated STATE.md decisions
+- Fixed Dev Mode playlist schema (#119): _normalizeLibraryItem helper at 8 consumer sites
+- Closed #91 (Keymaster 403 — woorszt confirmed PKCE resolves it)
+- Filed #120 (Bundled ID: foreign playlists not listed — discovered during regression test)
+- Locally tested both Client ID modes, no regression
 
 **Next action:**
 
-1. Create v3.0-auth branch from main
-2. Slim Phase 49-00 audit (Grep + 4-bucket classification)
-3. Plan Phase 49 PKCE OAuth
-4. Fix python3 dependency in spoton-pkce-audiokey-test.sh (woorszt feedback)
-5. warminskimarcin #60 still hasn't run account check script
+1. Reply to woorszt on #119 with fix details
+2. Investigate #120 (bundled ID foreign playlists)
+3. Create v3.0-auth branch from main
+4. Slim Phase 49-00 audit (Grep + 4-bucket classification)
+5. Plan Phase 49 PKCE OAuth
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-13 — Dead-end retracted, #91 + #115 updated, v3.0 validated*
+*Last updated: 2026-07-18 — #119 fix shipped, #91 closed, #120 filed*
