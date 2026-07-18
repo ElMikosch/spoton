@@ -987,17 +987,17 @@ PLUGIN_SPOTON_CLIENT_ID_SETTINGS
 	SV	Anpassad Spotify App
 
 PLUGIN_SPOTON_CLIENT_ID_DESC
-	CS	Pro přihlášení přes PKCE (Procházení, Vyhledávání a Knihovna) je vyžadováno Client-ID Spotify Developer App. Umožňuje přímou OAuth autentizaci s vlastním vyhrazeným limitem API požadavků, odděleným od ostatních uživatelů SpotOn.
-	DA	Et Spotify Developer App Client-ID er påkrævet for PKCE-login (Gennemse, Søg og Bibliotek). Det muliggør direkte OAuth-godkendelse med din egen dedikerede API-hastighedsgrænse, adskilt fra andre SpotOn-brugere.
-	DE	Für die PKCE-Anmeldung (Durchsuchen, Suche und Bibliothek) wird eine Spotify Developer App Client-ID benötigt. Sie ermöglicht die direkte OAuth-Authentifizierung mit einem eigenen, dedizierten API-Ratenlimit, getrennt von anderen SpotOn-Nutzern.
-	EN	A Spotify Developer App Client ID is required for PKCE login (Browse, Search, and Library). It enables direct OAuth authentication with your own dedicated API rate limit, separate from other SpotOn users.
-	ES	Se requiere un Client ID de Spotify Developer App para el inicio de sesión PKCE (Explorar, Buscar y Biblioteca). Permite la autenticación OAuth directa con tu propio límite de solicitudes de API dedicado, independiente de otros usuarios de SpotOn.
-	FR	Un Client ID Spotify Developer App est requis pour la connexion PKCE (Parcourir, Rechercher et Bibliothèque). Il permet une authentification OAuth directe avec votre propre limite de requêtes API dédiée, distincte des autres utilisateurs de SpotOn.
-	IT	Per l'accesso PKCE (Esplora, Ricerca e Libreria) è richiesto un Client ID di una Spotify Developer App. Consente l'autenticazione OAuth diretta con un limite di richieste API dedicato e separato dagli altri utenti di SpotOn.
-	NL	Voor PKCE-aanmelding (Bladeren, Zoeken en Bibliotheek) is een Spotify Developer App Client-ID vereist. Dit maakt directe OAuth-authenticatie mogelijk met een eigen, toegewezen API-snelheidslimiet, gescheiden van andere SpotOn-gebruikers.
-	NO	Et Spotify Developer App Client-ID kreves for PKCE-innlogging (Bla gjennom, Søk og Bibliotek). Det muliggjør direkte OAuth-autentisering med din egen dedikerte API-hastighetsgrense, atskilt fra andre SpotOn-brukere.
-	PL	Client ID aplikacji Spotify Developer App jest wymagane do logowania PKCE (Przeglądanie, Wyszukiwanie i Biblioteka). Umożliwia bezpośrednie uwierzytelnianie OAuth z własnym, dedykowanym limitem zapytań API, oddzielnym od innych użytkowników SpotOn.
-	SV	Ett Spotify Developer App Client-ID krävs för PKCE-inloggning (Bläddra, Sök och Bibliotek). Det möjliggör direkt OAuth-autentisering med en egen dedikerad API-hastighetsgräns, separat från andra SpotOn-användare.
+	CS	Volitelné: Zadejte vlastní Client ID Spotify Developer App pro vyhrazený limit API požadavků. Bez vlastního ID SpotOn používá sdílené Client ID se sdíleným přístupem Extended Quota.
+	DA	Valgfrit: Indtast dit eget Spotify Developer App Client-ID for en dedikeret API-hastighedsgrænse. Uden et brugerdefineret ID bruger SpotOn det medfølgende Client-ID med delt Extended Quota-adgang.
+	DE	Optional: Gib die Client-ID deiner eigenen Spotify Developer App für ein dediziertes API-Ratenlimit ein. Ohne eigene ID verwendet SpotOn die integrierte Client-ID mit gemeinsam genutztem Extended-Quota-Zugriff.
+	EN	Optional: Enter your own Spotify Developer App Client ID for a dedicated API rate limit. Without a custom ID, SpotOn uses the bundled Client ID with shared Extended Quota access.
+	ES	Opcional: Introduce el Client ID de tu propia App de Spotify Developer para un límite de solicitudes de API dedicado. Sin un ID personalizado, SpotOn usa el Client ID incluido con acceso Extended Quota compartido.
+	FR	Facultatif : saisissez le Client ID de votre propre application Spotify Developer pour une limite de requêtes API dédiée. Sans ID personnalisé, SpotOn utilise le Client ID intégré avec un accès Extended Quota partagé.
+	IT	Facoltativo: inserisci il Client ID della tua Spotify Developer App per un limite di richieste API dedicato. Senza un ID personalizzato, SpotOn utilizza il Client ID incluso con accesso Extended Quota condiviso.
+	NL	Optioneel: voer het Client-ID van uw eigen Spotify Developer App in voor een toegewezen API-snelheidslimiet. Zonder een eigen ID gebruikt SpotOn het meegeleverde Client-ID met gedeelde Extended Quota-toegang.
+	NO	Valgfritt: Skriv inn Client-ID-en til din egen Spotify Developer App for en dedikert API-hastighetsgrense. Uten en egendefinert ID bruker SpotOn det medfølgende Client-ID-et med delt Extended Quota-tilgang.
+	PL	Opcjonalnie: wpisz Client ID własnej aplikacji Spotify Developer, aby uzyskać dedykowany limit zapytań API. Bez własnego ID SpotOn korzysta z wbudowanego Client ID ze współdzielonym dostępem Extended Quota.
+	SV	Valfritt: Ange Client-ID:t för din egen Spotify Developer App för en dedikerad API-hastighetsgräns. Utan ett anpassat ID använder SpotOn det medföljande Client-ID:t med delad Extended Quota-åtkomst.
 
 PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
 	CS	Spotify Client-ID (32 znaků, alfanumerické)
@@ -1037,6 +1037,45 @@ PLUGIN_SPOTON_REGISTER_APP_LINK
 	NO	Registrer din egen app
 	PL	Zarejestruj własną aplikację
 	SV	Registrera din egen app
+
+PLUGIN_SPOTON_BUNDLED_MODE_INFO
+	CS	Používá se sdílené Client ID s přístupem Extended Quota. Všechny funkce API jsou dostupné bez vlastní Spotify Developer App.
+	DA	Bruger det medfølgende Client-ID med Extended Quota-adgang. Alle API-funktioner er tilgængelige uden en personlig Spotify Developer App.
+	DE	Verwendet die integrierte Client-ID mit Extended-Quota-Zugriff. Alle API-Funktionen stehen ohne eigene Spotify Developer App zur Verfügung.
+	EN	Using the bundled Client ID with Extended Quota access. All API features available without a personal Spotify Developer App.
+	ES	Usando el Client ID incluido con acceso Extended Quota. Todas las funciones de la API están disponibles sin una App de Spotify Developer personal.
+	FR	Utilisation du Client ID intégré avec accès Extended Quota. Toutes les fonctionnalités de l'API sont disponibles sans application Spotify Developer personnelle.
+	IT	Utilizzo del Client ID incluso con accesso Extended Quota. Tutte le funzionalità API sono disponibili senza una Spotify Developer App personale.
+	NL	Gebruikt het meegeleverde Client-ID met Extended Quota-toegang. Alle API-functies zijn beschikbaar zonder een eigen Spotify Developer App.
+	NO	Bruker det medfølgende Client-ID-et med Extended Quota-tilgang. Alle API-funksjoner er tilgjengelige uten en personlig Spotify Developer App.
+	PL	Używane jest wbudowane Client ID z dostępem Extended Quota. Wszystkie funkcje API są dostępne bez własnej aplikacji Spotify Developer.
+	SV	Använder det medföljande Client-ID:t med Extended Quota-åtkomst. Alla API-funktioner är tillgängliga utan en egen Spotify Developer App.
+
+PLUGIN_SPOTON_DEVMODE_QUOTA_WARNING
+	CS	Vaše Spotify Developer App je v režimu Dev Mode s omezeným přístupem k API (méně výsledků vyhledávání, některé endpointy nedostupné). Odstraňte výše uvedené Client ID a použijte místo toho vestavěný režim Extended Quota.
+	DA	Din Spotify Developer App er i Dev Mode med begrænset API-adgang (færre søgeresultater, nogle endpoints utilgængelige). Fjern dit Client-ID ovenfor for i stedet at bruge den medfølgende Extended Quota-tilstand.
+	DE	Deine Spotify Developer App befindet sich im Dev Mode mit eingeschränktem API-Zugriff (reduzierte Suchergebnisse, manche Endpunkte nicht verfügbar). Entferne oben deine Client-ID, um stattdessen den integrierten Extended-Quota-Modus zu nutzen.
+	EN	Your Spotify Developer App is in Dev Mode with restricted API access (reduced search results, some endpoints unavailable). Remove your Client ID above to use the bundled Extended Quota mode instead.
+	ES	Tu App de Spotify Developer está en Dev Mode con acceso API restringido (resultados de búsqueda reducidos, algunos endpoints no disponibles). Elimina tu Client ID arriba para usar en su lugar el modo Extended Quota incluido.
+	FR	Votre application Spotify Developer est en Dev Mode avec un accès API restreint (résultats de recherche réduits, certains endpoints indisponibles). Supprimez votre Client ID ci-dessus pour utiliser à la place le mode Extended Quota intégré.
+	IT	La tua Spotify Developer App è in Dev Mode con accesso API limitato (risultati di ricerca ridotti, alcuni endpoint non disponibili). Rimuovi il Client ID sopra per usare invece la modalità Extended Quota inclusa.
+	NL	Uw Spotify Developer App staat in Dev Mode met beperkte API-toegang (minder zoekresultaten, sommige endpoints niet beschikbaar). Verwijder uw Client-ID hierboven om in plaats daarvan de meegeleverde Extended Quota-modus te gebruiken.
+	NO	Din Spotify Developer App er i Dev Mode med begrenset API-tilgang (færre søkeresultater, enkelte endepunkter utilgjengelige). Fjern Client-ID-en din ovenfor for å bruke den medfølgende Extended Quota-modusen i stedet.
+	PL	Twoja aplikacja Spotify Developer działa w trybie Dev Mode z ograniczonym dostępem do API (mniej wyników wyszukiwania, niektóre endpointy niedostępne). Usuń powyższe Client ID, aby zamiast tego korzystać z wbudowanego trybu Extended Quota.
+	SV	Din Spotify Developer App är i Dev Mode med begränsad API-åtkomst (färre sökresultat, vissa endpoints otillgängliga). Ta bort ditt Client-ID ovan för att istället använda det medföljande Extended Quota-läget.
+
+PLUGIN_SPOTON_BUNDLED_ID_REVOKED
+	CS	Sdílené Spotify Client ID již není k dispozici. Vytvořte prosím vlastní Spotify Developer App a zadejte její Client ID výše pro obnovení přístupu.
+	DA	Det medfølgende Spotify Client-ID er ikke længere tilgængeligt. Opret venligst din egen Spotify Developer App, og indtast dens Client-ID ovenfor for at gendanne adgangen.
+	DE	Die integrierte Spotify-Client-ID ist nicht mehr verfügbar. Bitte erstelle deine eigene Spotify Developer App und gib ihre Client-ID oben ein, um den Zugriff wiederherzustellen.
+	EN	The bundled Spotify Client ID is no longer available. Please create your own Spotify Developer App and enter its Client ID above to restore access.
+	ES	El Client ID de Spotify incluido ya no está disponible. Crea tu propia App de Spotify Developer e introduce su Client ID arriba para restaurar el acceso.
+	FR	Le Client ID Spotify intégré n'est plus disponible. Veuillez créer votre propre application Spotify Developer et saisir son Client ID ci-dessus pour restaurer l'accès.
+	IT	Il Client ID Spotify incluso non è più disponibile. Crea la tua Spotify Developer App e inserisci il suo Client ID sopra per ripristinare l'accesso.
+	NL	Het meegeleverde Spotify Client-ID is niet langer beschikbaar. Maak uw eigen Spotify Developer App aan en voer het bijbehorende Client-ID hierboven in om de toegang te herstellen.
+	NO	Det medfølgende Spotify Client-ID-et er ikke lenger tilgjengelig. Opprett din egen Spotify Developer App og skriv inn dens Client-ID ovenfor for å gjenopprette tilgangen.
+	PL	Wbudowane Client ID Spotify nie jest już dostępne. Utwórz własną aplikację Spotify Developer i wpisz jej Client ID powyżej, aby przywrócić dostęp.
+	SV	Det medföljande Spotify Client-ID:t är inte längre tillgängligt. Skapa din egen Spotify Developer App och ange dess Client-ID ovan för att återställa åtkomsten.
 
 PLUGIN_SPOTON_CONNECT_ENABLED
 	CS	Spotify Connect

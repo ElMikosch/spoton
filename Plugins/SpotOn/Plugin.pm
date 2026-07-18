@@ -1121,8 +1121,19 @@ sub _authRequiredItem {
     my $needsAuth = Plugins::SpotOn::API::TokenManager->accountNeedsMigration($accountId)
                  || Plugins::SpotOn::API::TokenManager->needsReauth($accountId);
 
+    # D-06: distinguish a revoked bundled Client-ID from a generic reauth
+    # need -- shows a targeted "create your own app" message instead of the
+    # generic PLUGIN_SPOTON_AUTH_REQUIRED string.
+    my $stringKey = 'PLUGIN_SPOTON_NO_RESULTS';
+    if ($needsAuth) {
+        my $reason = Plugins::SpotOn::API::TokenManager->reauthReason($accountId) || '';
+        $stringKey = ($reason eq 'bundled_id_unavailable')
+            ? 'PLUGIN_SPOTON_BUNDLED_ID_REVOKED'
+            : 'PLUGIN_SPOTON_AUTH_REQUIRED';
+    }
+
     return {
-        name => cstring($client, $needsAuth ? 'PLUGIN_SPOTON_AUTH_REQUIRED' : 'PLUGIN_SPOTON_NO_RESULTS'),
+        name => cstring($client, $stringKey),
         type => 'textarea',
     };
 }

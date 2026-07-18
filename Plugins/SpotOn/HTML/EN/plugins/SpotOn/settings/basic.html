@@ -30,8 +30,7 @@
 	<div style="background:rgba(255,165,0,0.08); border:1px solid orange; padding:12px 16px; margin-bottom:20px; border-radius:4px">
 		<strong style="color:orange">[% 'PLUGIN_SPOTON_MIGRATION_SETTINGS_HINT' | string %]</strong>
 		<p style="margin:8px 0 0 0">
-			<button type="button" class="submit" onclick="spotonPkceStart()"
-				[% IF degradedMode %]disabled title="[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string | html %]"[% END %]>
+			<button type="button" class="submit" onclick="spotonPkceStart()">
 				[% 'PLUGIN_SPOTON_PKCE_CONNECT_BTN' | string %]
 			</button>
 		</p>
@@ -92,12 +91,13 @@
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_CLIENT_ID_SETTINGS" desc="PLUGIN_SPOTON_CLIENT_ID_DESC" %]
-		[% IF degradedMode %]
+		[% IF clientIdMode == 'bundled' %]
+		<div style="color: green; margin-bottom:10px">
+			[% 'PLUGIN_SPOTON_BUNDLED_MODE_INFO' | string %]
+		</div>
+		[% ELSIF clientIdMode == 'custom' AND quotaState == 'devmode' %]
 		<div style="color: orange; margin-bottom:10px">
-			[% 'PLUGIN_SPOTON_DEGRADED_MODE_WARNING' | string %]
-			<a href="https://developer.spotify.com/dashboard" target="_blank">
-				[% 'PLUGIN_SPOTON_REGISTER_APP_LINK' | string %]
-			</a>
+			[% 'PLUGIN_SPOTON_DEVMODE_QUOTA_WARNING' | string %]
 		</div>
 		[% END %]
 		<input type="text" class="stdedit" name="pref_clientId" id="pref_clientId"
@@ -114,17 +114,10 @@
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_SPOTON_PKCE_AUTH" desc="PLUGIN_SPOTON_PKCE_AUTH_DESC" %]
-		[% IF degradedMode %]
-		<div style="color: orange; margin-bottom:10px">
-			[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string %]
-		</div>
-		[% END %]
-
 		<p>
 			<button type="button" class="submit" id="pkceConnectBtn" onclick="spotonPkceStart()"
 				data-opening-text="[% 'PLUGIN_SPOTON_PKCE_OPENING' | string | html %]"
-				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]"
-				[% IF degradedMode %]disabled[% END %]>
+				data-error-text="[% 'PLUGIN_SPOTON_PKCE_ERROR' | string | html %]">
 				[% 'PLUGIN_SPOTON_PKCE_CONNECT_BTN' | string %]
 			</button>
 		</p>
@@ -138,7 +131,7 @@
 
 		<div id="pkce-status" style="display:none; margin-top:10px"></div>
 
-		<div id="pkce-fallback" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid rgba(128,128,128,0.2)">
+		<div id="pkce-fallback" style="[% IF clientIdMode == 'bundled' %]display:block[% ELSE %]display:none[% END %]; margin-top:14px; padding-top:14px; border-top:1px solid rgba(128,128,128,0.2)">
 			<p style="margin:0 0 4px 0"><strong>[% 'PLUGIN_SPOTON_PKCE_MANUAL_TITLE' | string %]</strong></p>
 			<p style="margin:0 0 8px 0; font-size:0.9em">[% 'PLUGIN_SPOTON_PKCE_MANUAL_DESC' | string %]</p>
 			<input type="text" id="pkce-manual-url" class="stdedit" style="width:80%"
@@ -149,6 +142,12 @@
 				[% 'PLUGIN_SPOTON_PKCE_MANUAL_BTN' | string %]
 			</button>
 		</div>
+
+		[% IF reauthReason == 'bundled_id_unavailable' %]
+		<div style="color: red; margin-top:14px">
+			[% 'PLUGIN_SPOTON_BUNDLED_ID_REVOKED' | string %]
+		</div>
+		[% END %]
 	[% END %]
 
 	<hr style="margin:16px 0; border:0; border-top:1px solid rgba(128,128,128,0.25)"/>
@@ -221,8 +220,7 @@
 			</table>
 
 			<p>
-				<button type="button" class="submit" onclick="spotonPkceStart()"
-					[% IF degradedMode %]disabled title="[% 'PLUGIN_SPOTON_PKCE_NEEDS_CLIENT_ID' | string | html %]"[% END %]>
+				<button type="button" class="submit" onclick="spotonPkceStart()">
 					[% 'PLUGIN_SPOTON_ADD_ANOTHER' | string %]
 				</button>
 			</p>
@@ -290,12 +288,18 @@
 					// auto-redirect may not reach this LMS instance (edge case D).
 					fallbackEl.style.display = 'block';
 					window.open(data.url, '_blank');
-					// No AJAX way to know the browser-side redirect finished —
-					// reload once as a fallback so a completed auth shows up.
-					var reloadTimer = setTimeout(function() { window.location.reload(); }, 30000);
-					var manualInput = document.getElementById('pkce-manual-url');
-					if (manualInput) {
-						manualInput.addEventListener('focus', function() { clearTimeout(reloadTimer); });
+					// D-03: in bundled mode the loopback redirect (127.0.0.1) never
+					// reaches this LMS instance, so a browser-side auto-callback can
+					// never complete -- copy-paste is the only path. A 30s reload
+					// would just interrupt the user mid-paste, so skip the timer.
+					if (!data.bundled) {
+						// No AJAX way to know the browser-side redirect finished —
+						// reload once as a fallback so a completed auth shows up.
+						var reloadTimer = setTimeout(function() { window.location.reload(); }, 30000);
+						var manualInput = document.getElementById('pkce-manual-url');
+						if (manualInput) {
+							manualInput.addEventListener('focus', function() { clearTimeout(reloadTimer); });
+						}
 					}
 					return;
 				}

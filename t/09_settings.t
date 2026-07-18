@@ -309,10 +309,12 @@ our @clear_reauth_calls = ();
 our @store_account_prefs_calls = ();
 our $needs_migration = 0;    # Plan 03 Task 3: Settings.pm migration banner (D-04 Channel 2)
 our %account_needs_migration;    # Plan 54-02: per-account override for _collectAuthHealth tests
+our %reauth_reason;    # Plan 55-02 (D-06): per-account reauthReason override
 sub anyAccountNeedsReauth { return (grep { $_ } values %needs_reauth) ? 1 : 0 }
 sub anyAccountNeedsMigration { return $needs_migration ? 1 : 0 }
 sub accountNeedsMigration { my ($class, $id) = @_; return $account_needs_migration{$id} ? 1 : 0 }
 sub needsReauth        { my ($class, $id) = @_; return $needs_reauth{$id} ? 1 : 0 }
+sub reauthReason        { my ($class, $id) = @_; return $reauth_reason{$id} }
 sub clearNeedsReauth    { my ($class, $id) = @_; push @clear_reauth_calls, $id; delete $needs_reauth{$id} }
 sub removeAccount     { }
 sub getAccountIds     { return () }
@@ -335,6 +337,7 @@ sub reset_calls {
     @clear_reauth_calls = ();
     @store_account_prefs_calls = ();
     %account_needs_migration = ();
+    %reauth_reason = ();
 }
 1;
 END
