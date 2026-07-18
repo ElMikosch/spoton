@@ -653,7 +653,9 @@ sub explodePlaylist {
                     return;
                 }
                 for my $plItem (@{ $data->{items} }) {
-                    next unless $plItem && $plItem->{track} && $plItem->{track}{id};
+                    next unless $plItem;
+                    Plugins::SpotOn::Plugin::_normalizeLibraryItem($plItem, 'track');
+                    next unless $plItem->{track} && $plItem->{track}{id};
                     my $track = $plItem->{track};
                     my $albumInfo = $track->{album} || {};
                     my $albumName  = $albumInfo->{name};

@@ -968,6 +968,14 @@ sub _isMadeForYou {
     return ($playlist->{name} // '') =~ $PERSONAL_MIX_REGEX;
 }
 
+sub _normalizeLibraryItem {
+	my ($item, $key) = @_;
+	if (ref($item->{item}) eq 'HASH' && ref($item->{$key}) ne 'HASH') {
+		$item->{$key} = $item->{item};
+	}
+	return $item;
+}
+
 # _trackItem($client, $track, $opts)
 # Builds an OPML audio item hashref for a Spotify track.
 # Per RESEARCH.md Pattern 3 and PATTERNS.md Track-Item pattern.
@@ -1300,7 +1308,10 @@ sub _recentlyPlayedFeed {
             $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
-        my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
+        my @items = map  { _trackItem($client, $_->{track}) }
+                    grep { defined $_->{track} }
+                    map  { _normalizeLibraryItem($_, 'track') }
+                    @{ $data->{items} || [] };
         $callback->({ items => \@items });
     });
 }
@@ -1481,6 +1492,7 @@ sub _savedTracksFeed {
                 my @deferredMeta;
                 my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
                             grep { defined $_->{track} }
+                            map  { _normalizeLibraryItem($_, 'track') }
                             @{$allItems};
                 if (!@items) {
                     push @items, _authRequiredItem($client, $accountId, $err);
@@ -1511,7 +1523,10 @@ sub _savedTracksFeed {
                 $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
                 return;
             }
-            my @items = map { _trackItem($client, $_->{track}) } @{ $data->{items} || [] };
+            my @items = map  { _trackItem($client, $_->{track}) }
+                        grep { defined $_->{track} }
+                        map  { _normalizeLibraryItem($_, 'track') }
+                        @{ $data->{items} || [] };
             $callback->({ items => \@items, offset => $offset, total => $data->{total} });
         });
     }
@@ -1537,7 +1552,10 @@ sub _savedAlbumsFeed {
             $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
-        my @items = map { _albumItem($client, $_->{album}) } @{ $data->{items} || [] };
+        my @items = map  { _albumItem($client, $_->{album}) }
+                    grep { defined $_->{album} }
+                    map  { _normalizeLibraryItem($_, 'album') }
+                    @{ $data->{items} || [] };
         $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
 }
@@ -1738,6 +1756,7 @@ sub _savedShowsFeed {
         # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
         my @items = map  { _showItem($client, $_->{show}) }
                     grep { defined $_->{show} }
+                    map  { _normalizeLibraryItem($_, 'show') }
                     @{ $data->{items} || [] };
         $callback->({ items => \@items, offset => $offset, total => $data->{total} });
     });
@@ -2804,6 +2823,7 @@ sub _playlistFeed {
                 my @deferredMeta;
                 my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
                             grep { defined $_->{track} }
+                            map  { _normalizeLibraryItem($_, 'track') }
                             @{$allItems};
                 if (!@items) {
                     push @items, _authRequiredItem($client, $accountId, $err);
@@ -2843,6 +2863,7 @@ sub _playlistFeed {
             # T-03-10: Skip null track entries (local files in playlists return null track objects).
             my @items = map  { _trackItem($client, $_->{track}) }
                         grep { defined $_->{track} }
+                        map  { _normalizeLibraryItem($_, 'track') }
                         @{ $data->{items} || [] };
 
             if (!@items) {
