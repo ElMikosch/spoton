@@ -989,8 +989,8 @@ PLUGIN_SPOTON_CLIENT_ID_SETTINGS
 PLUGIN_SPOTON_CLIENT_ID_DESC
 	CS	Volitelné: Zadejte vlastní Client ID Spotify Developer App pro vyhrazený limit API požadavků. Bez vlastního ID SpotOn používá sdílené Client ID se sdíleným přístupem Extended Quota.
 	DA	Valgfrit: Indtast dit eget Spotify Developer App Client-ID for en dedikeret API-hastighedsgrænse. Uden et brugerdefineret ID bruger SpotOn det medfølgende Client-ID med delt Extended Quota-adgang.
-	DE	Optional: Gib die Client-ID deiner eigenen Spotify Developer App für ein dediziertes API-Ratenlimit ein. Ohne eigene ID verwendet SpotOn die integrierte Client-ID mit gemeinsam genutztem Extended-Quota-Zugriff.
-	EN	Optional: Enter your own Spotify Developer App Client ID for a dedicated API rate limit. Without a custom ID, SpotOn uses the bundled Client ID with shared Extended Quota access.
+	DE	Empfohlen: Gib die Client-ID deiner eigenen Spotify Developer App für ein dediziertes API-Ratenlimit ein. Bei Dev-Mode-Einschränkungen (HTTP 400/403) kannst du das Feld leer lassen — SpotOn nutzt dann eine geteilte Community-Client-ID als Notlösung (ohne explizite Zustimmung des Projekt-Maintainers).
+	EN	Recommended: Enter your own Spotify Developer App Client ID for a dedicated API rate limit. If your app has Dev Mode restrictions (HTTP 400/403), you can leave this empty to use the bundled fallback — a shared community Client ID used without explicit permission from its maintainer.
 	ES	Opcional: Introduce el Client ID de tu propia App de Spotify Developer para un límite de solicitudes de API dedicado. Sin un ID personalizado, SpotOn usa el Client ID incluido con acceso Extended Quota compartido.
 	FR	Facultatif : saisissez le Client ID de votre propre application Spotify Developer pour une limite de requêtes API dédiée. Sans ID personnalisé, SpotOn utilise le Client ID intégré avec un accès Extended Quota partagé.
 	IT	Facoltativo: inserisci il Client ID della tua Spotify Developer App per un limite di richieste API dedicato. Senza un ID personalizzato, SpotOn utilizza il Client ID incluso con accesso Extended Quota condiviso.
@@ -1041,8 +1041,8 @@ PLUGIN_SPOTON_REGISTER_APP_LINK
 PLUGIN_SPOTON_BUNDLED_MODE_INFO
 	CS	Používá se sdílené Client ID s přístupem Extended Quota. Všechny funkce API jsou dostupné bez vlastní Spotify Developer App.
 	DA	Bruger det medfølgende Client-ID med Extended Quota-adgang. Alle API-funktioner er tilgængelige uden en personlig Spotify Developer App.
-	DE	Verwendet die integrierte Client-ID mit Extended-Quota-Zugriff. Alle API-Funktionen stehen ohne eigene Spotify Developer App zur Verfügung.
-	EN	Using the bundled Client ID with Extended Quota access. All API features available without a personal Spotify Developer App.
+	DE	Notlösung: Verwendet eine geteilte Community-Client-ID (ohne explizite Zustimmung des Maintainers). Bitte registriere eine eigene Spotify Developer App für ein dediziertes Ratenlimit.
+	EN	Fallback mode: Using a shared community Client ID (without explicit permission from its maintainer). Consider registering your own Spotify Developer App for a dedicated rate limit.
 	ES	Usando el Client ID incluido con acceso Extended Quota. Todas las funciones de la API están disponibles sin una App de Spotify Developer personal.
 	FR	Utilisation du Client ID intégré avec accès Extended Quota. Toutes les fonctionnalités de l'API sont disponibles sans application Spotify Developer personnelle.
 	IT	Utilizzo del Client ID incluso con accesso Extended Quota. Tutte le funzionalità API sono disponibili senza una Spotify Developer App personale.

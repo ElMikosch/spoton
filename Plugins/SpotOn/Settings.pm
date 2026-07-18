@@ -526,7 +526,9 @@ sub _pkceLoadVerifierDataFromState {
     my $nonce = $stateData ? $stateData->{nonce} : undef;
     return undef unless $nonce;
 
-    return Plugins::SpotOn::API::PKCE::loadAndDeleteVerifier($nonce);
+    my $data = Plugins::SpotOn::API::PKCE::loadAndDeleteVerifier($nonce);
+    return undef unless ref $data eq 'HASH';
+    return $data;
 }
 
 # ============================================================
@@ -657,6 +659,11 @@ sub _pkceStoreAccount {
                 # already running with stale credentials.
                 require Plugins::SpotOn::Unified::DaemonManager;
                 Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
+                require Plugins::SpotOn::API::Client;
+                unless (Plugins::SpotOn::API::Client->limitsProbed()) {
+                    Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
+                }
 
                 if ($isJson) {
                     _jsonResponse($httpClient, $response,

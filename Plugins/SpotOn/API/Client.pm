@@ -80,6 +80,7 @@ my %_detectedLimits = (
     album_tracks   => 50,
     playlist_items => 100,
 );
+my %_blockedEndpoints;
 my $_limitsProbed = 0;
 
 # ============================================================
@@ -97,12 +98,14 @@ sub reset {
         search => 10, library => 50, artist_albums => 20,
         album_tracks => 50, playlist_items => 100,
     );
+    %_blockedEndpoints = ();
     $_limitsProbed   = 0;
     main::INFOLOG && $log->info("Client: counters and limit detection reset");
 }
 
 sub getLimit {
     my ($class, $endpointClass) = @_;
+    return 0 if $_blockedEndpoints{$endpointClass};
     return $_detectedLimits{$endpointClass} // 50;
 }
 
@@ -195,8 +198,8 @@ sub probeEndpointLimits {
             }
 
             if ($status && $status eq 'blocked') {
-                $_detectedLimits{$cls->{name}} = 0;
-                $log->warn("Client: limit probe $cls->{name} blocked (403) — endpoint unavailable for this Client ID");
+                $_blockedEndpoints{$cls->{name}} = 1;
+                $log->warn("Client: limit probe $cls->{name} blocked (403) — endpoint unavailable for this Client ID, keeping default limit $_detectedLimits{$cls->{name}}");
                 $advance->();
                 return;
             }
@@ -369,8 +372,9 @@ sub statusSnapshot {
         api429Count     => $api429Count,
         rateLimited     => $cache->get('spoton_rate_limit') ? 1 : 0,
         wpRateLimited   => $cache->get(WP_RATE_LIMIT_KEY) ? 1 : 0,
-        apiLimits       => { %_detectedLimits },
-        limitsProbed    => $_limitsProbed,
+        apiLimits        => { %_detectedLimits },
+        blockedEndpoints => { %_blockedEndpoints },
+        limitsProbed     => $_limitsProbed,
     };
 }
 
