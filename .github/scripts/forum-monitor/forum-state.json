@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-17T23:35:57.123Z",
+  "lastChecked": "2026-07-18T10:47:21.973Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -210,9 +210,13 @@
         "1828974",
         "1829036",
         "1829039",
-        "1829052"
+        "1829052",
+        "1829062",
+        "1829064",
+        "1829072",
+        "1829075"
       ],
-      "lastPostCount": 208
+      "lastPostCount": 212
     }
   },
   "pendingTriage": [
@@ -235,6 +239,36 @@
       "contentPreview": "Question on how to find the \"Pathfinder Query Hash\". Instructions on the SpotOn settings page say:   \t \t\t \t\t\t \t\t\t \t\t\t \t\t\t\t1) Open open.spotify.com in your browser and log in. 2) Open Developer Tools (F12), go to the Network tab. 3) Filter for 'pathfinder'. 4) Find the request whose Payload contains ",
       "draft": "Hey CJS,\n\nGreat question — the \"Payload\" terminology can be confusing depending on which browser you're using. Here's a clearer breakdown for Edge (and Firefox, which is very similar):\n\n[B]In Microsoft Edge:[/B]\n\n1. Click on any of the [B]pathfinder[/B] requests listed in the Network tab\n2. In the panel that opens on the right, look for a tab called [B]\"Payload\"[/B] (it sits alongside Headers, Preview, Response, etc.)\n3. Click [B]Payload[/B] — you'll see the request body, which is JSON\n4. Look for an [CODE]operationName[/CODE] field near the top. You want the request where this reads [CODE]\"operationName\": \"home\"[/CODE]\n5. Once you find that request, expand [CODE]extensions[/CODE] → [CODE]persistedQuery[/CODE] and you'll see [CODE]sha256Hash[/CODE] — that's the value to copy\n\n[B]In Firefox:[/B]\n\nThe equivalent tab is called [B]\"Request\"[/B] instead of \"Payload\" — same idea, just named differently.\n\n[B]Tip to speed this up:[/B] Rather than clicking each request one by one, you can use the Network tab's search/filter on the request body. In Edge, with a pathfinder request selected, use [B]Ctrl+F[/B] within the Payload panel to search for [CODE]home[/CODE]. Alternatively, just work through the list — there are usually only a handful of pathfinder requests and most will have obviously different [CODE]operationName[/CODE] values (like [CODE]fetchLibrary[/CODE], [CODE]searchDesktop[/CODE], etc.).\n\nIf you're still having trouble locating it, try navigating to the Spotify home page ([URL]https://open.spotify.com[/URL]) with the Network tab already open and the pathfinder filter active — this tends to trigger the [CODE]home[/CODE] query reliably.\n\nHope that clears it up! Let us know if you get stuck.",
       "scrapedAt": "2026-07-17T22:32:51.454Z"
+    },
+    {
+      "postId": "1829062",
+      "postNumber": 209,
+      "author": "pilot000",
+      "timestamp": "2026-07-17T23:55:08-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tBut copying the sha256Hash string to SpotOn did not make a difference for the Playlists menu in SpotOn. \t\t\t ",
+      "draft": "Thanks for sharing that, pilot000 — that's a useful data point!\n\nJust to clarify what's happening under the hood: [B]Home[/B] and [B]Library → Playlists[/B] use different Spotify API endpoints entirely.\n\n[LIST]\n[*][B]Home[/B] uses the Pathfinder/GraphQL endpoint (which is why the sha256Hash setting matters for it)\n[*][B]Library → Playlists[/B] uses the standard REST API — specifically the playlist tracks endpoint\n[/LIST]\n\nSo finding your playlists via Home working correctly is good news, but it unfortunately doesn't work around the Playlists menu issue CJS was hitting.\n\nThat Playlists problem sounds like it may be related to [B]GitHub Issue #119[/B] — persistent HTTP 403 errors on playlist items/tracks even with a valid PKCE token. If that matches what you're seeing, it's worth adding your details there:\n\n[URL]https://github.com/stiefenm/spoton/issues/119[/URL]\n\n[QUOTE]But copying the sha256Hash string to SpotOn did not make a difference for the Playlists menu in SpotOn.[/QUOTE]\n\nThat's expected — the hash only affects the Home/Browse sections that go through Pathfinder. It won't help with Library → Playlists.\n\nIf either of you are still having trouble with the Playlists menu, it would help to grab a [B]diagnostic bundle[/B] (SpotOn Settings → Diagnostics) and attach it to the GitHub issue. That'll show the exact API response codes and help narrow down whether it's a token scope issue, an endpoint change on Spotify's side, or something else.",
+      "scrapedAt": "2026-07-18T10:47:00.161Z"
+    },
+    {
+      "postId": "1829072",
+      "postNumber": 211,
+      "author": "woOrszt",
+      "timestamp": "2026-07-18T02:36:21-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by CJS \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tSo the problem is that my own playlist shows as empty in SpotOn. \t\t\t \t\t \t Do you get a 403 error in the logs",
+      "draft": "[QUOTE=woOrszt;211]Do you get a 403 error in the logs? I'm currently facing the same issue. Seems like a Spotify restriction by not having our Client ID on their internal allowlist. I also reported this here: https://github.com/stiefenm/spoton/issues/119[/QUOTE]\n\nThanks for linking [URL=https://github.com/stiefenm/spoton/issues/119]#119[/URL], woOrszt — and yes, you've identified this correctly. Empty playlists returning HTTP 403 is a known issue we're actively tracking there.\n\nThe short version: even with a valid PKCE token, correct scopes, and the app owner added to User Management in the Spotify Developer Dashboard, playlist track requests are still being rejected. This appears to be on Spotify's side — likely related to API access tier restrictions for third-party Client IDs — rather than something wrong with your setup or token.\n\n[B]What you can try in the meantime:[/B]\n[LIST]\n[*]Double-check that your Spotify account is listed under [B]User Management[/B] in your Spotify Developer app settings (required while the app is in Development Mode)\n[*]Ensure the [B]scopes[/B] in SpotOn Settings match what your app has declared — particularly [CODE]playlist-read-private[/CODE] and [CODE]playlist-read-collaborative[/CODE]\n[*]Re-authenticate via [B]SpotOn Settings → Connect Spotify Account[/B] to rule out any stale token issues\n[/LIST]\n\nIf none of that helps, please grab a [B]diagnostic bundle[/B] ([B]SpotOn Settings → Diagnostics[/B]) and attach it to [URL=https://github.com/stiefenm/spoton/issues/119]GitHub issue #119[/URL]. The more affected users who can share logs there, the better — it helps build a clearer picture for Spotify if we need to escalate.\n\nI don't have a fix to offer yet, but it's on my radar. Apologies for the frustration.",
+      "scrapedAt": "2026-07-18T10:47:11.281Z"
+    },
+    {
+      "postId": "1829075",
+      "postNumber": 212,
+      "author": "CJS",
+      "timestamp": "2026-07-18T03:39:48-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "Originally posted by woOrszt \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tDo you get a 403 error in the logs? \t\t\t \t\t \t Do you mean the SpotOn Diagnostic Log or LMS server.log?  I",
+      "draft": "Thanks for checking both logs, CJS!\n\nA couple of things worth trying to get more visibility into what's happening:\n\n[B]1. Increase the log level[/B]\n\nSince you're currently on [B]Warning[/B], you may be missing relevant detail. In LMS Settings, set the [CODE]plugin.spoton[/CODE] log level to [B]Debug[/B], then reproduce the issue (browse to the empty playlist again) and check [CODE]server.log[/CODE] for any errors or API responses around that request.\n\n[B]2. Check the SpotOn Diagnostics bundle[/B]\n\nHead to [B]SpotOn Settings → Diagnostics[/B] and generate a diagnostic bundle. This captures API call details that may not surface in the standard log, and can help confirm whether a 403 (or any other HTTP error) is being returned silently.\n\n[B]Regarding the 403 issue[/B]\n\nAs woOrszt mentioned, this matches a known bug — playlist tracks returning HTTP 403 even with a valid PKCE token. This is being tracked here:\n\n[URL]https://github.com/stiefenm/spoton/issues/119[/URL]\n\nThe current understanding is that this may relate to Spotify's internal allowlist for Client IDs, meaning it's partly an upstream constraint. That said, any additional log data you can share on that issue would be very helpful — especially if your case shows [B]no 403 at all</B>, which could indicate a different root cause (e.g. the playlist appears to load successfully but returns an empty track list).\n\nIf you're able to reproduce with Debug logging enabled, please share the relevant [CODE]server.log[/CODE] snippet on the GitHub issue above. That will help narrow things down considerably.",
+      "scrapedAt": "2026-07-18T10:47:21.973Z"
     }
   ]
 }
