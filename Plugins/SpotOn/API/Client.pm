@@ -70,9 +70,14 @@ my $api429Count     = 0;
 
 # API limit detection — probed once per startup, conservative defaults until then.
 # Spotify enforces per-app maximums that vary by Client ID (Dev Mode).
+# artist_albums/album_tracks are separate namespaces from library — #118 root
+# cause was reusing the library limit (50) for artist/albums, which Dev Mode
+# caps differently (observed 400 above ~20-45 depending on Client ID).
 my %_detectedLimits = (
     search         => 10,
     library        => 50,
+    artist_albums  => 20,
+    album_tracks   => 50,
     playlist_items => 100,
 );
 my $_limitsProbed = 0;
@@ -88,7 +93,10 @@ sub reset {
     $inflightCount  = 0;
     $apiRequestCount = 0;
     $api429Count     = 0;
-    %_detectedLimits = (search => 10, library => 50, playlist_items => 100);
+    %_detectedLimits = (
+        search => 10, library => 50, artist_albums => 20,
+        album_tracks => 50, playlist_items => 100,
+    );
     $_limitsProbed   = 0;
     main::INFOLOG && $log->info("Client: counters and limit detection reset");
 }
@@ -105,10 +113,17 @@ sub probeEndpointLimits {
     return $doneCb->() if $_limitsProbed;
 
     my @classes = (
-        { name => 'search',         path => 'search', extra => { q => 'test', type => 'track' }, doc_max => 50 },
-        { name => 'library',        path => 'me/tracks', extra => {},                             doc_max => 50 },
-        { name => 'playlist_items', path => undef,                                                doc_max => 100 },
+        { name => 'search',         path => 'search',    extra => { q => 'test', type => 'track' }, doc_max => 50 },
+        { name => 'library',        path => 'me/tracks',  extra => {},                               doc_max => 50 },
+        { name => 'artist_albums',  path => undef,        extra => {},                               doc_max => 50 },
+        { name => 'album_tracks',   path => undef,        extra => {},                               doc_max => 50 },
+        { name => 'playlist_items', path => undef,        extra => {},                               doc_max => 100 },
     );
+
+    # Seed IDs for the classes that need a real object to probe against
+    # (artist_albums, album_tracks, playlist_items) -- #118 root cause was
+    # deriving these heuristically instead of hitting the real endpoint.
+    my ($seedArtistId, $seedAlbumId, $seedPlaylistId);
 
     my $probeIdx = 0;
     my $probeNext;
@@ -116,8 +131,9 @@ sub probeEndpointLimits {
         if ($probeIdx >= scalar @classes) {
             $_limitsProbed = 1;
             main::INFOLOG && $log->info(sprintf(
-                "Client: API limits detected — search=%d library=%d playlist_items=%d",
-                $_detectedLimits{search}, $_detectedLimits{library}, $_detectedLimits{playlist_items}
+                "Client: API limits detected — search=%d library=%d artist_albums=%d album_tracks=%d playlist_items=%d",
+                $_detectedLimits{search}, $_detectedLimits{library}, $_detectedLimits{artist_albums},
+                $_detectedLimits{album_tracks}, $_detectedLimits{playlist_items}
             ));
             undef $probeNext;
             $doneCb->();
@@ -126,29 +142,93 @@ sub probeEndpointLimits {
 
         my $cls = $classes[$probeIdx++];
 
-        if (!$cls->{path}) {
-            $_detectedLimits{$cls->{name}} = $_detectedLimits{library} * 2;
-            my $cap = $cls->{doc_max};
-            $_detectedLimits{$cls->{name}} = $cap if $_detectedLimits{$cls->{name}} > $cap;
-            $probeNext->();
-            return;
+        # Resolve dynamic path from seed IDs collected from earlier classes.
+        # If no seed is available (e.g. user has no playlists), skip this
+        # probe entirely and keep the class' current default.
+        unless ($cls->{path}) {
+            my $seedId = $cls->{name} eq 'artist_albums'  ? $seedArtistId
+                       : $cls->{name} eq 'album_tracks'   ? $seedAlbumId
+                       : $cls->{name} eq 'playlist_items' ? $seedPlaylistId
+                       :                                    undef;
+            unless ($seedId) {
+                main::INFOLOG && $log->info("Client: limit probe $cls->{name} skipped (no seed ID available), keeping default $_detectedLimits{$cls->{name}}");
+                $probeNext->();
+                return;
+            }
+            $cls->{path} = $cls->{name} eq 'artist_albums' ? "artists/$seedId/albums"
+                         : $cls->{name} eq 'album_tracks'  ? "albums/$seedId/tracks"
+                         :                                    "playlists/$seedId/items";
         }
 
+        # After search/library complete (success, blocked, or skip), fetch the
+        # seed IDs those two classes provide for the remaining classes, then
+        # advance. Every other class advances straight to $probeNext.
+        my $advance = sub {
+            if ($cls->{name} eq 'search') {
+                _fetchSearchSeed($accountId, sub {
+                    ($seedArtistId, $seedAlbumId) = @_;
+                    $probeNext->();
+                });
+                return;
+            }
+            if ($cls->{name} eq 'library') {
+                _fetchPlaylistSeed($accountId, sub {
+                    ($seedPlaylistId) = @_;
+                    $probeNext->();
+                });
+                return;
+            }
+            $probeNext->();
+        };
+
         _binarySearchLimit($accountId, $cls->{path}, $cls->{extra}, 1, $cls->{doc_max}, sub {
-            my ($limit, $aborted) = @_;
-            if ($aborted) {
-                main::INFOLOG && $log->info("Client: limit probe aborted (non-400 error), keeping defaults");
+            my ($limit, $status) = @_;
+
+            # Only a 401 (auth failure) aborts the ENTIRE remaining chain --
+            # everything else (403 blocked, 429/timeout/network skip) isolates
+            # to this class only and continues probing the rest.
+            if ($status && $status eq 'auth_abort') {
+                main::INFOLOG && $log->info("Client: limit probe aborted (401 unauthorized), keeping defaults for remaining classes");
                 undef $probeNext;
                 $doneCb->();
                 return;
             }
+
+            if ($status && $status eq 'blocked') {
+                $_detectedLimits{$cls->{name}} = 0;
+                $log->warn("Client: limit probe $cls->{name} blocked (403) — endpoint unavailable for this Client ID");
+                $advance->();
+                return;
+            }
+
+            if ($status && $status eq 'skip') {
+                main::INFOLOG && $log->info("Client: limit probe $cls->{name} skipped (transient error), keeping default $_detectedLimits{$cls->{name}}");
+                $advance->();
+                return;
+            }
+
             $_detectedLimits{$cls->{name}} = $limit;
             main::INFOLOG && $log->info("Client: limit probe $cls->{name} = $limit");
-            $probeNext->();
+            $advance->();
         });
     };
 
     $probeNext->();
+}
+
+# _classifyProbeError($code)
+# Classifies a non-success HTTP status from a limit probe request into one of:
+#   'retry'      - 400 (limit too high) -- binary search continues
+#   'blocked'    - 403 -- endpoint unavailable for this Client ID, limit=0
+#   'auth_abort' - 401 -- permanent auth failure, abort the entire probe chain
+#   'skip'       - anything else (429, timeout, network, unknown) -- keep the
+#                  class' current default and move to the next class
+sub _classifyProbeError {
+    my ($code) = @_;
+    return 'retry'      if $code == 400;
+    return 'blocked'    if $code == 403;
+    return 'auth_abort' if $code == 401;
+    return 'skip';
 }
 
 sub _binarySearchLimit {
@@ -167,8 +247,17 @@ sub _binarySearchLimit {
             return;
         }
         my $code = ($err && ref $err eq 'HASH') ? ($err->{code} || 0) : 0;
-        if ($code != 400) {
-            $doneCb->($low, 'aborted');
+        my $kind = _classifyProbeError($code);
+        if ($kind eq 'auth_abort') {
+            $doneCb->(undef, 'auth_abort');
+            return;
+        }
+        if ($kind eq 'blocked') {
+            $doneCb->(0, 'blocked');
+            return;
+        }
+        if ($kind eq 'skip') {
+            $doneCb->($low, 'skip');
             return;
         }
         if ($high <= $low) {
@@ -202,11 +291,71 @@ sub _doBinarySearch {
             return;
         }
         my $code = ($err && ref $err eq 'HASH') ? ($err->{code} || 0) : 0;
-        if ($code != 400) {
-            $doneCb->($low, 'aborted');
+        my $kind = _classifyProbeError($code);
+        if ($kind eq 'auth_abort') {
+            $doneCb->(undef, 'auth_abort');
+            return;
+        }
+        if ($kind eq 'blocked') {
+            $doneCb->(0, 'blocked');
+            return;
+        }
+        if ($kind eq 'skip') {
+            $doneCb->($low, 'skip');
             return;
         }
         _doBinarySearch($accountId, $path, $extra, $low, $mid, $doneCb);
+    });
+}
+
+# _fetchSearchSeed($accountId, $cb)
+# Issues a real search request (limit=1) to obtain a live artist ID and album
+# ID for seeding the artist_albums / album_tracks probe classes -- #118 root
+# cause was deriving these heuristically instead of probing a real object.
+# $cb->($artistId, $albumId) -- either may be undef if missing from the response
+# (e.g. no search results, unexpected shape). Never dies.
+sub _fetchSearchSeed {
+    my ($accountId, $cb) = @_;
+    __PACKAGE__->_request('get', 'search', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        _probeCall => 1,
+        q          => 'test',
+        type       => 'track',
+        limit      => 1,
+    }, sub {
+        my ($result, $err) = @_;
+        if ($err || !$result) {
+            $cb->(undef, undef);
+            return;
+        }
+        my $track     = eval { $result->{tracks}{items}[0] } || undef;
+        my $artistId  = eval { $track->{artists}[0]{id} } || undef;
+        my $albumId   = eval { $track->{album}{id} } || undef;
+        $cb->($artistId, $albumId);
+    });
+}
+
+# _fetchPlaylistSeed($accountId, $cb)
+# Issues a real me/playlists request (limit=1) to obtain a live playlist ID
+# for seeding the playlist_items probe class against a real playlist instead
+# of deriving it heuristically. $cb->($playlistId) -- undef if the user has
+# no playlists. Never dies.
+sub _fetchPlaylistSeed {
+    my ($accountId, $cb) = @_;
+    __PACKAGE__->_request('get', 'me/playlists', {
+        _accountId => $accountId,
+        _noCache   => 1,
+        _probeCall => 1,
+        limit      => 1,
+    }, sub {
+        my ($result, $err) = @_;
+        if ($err || !$result) {
+            $cb->(undef);
+            return;
+        }
+        my $playlistId = eval { $result->{items}[0]{id} } || undef;
+        $cb->($playlistId);
     });
 }
 
@@ -485,10 +634,15 @@ sub getArtistAlbums {
     my ($class, $accountId, $artistId, $params, $cb) = @_;
     return $cb->(undef, { error => 'invalid_id' })
         unless $artistId && $artistId =~ /^[A-Za-z0-9]{1,40}$/;
+    # Defense-in-depth clamp to the detected artist_albums limit (#118: this
+    # namespace is capped differently from library and must not reuse it).
+    my $max = $_detectedLimits{artist_albums};
+    my $limit = $params->{limit} // $max;
+    $limit = $max if $limit > $max;
     my %reqParams = (
         _accountId     => $accountId,
         offset         => $params->{offset} // 0,
-        limit          => $params->{limit}  // 50,
+        limit          => $limit,
     );
     $reqParams{include_groups} = $params->{include_groups}
         if defined $params->{include_groups};
@@ -511,10 +665,14 @@ sub getAlbumTracks {
     my ($class, $accountId, $albumId, $params, $cb) = @_;
     return $cb->(undef, { error => 'invalid_id' })
         unless $albumId && $albumId =~ /^[A-Za-z0-9]{1,40}$/;
+    # Defense-in-depth clamp to the detected album_tracks limit.
+    my $max = $_detectedLimits{album_tracks};
+    my $limit = $params->{limit} // $max;
+    $limit = $max if $limit > $max;
     $class->_request('get', "albums/$albumId/tracks", {
         _accountId => $accountId,
         offset     => $params->{offset} // 0,
-        limit      => $params->{limit}  // 50,
+        limit      => $limit,
     }, $cb);
 }
 
