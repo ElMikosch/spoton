@@ -2431,7 +2431,7 @@ sub _artistAlbumsFeed {
 
     my $offset = $args->{index}    || 0;
     my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
+    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('artist_albums') ? Plugins::SpotOn::API::Client->getLimit('artist_albums') : $qty;
 
     my $accountId = _getAccountId($client);
 
@@ -2479,7 +2479,7 @@ sub _albumFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('album_tracks') ? Plugins::SpotOn::API::Client->getLimit('album_tracks') : $qty;
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
@@ -2523,7 +2523,7 @@ sub _albumFeed {
                 my ($pageOffset) = @_;
                 Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
                     offset => $pageOffset,
-                    limit  => Plugins::SpotOn::API::Client->getLimit('library'),
+                    limit  => Plugins::SpotOn::API::Client->getLimit('album_tracks'),
                 }, sub {
                     # NON-UNIFORM site (review finding #4): on fetch failure, fall back to
                     # any accumulated tracks from prior pages -- only replace the inner
