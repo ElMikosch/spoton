@@ -5,6 +5,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-18
+### Added
+- **Bundled Client ID (fallback)** — SpotOn ships a shared community Client ID with Extended Quota access. Users whose own Developer App has API restrictions (HTTP 400/403) can remove their Client ID from Settings to use the fallback. The ID is borrowed from the ncspot open-source project without explicit permission — users are encouraged to use their own Client ID when possible.
+- **Granular API Limit Detection** — probes 5 endpoint classes individually on startup (search, library, artist albums, album tracks, playlist items) instead of 2. Each class gets its own binary-search limit detection. A 403 on one endpoint no longer aborts detection for the others. Detected limits and blocked endpoints are shown on the Status page.
+- **PKCE token invalidation on Client ID change** — switching between bundled and custom Client ID (or changing to a different custom ID) automatically deletes stored tokens and prompts re-authentication.
+- **TokenManager revocation detection** — distinguishes `invalid_client` (revoked Client ID) from `invalid_grant` (user revocation) with targeted messages in Settings and OPML.
+
+### Changed
+- **Settings UX** — bundled mode uses a loopback redirect URI with copy-paste auth flow (no Spotify Developer App required). Custom mode continues to use the GitHub Pages relay. The copy-paste field is visible from page load in bundled mode.
+- **API limit clamping** — `getArtistAlbums` and `getAlbumTracks` now internally clamp the `limit` parameter to the detected value (defense-in-depth), matching the existing `search()` behavior.
+
+### Fixed
+- **Artist albums HTTP 400** — `_artistAlbumsFeed` used the `library` limit class (50) for the `artists/{id}/albums` endpoint, which Spotify caps differently for Dev Mode apps. Now uses a dedicated `artist_albums` limit class. ([#118](https://github.com/stiefenm/spoton/issues/118))
+
 ## [3.0.3] - 2026-07-17
 ### Added
 - **API Limit Auto-Detection** — on startup, probes Spotify's enforced `limit` parameter maximum per endpoint class (Search, Library, Playlist Items) using binary search. Uses detected limits dynamically instead of hardcoded values. Displayed on the Status page under "API Limits". Apps with higher quotas automatically get better pagination; restricted apps stay within their enforced bounds.
