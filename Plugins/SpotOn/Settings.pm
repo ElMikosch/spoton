@@ -255,9 +255,25 @@ sub handler {
     $paramRef->{accounts}         = $prefs->get('accounts') || {};
     $paramRef->{activeAccount}    = $prefs->get('activeAccount') || '';
 
-    # Client-ID and degraded-mode status for template (D-02, D-03)
+    # Client-ID and mode status for template (D-05: bundled=full-access,
+    # custom+devmode=degraded -- semantics inverted from the old
+    # degradedMode flag).
     $paramRef->{customClientId} = $prefs->get('clientId') || '';
-    $paramRef->{degradedMode}   = _isDegradedMode();
+    $paramRef->{clientIdMode}   = $prefs->get('clientId') ? 'custom' : 'bundled';
+
+    if ($paramRef->{clientIdMode} eq 'bundled') {
+        $paramRef->{quotaState} = 'extended';
+    } else {
+        require Plugins::SpotOn::API::Client;
+        $paramRef->{quotaState} =
+            (Plugins::SpotOn::API::Client->limitsProbed() && Plugins::SpotOn::API::Client->getLimit('search') <= 10)
+            ? 'devmode' : 'extended';
+    }
+
+    # D-06: reason for the active account's reauth flag (if any), e.g.
+    # 'bundled_id_unavailable' when the bundled ncspot Client-ID is revoked --
+    # lets the template show a targeted message instead of the generic one.
+    $paramRef->{reauthReason} = Plugins::SpotOn::API::TokenManager->reauthReason($paramRef->{activeAccount}) || '';
 
     # PKCE auth status for template (AUTH-01): has any account completed the
     # PKCE OAuth flow (has a pkce_tokens.json)? Drives which setup guide/CTA
@@ -322,16 +338,19 @@ sub _pkceStartHandler {
 
     return unless _csrfCheck($httpClient, $response);
 
-    # WR-05: reject PKCE start when no Client-ID is configured — the bundled
-    # default cannot have the user's relay redirect URI registered, so the
-    # flow would end with a Spotify error page.
-    my $clientId = $prefs->get('clientId');
-    unless ($clientId) {
-        return _jsonResponse($httpClient, $response,
-            { error => 'no_client_id', message => 'A custom Spotify Client-ID is required for PKCE authentication.' });
-    }
+    # D-01: bundled (ncspot) Client-ID is now a full-access default — no
+    # gate. clientId pref empty => bundled mode, filled => custom mode.
+    my $clientId  = _pkceClientId();
+    my $isBundled = $prefs->get('clientId') ? 0 : 1;
 
     require Plugins::SpotOn::API::PKCE;
+
+    # D-02: bundled mode uses the fixed loopback redirect URI (copy-paste
+    # primary path, D-03); custom mode keeps the existing GitHub Pages relay.
+    my $redirectUri = $isBundled
+        ? Plugins::SpotOn::API::PKCE::LOOPBACK_REDIRECT_URI()
+        : Plugins::SpotOn::API::PKCE::GITHUB_PAGES_REDIRECT_URI();
+
     my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
     my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
 
@@ -348,14 +367,23 @@ sub _pkceStartHandler {
     my $callbackUrl = $scheme . '://' . $host . '/plugins/SpotOn/settings/pkce/callback';
 
     my $state = Plugins::SpotOn::API::PKCE::buildState($callbackUrl, $nonce);
-    Plugins::SpotOn::API::PKCE::storeVerifier($nonce, $verifier);
 
-    my $authUrl = Plugins::SpotOn::API::PKCE::buildAuthorizationUrl($clientId, $challenge, $state);
+    # D-04: enrich the verifier cache with redirect_uri + client_id so the
+    # callback/manual handlers are race-free if the user switches bundled/
+    # custom mode mid-flow (they read these cached values instead of
+    # re-deriving them from live prefs at callback time).
+    Plugins::SpotOn::API::PKCE::storeVerifier($nonce,
+        { verifier => $verifier, redirect_uri => $redirectUri, client_id => $clientId });
+
+    my $authUrl = Plugins::SpotOn::API::PKCE::buildAuthorizationUrl($clientId, $challenge, $state, $redirectUri);
 
     main::INFOLOG && $log->is_info && $log->info(
-        "Settings: PKCE auth flow started [nonce=" . substr($nonce, 0, 8) . "...]");
+        "Settings: PKCE auth flow started [nonce=" . substr($nonce, 0, 8) . "..."
+        . ", mode=" . ($isBundled ? 'bundled' : 'custom') . "]");
 
-    _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce });
+    # D-03: bundled flag tells the JS to skip the 30s auto-reload timer --
+    # the loopback redirect never reaches LMS, so copy-paste is the only path.
+    _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce, bundled => ($isBundled ? 1 : 0) });
 }
 
 # ============================================================
@@ -392,17 +420,22 @@ sub _pkceCallbackHandler {
         return;
     }
 
-    my $verifier = _pkceLoadVerifierFromState($state);
-    unless ($verifier) {
+    my $verifierData = _pkceLoadVerifierDataFromState($state);
+    unless ($verifierData) {
         $log->warn("Settings: PKCE callback — no verifier found for state (expired/reused)");
         _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
             'Authorization session expired or already used. Please try again from the Settings page.', 1);
         return;
     }
 
-    my $clientId = _pkceClientId();
+    # D-04: read verifier/client_id/redirect_uri from the enriched cache
+    # entry (stored at /pkce/start), not from live prefs -- race-free if the
+    # user toggled bundled/custom mode mid-flow.
+    my $verifier    = $verifierData->{verifier};
+    my $clientId    = $verifierData->{client_id};
+    my $redirectUri = $verifierData->{redirect_uri};
 
-    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, $redirectUri, sub {
         my ($tokenData, $err) = @_;
 
         unless ($tokenData) {
@@ -452,16 +485,21 @@ sub _pkceManualHandler {
         return;
     }
 
-    my $verifier = _pkceLoadVerifierFromState($state);
-    unless ($verifier) {
+    my $verifierData = _pkceLoadVerifierDataFromState($state);
+    unless ($verifierData) {
         _jsonResponse($httpClient, $response,
             { status => 'error', message => 'Authorization session expired or already used' });
         return;
     }
 
-    my $clientId = _pkceClientId();
+    # D-04: read verifier/client_id/redirect_uri from the enriched cache
+    # entry (stored at /pkce/start), not from live prefs -- race-free if the
+    # user toggled bundled/custom mode mid-flow.
+    my $verifier    = $verifierData->{verifier};
+    my $clientId    = $verifierData->{client_id};
+    my $redirectUri = $verifierData->{redirect_uri};
 
-    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, sub {
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, $redirectUri, sub {
         my ($tokenData, $err) = @_;
 
         unless ($tokenData) {
@@ -475,11 +513,12 @@ sub _pkceManualHandler {
 }
 
 # ============================================================
-# _pkceLoadVerifierFromState($state)
-# Parses the state parameter and pops the matching verifier from the
-# one-time-use cache. Returns undef (safely) on any malformed/missing input.
+# _pkceLoadVerifierDataFromState($state)
+# Parses the state parameter and pops the matching verifier-data hashref
+# {verifier, redirect_uri, client_id} (D-04) from the one-time-use cache.
+# Returns undef (safely) on any malformed/missing input.
 # ============================================================
-sub _pkceLoadVerifierFromState {
+sub _pkceLoadVerifierDataFromState {
     my ($state) = @_;
     return undef unless $state;
 
@@ -948,16 +987,6 @@ sub _jsonResponse {
     $response->header('Connection' => 'close');
     $response->content_type('application/json');
     Slim::Web::HTTP::addHTTPResponse($httpClient, $response, \$bytes);
-}
-
-# ============================================================
-# Helper: check degraded mode (D-03)
-# Degraded = no custom Client-ID configured.
-# Shows a hint in Settings so the user can enter their own Spotify Developer App.
-# ============================================================
-sub _isDegradedMode {
-    my $customId = $prefs->get('clientId') || '';
-    return $customId ? 0 : 1;
 }
 
 sub _readLogTail {
