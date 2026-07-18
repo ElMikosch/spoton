@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-18T16:41:45.602Z",
+  "phase": "55",
+  "phase_name": "bundled-client-id",
+  "phase_dir": ".planning/phases/55-bundled-client-id",
+  "status": "paused",
+  "stopped_at": "v3.1.0 released and announced. Phase 55 Plans 01-03 executed, code review done. Triage complete. TROUBLESHOOTING.md updated.",
+  "completed_this_session": [
+    "Obsidian vault sync (v3.1.0 state, Phase 55, #118 closed, Token Architecture superseded)",
+    "Forum triage: 5 pending posts processed (CJS Pathfinder hash + empty playlist, woorszt/pilot000 community help)",
+    "Forum reply #212 drafted and posted (CJS: Pathfinder hash tip + v3.1.0 bundled ID for empty playlist)",
+    "GitHub #119 comment posted (v3.1.0 bundled ID as fix, CJS Spirc log clarification, woorszt test request)",
+    "#119 label updated (waiting-user)",
+    "TROUBLESHOOTING.md: new 'Made For You playlists missing or empty' section with sp_dc + hash instructions",
+    "forum-topics.json: 2 new topics added (cjs-v3-pkce-setup, cjs-empty-playlist-pathfinder-hash), auth-architecture-discussion updated",
+    "Committed and pushed: docs + forum-topics"
+  ],
+  "remaining": [
+    "Phase 55 Plan 01 (55-01-PLAN.md) — may need execution (Plans 02+03 executed out of order, but 55-01 commits exist)",
+    "v2.3 Library Integration Phases 38-41 — paused, not started",
+    "Phase 30 Plan 02 — legacy pipe cleanup, not executed"
+  ],
+  "decisions": [
+    {"what": "Pathfinder hash capture: log out + log in with DevTools open", "why": "operationName:home only fires during login redirect, easy to miss during normal browsing"},
+    {"what": "TROUBLESHOOTING.md gets Pathfinder/sp_dc section", "why": "CJS question revealed missing documentation for common setup step"},
+    {"what": "#119 waiting-user after v3.1.0 comment", "why": "Waiting for woorszt/CJS to test bundled Client ID as playlist 403 fix"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {"action": "Monitor #119 for woorszt/CJS feedback on bundled Client ID", "context": "v3.1.0 bundled ID may fix playlist 403", "blocking": false},
+    {"action": "Monitor Reiner feedback (~2 weeks vacation)", "context": "User Management allowlist theory, Telegram sent", "blocking": false}
+  ],
+  "next_actions": [
+    "Check #119 for woorszt/CJS bundled ID test results",
+    "Verify Phase 55 completeness (Plan 01 commits exist but no SUMMARY — check if execution is needed)",
+    "Resume v2.3 Library Integration (Phase 38 Importer Foundation) or wrap up Phase 55",
+    "#117 DSTM/Autoplay-Override — enhancement, low priority"
+  ]
+}

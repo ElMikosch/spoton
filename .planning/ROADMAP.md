@@ -219,6 +219,13 @@
   - [x] 54-04-PLAN.md — Playlist play-all fix (implement chosen approach + cleanup)
   - [x] 54-05-PLAN.md — v2-legacy branch + v3.0 merge + version bump + PKCE E2E verification
 
+### Phase 55: Bundled Client ID + Granular Probing
+
+- [ ] **Phase 55: Bundled Client ID + Granular Endpoint Probing**
+  **Goal**: Enable ncspot's Extended Quota Client ID as bundled default (solves #119 playlist 403 + all Dev Mode restrictions). Add granular per-endpoint limit probing with per-class abort isolation (solves #118 artist/albums 400). Loopback redirect URI with copy-paste fallback, Settings UX for bundled vs custom ID mode, TokenManager revocation handling.
+  Depends on: Phase 49, Phase 50
+  See: `.planning/spikes/ncspot-bundled-id-spike.md`, `.planning/phases/55-bundled-client-id/`
+
 ## Progress Table
 
 | Phase | Milestone | Plans | Status | Completed |

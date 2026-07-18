@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
-current_phase: 54
-current_phase_name: auth-health-dashboard
-status: verifying
-stopped_at: Completed 54-05-PLAN.md — Phase 54 done, v3.0.0 ready pending release approval
-last_updated: "2026-07-17T06:07:35.170Z"
-last_activity: 2026-07-16
-last_activity_desc: Phase 54 execution started
+current_phase: 55
+current_phase_name: bundled-client-id
+status: executing
+stopped_at: Completed 55-02-PLAN.md
+last_updated: "2026-07-18T14:43:18.597Z"
+last_activity: 2026-07-18
+last_activity_desc: "Phase 55 Plan 03 executed (Granular Endpoint Probing, #118 fix)"
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 6
-  total_plans: 25
-  completed_plans: 23
+  total_plans: 28
+  completed_plans: 25
 ---
 
 # Project State: SpotOn
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** Phase 54 — auth-health-dashboard
+**Current Focus:** Phase 55 — bundled-client-id
 
 ## Current Position
 
-Phase: 54 (auth-health-dashboard) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-07-16 — Phase 54 execution started
+Phase: 55 (bundled-client-id) — EXECUTING
+Plan: 03 of 3 (executed out of order — Plans 01/02 still pending)
+Status: Plan 55-03 complete; 55-01/55-02 not yet executed
+Last activity: 2026-07-18 — Phase 55 Plan 03 executed (Granular Endpoint Probing, #118 fix)
 
 ## Progress Bar
 
@@ -84,6 +84,7 @@ Phase 53: [ ] Keymaster Removal + Migration (AUTH-06, AUTH-07)
 | Phase 54 P02 | 15min | 2 tasks | 4 files |
 | Phase 54 P04 | 3min | 2 tasks | 1 files |
 | Phase 54 P05 | ~2h | 3 tasks | 8 files |
+| Phase 55 P02 | 45min | 2 tasks | 5 files |
 
 ## Deferred Items
 
@@ -189,6 +190,9 @@ Items carried forward from previous milestones:
 - [Phase ?]: [Phase 54][54-05] repo.xml version bumped to 3.0.0 with URL/SHA intentionally still pointing at v2.3.18 -- safe only because main stays unpushed until explicit release approval
 - [Phase ?]: [Phase 54][54-05] User decided post-checkpoint to relocate the Auth Health Dashboard from Settings page to Status page (3 follow-up commits: 16f5cde, c6eea81, 2b1ff22)
 - [Phase ?]: [Phase 54][54-05] CHANGELOG.md [3.0.0] Changed entry corrected from 'Settings page' to 'Status page' to match dashboard relocation (Rule 1 auto-fix)
+- [Phase ?]: [Phase 55][55-03] Seed IDs for artist_albums/album_tracks/playlist_items probes fetched via dedicated real API calls (search limit=1, me/playlists limit=1), not reused from binary-search intermediate responses -- final converged binary-search value has no guaranteed fresh response body
+- [Phase ?]: [Phase 55][55-03] Probe error classification: 400=retry (binary search continues), 403=blocked (limit=0, class isolated), 401=auth_abort (stops entire chain), everything else=skip (keep default, continue) -- only 401 aborts the full probe chain
+- [Phase ?]: D-01..D-06: bundled Client-ID Settings UX wired per 55-CONTEXT.md, no deviations from documented design
 
 ### Blockers/Concerns
 
@@ -211,8 +215,8 @@ Items carried forward from previous milestones:
 
 **Resume file:** None
 
-**Last session:** 2026-07-17T06:07:35.161Z
-**Stopped at:** Completed 54-05-PLAN.md — Phase 54 done, v3.0.0 ready pending release approval
+**Last session:** 2026-07-18T14:43:18.590Z
+**Stopped at:** Completed 55-02-PLAN.md
 **Key finding:** Keymaster 403 and audio key denial are SEPARATE migrations. Mid-cohort (woorszt-type, likely majority of affected users) gets full functionality back via PKCE. Newest-cohort (test accounts) remains blocked at audio key layer — separate future concern.
 **Completed this session:**
 
