@@ -75,6 +75,12 @@ sub getToken {
     $class->_refreshToken($accountId, $cb);
 }
 
+sub clearCachedToken {
+    my ($class, $accountId) = @_;
+    $cache->remove("spoton_token_${accountId}");
+    $cache->remove(REAUTH_FLAG_PREFIX . $accountId);
+}
+
 # removeAccount($class, $accountId)
 # Removes account from prefs and cache. Single token cache key (no flavor,
 # D-04) plus the re-auth flag are both cleared.

@@ -321,6 +321,18 @@ sub storeTokens {
 # loadTokens($accountId)
 # Reads and JSON-decodes pkce_tokens.json for the given account.
 # Returns the hashref, or undef if the file is missing or unparseable.
+sub deleteTokens {
+    my ($accountId) = @_;
+    my $target = catfile(_accountDir($accountId), PKCE_TOKEN_FILE);
+    if (-f $target) {
+        unlink $target;
+        my $masked = substr($accountId, 0, 4) . '****';
+        main::INFOLOG && $log->info("PKCE: tokens deleted for account $masked");
+        return 1;
+    }
+    return 0;
+}
+
 sub loadTokens {
     my ($accountId) = @_;
 

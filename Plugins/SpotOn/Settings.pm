@@ -122,7 +122,18 @@ sub handler {
             my $id = $paramRef->{pref_clientId} // '';
             $id =~ s/[^a-zA-Z0-9]//g;  # T-04.4-01: alphanumeric only (injection guard)
             $id = substr($id, 0, 32);   # T-04.4-01: max 32 chars (Spotify Client-ID format)
+            my $oldId = $prefs->get('clientId') || '';
             $prefs->set('clientId', $id);
+
+            if ($id ne $oldId) {
+                require Plugins::SpotOn::API::TokenManager;
+                require Plugins::SpotOn::API::PKCE;
+                for my $acctId (Plugins::SpotOn::API::TokenManager->getAccountIds()) {
+                    Plugins::SpotOn::API::PKCE::deleteTokens($acctId);
+                    Plugins::SpotOn::API::TokenManager->clearCachedToken($acctId);
+                }
+                $log->warn("Settings: Client ID changed — PKCE tokens invalidated, re-auth required");
+            }
         }
 
         # Save sp_dc cookie for Made For You (D-08/D-09). Deliberately NOT
