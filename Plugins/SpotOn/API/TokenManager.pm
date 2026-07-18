@@ -164,6 +164,20 @@ sub needsReauth {
     return $cache->get(REAUTH_FLAG_PREFIX . $accountId) ? 1 : 0;
 }
 
+# reauthReason($class, $accountId)
+# Public query (D-06): returns the reason string stored in the {reason, ts}
+# hashref written by _markNeedsReauth() for this account's persistent
+# re-auth flag, or undef if no flag is set. Lets Plugin.pm/Settings.pm
+# distinguish bundled_id_unavailable (bundled ncspot Client ID revoked) from
+# custom_id_invalid or other reasons (e.g. invalid_grant/token_rejected) for
+# targeted display messaging.
+sub reauthReason {
+    my ($class, $accountId) = @_;
+    my $flag = $cache->get(REAUTH_FLAG_PREFIX . $accountId);
+    return undef unless $flag && ref $flag eq 'HASH';
+    return $flag->{reason};
+}
+
 # anyAccountNeedsReauth($class)
 # Public query: returns 1 if ANY known account needs re-auth. Used for the
 # OPML-menu-wide warning item (Channel 1) and Settings-page-wide banner
@@ -354,13 +368,26 @@ sub _refreshToken {
             $log->error("TokenManager: PKCE refresh failed for account " . _mask($accountId)
                 . ": " . ($err // 'unknown'));
 
+            # D-06: invalid_client means the Client ID itself was rejected
+            # (revoked or unknown) -- Spotify returns this on HTTP 401. This
+            # is distinct from invalid_grant (the user revoked SpotOn's
+            # access) and needs a targeted message: if the rejected ID is
+            # the bundled ncspot ID, tell the user to switch to their own
+            # Client ID; if it's already a custom ID, tell them it's invalid.
+            # Checked BEFORE the invalid_grant/400 branch below.
+            if ($oauthError && $oauthError eq 'invalid_client') {
+                my $reason = ($clientId eq SPOTON_DEFAULT_CLIENT_ID)
+                    ? 'bundled_id_unavailable'
+                    : 'custom_id_invalid';
+                $class->_markNeedsReauth($accountId, $reason);
+            }
             # M-6: HTTP 400 on the token endpoint is practically always a
             # permanent rejection (invalid_grant is the RFC 6749 standard
             # signal), even when the response body could not be parsed into
             # a recognizable oauth_error string -- treat both cases as
             # permanent. Non-400 failures (timeout, 5xx, DNS) are transient
             # and must NOT flip the persistent needsReauth flag (Pitfall 1).
-            if (($oauthError && $oauthError eq 'invalid_grant') || $httpCode == 400) {
+            elsif (($oauthError && $oauthError eq 'invalid_grant') || $httpCode == 400) {
                 $class->_markNeedsReauth($accountId, $oauthError || 'token_rejected');
             } else {
                 main::INFOLOG && $log->info("TokenManager: transient refresh failure for account "
