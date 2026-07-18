@@ -304,7 +304,11 @@ footer {
 
         if (api.apiLimits) {
             var lim = api.apiLimits;
-            var limStr = 'Search ' + val(lim.search) + ' | Library ' + val(lim.library) + ' | Playlists ' + val(lim.playlist_items);
+            var limStr = 'Search ' + val(lim.search) +
+                ' | Library ' + val(lim.library) +
+                ' | Artist Albums ' + val(lim.artist_albums) +
+                ' | Album Tracks ' + val(lim.album_tracks) +
+                ' | Playlists ' + val(lim.playlist_items);
             var limClass = api.limitsProbed ? '' : 'pending';
             body.appendChild(createMetricRow('API Limits', api.limitsProbed ? limStr : limStr + ' (probing...)', limClass));
         }
