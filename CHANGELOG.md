@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-07-18
+### Fixed
+- **Playlists empty for Development Mode Client IDs** — Spotify's Feb 2026 API changes serve a different response schema for Dev Mode apps (`item` key instead of `track`/`album`/`show`). SpotOn assumed the legacy schema everywhere, causing empty playlists, saved tracks, saved albums, and saved shows. Added `_normalizeLibraryItem` helper at all 8 consumer sites to handle both schemas transparently. ([#119](https://github.com/stiefenm/spoton/issues/119))
+
 ## [3.1.0] - 2026-07-18
 ### Added
 - **Bundled Client ID (fallback)** — SpotOn ships a shared community Client ID with Extended Quota access. Users whose own Developer App has API restrictions (HTTP 400/403) can remove their Client ID from Settings to use the fallback. The ID is borrowed from the ncspot open-source project without explicit permission — users are encouraged to use their own Client ID when possible.
