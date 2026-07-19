@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-18T18:09:31.828Z",
+  "lastChecked": "2026-07-19T20:22:09.205Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -216,10 +216,23 @@
         "1829072",
         "1829075",
         "1829111",
-        "1829118"
+        "1829118",
+        "1829124",
+        "1829127"
       ],
-      "lastPostCount": 214
+      "lastPostCount": 216
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1829127",
+      "postNumber": 216,
+      "author": "CJS",
+      "timestamp": "2026-07-18T12:37:03-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "So I updated from SpotOn v3.0.3 to v3.1.1. I did not remove my own development mode client id yet, and also did nor re-authenticate. My Test playlist is now working as expected. So I can confirm that the fix that was implemented in SpotOn Release v3.1.1 is working.  sti and woOrszt, thank you both f",
+      "draft": "Great news, CJS — glad to hear v3.1.1 sorted the empty playlist issue for you!\n\nTo answer your question about keeping your own Client ID vs. switching to the Bundled one:\n\n[B]Short answer:[/B] If everything is working with your own Client ID, there's no urgent reason to switch.\n\n[B]Longer answer — a few things to consider:[/B]\n\n[B]Keeping your own Client ID:[/B]\n[LIST]\n[*] You stay in Development Mode, which means Spotify enforces a 25-user limit and some endpoint restrictions\n[*] The Status page may still show a \"Development Mode\" warning (see issue [URL=https://github.com/stiefenm/spoton/issues/122]#122[/URL]) — that's cosmetic for now\n[*] Followed/foreign playlists may not appear under Library → Playlists due to a known restriction ([URL=https://github.com/stiefenm/spoton/issues/120]#120[/URL])\n[/LIST]\n\n[B]Switching to the Bundled Client ID:[/B]\n[LIST]\n[*] The bundled app has been configured specifically for SpotOn's use case and is the long-term supported path\n[*] You'd benefit from any future endpoint allowlist improvements on our side without needing to manage your own Spotify app\n[*] Followed playlists should be visible (once #120 is resolved)\n[/LIST]\n\nIf you use [B]followed/foreign playlists[/B] or want a cleaner setup going forward, switching to the Bundled Client ID is worth doing. If you only use your own playlists and everything works, you're fine staying put for now.\n\nWhen you do decide to switch, remember to [B]re-authenticate[/B] after removing your Client ID — the token is tied to the app credentials.\n\nThanks again for testing and reporting back — it really helps! 🙌",
+      "scrapedAt": "2026-07-19T20:22:09.205Z"
+    }
+  ]
 }
