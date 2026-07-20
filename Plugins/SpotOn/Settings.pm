@@ -132,7 +132,8 @@ sub handler {
                     Plugins::SpotOn::API::PKCE::deleteTokens($acctId);
                     Plugins::SpotOn::API::TokenManager->clearCachedToken($acctId);
                 }
-                $log->warn("Settings: Client ID changed — PKCE tokens invalidated, re-auth required");
+                Plugins::SpotOn::API::Client->reset();
+                $log->warn("Settings: Client ID changed — PKCE tokens invalidated, API limits reset, re-auth required");
             }
         }
 

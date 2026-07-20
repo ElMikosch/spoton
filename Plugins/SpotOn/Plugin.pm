@@ -1534,30 +1534,69 @@ sub _savedTracksFeed {
 
 # _savedAlbumsFeed($client, $callback, $args)
 # Fetches user's saved albums with LMS OPMLBased pagination mapping.
+# Play-all detection (GH #121): same pattern as _artistAlbumsFeed — fetch all pages
+# when quantity >= 500 to avoid LMS serving undef slots from cache.
 sub _savedAlbumsFeed {
     my ($client, $callback, $args) = @_;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} || 200;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getSavedAlbums($accountId, {
-        offset => $offset,
-        limit  => $limit,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+    my $cacheKey = "savedAlbums:$accountId";
+
+    if ($isPlayAll && $offset == 0) {
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getSavedAlbums($acct, $params, $cb);
+            },
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err) = @_;
+                my @items = map  { _albumItem($client, $_->{album}) }
+                            grep { defined $_->{album} }
+                            map  { _normalizeLibraryItem($_, 'album') }
+                            @{$allItems};
+                if (!@items) {
+                    push @items, _authRequiredItem($client, $accountId, $err);
+                }
+                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
+                $callback->({ items => \@items });
+            },
+        });
+    } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
             return;
         }
-        my @items = map  { _albumItem($client, $_->{album}) }
-                    grep { defined $_->{album} }
-                    map  { _normalizeLibraryItem($_, 'album') }
-                    @{ $data->{items} || [] };
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
-    });
+        delete $_playAllItemCache{$cacheKey};
+        goto &_savedAlbumsFeed;
+    } else {
+        Plugins::SpotOn::API::Client->getSavedAlbums($accountId, {
+            offset => $offset,
+            limit  => $limit,
+        }, sub {
+            my ($data, $err) = @_;
+            unless ($data) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                return;
+            }
+            my @items = map  { _albumItem($client, $_->{album}) }
+                        grep { defined $_->{album} }
+                        map  { _normalizeLibraryItem($_, 'album') }
+                        @{ $data->{items} || [] };
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        });
+    }
 }
 
 # _followedArtistsFeed($client, $callback, $args)
@@ -1677,29 +1716,66 @@ sub _fetchAllPages {
 # Fetches user's playlists, excluding Made-For-You playlists (per D-03).
 # Note: total from API includes Made-For-You playlists so displayed count may be
 # slightly off — this is an accepted limitation documented in the plan (must_haves).
+# Play-all detection (GH #121): same pattern as _artistAlbumsFeed — fetch all pages
+# when quantity >= 500 to avoid LMS serving undef slots from cache.
 sub _userPlaylistsFeed {
     my ($client, $callback, $args) = @_;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} || 200;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
-        offset => $offset,
-        limit  => $limit,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+    my $cacheKey = "userPlaylists:$accountId";
+
+    if ($isPlayAll && $offset == 0) {
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getUserPlaylists($acct, $params, $cb);
+            },
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err) = @_;
+                my @user  = grep { !_isMadeForYou($_) } @{$allItems};
+                my @items = map  { _playlistItem($client, $_) } @user;
+                if (!@items) {
+                    push @items, _authRequiredItem($client, $accountId, $err);
+                }
+                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
+                $callback->({ items => \@items });
+            },
+        });
+    } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
             return;
         }
-        # D-03: Exclude Made-For-You playlists from Library Playlists
-        my @user  = grep { !_isMadeForYou($_) } @{ $data->{items} || [] };
-        my @items = map  { _playlistItem($client, $_) } @user;
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
-    });
+        delete $_playAllItemCache{$cacheKey};
+        goto &_userPlaylistsFeed;
+    } else {
+        Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
+            offset => $offset,
+            limit  => $limit,
+        }, sub {
+            my ($data, $err) = @_;
+            unless ($data) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                return;
+            }
+            # D-03: Exclude Made-For-You playlists from Library Playlists
+            my @user  = grep { !_isMadeForYou($_) } @{ $data->{items} || [] };
+            my @items = map  { _playlistItem($client, $_) } @user;
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        });
+    }
 }
 
 # ============================================================
@@ -1733,33 +1809,72 @@ sub _podcastsFeed {
 # Paginated list of user's saved podcast shows.
 # Per POD-01: uses getSavedShows with OPMLBased offset/limit pagination.
 # Per D-03 (Pitfall 1): API response wraps show under {show} key.
+# Play-all detection (GH #121): same pattern as _artistAlbumsFeed — fetch all pages
+# when quantity >= 500 to avoid LMS serving undef slots from cache.
 sub _savedShowsFeed {
     my ($client, $callback, $args) = @_;
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify /me/shows max = 50
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} || 200;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify /me/shows max = 50
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->getSavedShows($accountId, {
-        offset   => $offset,
-        limit    => $limit,
-        _noCache => 1,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+    my $cacheKey = "savedShows:$accountId";
+
+    if ($isPlayAll && $offset == 0) {
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getSavedShows($acct, { %$params, _noCache => 1 }, $cb);
+            },
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err) = @_;
+                my @items = map  { _showItem($client, $_->{show}) }
+                            grep { defined $_->{show} }
+                            map  { _normalizeLibraryItem($_, 'show') }
+                            @{$allItems};
+                if (!@items) {
+                    push @items, _authRequiredItem($client, $accountId, $err);
+                }
+                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
+                $callback->({ items => \@items });
+            },
+        });
+    } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
             return;
         }
-        # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
-        # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
-        my @items = map  { _showItem($client, $_->{show}) }
-                    grep { defined $_->{show} }
-                    map  { _normalizeLibraryItem($_, 'show') }
-                    @{ $data->{items} || [] };
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} });
-    });
+        delete $_playAllItemCache{$cacheKey};
+        goto &_savedShowsFeed;
+    } else {
+        Plugins::SpotOn::API::Client->getSavedShows($accountId, {
+            offset   => $offset,
+            limit    => $limit,
+            _noCache => 1,
+        }, sub {
+            my ($data, $err) = @_;
+            unless ($data) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                return;
+            }
+            # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
+            # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
+            my @items = map  { _showItem($client, $_->{show}) }
+                        grep { defined $_->{show} }
+                        map  { _normalizeLibraryItem($_, 'show') }
+                        @{ $data->{items} || [] };
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        });
+    }
 }
 
 # _showItem($client, $show)
@@ -2453,34 +2568,74 @@ sub _artistFeed {
 # _artistAlbumsFeed($client, $callback, $args, $passthrough)
 # Fetches paginated albums for an artist filtered by a SINGLE include_groups value.
 # Per D-09/Pitfall 1: never combine include_groups values — issues separate request per type.
+# Play-all detection (GH #121): Material Skin sends quantity=25000 which exceeds the
+# artist_albums API limit (20). Without fetching all pages, LMS caches undef slots
+# beyond the first page and serves empty items on scroll.
 sub _artistAlbumsFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $artistId      = $passthrough->{artistId}      // '';
     my $includeGroups = $passthrough->{includeGroups} // 'album';
 
-    my $offset = $args->{index}    || 0;
-    my $qty    = $args->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('artist_albums') ? Plugins::SpotOn::API::Client->getLimit('artist_albums') : $qty;
+    my $offset    = $args->{index}    // 0;
+    my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
+    my $qty       = $args->{quantity} || 200;
+    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('artist_albums') ? Plugins::SpotOn::API::Client->getLimit('artist_albums') : $qty;
 
     my $accountId = _getAccountId($client);
+    my $cacheKey  = "artistAlbums:$accountId:$artistId:$includeGroups";
 
-    Plugins::SpotOn::API::Client->getArtistAlbums($accountId, $artistId, {
-        include_groups => $includeGroups,
-        offset         => $offset,
-        limit          => $limit,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+    if ($isPlayAll && $offset == 0) {
+        _fetchAllPages({
+            accountId    => $accountId,
+            apiFn        => sub {
+                my ($acct, $params, $cb) = @_;
+                Plugins::SpotOn::API::Client->getArtistAlbums($acct, $artistId, {
+                    include_groups => $includeGroups,
+                    offset         => $params->{offset},
+                    limit          => $params->{limit},
+                }, $cb);
+            },
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('artist_albums'),
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err) = @_;
+                my @items = map { _albumItem($client, $_) } @{$allItems};
+                if (!@items) {
+                    push @items, _authRequiredItem($client, $accountId, $err);
+                }
+                $_playAllItemCache{$cacheKey} = { items => \@items, ts => time() };
+                $callback->({ items => \@items });
+            },
+        });
+    } elsif (my $cached = $_playAllItemCache{$cacheKey}) {
+        if (time() - $cached->{ts} < 120 && $offset < scalar @{$cached->{items}}) {
+            my $end = $offset + $qty - 1;
+            $end = $#{ $cached->{items} } if $end > $#{ $cached->{items} };
+            my @slice = @{ $cached->{items} }[$offset .. $end];
+            $callback->({ items => \@slice, offset => $offset, total => scalar @{$cached->{items}} });
             return;
         }
-        my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
-        if (!@items) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
-        $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
-    });
+        delete $_playAllItemCache{$cacheKey};
+        goto &_artistAlbumsFeed;
+    } else {
+        Plugins::SpotOn::API::Client->getArtistAlbums($accountId, $artistId, {
+            include_groups => $includeGroups,
+            offset         => $offset,
+            limit          => $limit,
+        }, sub {
+            my ($data, $err) = @_;
+            unless ($data) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                return;
+            }
+            my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
+            if (!@items) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
+            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+        });
+    }
 }
 
 # ============================================================
