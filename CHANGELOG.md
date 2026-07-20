@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-07-20
+### Fixed
+- **Artist Albums pagination broken in Material Skin** — `_artistAlbumsFeed` fetched only one API page but reported the full `total` to LMS, causing Material Skin to show "scroll for more" indefinitely. Added the same play-all/`_fetchAllPages` pattern that `_playlistFeed` already had. Also applied to `_savedAlbumsFeed`, `_userPlaylistsFeed`, and `_savedShowsFeed` which had the same structural vulnerability for large collections. ([#121](https://github.com/stiefenm/spoton/issues/121))
+- **Stale API limits after Client ID switch** — the binary-search limit detection was not re-triggered when switching between custom and bundled Client IDs. The Status page continued to show limits from the previous Client ID, and the higher caps of the bundled ID were not utilized. Now calls `Client->reset()` on Client ID change so the probe re-runs after re-authentication. ([#122](https://github.com/stiefenm/spoton/issues/122))
+
 ## [3.1.1] - 2026-07-18
 ### Fixed
 - **Playlists empty for Development Mode Client IDs** — Spotify's Feb 2026 API changes serve a different response schema for Dev Mode apps (`item` key instead of `track`/`album`/`show`). SpotOn assumed the legacy schema everywhere, causing empty playlists, saved tracks, saved albums, and saved shows. Added `_normalizeLibraryItem` helper at all 8 consumer sites to handle both schemas transparently. ([#119](https://github.com/stiefenm/spoton/issues/119))
