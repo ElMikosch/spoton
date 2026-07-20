@@ -1,43 +1,42 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-18T19:03:59.967Z",
+  "timestamp": "2026-07-20T20:48:06.396Z",
   "phase": "55",
   "phase_name": "bundled-client-id",
   "phase_dir": ".planning/phases/55-bundled-client-id",
   "status": "paused",
-  "stopped_at": "v3.1.1 released. Dev Mode schema fix (#119) shipped, #91 closed, #120 filed, triage clean.",
+  "stopped_at": "v3.1.2 released. #121/#122 fixed, #119/#120 closed, #123 filed, triage clean.",
   "completed_this_session": [
-    "Fixed Dev Mode playlist/library schema (#119): _normalizeLibraryItem helper at 8 consumer sites",
-    "Fable 5 plan review: APPROVE WITH CHANGES (saved albums/shows coverage, verify commands)",
-    "Locally tested both Client ID modes (Dev Mode + Extended Quota) — no regression",
-    "v3.1.1 released (Perl-only, CI binary reuse)",
-    "Closed #91 — woorszt confirmed PKCE resolves Keymaster 403",
-    "Filed #120 — bundled Client ID doesn't list foreign playlists",
-    "#119 reply posted to woorszt with fix details, waiting-user tagged",
-    "Obsidian vault synced (v3.1.1, #91 closed, #120, schema finding, Keymaster 403 resolved)",
-    "Triage: clean — 0 pending forum, all issues labeled correctly"
+    "Investigated #121 (Artist Albums pagination) — root cause: _artistAlbumsFeed missing play-all/_fetchAllPages pattern",
+    "Investigated #122 (stale API limits) — root cause: $_limitsProbed never reset on Client ID change",
+    "Implemented fixes: play-all pattern added to 4 feeds + Client->reset() on ID change",
+    "Fable 5 review: caught missing cache-read branch — fixed, full 3-branch pattern in all 4 feeds",
+    "v3.1.2 released (Perl-only, CI binary reuse)",
+    "#119 closed — CJS confirmed v3.1.1 fix in forum post #216",
+    "#120 closed — PKCE spike disproved hypothesis: bundled ID returns MORE playlists (91 vs 71), was #121 pagination bug",
+    "#123 filed — Enhancement: periodic/lazy re-probe of API limits (woorszt #122)",
+    "Forum reply #216 posted, forum-topics updated",
+    "Obsidian vault moved vault/ → obsidian/spoton/",
+    "Sudoers cleanup: sti ALL NOPASSWD ALL replaces fine-grained rules"
   ],
   "remaining": [
-    "#119 awaiting woorszt test confirmation of v3.1.1",
-    "#120 investigation (bundled ID foreign playlists)",
+    "#121/#122 awaiting woorszt test confirmation of v3.1.2",
+    "#123 periodic re-probe (enhancement, low priority)",
     "v2.3 Library Integration Phases 38-41 (paused, not started)"
   ],
   "decisions": [
-    {"what": "_normalizeLibraryItem as parametric helper (track/album/show)", "why": "Fable 5 found saved albums and shows are likely also affected by the generic item key"},
-    {"what": "grep guards added at 3 sites that lacked them", "why": "Fable 5 recommended: _trackItem(undef) produces garbage rows, guard is defensively correct"},
-    {"what": "v3.1.1 as patch release", "why": "Pure bugfix, no new features"}
+    {"what": "Play-all/_fetchAllPages pattern as fix for pagination class bug", "why": "Proven pattern from 4 existing feeds, same 3-branch structure"},
+    {"what": "#120 closed as duplicate of #121", "why": "PKCE spike proved bundled ID returns 91 playlists (46 foreign) vs 71 (27 foreign)"},
+    {"what": "Vault renamed vault/ → obsidian/spoton/", "why": "Obsidian uses folder name as vault name, user has multiple projects"}
   ],
   "blockers": [],
   "human_actions_pending": [
-    {"action": "Monitor #119 for woorszt feedback on v3.1.1", "context": "Fix shipped, waiting for test confirmation", "blocking": false},
-    {"action": "Monitor Reiner feedback (~2 weeks vacation)", "context": "User Management allowlist theory", "blocking": false}
+    {"action": "Monitor #121/#122 for woorszt feedback on v3.1.2", "context": "Fixes shipped, waiting-user", "blocking": false}
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [".gitignore"],
   "next_actions": [
-    "Check #119 for woorszt v3.1.1 test results",
-    "Investigate #120 (bundled ID foreign playlists — me/playlists response difference)",
-    "Resume v2.3 Library Integration (Phase 38 Importer Foundation)",
-    "#117 DSTM/Autoplay-Override — enhancement, low priority"
+    "Check #121/#122 for woorszt v3.1.2 test results",
+    "Resume v2.3 Library Integration (Phase 38 Importer Foundation)"
   ],
-  "context_notes": "Productive session: woorszt found the exact root cause of #119 (Spotify serves different response schemas per quota mode). Fix was straightforward — schema normalization at all consumer sites. Fable 5 review added coverage for albums/shows. #91 is finally closed after months — PKCE confirmed working for mid-cohort. New finding #120 (bundled ID missing foreign playlists) is separate and lower priority."
+  "context_notes": "Productive session: two woorszt bug reports investigated, root-caused, fixed, released in one pass. #120 turned out to be #121 side-effect — PKCE spike verified. .gitignore changed (vault/ → obsidian/) not yet committed."
 }
