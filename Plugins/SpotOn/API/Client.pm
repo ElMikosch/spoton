@@ -82,6 +82,8 @@ my %_detectedLimits = (
 );
 my %_blockedEndpoints;
 my $_limitsProbed = 0;
+my $_limitsLastProbed = 0;
+use constant REPROBE_COOLDOWN_S => 3600 * 6;
 
 # ============================================================
 # Public class methods
@@ -99,7 +101,8 @@ sub reset {
         album_tracks => 50, playlist_items => 100,
     );
     %_blockedEndpoints = ();
-    $_limitsProbed   = 0;
+    $_limitsProbed      = 0;
+    $_limitsLastProbed  = 0;
     main::INFOLOG && $log->info("Client: counters and limit detection reset");
 }
 
@@ -112,8 +115,9 @@ sub getLimit {
 sub limitsProbed { return $_limitsProbed }
 
 sub probeEndpointLimits {
-    my ($class, $accountId, $doneCb) = @_;
-    return $doneCb->() if $_limitsProbed;
+    my ($class, $accountId, $doneCb, %opts) = @_;
+    return $doneCb->() if $_limitsProbed && !$opts{force};
+    $_limitsProbed = 0;
 
     my @classes = (
         { name => 'search',         path => 'search',    extra => { q => 'test', type => 'track' }, doc_max => 50 },
@@ -133,6 +137,7 @@ sub probeEndpointLimits {
     $probeNext = sub {
         if ($probeIdx >= scalar @classes) {
             $_limitsProbed = 1;
+            $_limitsLastProbed = time();
             main::INFOLOG && $log->info(sprintf(
                 "Client: API limits detected — search=%d library=%d artist_albums=%d album_tracks=%d playlist_items=%d",
                 $_detectedLimits{search}, $_detectedLimits{library}, $_detectedLimits{artist_albums},
@@ -372,9 +377,10 @@ sub statusSnapshot {
         api429Count     => $api429Count,
         rateLimited     => $cache->get('spoton_rate_limit') ? 1 : 0,
         wpRateLimited   => $cache->get(WP_RATE_LIMIT_KEY) ? 1 : 0,
-        apiLimits        => { %_detectedLimits },
-        blockedEndpoints => { %_blockedEndpoints },
-        limitsProbed     => $_limitsProbed,
+        apiLimits         => { %_detectedLimits },
+        blockedEndpoints  => { %_blockedEndpoints },
+        limitsProbed      => $_limitsProbed,
+        limitsLastProbed  => $_limitsLastProbed,
     };
 }
 
@@ -1462,6 +1468,17 @@ sub _doRequest {
                     my $body = eval { from_json($response->content) };
                     $detail = $body->{error}{message} // '' if $body && $body->{error};
                 }
+
+                # Lazy re-probe: a 400 on a non-probe request may indicate
+                # server-side limit changes. Trigger re-probe if cooldown expired.
+                if ($code == 400 && !$params->{_probeCall}
+                    && $_limitsProbed
+                    && (time() - $_limitsLastProbed) > REPROBE_COOLDOWN_S)
+                {
+                    $log->warn("Client: 400 on $cleanPath — triggering lazy limit re-probe");
+                    $class->probeEndpointLimits($accountId, sub {}, force => 1);
+                }
+
                 unless ($params->{_probeCall}) {
                     $log->error("Client: HTTP $code error for $cleanPath: $error" . ($detail ? " ($detail)" : ''));
                     if ($INC{'Plugins/SpotOn/Status.pm'}) {
