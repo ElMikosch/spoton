@@ -83,9 +83,7 @@ sub _searchArtists {
 
     my $artist = $artists->[$idx];
     my $limit  = Plugins::SpotOn::API::Client->getLimit('search') || 10;
-    # Per-artist cap: distribute budget across remaining artists
-    my $remaining = scalar(@$artists) - $idx;
-    my $perArtist = int(DSTM_MAX_TRACKS / $remaining) + 2;
+    my $perArtist = int(DSTM_MAX_TRACKS / scalar(@$artists)) + 1;
     $limit = min($limit, $perArtist);
 
     main::INFOLOG && $log->info(
@@ -127,7 +125,6 @@ sub _finalizeResults {
         @$allTracks[$i, $j] = @$allTracks[$j, $i];
     }
 
-    # Cap at DSTM_MAX_TRACKS
     splice @$allTracks, DSTM_MAX_TRACKS if scalar @$allTracks > DSTM_MAX_TRACKS;
 
     my @uris = _cacheAndExtractUris($allTracks);
