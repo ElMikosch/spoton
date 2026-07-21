@@ -9,7 +9,6 @@ use List::Util qw(min);
 use Time::HiRes;
 
 use Slim::Plugin::DontStopTheMusic::Plugin;
-use Slim::Schema;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -59,13 +58,38 @@ sub dontStopTheMusic {
 
     require Plugins::SpotOn::API::Client;
 
+    # D1: if search is blocked (getLimit returns 0), skip search entirely
+    my $searchAvailable = Plugins::SpotOn::API::Client->getLimit('search') > 0;
+
+    # Build seed exclusion set from current playlist (D3: prevent self-queueing)
+    my %seedExclude;
+    foreach my $track (@$seedTracks) {
+        next unless $track->{artist} && $track->{title};
+        $seedExclude{_dstmTagKey($track->{artist}, $track->{title})} = 1;
+    }
+
+    # D4: extract first artist name, handling "Tyler, The Creator" etc.
+    # by checking if the full joined string itself is a single artist
+    # (i.e. no actual multi-artist separator). Heuristic: if the track
+    # has artist metadata with a single name matching the full string, use it.
     my (@seedArtists, %seen);
     foreach my $track (@$seedTracks) {
         next unless $track->{artist};
         next if $cache->get(_dstmTagKey($track->{artist}, $track->{title}));
-        my ($first) = split /,\s*/, $track->{artist};
-        next unless $first && !$seen{lc $first}++;
-        push @seedArtists, $first;
+        my $artistName = $track->{artist};
+        # The joined string has " — Artist" appended by LMS getMixableProperties
+        # from the title field. The raw artist is before any " — ".
+        # However, getMixableProperties provides {artist} directly, already joined.
+        # Split only when we see the pattern "Name1, Name2" where Name2 starts
+        # with uppercase (multi-artist), not "Tyler, The Creator" patterns.
+        if ($artistName =~ /^([^,]+),\s+([a-z])/) {
+            # Lowercase after comma: likely part of one name (e.g. "Tyler, The Creator")
+            # keep full name
+        } elsif ($artistName =~ /^([^,]+),/) {
+            $artistName = $1;
+        }
+        next unless $artistName && !$seen{lc $artistName}++;
+        push @seedArtists, $artistName;
     }
 
     _shuffle(\@seedArtists);
@@ -74,13 +98,14 @@ sub dontStopTheMusic {
     _withDiversityPool($accountId, sub {
         my ($pool) = @_;
 
-        if (@seedArtists) {
+        if (@seedArtists && $searchAvailable) {
             main::INFOLOG && $log->info("SpotOn DSTM: mixing from artists: " . join(', ', @seedArtists));
-            _searchArtists($client, $accountId, \@seedArtists, 0, [], $pool, $cb);
+            _searchArtists($client, $accountId, \@seedArtists, 0, [], $pool, \%seedExclude, $cb);
         }
         else {
-            main::INFOLOG && $log->info("SpotOn DSTM: no organic seeds, using pool only");
-            _finalizeResults($client, [], $pool, $cb);
+            main::INFOLOG && $log->info("SpotOn DSTM: " .
+                (!$searchAvailable ? "search blocked" : "no organic seeds") . ", using pool only");
+            _finalizeResults($client, [], $pool, \%seedExclude, $cb);
         }
     });
 }
@@ -104,10 +129,10 @@ sub _withDiversityPool {
 }
 
 sub _searchArtists {
-    my ($client, $accountId, $artists, $idx, $allTracks, $pool, $cb) = @_;
+    my ($client, $accountId, $artists, $idx, $allTracks, $pool, $seedExclude, $cb) = @_;
 
     if ($idx >= scalar @$artists) {
-        _finalizeResults($client, $allTracks, $pool, $cb);
+        _finalizeResults($client, $allTracks, $pool, $seedExclude, $cb);
         return;
     }
 
@@ -117,8 +142,11 @@ sub _searchArtists {
     $limit = min($limit, $perArtist);
     my $offset = int(rand(3)) * $perArtist;
 
+    # D5: escape quotes in artist names
+    (my $safeArtist = $artist) =~ s/"//g;
+
     Plugins::SpotOn::API::Client->search($accountId, {
-        q      => sprintf('artist:"%s"', $artist),
+        q      => sprintf('artist:"%s"', $safeArtist),
         type   => 'track',
         limit  => $limit,
         offset => $offset,
@@ -127,9 +155,10 @@ sub _searchArtists {
         my $tracks = ($result && $result->{tracks} && $result->{tracks}{items})
             ? $result->{tracks}{items} : [];
 
-        if (!@$tracks && $offset > 0) {
+        # D6: only retry on successful-but-empty, not on errors
+        if (!@$tracks && $offset > 0 && $result && $result->{tracks}) {
             Plugins::SpotOn::API::Client->search($accountId, {
-                q      => sprintf('artist:"%s"', $artist),
+                q      => sprintf('artist:"%s"', $safeArtist),
                 type   => 'track',
                 limit  => $limit,
                 offset => 0,
@@ -139,7 +168,7 @@ sub _searchArtists {
                     ? $result2->{tracks}{items} : [];
                 push @$allTracks, @$tracks2;
                 Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + DSTM_SEARCH_STAGGER_S,
-                    sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $cb) });
+                    sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $seedExclude, $cb) });
             });
             return;
         }
@@ -147,25 +176,31 @@ sub _searchArtists {
         push @$allTracks, @$tracks;
 
         Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + DSTM_SEARCH_STAGGER_S,
-            sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $cb) });
+            sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $seedExclude, $cb) });
     });
 }
 
 sub _finalizeResults {
-    my ($client, $allTracks, $pool, $cb) = @_;
+    my ($client, $allTracks, $pool, $seedExclude, $cb) = @_;
 
     my $clientId = $client->id();
     my $recentKey = 'spoton_dstm_recent_' . $clientId;
     my $recentUris = $cache->get($recentKey) || [];
     my %recentSet = map { $_ => 1 } @$recentUris;
 
-    my @filtered;
+    # D2: intra-batch URI dedupe + D3: exclude seed tracks
+    my (%seenUri, @filtered);
     for my $t (@$allTracks) {
         next unless $t->{uri} && $t->{uri} =~ /(track:[a-z0-9]+)/i;
         my $uri = "spoton://$1";
-        push @filtered, $t unless $recentSet{$uri};
+        next if $seenUri{$uri}++;
+        next if $recentSet{$uri};
+        my $artist = join(', ', map { $_->{name} } @{$t->{artists} || []});
+        next if $seedExclude->{_dstmTagKey($artist, $t->{name})};
+        push @filtered, $t;
     }
 
+    # Inject diversity pool tracks
     if ($pool && @$pool) {
         my %searchArtists;
         for my $t (@filtered) {
@@ -181,7 +216,9 @@ sub _finalizeResults {
             last if $injected >= DSTM_POOL_INJECT;
             next unless $t->{uri} && $t->{uri} =~ /(track:[a-z0-9]+)/i;
             my $uri = "spoton://$1";
-            next if $recentSet{$uri};
+            next if $seenUri{$uri}++ || $recentSet{$uri};
+            my $artist = join(', ', map { $_->{name} } @{$t->{artists} || []});
+            next if $seedExclude->{_dstmTagKey($artist, $t->{name})};
             my $primaryArtist = ($t->{artists} && @{$t->{artists}}) ? lc($t->{artists}[0]{name} // '') : '';
             next if $primaryArtist && $searchArtists{$primaryArtist};
             push @filtered, $t;

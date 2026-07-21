@@ -117,6 +117,8 @@ sub limitsProbed { return $_limitsProbed }
 sub probeEndpointLimits {
     my ($class, $accountId, $doneCb, %opts) = @_;
     return $doneCb->() if $_limitsProbed && !$opts{force};
+    # C1: clear blocked endpoints on forced re-probe so healed endpoints are re-discovered
+    %_blockedEndpoints = () if $opts{force};
     $_limitsProbed = 0;
 
     my @classes = (
@@ -197,6 +199,8 @@ sub probeEndpointLimits {
             # to this class only and continues probing the rest.
             if ($status && $status eq 'auth_abort') {
                 main::INFOLOG && $log->info("Client: limit probe aborted (401 unauthorized), keeping defaults for remaining classes");
+                # C2: restore probed state so lazy re-probe remains functional
+                $_limitsProbed = 1;
                 undef $probeNext;
                 $doneCb->();
                 return;
@@ -1469,13 +1473,15 @@ sub _doRequest {
                     $detail = $body->{error}{message} // '' if $body && $body->{error};
                 }
 
-                # Lazy re-probe: a 400 on a non-probe request may indicate
-                # server-side limit changes. Trigger re-probe if cooldown expired.
+                # Lazy re-probe: a limit-related 400 on a non-probe request may
+                # indicate server-side limit changes. Trigger re-probe if cooldown expired.
                 if ($code == 400 && !$params->{_probeCall}
                     && $_limitsProbed
+                    && $detail =~ /limit|offset/i
+                    && !$cache->get('spoton_rate_limit')
                     && (time() - $_limitsLastProbed) > REPROBE_COOLDOWN_S)
                 {
-                    $log->warn("Client: 400 on $cleanPath — triggering lazy limit re-probe");
+                    $log->warn("Client: 400 on $cleanPath (limit-related) — triggering lazy limit re-probe");
                     $class->probeEndpointLimits($accountId, sub {}, force => 1);
                 }
 
