@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Digest::MD5 qw(md5_hex);
+use Encode qw(encode_utf8);
 use List::Util qw(min);
 use Time::HiRes;
 
@@ -19,7 +20,12 @@ my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
 use constant DSTM_MAX_TRACKS       => 10;
+use constant DSTM_POOL_INJECT      => 3;
 use constant DSTM_SEARCH_STAGGER_S => 0.2;
+use constant DSTM_POOL_TTL         => 1800;
+use constant DSTM_RECENT_TTL       => 86400;
+use constant DSTM_RECENT_MAX       => 30;
+use constant DSTM_TAG_TTL          => 604800;
 
 sub init {
     Slim::Plugin::DontStopTheMusic::Plugin->registerHandler(
@@ -28,10 +34,15 @@ sub init {
     );
 }
 
+sub _dstmTagKey {
+    my ($artist, $title) = @_;
+    return 'spoton_dstm_tag_' . md5_hex(encode_utf8(lc($artist // '') . '|' . lc($title // '')));
+}
+
 sub dontStopTheMusic {
     my ($client, $cb) = @_;
 
-    my $seedTracks = Slim::Plugin::DontStopTheMusic::Plugin->getMixableProperties($client, 3);
+    my $seedTracks = Slim::Plugin::DontStopTheMusic::Plugin->getMixableProperties($client, 20);
 
     if (!$seedTracks || !ref $seedTracks || !scalar @$seedTracks) {
         $cb->($client);
@@ -42,42 +53,61 @@ sub dontStopTheMusic {
                  || $prefs->get('activeAccount')
                  || '';
     unless ($accountId) {
-        main::INFOLOG && $log->info("SpotOn DSTM: no active account, skipping");
         $cb->($client);
         return;
     }
 
     require Plugins::SpotOn::API::Client;
 
-    # Extract unique artist names from seeds.
-    # getMixableProperties returns joined artist strings ("A, B, C") —
-    # split on ", " and take the first name to avoid Spotify query mismatch.
     my (@seedArtists, %seen);
     foreach my $track (@$seedTracks) {
         next unless $track->{artist};
+        next if $cache->get(_dstmTagKey($track->{artist}, $track->{title}));
         my ($first) = split /,\s*/, $track->{artist};
         next unless $first && !$seen{lc $first}++;
         push @seedArtists, $first;
     }
 
-    unless (@seedArtists) {
-        main::INFOLOG && $log->info("SpotOn DSTM: no artist seed available, skipping");
-        $cb->($client);
-        return;
-    }
+    _shuffle(\@seedArtists);
+    splice @seedArtists, 3 if @seedArtists > 3;
 
-    main::INFOLOG && $log->info("SpotOn DSTM: mixing from artists: " . join(', ', @seedArtists));
+    _withDiversityPool($accountId, sub {
+        my ($pool) = @_;
 
-    _searchArtists($client, $accountId, \@seedArtists, 0, [], $cb);
+        if (@seedArtists) {
+            main::INFOLOG && $log->info("SpotOn DSTM: mixing from artists: " . join(', ', @seedArtists));
+            _searchArtists($client, $accountId, \@seedArtists, 0, [], $pool, $cb);
+        }
+        else {
+            main::INFOLOG && $log->info("SpotOn DSTM: no organic seeds, using pool only");
+            _finalizeResults($client, [], $pool, $cb);
+        }
+    });
 }
 
-# _searchArtists — iterate seed artists sequentially with 200ms stagger.
-# Collects tracks from each artist, then merges/shuffles/caps the result.
+sub _withDiversityPool {
+    my ($accountId, $cb) = @_;
+    my $key = 'spoton_dstm_pool_' . $accountId;
+    my $pool = $cache->get($key);
+    if ($pool && ref $pool eq 'ARRAY' && @$pool) {
+        return $cb->($pool);
+    }
+    Plugins::SpotOn::API::Client->getTopTracks($accountId, {
+        time_range => 'medium_term',
+        limit      => 50,
+    }, sub {
+        my $result = shift;
+        $pool = ($result && $result->{items}) ? $result->{items} : [];
+        $cache->set($key, $pool, DSTM_POOL_TTL) if @$pool;
+        $cb->($pool);
+    });
+}
+
 sub _searchArtists {
-    my ($client, $accountId, $artists, $idx, $allTracks, $cb) = @_;
+    my ($client, $accountId, $artists, $idx, $allTracks, $pool, $cb) = @_;
 
     if ($idx >= scalar @$artists) {
-        _finalizeResults($client, $allTracks, $cb);
+        _finalizeResults($client, $allTracks, $pool, $cb);
         return;
     }
 
@@ -85,49 +115,93 @@ sub _searchArtists {
     my $limit  = Plugins::SpotOn::API::Client->getLimit('search') || 10;
     my $perArtist = int(DSTM_MAX_TRACKS / scalar(@$artists)) + 1;
     $limit = min($limit, $perArtist);
-
-    main::INFOLOG && $log->info(
-        "SpotOn DSTM: artist search (artist=$artist, limit=$limit)"
-    );
+    my $offset = int(rand(3)) * $perArtist;
 
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => sprintf('artist:"%s"', $artist),
         type   => 'track',
         limit  => $limit,
+        offset => $offset,
     }, sub {
         my $result = shift;
         my $tracks = ($result && $result->{tracks} && $result->{tracks}{items})
             ? $result->{tracks}{items} : [];
 
+        if (!@$tracks && $offset > 0) {
+            Plugins::SpotOn::API::Client->search($accountId, {
+                q      => sprintf('artist:"%s"', $artist),
+                type   => 'track',
+                limit  => $limit,
+                offset => 0,
+            }, sub {
+                my $result2 = shift;
+                my $tracks2 = ($result2 && $result2->{tracks} && $result2->{tracks}{items})
+                    ? $result2->{tracks}{items} : [];
+                push @$allTracks, @$tracks2;
+                Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + DSTM_SEARCH_STAGGER_S,
+                    sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $cb) });
+            });
+            return;
+        }
+
         push @$allTracks, @$tracks;
 
-        Slim::Utils::Timers::setTimer(
-            undef,
-            Time::HiRes::time() + DSTM_SEARCH_STAGGER_S,
-            sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $cb) }
-        );
+        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + DSTM_SEARCH_STAGGER_S,
+            sub { _searchArtists($client, $accountId, $artists, $idx + 1, $allTracks, $pool, $cb) });
     });
 }
 
-# _finalizeResults — shuffle, cap, cache metadata, return URIs to LMS.
 sub _finalizeResults {
-    my ($client, $allTracks, $cb) = @_;
+    my ($client, $allTracks, $pool, $cb) = @_;
 
-    unless (@$allTracks) {
-        main::INFOLOG && $log->info("SpotOn DSTM: no tracks found for any seed artist");
+    my $clientId = $client->id();
+    my $recentKey = 'spoton_dstm_recent_' . $clientId;
+    my $recentUris = $cache->get($recentKey) || [];
+    my %recentSet = map { $_ => 1 } @$recentUris;
+
+    my @filtered;
+    for my $t (@$allTracks) {
+        next unless $t->{uri} && $t->{uri} =~ /(track:[a-z0-9]+)/i;
+        my $uri = "spoton://$1";
+        push @filtered, $t unless $recentSet{$uri};
+    }
+
+    if ($pool && @$pool) {
+        my %searchArtists;
+        for my $t (@filtered) {
+            for my $a (@{$t->{artists} || []}) {
+                $searchArtists{lc($a->{name})}++ if $a->{name};
+            }
+        }
+
+        my $injected = 0;
+        my @poolShuffled = @$pool;
+        _shuffle(\@poolShuffled);
+        for my $t (@poolShuffled) {
+            last if $injected >= DSTM_POOL_INJECT;
+            next unless $t->{uri} && $t->{uri} =~ /(track:[a-z0-9]+)/i;
+            my $uri = "spoton://$1";
+            next if $recentSet{$uri};
+            my $primaryArtist = ($t->{artists} && @{$t->{artists}}) ? lc($t->{artists}[0]{name} // '') : '';
+            next if $primaryArtist && $searchArtists{$primaryArtist};
+            push @filtered, $t;
+            $injected++;
+        }
+    }
+
+    unless (@filtered) {
         $cb->($client);
         return;
     }
 
-    # Fisher-Yates shuffle
-    for my $i (reverse 1 .. $#$allTracks) {
-        my $j = int(rand($i + 1));
-        @$allTracks[$i, $j] = @$allTracks[$j, $i];
-    }
+    _shuffle(\@filtered);
+    splice @filtered, DSTM_MAX_TRACKS if @filtered > DSTM_MAX_TRACKS;
 
-    splice @$allTracks, DSTM_MAX_TRACKS if scalar @$allTracks > DSTM_MAX_TRACKS;
+    my @uris = _cacheAndExtractUris(\@filtered);
 
-    my @uris = _cacheAndExtractUris($allTracks);
+    push @$recentUris, @uris;
+    splice @$recentUris, 0, (@$recentUris - DSTM_RECENT_MAX) if @$recentUris > DSTM_RECENT_MAX;
+    $cache->set($recentKey, $recentUris, DSTM_RECENT_TTL);
 
     if (@uris) {
         main::INFOLOG && $log->info("SpotOn DSTM: queuing " . scalar(@uris) . " tracks");
@@ -168,10 +242,20 @@ sub _cacheAndExtractUris {
             %trackIds,
         }, 604800);
 
+        $cache->set(_dstmTagKey($artist, $track->{name}), 1, DSTM_TAG_TTL);
+
         push @uris, $uri;
     }
 
     return @uris;
+}
+
+sub _shuffle {
+    my ($arr) = @_;
+    for my $i (reverse 1 .. $#$arr) {
+        my $j = int(rand($i + 1));
+        @$arr[$i, $j] = @$arr[$j, $i];
+    }
 }
 
 1;
