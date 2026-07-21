@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-07-21
+### Fixed
+- **DSTM silent failures** — five bugs in Don't Stop The Music that caused silent fallback to local music: multi-artist query strings that Spotify couldn't match, unclamped random offset producing empty results, `getLimit('search')` returning 0 for blocked endpoints, and dead code (`_searchForSeeds`) that wasted API calls and could trigger rate-limit self-sabotage.
+- **DSTM single-artist feedback loop** — only the first seed artist was used, producing tracks from one artist that then reinforced itself in successive cycles. Now collects up to 3 unique artists from a deep seed window (last 20 playlist tracks), shuffles per cycle, and excludes previously DSTM-generated tracks via tagging.
+- **DSTM self-queueing** — search results could include tracks already in the playlist. Now builds an exclusion set from the current playlist and filters results against it.
+- **Artist name mangling** — "Tyler, The Creator" was incorrectly split into "Tyler". Now preserves comma-containing artist names where the post-comma text starts lowercase.
+- **Lazy re-probe hardening** — blocked endpoints stayed permanently blocked after re-probe (cleared now), auth failures mid-probe disabled future re-probes (restored now), and any HTTP 400 triggered probe storms (now gated on limit-related error messages only).
+
+### Added
+- **DSTM diversity pool** — injects up to 3 tracks from the user's Spotify top tracks (medium-term, cached 30 min) into each DSTM mix for taste-relevant variety beyond the seed artists.
+- **DSTM recent-URI deduplication** — per-client rolling list of the last 30 DSTM-queued URIs (24h TTL) prevents the same tracks from reappearing across successive cycles.
+- **Lazy API limit re-probe** — when a limit-related HTTP 400 occurs and the last probe was more than 6 hours ago, SpotOn automatically re-probes endpoint limits without requiring an LMS restart. ([#123](https://github.com/stiefenm/spoton/issues/123))
+
 ## [3.1.2] - 2026-07-20
 ### Fixed
 - **Artist Albums pagination broken in Material Skin** — `_artistAlbumsFeed` fetched only one API page but reported the full `total` to LMS, causing Material Skin to show "scroll for more" indefinitely. Added the same play-all/`_fetchAllPages` pattern that `_playlistFeed` already had. Also applied to `_savedAlbumsFeed`, `_userPlaylistsFeed`, and `_savedShowsFeed` which had the same structural vulnerability for large collections. ([#121](https://github.com/stiefenm/spoton/issues/121))
