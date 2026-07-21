@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-21T06:18:11.689Z",
+  "lastChecked": "2026-07-21T09:17:19.296Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -219,10 +219,22 @@
         "1829118",
         "1829124",
         "1829127",
-        "1829208"
+        "1829208",
+        "1829262"
       ],
-      "lastPostCount": 217
+      "lastPostCount": 218
     }
   },
-  "pendingTriage": []
+  "pendingTriage": [
+    {
+      "postId": "1829262",
+      "postNumber": 218,
+      "author": "OliWarner",
+      "timestamp": "2026-07-21T01:46:58-07:00",
+      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
+      "contentPreview": "SpotOn recommendations on Don't Stop The Music are really tight. They seem to always include the same artist.  Is there any way of loosening this up a bit?",
+      "draft": "Hey OliWarner,\n\nThanks for the feedback — you're touching on something that's a known limitation with how SpotOn's Autoplay/Don't Stop The Music integration currently works.\n\nThe short version: SpotOn uses Spotify's recommendations API seeded from the currently playing track/artist, which tends to produce fairly similar results by default. The \"same artist keeps appearing\" behaviour is a common complaint and is something we'd like to improve.\n\nThere's an open enhancement request related to this — [B]Issue #117[/B] covers the fact that SpotOn's Autoplay silently overrides the Don't Stop The Music setting rather than integrating cleanly with it. Wider recommendation variety is part of that same conversation.\n\nA few things that [I]may[/I] help in the meantime:\n\n[LIST]\n[*]Make sure you've played a good variety of tracks before DSTM kicks in — the seed Spotify uses matters a lot\n[*]Check whether your Spotify account has a broad listening history; the recommendations API draws on that\n[/LIST]\n\nThat said, I won't pretend there's a setting you're missing that fixes this — the tightness you're seeing is largely a function of how the Spotify recommendations endpoint behaves with a single seed.\n\nIf you want to help shape how this gets improved, feel free to add a comment on the GitHub issue with your specific experience:\n\n[URL]https://github.com/stiefenm/spoton/issues/117[/URL]\n\nThe more concrete examples we have of what users expect vs. what they get, the better we can prioritise and spec out a fix.",
+      "scrapedAt": "2026-07-21T09:17:19.296Z"
+    }
+  ]
 }
