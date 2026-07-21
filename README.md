@@ -27,7 +27,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 - **Streaming** — Per-player format selection (OGG passthrough, FLAC, PCM, MP3) with 96/160/320 kbps bitrate and volume normalization
 - **Spotify Connect** — Full bidirectional control: appear as a Connect device, control from any Spotify client, state syncs both ways
 - **Made For You** — Daily Mixes, Discover Weekly, Daylist, Release Radar with locale-aware sorting
-- **Don't Stop The Music** — Automatic queue extension using Spotify recommendations
+- **Don't Stop The Music** — Automatic queue extension with multi-artist search, diversity pool from your top tracks, and anti-bubble deduplication
 - **Multi-Account** — Switch between Spotify accounts without re-authentication
 
 ## Requirements
