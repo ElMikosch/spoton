@@ -483,31 +483,36 @@ sub handleFeed {
     if ($activeName) {
         if ($accountCount > 1) {
             push @items, {
-                name => cstring($client, 'PLUGIN_SPOTON_ACTIVE_ACCOUNT', $activeName),
-                url  => \&_accountSwitcherFeed,
-                type => 'link',
+                name  => cstring($client, 'PLUGIN_SPOTON_ACTIVE_ACCOUNT', $activeName),
+                url   => \&_accountSwitcherFeed,
+                image => 'plugins/SpotOn/html/images/account.png',
+                type  => 'link',
             };
         }
 
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_HOME'),
-            url  => \&_homeFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_HOME'),
+            url   => \&_homeFeed,
+            image => 'plugins/SpotOn/html/images/home.png',
+            type  => 'link',
         };
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_SEARCH'),
-            url  => \&_searchFeed,
-            type => 'search',
+            name  => cstring($client, 'PLUGIN_SPOTON_SEARCH'),
+            url   => \&_searchFeed,
+            image => 'html/images/search.png',
+            type  => 'search',
         };
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_LIBRARY'),
-            url  => \&_libraryFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_LIBRARY'),
+            url   => \&_libraryFeed,
+            image => 'html/images/musicfolder.png',
+            type  => 'link',
         };
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_PODCASTS'),
-            url  => \&_podcastsFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_PODCASTS'),
+            url   => \&_podcastsFeed,
+            image => 'plugins/SpotOn/html/images/podcasts.png',
+            type  => 'link',
         };
     } else {
         push @items, {
@@ -898,7 +903,7 @@ sub SpotOnAddToPlaylist {
                 name        => $pl->{name} // '',
                 url         => \&_doAddToPlaylist,
                 passthrough => [{ playlistId => $pl->{id}, playlistName => $pl->{name}, spotifyUri => $spotifyUri, accountId => $accountId }],
-                image       => _largestImage($pl->{images}),
+                image       => _largestImage($pl->{images}) || 'html/images/playlists.png',
                 line2       => ($pl->{owner} || {})->{display_name} // '',
                 type        => 'link',
             };
@@ -1101,7 +1106,7 @@ sub _trackItem {
         play          => $spoton_url,
         on_select     => 'play',
         playall       => 1,    # Context queueing (D-09/D-10) — XMLBrowser enqueues all feed items
-        image         => $image,
+        image         => $image || 'html/images/cover.png',
         duration      => $duration,
         type          => 'audio',
         # spoton:// URL for LMS Favorites playback
@@ -1164,7 +1169,7 @@ sub _albumItem {
         name          => $album->{name} // '',
         url           => \&_albumFeed,
         passthrough   => [{ albumId => $album->{id}, albumImages => $album->{images}, albumArtist => $firstArtist, albumName => $album->{name}, albumReleaseDate => $releaseDate }],
-        image         => _largestImage($album->{images}),
+        image         => _largestImage($album->{images}) || 'html/images/albums.png',
         line2         => $line2,
         favorites_url => $album_spoton,
         type          => 'playlist',
@@ -1180,7 +1185,7 @@ sub _artistItem {
         name        => $artist->{name} // '',
         url         => \&_artistFeed,               # defined in Plan 03-03
         passthrough => [{ artistId => $artist->{id} }],
-        image       => _largestImage($artist->{images}),
+        image       => _largestImage($artist->{images}) || 'html/images/artists.png',
         type        => 'link',
     };
 }
@@ -1203,7 +1208,7 @@ sub _playlistItem {
         name          => $playlist->{name} // '',
         url           => \&_playlistFeed,
         passthrough   => [{ playlistId => $playlist->{id}, webPlayer => $webPlayer }],
-        image         => _largestImage($playlist->{images}),
+        image         => _largestImage($playlist->{images}) || 'html/images/playlists.png',
         line2         => $playlist->{owner}{display_name} // '',
         favorites_url => $pl_spoton,
         type          => 'playlist',
@@ -1431,24 +1436,28 @@ sub _libraryFeed {
 
     my @items = (
         {
-            name => cstring($client, 'PLUGIN_SPOTON_LIKED_SONGS'),
-            url  => \&_savedTracksFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_LIKED_SONGS'),
+            url   => \&_savedTracksFeed,
+            image => 'plugins/SpotOn/html/images/song.png',
+            type  => 'link',
         },
         {
-            name => cstring($client, 'PLUGIN_SPOTON_ALBUMS'),
-            url  => \&_savedAlbumsFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_ALBUMS'),
+            url   => \&_savedAlbumsFeed,
+            image => 'html/images/albums.png',
+            type  => 'link',
         },
         {
-            name => cstring($client, 'PLUGIN_SPOTON_ARTISTS'),
-            url  => \&_followedArtistsFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_ARTISTS'),
+            url   => \&_followedArtistsFeed,
+            image => 'html/images/artists.png',
+            type  => 'link',
         },
         {
-            name => cstring($client, 'PLUGIN_SPOTON_PLAYLISTS'),
-            url  => \&_userPlaylistsFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_PLAYLISTS'),
+            url   => \&_userPlaylistsFeed,
+            image => 'html/images/playlists.png',
+            type  => 'link',
         },
     );
 
@@ -1895,7 +1904,7 @@ sub _showItem {
         line2         => $publisher,
         url           => \&_showFeed,
         passthrough   => [{ showId => $show->{id}, showUri => $show->{uri}, showImages => $show->{images}, showName => $name }],
-        image         => _largestImage($show->{images}),
+        image         => _largestImage($show->{images}) || 'html/images/cover.png',
         favorites_url => $show_spoton,
         type          => 'playlist',
     };
@@ -2101,7 +2110,7 @@ sub _episodeItem {
         url           => $spoton_url,
         play          => $spoton_url,
         on_select     => 'play',
-        image         => $image,
+        image         => $image || 'html/images/cover.png',
         duration      => $duration,
         type          => 'audio',
         # spoton:// URL for LMS Favorites playback
@@ -2914,7 +2923,7 @@ sub _albumTrackItem {
         play      => $spoton_url,
         on_select => 'play',
         playall   => 1,    # Context queueing for album track tap (D-09)
-        image     => $image,
+        image     => $image || 'html/images/cover.png',
         duration  => $duration,
         type      => 'audio',
     );
