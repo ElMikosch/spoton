@@ -292,6 +292,22 @@ sub shutdownPlugin {
         \&Plugins::SpotOn::API::TokenManager::refreshAllTokens);
 }
 
+# postinitPlugin($class)
+# Called by LMS after all plugins have completed initPlugin. Registers
+# SpotOn's Home Extras (scrolled "Recently Played" / "Top Tracks" rows)
+# with Material Skin's home screen -- silent no-op when Material Skin is
+# not installed or predates the registerHomeExtra API (GH #125).
+sub postinitPlugin {
+    my $class = shift;
+
+    if ( Slim::Utils::PluginManager->isEnabled('Plugins::MaterialSkin::Plugin')
+        && Plugins::MaterialSkin::Plugin->can('registerHomeExtra') )
+    {
+        eval { require Plugins::SpotOn::HomeExtras; };
+        $log->error("Could not load SpotOn Home Extras: $@") if $@;
+    }
+}
+
 # Material Skin resolves app icons via /material/svg/{tag} from its own
 # images dir, with a fallback to {prefs_dir}/material-skin/images/.
 # Deploy our SVG there so the icon renders in the Material Skin grid.
