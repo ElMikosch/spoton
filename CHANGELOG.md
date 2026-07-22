@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-07-22
+### Fixed
+- **Material Skin grid-view toggle broken by artwork-less items** — playlists, albums, or tracks without Spotify artwork now show LMS-core fallback images instead of empty strings, so Material Skin's grid/cover-view toggle stays available for the entire list. Applied to all 8 item builders. ([#124](https://github.com/stiefenm/spoton/issues/124))
+
+### Added
+- **Material Skin home-screen integration** — new HomeExtras module registers "Recently Played" and "Top Tracks" as scrolled rows on the Material Skin home screen. Loads silently as a no-op when Material Skin is not installed. ([#125](https://github.com/stiefenm/spoton/issues/125))
+- **Menu icons for all skins** — top-level entries (Home, Search, Library, Podcasts, Account Switcher) and library submenu entries (Liked Songs, Albums, Artists, Playlists) now have distinct icons, improving navigation in Material Skin and all other LMS skins.
+- **HomeExtras robustness** — scrolled-row feeds filter out error/auth textarea items (preventing junk cards) and memoize results for 60s per player (preventing uncached API calls on every home-screen refresh).
+
 ## [3.1.3] - 2026-07-21
 ### Fixed
 - **DSTM silent failures** — five bugs in Don't Stop The Music that caused silent fallback to local music: multi-artist query strings that Spotify couldn't match, unclamped random offset producing empty results, `getLimit('search')` returning 0 for blocked endpoints, and dead code (`_searchForSeeds`) that wasted API calls and could trigger rate-limit self-sabotage.
