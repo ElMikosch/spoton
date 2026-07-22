@@ -226,6 +226,18 @@
   Depends on: Phase 49, Phase 50
   See: `.planning/spikes/ncspot-bundled-id-spike.md`, `.planning/phases/55-bundled-client-id/`
 
+### Phase 56: Material Skin Compatibility
+
+- [ ] **Phase 56: Material Skin Compatibility**
+  **Goal**: Fix Grid/Cover-View toggle for Playlists (#124), add Home Extras for MS home screen scrolled rows (#125), add icons to all menus. Fallback images in item builders, HomeExtras.pm module, top-level + submenu icons.
+  **Plans:** 1 plan
+  Depends on: None (independent)
+  See: `.planning/phases/56-material-skin-compat/`
+
+  Plans:
+
+  - [ ] 56-01-PLAN.md — Fallback images in item builders + menu icons + HomeExtras module
+
 ## Progress Table
 
 | Phase | Milestone | Plans | Status | Completed |
