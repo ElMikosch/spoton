@@ -1285,9 +1285,10 @@ sub _homeFeed {
     }
 
     push @items, {
-        name => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
-        url  => \&_topTracksFeed,
-        type => 'link',
+        name  => cstring($client, 'PLUGIN_SPOTON_TOP_TRACKS'),
+        url   => \&_topTracksFeed,
+        type  => 'link',
+        image => 'plugins/SpotOn/html/images/toptracks.png',
     };
 
     $callback->({ items => \@items });
