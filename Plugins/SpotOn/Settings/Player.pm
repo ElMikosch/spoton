@@ -85,13 +85,13 @@ sub handler {
         my $rawAutoplay = $prefs->client($client)->get('enableAutoplay');
         $paramRef->{autoplayEnabled} = $rawAutoplay // 1;
 
-        if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
+        my $dstmAvailable = Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin');
+        $paramRef->{dstmAvailable} = $dstmAvailable ? 1 : 0;
+        if ( $dstmAvailable ) {
             my $dstmPrefs    = preferences('plugin.dontstopthemusic');
             my $dstmProvider = $dstmPrefs->client($client)->get('provider') // '';
-            $paramRef->{dstmProvider}  = $dstmProvider;
             $paramRef->{dstmIsSpotOn}  = ($dstmProvider eq 'PLUGIN_SPOTON_RECOMMENDATIONS') ? 1 : 0;
         } else {
-            $paramRef->{dstmProvider}  = '';
             $paramRef->{dstmIsSpotOn}  = 0;
         }
     }

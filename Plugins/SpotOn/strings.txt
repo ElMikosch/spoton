@@ -1130,17 +1130,17 @@ PLUGIN_SPOTON_AUTOPLAY_ENABLED
 	SV	Automatisk uppspelning (Autoplay)
 
 PLUGIN_SPOTON_AUTOPLAY_ENABLED_DESC
-	CS	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	DA	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
+	CS	Pokud je aktivováno, Spotify pokračuje v přehrávání podobných skladeb po skončení playlistu nebo alba (pouze režim Connect).
+	DA	Når aktiveret, fortsætter Spotify med at afspille lignende numre efter en playliste eller et album slutter (kun Connect-tilstand).
 	DE	Wenn aktiviert, spielt Spotify nach Ende einer Playlist oder eines Albums ähnliche Titel weiter (nur Connect-Modus).
 	EN	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	ES	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	FR	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	IT	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	NL	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	NO	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	PL	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
-	SV	When enabled, Spotify continues playing similar tracks after a playlist or album ends (Connect mode only).
+	ES	Cuando está activado, Spotify continúa reproduciendo canciones similares tras finalizar una lista o álbum (solo modo Connect).
+	FR	Lorsqu'activé, Spotify continue la lecture avec des titres similaires après la fin d'une playlist ou d'un album (mode Connect uniquement).
+	IT	Se abilitato, Spotify continua a riprodurre brani simili dopo la fine di una playlist o di un album (solo modalità Connect).
+	NL	Indien ingeschakeld, speelt Spotify vergelijkbare nummers af nadat een afspeellijst of album is afgelopen (alleen Connect-modus).
+	NO	Når aktivert, fortsetter Spotify å spille lignende spor etter at en spilleliste eller et album er ferdig (kun Connect-modus).
+	PL	Po włączeniu Spotify kontynuuje odtwarzanie podobnych utworów po zakończeniu playlisty lub albumu (tylko tryb Connect).
+	SV	När aktiverat fortsätter Spotify att spela liknande låtar efter att en spellista eller ett album har avslutats (endast Connect-läge).
 
 PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL
 	CS	Automatické přehrávání aktivovat
@@ -1156,30 +1156,30 @@ PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL
 	SV	Aktivera automatisk uppspelning
 
 PLUGIN_SPOTON_DSTM_STATUS_ACTIVE
-	CS	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	DA	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
+	CS	Don't Stop The Music: SpotOn je vybrán jako poskytovatel (změnit v nastavení přehrávače LMS).
+	DA	Don't Stop The Music: SpotOn er valgt som udbyder (ændr i LMS-afspillerindstillinger).
 	DE	Don't Stop The Music: SpotOn ist als Anbieter ausgewählt (ändern in LMS Player-Einstellungen).
 	EN	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	ES	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	FR	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	IT	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	NL	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	NO	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	PL	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
-	SV	Don't Stop The Music: SpotOn is selected as provider (change in LMS Player Settings).
+	ES	Don't Stop The Music: SpotOn está seleccionado como proveedor (cambiar en ajustes del reproductor LMS).
+	FR	Don't Stop The Music : SpotOn est sélectionné comme fournisseur (modifier dans les réglages du lecteur LMS).
+	IT	Don't Stop The Music: SpotOn è selezionato come fornitore (modificare nelle impostazioni del lettore LMS).
+	NL	Don't Stop The Music: SpotOn is geselecteerd als aanbieder (wijzigen in LMS-spelerinstellingen).
+	NO	Don't Stop The Music: SpotOn er valgt som leverandør (endre i LMS-spillerinnstillinger).
+	PL	Don't Stop The Music: SpotOn jest wybrany jako dostawca (zmień w ustawieniach odtwarzacza LMS).
+	SV	Don't Stop The Music: SpotOn är valt som leverantör (ändra i LMS-spelarinställningar).
 
 PLUGIN_SPOTON_DSTM_STATUS_HINT
-	CS	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	DA	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
+	CS	Don't Stop The Music: Pro použití doporučení SpotOn po skončení Browse playlistů vyberte 'SpotOn' v nastavení přehrávače LMS > Don't Stop The Music.
+	DA	Don't Stop The Music: For at bruge SpotOn-anbefalinger efter Browse-playlister slutter, vælg 'SpotOn' i LMS-afspillerindstillinger > Don't Stop The Music.
 	DE	Don't Stop The Music: Um SpotOn-Empfehlungen nach Ende von Browse-Playlists zu nutzen, wähle 'SpotOn' in LMS Player-Einstellungen > Don't Stop The Music.
 	EN	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	ES	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	FR	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	IT	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	NL	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	NO	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	PL	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
-	SV	Don't Stop The Music: To use SpotOn recommendations after Browse playlists end, select 'SpotOn' in LMS Player Settings > Don't Stop The Music.
+	ES	Don't Stop The Music: Para usar las recomendaciones de SpotOn tras finalizar las listas de Browse, selecciona 'SpotOn' en ajustes del reproductor LMS > Don't Stop The Music.
+	FR	Don't Stop The Music : Pour utiliser les recommandations SpotOn après la fin des playlists Browse, sélectionnez 'SpotOn' dans réglages du lecteur LMS > Don't Stop The Music.
+	IT	Don't Stop The Music: Per utilizzare i consigli di SpotOn dopo la fine delle playlist Browse, seleziona 'SpotOn' nelle impostazioni del lettore LMS > Don't Stop The Music.
+	NL	Don't Stop The Music: Om SpotOn-aanbevelingen te gebruiken nadat Browse-afspeellijsten eindigen, selecteer 'SpotOn' in LMS-spelerinstellingen > Don't Stop The Music.
+	NO	Don't Stop The Music: For å bruke SpotOn-anbefalinger etter at Browse-spillelister er ferdig, velg 'SpotOn' i LMS-spillerinnstillinger > Don't Stop The Music.
+	PL	Don't Stop The Music: Aby używać rekomendacji SpotOn po zakończeniu playlist Browse, wybierz 'SpotOn' w ustawieniach odtwarzacza LMS > Don't Stop The Music.
+	SV	Don't Stop The Music: För att använda SpotOn-rekommendationer efter att Browse-spellistor avslutats, välj 'SpotOn' i LMS-spelarinställningar > Don't Stop The Music.
 
 PLUGIN_SPOTON_CONNECT_OGG_OVERRIDE
 	CS	Audio formát (Connect)

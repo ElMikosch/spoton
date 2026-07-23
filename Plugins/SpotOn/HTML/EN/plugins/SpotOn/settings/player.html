@@ -27,6 +27,7 @@
 		       id="pref_enableAutoplay"
 		       value="1" [% IF autoplayEnabled %]checked[% END %]/>
 		<label for="pref_enableAutoplay">[% 'PLUGIN_SPOTON_AUTOPLAY_ENABLED_LABEL' | string %]</label>
+		[% IF dstmAvailable %]
 		<div style="margin-top:8px; color:#888; font-size:0.9em">
 			[% IF dstmIsSpotOn %]
 				[% 'PLUGIN_SPOTON_DSTM_STATUS_ACTIVE' | string %]
@@ -34,6 +35,7 @@
 				[% 'PLUGIN_SPOTON_DSTM_STATUS_HINT' | string %]
 			[% END %]
 		</div>
+		[% END %]
 	[% END %]
 	[% END %]
 
