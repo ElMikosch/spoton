@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-07-23
+### Fixed
+- **Connect seek/skip doesn't update progress bar on JiveLite/SqueezePlay** — the seek and track-change handlers in Connect mode now trigger a status push so subscribed displays resync immediately. Previously, LMS silently dropped the notification because no nested command was executed. ([#126](https://github.com/stiefenm/spoton/issues/126))
+- **UTF-8 double-encoding on Status and Settings pages** — player names and other non-ASCII text (e.g. "Küche") now render correctly instead of mojibake ("KÃ¼che"). The `_jsonResponse` helper was wrapping `to_json()` output in a redundant `encode('UTF-8', ...)`. ([#125](https://github.com/stiefenm/spoton/issues/125))
+
+### Added
+- **Home feed icons for Material Skin grid/cover toggle** — Recently Played, Made For You, and Top Tracks entries now carry menu icons, enabling the grid/cover-view toggle on the Home feed. ([#124](https://github.com/stiefenm/spoton/issues/124))
+- **Search result category icons** — Top Result, Tracks, Albums, Artists, and Playlists categories in search results now have distinct icons.
+- **Made For You as Material Skin scrolled row** — available in MS Settings → Home Screen alongside Recently Played and Top Tracks. Degrades cleanly when sp_dc is not configured. ([#125](https://github.com/stiefenm/spoton/issues/125))
+
 ## [3.2.1] - 2026-07-23
 ### Fixed
 - **Autoplay silently overrides Don't Stop The Music** — the Autoplay toggle in SpotOn Player Settings now controls Spotify Connect autoplay only and no longer writes to the DSTM provider setting. SpotOn no longer auto-claims DSTM for all players, and saving SpotOn settings no longer overwrites your chosen DSTM provider (LastMix, MusicIP, Random Mix, etc.). To use SpotOn recommendations for Browse queues, select "SpotOn Recommendations" in LMS Player Settings > Don't Stop The Music. ([#117](https://github.com/stiefenm/spoton/issues/117))
