@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-07-23T10:06:23.017Z",
+  "lastChecked": "2026-07-23T12:03:27.677Z",
   "threads": {
     "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty": {
       "knownPostIds": [
@@ -227,26 +227,5 @@
       "lastPostCount": 220
     }
   },
-  "pendingTriage": [
-    {
-      "postId": "1829262",
-      "postNumber": 218,
-      "author": "OliWarner",
-      "timestamp": "2026-07-21T01:46:58-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "SpotOn recommendations on Don't Stop The Music are really tight. They seem to always include the same artist.  Is there any way of loosening this up a bit?",
-      "draft": "Hey OliWarner,\n\nThanks for the feedback — you're touching on something that's a known limitation with how SpotOn's Autoplay/Don't Stop The Music integration currently works.\n\nThe short version: SpotOn uses Spotify's recommendations API seeded from the currently playing track/artist, which tends to produce fairly similar results by default. The \"same artist keeps appearing\" behaviour is a common complaint and is something we'd like to improve.\n\nThere's an open enhancement request related to this — [B]Issue #117[/B] covers the fact that SpotOn's Autoplay silently overrides the Don't Stop The Music setting rather than integrating cleanly with it. Wider recommendation variety is part of that same conversation.\n\nA few things that [I]may[/I] help in the meantime:\n\n[LIST]\n[*]Make sure you've played a good variety of tracks before DSTM kicks in — the seed Spotify uses matters a lot\n[*]Check whether your Spotify account has a broad listening history; the recommendations API draws on that\n[/LIST]\n\nThat said, I won't pretend there's a setting you're missing that fixes this — the tightness you're seeing is largely a function of how the Spotify recommendations endpoint behaves with a single seed.\n\nIf you want to help shape how this gets improved, feel free to add a comment on the GitHub issue with your specific experience:\n\n[URL]https://github.com/stiefenm/spoton/issues/117[/URL]\n\nThe more concrete examples we have of what users expect vs. what they get, the better we can prioritise and spec out a fix.",
-      "scrapedAt": "2026-07-21T09:17:19.296Z"
-    },
-    {
-      "postId": "1829337",
-      "postNumber": 219,
-      "author": "woOrszt",
-      "timestamp": "2026-07-22T00:07:16-07:00",
-      "threadUrl": "https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton-%E2%80%94-spotify-plugin-for-lms-alternative-to-spotty",
-      "contentPreview": "Originally posted by OliWarner \t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t\t \t\t\t\t\t\t\t\t \t\t\t\t\t\t\t \t\t\t\t\t\t \t\t\t\t\t \t\t\t\t \t\t\t\tSpotOn recommendations on Don't Stop The Music are really tight. They seem to always include the same ",
-      "draft": "[QUOTE=woOrszt]Chances are even high that these are a result of your comment yesterday. sti has some GitHub actions going to on the scan this thread frequently (which is nice).[/QUOTE]\n\nHa, I appreciate the kind words, woOrszt! 😄\n\n[B]OliWarner[/B] — yes, please give [B]v3.1.3[/B] a try! The update includes some changes aimed at broadening recommendation variety, so the \"same artist on repeat\" behaviour should be noticeably improved.\n\nThat said, I want to be transparent: the underlying recommendations come from Spotify's API, so there's a limit to how much we can tune on our end. If after updating to 3.1.3 you're still finding the suggestions too narrow, it would really help to know:\n\n[LIST]\n[*]What kind of seed tracks/artists tend to trigger it?\n[*]Are you seeing the same artist repeatedly, or just the same general genre/mood?\n[/LIST]\n\nAlso worth noting — there's an open issue ([URL=https://github.com/stiefenm/spoton/issues/117]#117[/URL]) tracking the fact that SpotOn's Autoplay can silently override LMS's native Don't Stop The Music setting. If your experience is more about [I]which[/I] feature is actually driving playback rather than recommendation quality itself, that issue might be relevant context.\n\nIf 3.1.3 doesn't improve things to your satisfaction, please open a GitHub issue with some details: [URL=https://github.com/stiefenm/spoton/issues]https://github.com/stiefenm/spoton/issues[/URL] — and grab a diagnostic bundle from [B]SpotOn Settings → Diagnostics[/B] if you can, it helps a lot in tracking down what seeds are being passed to the API.",
-      "scrapedAt": "2026-07-22T07:23:20.106Z"
-    }
-  ]
+  "pendingTriage": []
 }
