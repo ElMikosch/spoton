@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.3] - 2026-07-23
+### Fixed
+- **Connect progress bar divergence on mid-song resume** — the change handler no longer pushes a premature `newmetadata` notification at track-change time, which was sending a definitive position=0 to LMS clients before the real position arrived. The notification is now deferred to `_fetchTrackMetadata`'s failure paths (stale-API discard, 429 backoff, parse error), preserving the rapid-skip progress reset from the #126 fix without the eager wrong push. ([#126](https://github.com/stiefenm/spoton/issues/126))
+- **Mid-song Connect resume position stays at 0** — the `needs_position_sync` flag in the librespot Connect handler now survives an intervening `TrackChanged Some→Some` event. Previously, a second TrackChanged before the first Playing event unconditionally cleared the flag, so the seek notification with the real position never fired. Both Playing handler branches now consume the flag via atomic swap. (librespot-spoton 3.0.1, [#126](https://github.com/stiefenm/spoton/issues/126))
+
 ## [3.2.2] - 2026-07-23
 ### Fixed
 - **Connect seek/skip doesn't update progress bar on JiveLite/SqueezePlay** — the seek and track-change handlers in Connect mode now trigger a status push so subscribed displays resync immediately. Previously, LMS silently dropped the notification because no nested command was executed. ([#126](https://github.com/stiefenm/spoton/issues/126))
