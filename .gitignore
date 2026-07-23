@@ -18,6 +18,7 @@ obsidian/
 .claude/
 .github/scripts/forum-monitor/
 CLAUDE.md
+.continue-here.md
 REQUIREMENTS.md
 claude-spotty.sudoers
 test_keymaster_*.py

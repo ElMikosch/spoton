@@ -6,33 +6,30 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
   issues: write
 
 jobs:
   monitor:
     runs-on: [self-hosted, spoton]
     env:
+      SCRIPTS_DIR: /home/sti/.spoton-forum-monitor/scripts
       STATE_DIR: /home/sti/.spoton-forum-monitor
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install dependencies
-        working-directory: .github/scripts/forum-monitor
+        working-directory: ${{ env.SCRIPTS_DIR }}
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: .github/scripts/forum-monitor
+        working-directory: ${{ env.SCRIPTS_DIR }}
         run: npx playwright install chromium --with-deps 2>/dev/null || npx playwright install chromium
 
       - name: Restore state
-        working-directory: .github/scripts/forum-monitor
+        working-directory: ${{ env.SCRIPTS_DIR }}
         run: |
-          mkdir -p "$STATE_DIR"
           [ -f "$STATE_DIR/forum-state.json" ] && cp "$STATE_DIR/forum-state.json" forum-state.json || true
 
       - name: Run forum monitor
-        working-directory: .github/scripts/forum-monitor
+        working-directory: ${{ env.SCRIPTS_DIR }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,19 +38,6 @@ jobs:
 
       - name: Save state
         if: always()
-        working-directory: .github/scripts/forum-monitor
+        working-directory: ${{ env.SCRIPTS_DIR }}
         run: |
           [ -f forum-state.json ] && cp forum-state.json "$STATE_DIR/forum-state.json" || true
-
-      - name: Commit state to repo
-        if: always()
-        working-directory: .github/scripts/forum-monitor
-        run: |
-          cp forum-state.json /tmp/forum-state-ours.json
-          git fetch origin main
-          git reset --hard origin/main
-          cp /tmp/forum-state-ours.json forum-state.json
-          git add forum-state.json
-          git diff --cached --quiet && exit 0
-          git commit -m "chore: update forum monitor state [skip ci]"
-          git push
