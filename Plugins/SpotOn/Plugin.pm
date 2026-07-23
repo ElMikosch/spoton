@@ -1252,9 +1252,10 @@ sub _homeFeed {
 
     my @items = (
         {
-            name => cstring($client, 'PLUGIN_SPOTON_RECENTLY_PLAYED'),
-            url  => \&_recentlyPlayedFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_RECENTLY_PLAYED'),
+            url   => \&_recentlyPlayedFeed,
+            type  => 'link',
+            image => 'plugins/SpotOn/html/images/recently.png',
         },
     );
 
@@ -1272,15 +1273,17 @@ sub _homeFeed {
             . _mfyMaskAccount($accountId) . ' (D-05)');
     } elsif ($mfyState eq 'expired') {
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
-            url  => \&_madeForYouExpiredFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
+            url   => \&_madeForYouExpiredFeed,
+            type  => 'link',
+            image => 'plugins/SpotOn/html/images/madeforyou.png',
         };
     } else {
         push @items, {
-            name => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
-            url  => \&_madeForYouFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
+            url   => \&_madeForYouFeed,
+            type  => 'link',
+            image => 'plugins/SpotOn/html/images/madeforyou.png',
         };
     }
 
