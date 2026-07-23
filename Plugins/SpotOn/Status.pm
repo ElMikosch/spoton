@@ -3,7 +3,6 @@ package Plugins::SpotOn::Status;
 use strict;
 use warnings;
 
-use Encode qw(encode);
 use JSON::XS::VersionOneAndTwo;
 
 use Slim::Utils::Cache;
@@ -318,7 +317,7 @@ sub _systemInfo {
 sub _jsonResponse {
     my ($httpClient, $response, $data, $code) = @_;
     $code //= 200;
-    my $bytes = encode('UTF-8', to_json($data));
+    my $bytes = to_json($data);
     $response->header('Content-Length' => length($bytes));
     $response->code($code);
     $response->header('Connection' => 'close');
