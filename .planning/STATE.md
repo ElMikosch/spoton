@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 Phase: 23 — forum monitor + draft generation
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-23 — Completed quick task 260723-awc: Fix #117 DSTM decoupling
+Last activity: 2026-07-23 — Completed quick task 260723-fkg: Fix #126 Connect seek/change progress bar resync
 
 ## Progress Bar
 
@@ -221,6 +221,7 @@ Items carried forward from previous milestones:
 | 3 | Keymaster Token Usage Audit (4-bucket classification) | 2026-07-13 | e50fc26 | — |
 | 260718-rpy | Dev Mode playlist/library item schema fix (#119) | 2026-07-18 | 26e8c1a | [260718-rpy](./quick/260718-rpy-dev-mode-playlist-schema-fix/) |
 | 260723-awc | Fix #117: Decouple Connect Autoplay from DSTM provider | 2026-07-23 | a3c18dd | [260723-awc](./quick/260723-awc-fix-117-decouple-connect-autoplay-from-d/) |
+| 260723-fkg | Fix #126: Connect seek/change progress bar resync | 2026-07-23 | 5d91cd8 | [260723-fkg](./quick/260723-fkg-fix-126-connect-seek-change-progress-bar/) |
 
 ## Session Continuity
 
