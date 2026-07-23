@@ -156,10 +156,18 @@ impl LMS {
                         }
                     }
                     Some(_) => {
-                        self.needs_position_sync.store(false, Ordering::Release);
                         self.was_paused.store(false, Ordering::Release);
                         let prev = current_track.replace(new_id.clone()).unwrap_or_default();
                         self.notify("change", &new_id, &prev).await;
+                        // A session-start sync armed before this change (TrackChanged
+                        // None->Some -> TrackChanged Some->Some -> Playing) is still
+                        // pending here — honor it the same way the same-id branch does.
+                        if self.needs_position_sync.swap(false, Ordering::AcqRel) {
+                            let secs = f64::from(*position_ms) / 1000.0;
+                            if secs > 1.0 {
+                                self.notify("seek", &format!("{secs:.3}"), "").await;
+                            }
+                        }
                     }
                     None => {
                         self.was_paused.store(false, Ordering::Release);
@@ -244,7 +252,6 @@ impl LMS {
                         self.was_paused.store(false, Ordering::Release);
                     }
                     Some(_) => {
-                        self.needs_position_sync.store(false, Ordering::Release);
                         self.was_paused.store(false, Ordering::Release);
                         let prev = current_track.replace(new_id.clone()).unwrap_or_default();
                         self.notify("change", &new_id, &prev).await;
