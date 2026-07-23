@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Library Integration
-current_phase: 55
-current_phase_name: bundled-client-id
-status: executing
-stopped_at: Completed 55-02-PLAN.md
-last_updated: "2026-07-18T14:43:18.597Z"
-last_activity: 2026-07-18
-last_activity_desc: "Phase 55 Plan 03 executed (Granular Endpoint Probing, #118 fix)"
+current_phase: 23
+current_phase_name: forum monitor + draft generation
+status: planning
+stopped_at: Completed 56-01-PLAN.md
+last_updated: "2026-07-22T16:48:04.775Z"
+last_activity: 2026-07-22
+last_activity_desc: Phase 56 complete, transitioned to Phase 23
 progress:
-  total_phases: 12
-  completed_phases: 6
-  total_plans: 28
-  completed_plans: 25
+  total_phases: 13
+  completed_phases: 7
+  total_plans: 29
+  completed_plans: 26
 ---
 
 # Project State: SpotOn
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 
 **Core Value:** Reliable Spotify playback and Connect integration on LMS — Browse, stream, and control via Spotify app, without 429 bursts, zombie daemons, or audio glitches.
 
-**Current Focus:** Phase 55 — bundled-client-id
+**Current Focus:** Phase 23 — forum monitor + draft generation
 
 ## Current Position
 
-Phase: 55 (bundled-client-id) — EXECUTING
-Plan: 03 of 3 (executed out of order — Plans 01/02 still pending)
-Status: Plan 55-03 complete; 55-01/55-02 not yet executed
-Last activity: 2026-07-18 — Phase 55 Plan 03 executed (Granular Endpoint Probing, #118 fix)
+Phase: 23 — forum monitor + draft generation
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-23 — Completed quick task 260723-awc: Fix #117 DSTM decoupling
 
 ## Progress Bar
 
@@ -54,13 +54,18 @@ Phase 44: [x] Connect OGG Rate-Limiting (OGG-05)
 Phase 46: [x] Code Review Bugfixes (30 findings)
 Phase 48: [~] SUPERSEDED by v3.0 Auth Overhaul (2026-07-04)
 
-v3.0 Auth Overhaul (Phases 49-53, branch: v3.0-auth):
-Phase 49-00: [ ] Token Usage Audit + Backend Evaluation
-Phase 49: [ ] PKCE OAuth Flow (AUTH-01, AUTH-02)
-Phase 50: [ ] Perl TokenManager Rewrite (AUTH-03)
-Phase 51: [ ] Credential Derivation + Connect (AUTH-04, AUTH-05)
-Phase 52: [ ] sp_dc + Pathfinder Integration (Made for You)
-Phase 53: [ ] Keymaster Removal + Migration (AUTH-06, AUTH-07)
+v3.0 Auth Overhaul (Phases 49-53, shipped v3.0.0):
+Phase 49-00: [x] Token Usage Audit + Backend Evaluation
+Phase 49: [x] PKCE OAuth Flow (AUTH-01, AUTH-02)
+Phase 50: [x] Perl TokenManager Rewrite (AUTH-03)
+Phase 51: [x] Credential Derivation + Connect (AUTH-04, AUTH-05)
+Phase 52: [x] sp_dc + Pathfinder Integration (Made for You)
+Phase 53: [x] Keymaster Removal + Migration (AUTH-06, AUTH-07)
+
+Post-v3.0 (shipped):
+Phase 54: [x] Auth Health Dashboard
+Phase 55: [x] Bundled Client ID UX
+Phase 56: [x] Material Skin Compatibility (v3.2.0)
 ```
 
 ## Performance Metrics
@@ -85,6 +90,7 @@ Phase 53: [ ] Keymaster Removal + Migration (AUTH-06, AUTH-07)
 | Phase 54 P04 | 3min | 2 tasks | 1 files |
 | Phase 54 P05 | ~2h | 3 tasks | 8 files |
 | Phase 55 P02 | 45min | 2 tasks | 5 files |
+| Phase 56 P01 | 20min | 2 tasks | 6 files |
 
 ## Deferred Items
 
@@ -193,6 +199,9 @@ Items carried forward from previous milestones:
 - [Phase ?]: [Phase 55][55-03] Seed IDs for artist_albums/album_tracks/playlist_items probes fetched via dedicated real API calls (search limit=1, me/playlists limit=1), not reused from binary-search intermediate responses -- final converged binary-search value has no guaranteed fresh response body
 - [Phase ?]: [Phase 55][55-03] Probe error classification: 400=retry (binary search continues), 403=blocked (limit=0, class isolated), 401=auth_abort (stops entire chain), everything else=skip (keep default, continue) -- only 401 aborts the full probe chain
 - [Phase ?]: D-01..D-06: bundled Client-ID Settings UX wired per 55-CONTEXT.md, no deviations from documented design
+- [Phase ?]: [Phase 56][56-01] Metadata cache writes in _trackItem/_albumTrackItem/_episodeItem keep raw (possibly empty) $image -- only the OPML display hash gets the fallback, so cached NowPlaying/history artwork reflects what Spotify actually returned
+- [Phase ?]: [Phase 56][56-01] Made For You skipped as a HomeExtra candidate -- its feed renders a textarea hint when sp_dc is missing, which would show as a junk row in a Material Skin scrolled list
+- [Phase ?]: [Phase 56][56-01] HomeExtraBase.initPlugin passes the feed coderef directly (no OPML.pm-style menu-param wrapper) since SpotOn's _recentlyPlayedFeed/_topTracksFeed already match the ($client, $callback, $args) signature Plugins::MaterialSkin::HomeExtraBase expects
 
 ### Blockers/Concerns
 
@@ -211,28 +220,26 @@ Items carried forward from previous milestones:
 | 260713-bg4 | Keymaster 403 account check script for affected users | 2026-07-13 | 9aef195 | [260713-bg4](./quick/260713-bg4-keymaster-403-account-check-script-for-a/) |
 | 3 | Keymaster Token Usage Audit (4-bucket classification) | 2026-07-13 | e50fc26 | — |
 | 260718-rpy | Dev Mode playlist/library item schema fix (#119) | 2026-07-18 | 26e8c1a | [260718-rpy](./quick/260718-rpy-dev-mode-playlist-schema-fix/) |
+| 260723-awc | Fix #117: Decouple Connect Autoplay from DSTM provider | 2026-07-23 | a3c18dd | [260723-awc](./quick/260723-awc-fix-117-decouple-connect-autoplay-from-d/) |
 
 ## Session Continuity
 
 **Resume file:** None
 
-**Last session:** 2026-07-18
-**Stopped at:** Quick task 260718-rpy complete, #91 closed, #120 filed
-**Completed this session:**
+**Last session:** 2026-07-23
+**Stopped at:** Session resumed, reviewing project state
+**Completed last session (2026-07-22):**
 
-- Fixed Dev Mode playlist schema (#119): _normalizeLibraryItem helper at 8 consumer sites
-- Closed #91 (Keymaster 403 — woorszt confirmed PKCE resolves it)
-- Filed #120 (Bundled ID: foreign playlists not listed — discovered during regression test)
-- Locally tested both Client ID modes, no regression
+- Phase 56 (Material Skin Compat) planned, executed, reviewed, released as v3.2.0
+- #124/#125 kommentiert mit Fix-Notice, warten auf User-Bestätigung
 
 **Next action:**
 
-1. Reply to woorszt on #119 with fix details
-2. Investigate #120 (bundled ID foreign playlists)
-3. Create v3.0-auth branch from main
-4. Slim Phase 49-00 audit (Grep + 4-bucket classification)
-5. Plan Phase 49 PKCE OAuth
+1. Phase 23 planen (Forum Monitor + Draft Generation)
+2. #124/#125 schließen wenn User-Feedback kommt
+3. #117 (Autoplay/DSTM) — Feedback beobachten
+4. v2.3 Library Integration (Phasen 38–41) — geparkt
 
 ---
 *State initialized: 2026-05-26*
-*Last updated: 2026-07-18 — #119 fix shipped, #91 closed, #120 filed*
+*Last updated: 2026-07-23 — Session resumed, stale next-actions corrected*
