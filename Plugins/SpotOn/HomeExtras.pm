@@ -5,6 +5,7 @@ use warnings;
 
 Plugins::SpotOn::HomeExtraRecentlyPlayed->initPlugin();
 Plugins::SpotOn::HomeExtraTopTracks->initPlugin();
+Plugins::SpotOn::HomeExtraMadeForYou->initPlugin();
 
 1;
 
@@ -96,6 +97,26 @@ sub initPlugin {
         subtitle => 'PLUGIN_SPOTON',
         feed     => \&Plugins::SpotOn::Plugin::_topTracksFeed,
         tag      => 'TopTracks',
+    );
+}
+
+1;
+
+package Plugins::SpotOn::HomeExtraMadeForYou;
+
+use strict;
+use warnings;
+
+use base qw(Plugins::SpotOn::HomeExtraBase);
+
+sub initPlugin {
+    my $class = shift;
+
+    $class->SUPER::initPlugin(
+        title    => 'PLUGIN_SPOTON_MADE_FOR_YOU',
+        subtitle => 'PLUGIN_SPOTON',
+        feed     => \&Plugins::SpotOn::Plugin::_madeForYouFeed,
+        tag      => 'MadeForYou',
     );
 }
 
