@@ -610,6 +610,7 @@ sub _connectEvent {
                 if ($song) {
                     my $elapsed = $client->songElapsedSeconds() || 0;
                     $song->startOffset($position - $elapsed);
+                    Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
                     main::INFOLOG && $log->is_info && $log->info(
                         "Stream mode seek: adjusted startOffset to " . $song->startOffset()
                     );
@@ -860,6 +861,7 @@ sub _connectEvent {
             $song->startOffset(0 - $elapsed);
             $client->playPoint(undef);
             $client->pluginData(progress => 0);
+            Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
         }
 
         # Ensure player is playing — stop→change from skip leaves squeezelite paused.
