@@ -305,6 +305,26 @@
         "Pete7874"
       ],
       "note": "Pete7874: Browse/Library empty on Ubuntu + Squeezebox Touch, 6 players, old account recently upgraded to Premium. Diagnostic posted on GH #116 \u2014 daemon auth OK but crash-loop, likely Keymaster 403. Server.log + Status page requested."
+    },
+    "dstm-account-centric-recommendations": {
+      "status": "active",
+      "keywords": [
+        "Don't Stop The Music",
+        "DSTM",
+        "recommendations",
+        "account-centric",
+        "shared account",
+        "same artist",
+        "too tight"
+      ],
+      "ghIssue": 127,
+      "firstPost": 218,
+      "latestPost": 220,
+      "participants": [
+        "OliWarner",
+        "woOrszt"
+      ],
+      "note": "DSTM recommendations too account-centric in shared-account setups. Diversity pool uses me/top/tracks which reflects account owner. v3.1.3 improved but still too narrow. Ideas: configurable pool injection, recently-played instead of top-tracks."
     }
   }
 }
