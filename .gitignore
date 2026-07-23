@@ -16,6 +16,7 @@ obsidian/
 # Internal development files (not part of the plugin)
 .planning/
 .claude/
+.github/scripts/forum-monitor/
 CLAUDE.md
 REQUIREMENTS.md
 claude-spotty.sudoers
