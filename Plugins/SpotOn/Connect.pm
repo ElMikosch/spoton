@@ -857,11 +857,13 @@ sub _connectEvent {
             # Reset progress bar for the new track: in stream mode,
             # songElapsedSeconds counts from the original stream start,
             # so startOffset must compensate to reset songTime to ~0.
+            # The client push for this reset happens later, from
+            # _fetchTrackMetadata's exit paths (Phase 58) -- pushing it here
+            # would announce position=0 before the real position is known.
             my $elapsed = $client->songElapsedSeconds() || 0;
             $song->startOffset(0 - $elapsed);
             $client->playPoint(undef);
             $client->pluginData(progress => 0);
-            Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
         }
 
         # Ensure player is playing — stop→change from skip leaves squeezelite paused.
@@ -1001,6 +1003,9 @@ sub _fetchTrackMetadata {
                 "Stale API response: event=$eventUri, API=" . $trackInfo->{uri} . " — using event (T-05-14)"
             );
             $log->warn("[DIAG] metadata_stale: mac=" . $client->id . " event_uri=$eventUri api_uri=" . ($trackInfo->{uri} || 'none')) if $prefs->get('diagnosticMode');
+            # Push the change handler's progress reset now -- the API response
+            # is discarded, but clients still need to see the reset (Phase 58).
+            Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
             _finishNewTrack($client);   # H7
             return;
         }
@@ -1008,6 +1013,10 @@ sub _fetchTrackMetadata {
         # H7: EVERY exit path of this callback must clear newTrack — a leaked
         # flag swallows all subsequent stop events.
         unless ($trackInfo && $trackInfo->{name}) {
+            # Push the change handler's progress reset now -- metadata fetch
+            # failed (429 backoff / parse error / no data), so this is the
+            # only remaining chance to notify clients (Phase 58, preserves #126).
+            Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
             _finishNewTrack($client);
             return;
         }
