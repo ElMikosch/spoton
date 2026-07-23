@@ -240,17 +240,17 @@
 
 ### Phase 57: Material Skin UX Polish
 
-- [ ] **Phase 57: Material Skin UX Polish**
+- [x] **Phase 57: Material Skin UX Polish** (completed 2026-07-23)
   **Goal**: Home feed icons for grid/cover toggle (#124), UTF-8 double-encoding fix (#125), Made For You as scrolled row (#125), upstream MS encoding issue filed. Follow-up to Phase 56.
-  **Plans:** 3 plans
+  **Plans:** 3/3 plans complete
   Depends on: Phase 56 (completed)
   See: `.planning/phases/57-material-skin-ux-polish/`
 
   Plans:
 
-  - [ ] 57-01-PLAN.md — Home feed icons: 3 PNG assets + image keys on all 4 _homeFeed items
-  - [ ] 57-02-PLAN.md — UTF-8 double-encoding fix (Status/Settings _jsonResponse) + Made For You scrolled row
-  - [ ] 57-03-PLAN.md — Upstream MS encoding issue at CDrummond/lms-material (draft → approval checkpoint → post)
+  - [x] 57-01-PLAN.md — Home feed icons: 3 PNG assets + image keys on all 4 _homeFeed items
+  - [x] 57-02-PLAN.md — UTF-8 double-encoding fix (Status/Settings _jsonResponse) + Made For You scrolled row
+  - [x] 57-03-PLAN.md — Upstream MS encoding issue (CDrummond/lms-material#1243)
 
 ## Progress Table
 

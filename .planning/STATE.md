@@ -5,15 +5,15 @@ milestone_name: Library Integration
 current_phase: 23
 current_phase_name: forum monitor + draft generation
 status: planning
-stopped_at: Completed 56-01-PLAN.md
-last_updated: "2026-07-22T16:48:04.775Z"
-last_activity: 2026-07-22
-last_activity_desc: Phase 56 complete, transitioned to Phase 23
+stopped_at: Completed 57-01-PLAN.md
+last_updated: "2026-07-23T09:59:45.674Z"
+last_activity: 2026-07-23
+last_activity_desc: "Completed quick task 260723-fkg: Fix #126 Connect seek/change progress bar resync"
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 7
-  total_plans: 29
-  completed_plans: 26
+  total_plans: 32
+  completed_plans: 27
 ---
 
 # Project State: SpotOn
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-06-30)
 Phase: 23 — forum monitor + draft generation
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-23 — Completed quick task 260723-fkg: Fix #126 Connect seek/change progress bar resync
+Last activity: 2026-07-23 — Completed Phase 57: Material Skin UX Polish (3 plans)
 
 ## Progress Bar
 
@@ -66,6 +66,7 @@ Post-v3.0 (shipped):
 Phase 54: [x] Auth Health Dashboard
 Phase 55: [x] Bundled Client ID UX
 Phase 56: [x] Material Skin Compatibility (v3.2.0)
+Phase 57: [x] Material Skin UX Polish
 ```
 
 ## Performance Metrics
@@ -91,6 +92,7 @@ Phase 56: [x] Material Skin Compatibility (v3.2.0)
 | Phase 54 P05 | ~2h | 3 tasks | 8 files |
 | Phase 55 P02 | 45min | 2 tasks | 5 files |
 | Phase 56 P01 | 20min | 2 tasks | 6 files |
+| Phase 57 P01 | ~15min | 2 tasks | 4 files |
 
 ## Deferred Items
 
@@ -202,6 +204,8 @@ Items carried forward from previous milestones:
 - [Phase ?]: [Phase 56][56-01] Metadata cache writes in _trackItem/_albumTrackItem/_episodeItem keep raw (possibly empty) $image -- only the OPML display hash gets the fallback, so cached NowPlaying/history artwork reflects what Spotify actually returned
 - [Phase ?]: [Phase 56][56-01] Made For You skipped as a HomeExtra candidate -- its feed renders a textarea hint when sp_dc is missing, which would show as a junk row in a Material Skin scrolled list
 - [Phase ?]: [Phase 56][56-01] HomeExtraBase.initPlugin passes the feed coderef directly (no OPML.pm-style menu-param wrapper) since SpotOn's _recentlyPlayedFeed/_topTracksFeed already match the ($client, $callback, $args) signature Plugins::MaterialSkin::HomeExtraBase expects
+- [Phase ?]: [Phase 57][57-01] Both Made For You _homeFeed push sites (expired + normal branch) get the same madeforyou.png image key -- missing either would silently break the grid/cover toggle depending on sp_dc state
+- [Phase ?]: [Phase 57][57-01] toptracks.png copied unmodified from Spotty; recently.png + madeforyou.png generated fresh via throwaway PIL script (4x oversample + LANCZOS downscale, LA mode) since Spotty has no equivalent icons
 
 ### Blockers/Concerns
 
@@ -227,8 +231,8 @@ Items carried forward from previous milestones:
 
 **Resume file:** None
 
-**Last session:** 2026-07-23
-**Stopped at:** Session resumed, reviewing project state
+**Last session:** 2026-07-23T09:59:45.664Z
+**Stopped at:** Completed 57-01-PLAN.md
 **Completed last session (2026-07-22):**
 
 - Phase 56 (Material Skin Compat) planned, executed, reviewed, released as v3.2.0
