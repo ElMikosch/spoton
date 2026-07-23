@@ -2443,6 +2443,7 @@ sub _searchFeed {
                 name  => cstring($client, 'PLUGIN_SPOTON_TOP_RESULT'),
                 items => [ _trackItem($client, $topTrack) ],
                 type  => 'outline',
+                image => 'plugins/SpotOn/html/images/search.png',
             };
         }
 
@@ -2458,6 +2459,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'track' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/song.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $tracksTotal),
             };
         }
@@ -2467,6 +2469,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'album' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/album.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $albumsTotal),
             };
         }
@@ -2476,6 +2479,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'artist' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/artist.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $artistsTotal),
             };
         }
@@ -2485,6 +2489,7 @@ sub _searchFeed {
                 url         => \&_searchTypeFeed,
                 passthrough => [{ query => $query, type => 'playlist' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/playlist.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $playlistsTotal),
             };
         }
