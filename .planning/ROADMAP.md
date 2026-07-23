@@ -228,15 +228,29 @@
 
 ### Phase 56: Material Skin Compatibility
 
-- [ ] **Phase 56: Material Skin Compatibility**
+- [x] **Phase 56: Material Skin Compatibility** (completed 2026-07-22)
   **Goal**: Fix Grid/Cover-View toggle for Playlists (#124), add Home Extras for MS home screen scrolled rows (#125), add icons to all menus. Fallback images in item builders, HomeExtras.pm module, top-level + submenu icons.
-  **Plans:** 1 plan
+  **Plans:** 1/1 plans complete
   Depends on: None (independent)
   See: `.planning/phases/56-material-skin-compat/`
 
   Plans:
 
-  - [ ] 56-01-PLAN.md — Fallback images in item builders + menu icons + HomeExtras module
+  - [x] 56-01-PLAN.md — Fallback images in item builders + menu icons + HomeExtras module
+
+### Phase 57: Material Skin UX Polish
+
+- [ ] **Phase 57: Material Skin UX Polish**
+  **Goal**: Home feed icons for grid/cover toggle (#124), UTF-8 double-encoding fix (#125), Made For You as scrolled row (#125), upstream MS encoding issue filed. Follow-up to Phase 56.
+  **Plans:** 3 plans
+  Depends on: Phase 56 (completed)
+  See: `.planning/phases/57-material-skin-ux-polish/`
+
+  Plans:
+
+  - [ ] 57-01-PLAN.md — Home feed icons: 3 PNG assets + image keys on all 4 _homeFeed items
+  - [ ] 57-02-PLAN.md — UTF-8 double-encoding fix (Status/Settings _jsonResponse) + Made For You scrolled row
+  - [ ] 57-03-PLAN.md — Upstream MS encoding issue at CDrummond/lms-material (draft → approval checkpoint → post)
 
 ## Progress Table
 
