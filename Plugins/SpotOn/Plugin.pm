@@ -113,7 +113,7 @@ sub initPlugin {
         enableSpotifyConnect => 1,     # CON-10: per-player Connect toggle, default on
         connectOggOverride   => 'auto', # D-05: OGG passthrough override ('auto'|'ogg'|'pcm')
         disableDiscovery     => 0,     # D-04: global discovery toggle, default on (Pitfall 4)
-        enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (controls Connect autoplay + DSTM)
+        enableAutoplay       => 1,     # D-08: Autoplay toggle, default on (Connect autoplay only — DSTM decoupled per GH #117)
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
         streamingMode        => 'direct', # COMPAT-01: global streaming mode default (direct|proxy); per-player override lives in same-name client pref (GH #96)

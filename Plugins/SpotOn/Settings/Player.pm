@@ -65,15 +65,6 @@ sub handler {
         my $enableAutoplay = $paramRef->{'pref_enableAutoplay'} ? 1 : 0;
         $prefs->client($client)->set('enableAutoplay', $enableAutoplay);
 
-        if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
-            my $dstmPrefs = preferences('plugin.dontstopthemusic');
-            if ($enableAutoplay) {
-                $dstmPrefs->client($client)->set('provider', 'PLUGIN_SPOTON_RECOMMENDATIONS');
-            } else {
-                $dstmPrefs->client($client)->set('provider', 0);
-            }
-        }
-
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
     }
@@ -93,11 +84,15 @@ sub handler {
         $paramRef->{canAutoplay}     = Plugins::SpotOn::Helper->getCapability('autoplay') ? 1 : 0;
         my $rawAutoplay = $prefs->client($client)->get('enableAutoplay');
         $paramRef->{autoplayEnabled} = $rawAutoplay // 1;
-        if ( defined $rawAutoplay && $paramRef->{canAutoplay}
-             && Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
+
+        if ( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin') ) {
             my $dstmPrefs    = preferences('plugin.dontstopthemusic');
             my $dstmProvider = $dstmPrefs->client($client)->get('provider') // '';
-            $paramRef->{autoplayEnabled} = ($dstmProvider eq 'PLUGIN_SPOTON_RECOMMENDATIONS') ? 1 : 0;
+            $paramRef->{dstmProvider}  = $dstmProvider;
+            $paramRef->{dstmIsSpotOn}  = ($dstmProvider eq 'PLUGIN_SPOTON_RECOMMENDATIONS') ? 1 : 0;
+        } else {
+            $paramRef->{dstmProvider}  = '';
+            $paramRef->{dstmIsSpotOn}  = 0;
         }
     }
 

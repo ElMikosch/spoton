@@ -309,22 +309,6 @@ sub initHelpers {
         $staggerIdx++;
     }
 
-    # Ensure DSTM provider is set for players that never opened SpotOn settings.
-    # Only auto-configure when enableAutoplay was never explicitly saved (no timestamp).
-    # If the user saved settings (timestamp exists), their choice is authoritative.
-    if (Slim::Utils::PluginManager->isEnabled('Slim::Plugin::DontStopTheMusic::Plugin')) {
-        my $dstmPrefs = preferences('plugin.dontstopthemusic');
-        for my $client (Slim::Player::Client::clients()) {
-            next if $prefs->client($client)->get('_ts_enableAutoplay');
-            my $provider = $dstmPrefs->client($client)->get('provider') // '';
-            next if $provider;
-            $dstmPrefs->client($client)->set('provider', 'PLUGIN_SPOTON_RECOMMENDATIONS');
-            main::INFOLOG && $log->is_info && $log->info(
-                "Auto-configured DSTM provider for " . $client->id
-            );
-        }
-    }
-
     # 60s watchdog: ensure daemons are alive even without player events
     Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + DAEMON_WATCHDOG_INTERVAL, \&initHelpers);
 }
