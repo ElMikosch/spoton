@@ -252,6 +252,17 @@
   - [x] 57-02-PLAN.md — UTF-8 double-encoding fix (Status/Settings _jsonResponse) + Made For You scrolled row
   - [x] 57-03-PLAN.md — Upstream MS encoding issue (CDrummond/lms-material#1243)
 
+### Phase 58: Connect Position Sync Fix
+
+- [ ] **Phase 58: Connect Position Sync Fix**
+  **Goal**: Fix mid-song Connect resume position (Rust: needs_position_sync cleared too early in TrackChanged Some→Some) and relocate the change-handler notification to _fetchTrackMetadata failure paths (Perl: avoid pushing position=0 before real position is known). Fixes regression from #126 fix.
+  Depends on: Phase 57 (completed), #126 fix (commit 5d91cd8)
+  **Plans:** 2 plans
+  Plans:
+  - [ ] 58-01-PLAN.md — Perl hotfix: relocate change-handler newmetadata notify to _fetchTrackMetadata failure paths (Wave 1)
+  - [ ] 58-02-PLAN.md — Rust root-cause fix: preserve needs_position_sync across TrackChanged Some→Some, consume in Playing Some→Some (Wave 1, triggers CI binary rebuild)
+  See: `.planning/phases/58-connect-position-sync-fix/`
+
 ## Progress Table
 
 | Phase | Milestone | Plans | Status | Completed |
