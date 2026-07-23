@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-07-23
+### Fixed
+- **Autoplay silently overrides Don't Stop The Music** — the Autoplay toggle in SpotOn Player Settings now controls Spotify Connect autoplay only and no longer writes to the DSTM provider setting. SpotOn no longer auto-claims DSTM for all players, and saving SpotOn settings no longer overwrites your chosen DSTM provider (LastMix, MusicIP, Random Mix, etc.). To use SpotOn recommendations for Browse queues, select "SpotOn Recommendations" in LMS Player Settings > Don't Stop The Music. ([#117](https://github.com/stiefenm/spoton/issues/117))
+
+### Added
+- **DSTM status display** — SpotOn Player Settings now shows the current Don't Stop The Music provider status as read-only info, with a hint pointing to LMS Player Settings for configuration.
+
 ## [3.2.0] - 2026-07-22
 ### Fixed
 - **Material Skin grid-view toggle broken by artwork-less items** — playlists, albums, or tracks without Spotify artwork now show LMS-core fallback images instead of empty strings, so Material Skin's grid/cover-view toggle stays available for the entire list. Applied to all 8 item builders. ([#124](https://github.com/stiefenm/spoton/issues/124))
