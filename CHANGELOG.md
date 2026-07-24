@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Seek from JiveLite/LMS UIs now works during Spotify Connect playback** — the seek slider was disabled for Connect streams (`canSeek` returned 0). Seeking now forwards the target position to the Connect binary via `/control/seek` without restarting the LMS stream: `getSeekData` suppresses the LMS-side stream restart while Connect is active, and the seek handler reads the target from the request instead of the (stale) player position. Relative seeks (`+N`/`-N`) are supported. ([#129](https://github.com/stiefenm/spoton/issues/129))
+- **Search category results were capped at the first API page** — drilling into Tracks/Albums/Artists/Playlists from search showed the same first 10 results on every page. `_searchTypeFeed` now maps the LMS page index to the API offset and reports `offset`/`total` back to the menu framework, enabling real pagination (same pattern as the artist-albums fix in #121). ([#130](https://github.com/stiefenm/spoton/issues/130))
+
 ## [3.2.3] - 2026-07-23
 ### Fixed
 - **Connect progress bar divergence on mid-song resume** — the change handler no longer pushes a premature `newmetadata` notification at track-change time, which was sending a definitive position=0 to LMS clients before the real position arrived. The notification is now deferred to `_fetchTrackMetadata`'s failure paths (stale-API discard, 429 backoff, parse error), preserving the rapid-skip progress reset from the #126 fix without the eager wrong push. ([#126](https://github.com/stiefenm/spoton/issues/126))
