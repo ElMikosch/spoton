@@ -780,9 +780,40 @@ sub getSeekData {
     # LMS-side stream restart (_Stop + _Stream would tear down /stream).
     # The ['time'] event still fires and Connect::_onSeek forwards the seek
     # to the binary via /control/seek.
+    #
+    # Known accepted paths that still restart the stream (59-REVIEW R-2/R-3):
+    # - Pause -> seek -> unpause: _JumpPaused stores resumeTime (canSeek=1),
+    #   unpause calls _JumpToTime with restartIfNoSeek=1 which bypasses this
+    #   undef. Harmless: the binary already seeked, and the /stream reconnect
+    #   re-enters the mid-song-connect path where CON-13 adjusts startOffset.
+    #   Seek-to-0 while paused IS suppressed via canDoAction('rew').
+    # - Seek beyond track duration (CLI only): LMS _Skip fires before
+    #   getSeekData. No handler hook exists; accepted as known limitation.
     return undef if Plugins::SpotOn::Connect->isSpotifyConnect($client);
 
     return { timeOffset => $newtime };
+}
+
+# canDoAction($class, $client, $url, $action)
+# Connect mode (R-1, GH #129): block LMS-side track restart on seek-to-0.
+# _JumpToTime special-cases newtime == 0 BEFORE getSeekData and would
+# _Stop + _Stream the Connect stream. Returning 0 for 'rew' suppresses the
+# restart in both _JumpToTime (playing) and _JumpPaused (paused); the
+# ['time'] event still fires and _onSeek forwards seek-to-0 to the binary.
+# Track restart via prev-button is unaffected: _onPlaylistJump forwards
+# playlist jump -1/+0 to /control/prev.
+# All other actions ('stop', 'pause', 'fwd') must stay allowed (return 1).
+sub canDoAction {
+    my ($class, $client, $url, $action) = @_;
+
+    if ($action eq 'rew' && Plugins::SpotOn::Connect->isSpotifyConnect($client)) {
+        main::DEBUGLOG && $log->is_debug && $log->debug(
+            "Connect mode: blocking LMS-side restart for 'rew' (seek-to-0 handled by binary)"
+        );
+        return 0;
+    }
+
+    return 1;
 }
 
 # getMetadataFor($class, $client, $url)
