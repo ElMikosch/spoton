@@ -2512,12 +2512,13 @@ sub _searchTypeFeed {
     my $type   = $passthrough->{type}  // 'track';
 
     my $accountId = _getAccountId($client);
+    my $offset = $args->{index} // 0;
 
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,
         type   => $type,
         limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => 0,
+        offset => $offset,
     }, sub {
         my ($data, $err) = @_;
         unless ($data) {
@@ -2548,11 +2549,11 @@ sub _searchTypeFeed {
             @items = map { _playlistItem($client, $_) } @valid;
         }
 
-        if (!@items) {
+        if (!@items && !$offset) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items });
+        $callback->({ items => \@items, offset => $offset, total => $typeData->{total} // 0 });
     });
 }
 
