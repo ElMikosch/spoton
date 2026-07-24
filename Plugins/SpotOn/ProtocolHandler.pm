@@ -788,6 +788,28 @@ sub getSeekData {
     return { timeOffset => $newtime };
 }
 
+# canDoAction($class, $client, $url, $action)
+# Connect mode (R-1, GH #129): block LMS-side track restart on seek-to-0.
+# _JumpToTime special-cases newtime == 0 BEFORE getSeekData and would
+# _Stop + _Stream the Connect stream. Returning 0 for 'rew' suppresses the
+# restart in both _JumpToTime (playing) and _JumpPaused (paused); the
+# ['time'] event still fires and _onSeek forwards seek-to-0 to the binary.
+# Track restart via prev-button is unaffected: _onPlaylistJump forwards
+# playlist jump -1/+0 to /control/prev.
+# All other actions ('stop', 'pause', 'fwd') must stay allowed (return 1).
+sub canDoAction {
+    my ($class, $client, $url, $action) = @_;
+
+    if ($action eq 'rew' && Plugins::SpotOn::Connect->isSpotifyConnect($client)) {
+        main::DEBUGLOG && $log->is_debug && $log->debug(
+            "Connect mode: blocking LMS-side restart for 'rew' (seek-to-0 handled by binary)"
+        );
+        return 0;
+    }
+
+    return 1;
+}
+
 # getMetadataFor($class, $client, $url)
 # Returns cached track metadata for NowPlaying display (artwork, title, artist, album,
 # duration, bitrate, type).
