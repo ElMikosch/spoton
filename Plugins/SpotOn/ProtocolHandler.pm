@@ -767,11 +767,6 @@ sub canSeek {
 
 sub canTranscodeSeek {
     my ($class, $client) = @_;
-    if ($client) {
-        my $song = $client->playingSong();
-        my $url = $song ? ($song->track->url || '') : '';
-        return 0 if $url =~ m{spoton://connect-};
-    }
     # Unified daemon: seek is handled via ?start_position=N in canDirectStreamSong,
     # not via $START$ in the transcoding command. Returning 0 keeps canDoSeek at 1
     # so streamMode 'I' stays in the profile search and soc-pcm-*-* matches.
