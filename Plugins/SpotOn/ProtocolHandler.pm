@@ -762,11 +762,6 @@ sub isRepeatingStream {
 
 sub canSeek {
     my ($class, $client) = @_;
-    if ($client) {
-        my $song = $client->playingSong();
-        my $url = $song ? ($song->track->url || '') : '';
-        return 0 if $url =~ m{spoton://connect-};
-    }
     return Slim::Utils::Versions->compareVersions($::VERSION, '7.9.1') >= 0;
 }
 
