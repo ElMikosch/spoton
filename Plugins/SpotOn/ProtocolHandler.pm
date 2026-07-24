@@ -785,6 +785,22 @@ sub canTranscodeSeek {
 
 sub getSeekData {
     my ($class, $client, $song, $newtime) = @_;
+
+    # Connect mode (GH #129): return undef so _JumpToTime suppresses the
+    # LMS-side stream restart (_Stop + _Stream would tear down /stream).
+    # The ['time'] event still fires and Connect::_onSeek forwards the seek
+    # to the binary via /control/seek.
+    #
+    # Known accepted paths that still restart the stream (59-REVIEW R-2/R-3):
+    # - Pause -> seek -> unpause: _JumpPaused stores resumeTime (canSeek=1),
+    #   unpause calls _JumpToTime with restartIfNoSeek=1 which bypasses this
+    #   undef. Harmless: the binary already seeked, and the /stream reconnect
+    #   re-enters the mid-song-connect path where CON-13 adjusts startOffset.
+    #   Seek-to-0 while paused IS suppressed via canDoAction('rew').
+    # - Seek beyond track duration (CLI only): LMS _Skip fires before
+    #   getSeekData. No handler hook exists; accepted as known limitation.
+    return undef if Plugins::SpotOn::Connect->isSpotifyConnect($client);
+
     return { timeOffset => $newtime };
 }
 
