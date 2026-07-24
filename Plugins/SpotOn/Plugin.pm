@@ -2510,6 +2510,7 @@ sub _searchTypeFeed {
 
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'track';
+    my $offset = $args->{index}        // 0;
 
     my $accountId = _getAccountId($client);
 
@@ -2517,11 +2518,11 @@ sub _searchTypeFeed {
         q      => $query,
         type   => $type,
         limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => 0,
+        offset => $offset,
     }, sub {
         my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
             return;
         }
 
@@ -2535,24 +2536,31 @@ sub _searchTypeFeed {
         my $typeData  = $data->{$key} || {};
         my $resultItems = $typeData->{items} || [];
 
-        my @valid = grep { $_->{name} && $_->{name} =~ /\S/ } @{$resultItems};
+        # R-4: map nameless entries to { ignore => 1 } placeholders instead of
+        # filtering them out — XMLBrowser skips ignore-items and decrements
+        # totalCount, so offset/total stay aligned with the API's paging.
+        my %typeToItem = (
+            track    => \&_trackItem,
+            album    => \&_albumItem,
+            artist   => \&_artistItem,
+            playlist => \&_playlistItem,
+        );
+        my $itemFn = $typeToItem{$type} // \&_trackItem;
 
-        my @items;
-        if ($type eq 'track') {
-            @items = map { _trackItem($client, $_) } @valid;
-        } elsif ($type eq 'album') {
-            @items = map { _albumItem($client, $_) } @valid;
-        } elsif ($type eq 'artist') {
-            @items = map { _artistItem($client, $_) } @valid;
-        } elsif ($type eq 'playlist') {
-            @items = map { _playlistItem($client, $_) } @valid;
-        }
+        my @items = map {
+            ($_->{name} && $_->{name} =~ /\S/) ? $itemFn->($client, $_) : { ignore => 1 }
+        } @{$resultItems};
 
-        if (!@items) {
+        my $realCount = grep { !$_->{ignore} } @items;
+        if (!$realCount && !$offset) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items });
+        # R-5: Spotify search rejects offset >= 1000 — cap advertised total.
+        my $total = $typeData->{total} // 0;
+        $total = 1000 if $total > 1000;
+
+        $callback->({ items => \@items, offset => $offset, total => $total });
     });
 }
 
