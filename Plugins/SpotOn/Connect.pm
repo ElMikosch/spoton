@@ -436,7 +436,20 @@ sub _onSeek {
 
     return unless __PACKAGE__->isSpotifyConnect($client);
 
-    my $position = Slim::Player::Source::songTime($client) || 0;
+    # GH #129: read the seek target from the request instead of songTime —
+    # with getSeekData returning undef in Connect mode, LMS does not restart
+    # the stream, so songTime still holds the OLD position at this point.
+    my $newvalue = $request->getParam('_newvalue');
+    my $position;
+    if (defined $newvalue && $newvalue =~ /^[+-]/) {
+        # Relative seek: +N / -N applied to current position
+        $position = (Slim::Player::Source::songTime($client) || 0) + $newvalue;
+    } elsif (defined $newvalue) {
+        $position = $newvalue;
+    } else {
+        $position = Slim::Player::Source::songTime($client) || 0;
+    }
+    $position = 0 if $position < 0;
     my $positionMs = int($position * 1000);
 
     # Debounce: coalesce rapid seek events (0.3s window)
