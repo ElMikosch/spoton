@@ -775,6 +775,13 @@ sub canTranscodeSeek {
 
 sub getSeekData {
     my ($class, $client, $song, $newtime) = @_;
+
+    # Connect mode (GH #129): return undef so _JumpToTime suppresses the
+    # LMS-side stream restart (_Stop + _Stream would tear down /stream).
+    # The ['time'] event still fires and Connect::_onSeek forwards the seek
+    # to the binary via /control/seek.
+    return undef if Plugins::SpotOn::Connect->isSpotifyConnect($client);
+
     return { timeOffset => $newtime };
 }
 
