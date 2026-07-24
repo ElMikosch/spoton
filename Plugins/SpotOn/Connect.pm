@@ -78,7 +78,8 @@ sub initConnectHandlers {
 
 # isSpotifyConnect($class, $client)
 # Returns true if the given player is currently in active Spotify Connect mode.
-# Used by ProtocolHandler to disable LMS seek in stream mode.
+# Used by ProtocolHandler to suppress the LMS-side stream restart on seek
+# (getSeekData returns undef; the seek is forwarded to the binary instead).
 sub isSpotifyConnect {
     my ($class, $client) = @_;
 
