@@ -4,6 +4,11 @@ All notable changes to SpotOn will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+### Fixed
+- **Connect seek-to-0 tears down stream** — seeking to the track start during Connect playback no longer triggers an LMS-side `_Stop`+`_Stream` restart. The new `canDoAction('rew')` guard suppresses the restart while the `['time']` event still forwards the seek to the binary. ([#129](https://github.com/stiefenm/spoton/issues/129))
+- **Search pagination breaks when API returns nameless entries** — nameless items in search results are now mapped to XMLBrowser `ignore` placeholders instead of being filtered out, keeping offset/total aligned across page boundaries. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Search total exceeds Spotify's 1000-offset limit** — the advertised total is now capped at 1000 to prevent users from paging into guaranteed API errors. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Search error path missing offset/total** — when the API returns an error mid-paging, OPMLBased now receives offset and total so the auth-required item renders correctly. ([#130](https://github.com/stiefenm/spoton/issues/130))
 
 ## [3.2.3] - 2026-07-23
 ### Fixed
