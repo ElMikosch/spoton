@@ -2326,9 +2326,9 @@ sub _podcastSearchFeed {
 
         my $showsTotal    = $results->{show}{total}    // 0;
         my $episodesTotal = $results->{episode}{total} // 0;
-        # R-5: cap overview totals at 1000 (same as drill-in)
-        $showsTotal    = 1000 if $showsTotal    > 1000;
-        $episodesTotal = 1000 if $episodesTotal > 1000;
+        # R-5: cap overview totals to match drill-in (50 for shows/episodes in Dev Mode)
+        $showsTotal    = 50 if $showsTotal    > 50;
+        $episodesTotal = 50 if $episodesTotal > 50;
 
         if ($showsTotal > 0) {
             push @items, {
@@ -2407,9 +2407,11 @@ sub _podcastSearchTypeFeed {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        # R-5: Spotify search rejects offset >= 1000 — cap advertised total.
+        # R-5: Spotify rejects offset >= 1000 for tracks/albums/artists/playlists,
+        # but only >= 50 for shows/episodes in Dev Mode.
+        my $maxOffset = ($type eq 'show' || $type eq 'episode') ? 50 : 1000;
         my $total = $typeData->{total} // 0;
-        $total = 1000 if $total > 1000;
+        $total = $maxOffset if $total > $maxOffset;
 
         $callback->({ items => \@items, offset => $offset, total => $total });
     });
