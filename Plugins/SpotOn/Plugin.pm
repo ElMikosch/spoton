@@ -2301,6 +2301,8 @@ sub _formatRelativeDate {
 # Entry point for podcast text search. LMS passes query in $args->{search}.
 # Per D-10: full search in Phase 19. Per D-11: separate Show/Episode result sections.
 # Per D-12: limit=10 (Dev Mode). No top-result (simpler than global search).
+# Totals come from single-type calls via _multiTypeSearch so overview counts match
+# _podcastSearchTypeFeed drill-in totals (GH #130).
 sub _podcastSearchFeed {
     my ($client, $callback, $args) = @_;
 
@@ -2312,23 +2314,17 @@ sub _podcastSearchFeed {
 
     my $accountId = _getAccountId($client);
 
-    # Single API call for combined show+episode counts
-    Plugins::SpotOn::API::Client->search($accountId, {
-        q      => $query,
-        type   => 'show,episode',
-        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => 0,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
+    _multiTypeSearch($accountId, $query, ['show', 'episode'], sub {
+        my ($results, $err) = @_;
+        if ($err) {
             $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
 
         my @items;
 
-        my $showsTotal    = $data->{shows}{total}    // 0;
-        my $episodesTotal = $data->{episodes}{total} // 0;
+        my $showsTotal    = $results->{show}{total}    // 0;
+        my $episodesTotal = $results->{episode}{total} // 0;
 
         if ($showsTotal > 0) {
             push @items, {
@@ -2404,6 +2400,48 @@ sub _podcastSearchTypeFeed {
 # ============================================================
 # Search Feeds (NAV-04, NAV-11, D-10)
 # ============================================================
+
+# _multiTypeSearch($accountId, $query, $types, $doneCb)
+# Shared aggregator that fires N parallel single-type search requests (one per
+# entry in $types) and delivers the merged results to $doneCb once every
+# request has completed.
+#
+# Contract:
+#   $types   — arrayref of Spotify type names (e.g. ['track','album','artist','playlist'])
+#   $doneCb  — called once with (\%results, $firstErr) when ALL requests have returned.
+#              %results is keyed by singular type name, each value is { total, items }.
+#              $firstErr is the first error seen if ANY request failed, undef otherwise.
+#
+# Implementation note: $remaining is initialized BEFORE firing any request —
+# Client.pm caches search responses, so a callback may fire synchronously on a
+# cache hit; initializing the counter after the fire loop would deliver $doneCb
+# early or never.  LMS runs a single-threaded event loop, so no locking is needed.
+sub _multiTypeSearch {
+    my ($accountId, $query, $types, $doneCb) = @_;
+
+    my $remaining = scalar @$types;
+    my %results;
+    my $firstErr;
+
+    for my $type (@$types) {
+        Plugins::SpotOn::API::Client->search($accountId, {
+            q      => $query,
+            type   => $type,
+            limit  => Plugins::SpotOn::API::Client->getLimit('search'),
+            offset => 0,
+        }, sub {
+            my ($data, $err) = @_;
+            if ($data) {
+                $results{$type} = $data->{"${type}s"} || {};
+            } else {
+                $firstErr //= $err;
+            }
+            if (--$remaining == 0) {
+                $doneCb->(\%results, $firstErr);
+            }
+        });
+    }
+}
 
 # _searchFeed($client, $callback, $args)
 # Entry point for the Search type item. LMS passes the search query in $args->{search}.
