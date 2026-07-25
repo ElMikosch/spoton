@@ -515,7 +515,7 @@ sub handleFeed {
         push @items, {
             name  => cstring($client, 'PLUGIN_SPOTON_SEARCH'),
             url   => \&_searchFeed,
-            image => 'html/images/search.png',
+            image => 'plugins/SpotOn/html/images/search.png',
             type  => 'search',
         };
         push @items, {
