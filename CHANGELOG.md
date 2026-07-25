@@ -5,9 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-07-25
+
 ### Fixed
-- **Search overview counts now match drill-in totals** — the search overview ("Albums (57 results)") and the drill-in page now use the same single-type API calls. Previously, the combined multi-type search returned different totals than single-type searches for the same query, so the overview label disagreed with the drill-in's actual pagination total. ([#130](https://github.com/stiefenm/spoton/issues/130))
-- **Podcast search (Shows/Episodes) now paginates past the first 10 results** — `_podcastSearchTypeFeed` maps the LMS page index to the API offset and reports `offset`/`total` back to the menu framework, including the nameless-entry ignore placeholders and the 1000-total cap already shipped for music search in v3.3.0. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Search overview counts now match drill-in totals** — the search overview and drill-in page now use the same single-type API calls. Previously, the combined multi-type search returned different per-type totals, so the overview label disagreed with the drill-in's actual pagination total. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Podcast search (Shows/Episodes) now paginates past the first 10 results** — drill-in maps the LMS page index to the API offset and reports `offset`/`total` back to the menu framework, including nameless-entry ignore placeholders and a 50-offset cap matching Dev Mode limits. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Search items named "0" were hidden** — the nameless-entry predicate treated the literal name `"0"` as falsy. Now uses `defined` check. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Search icon missing in Classic Skin** — the main menu search entry used an incorrect image path.
+- **Artist feed missing grid/cover toggle in Material Skin** — Albums, Singles, Compilations, and Appears On category items now have image keys, enabling Material Skin's view toggle. ([#124](https://github.com/stiefenm/spoton/issues/124))
+- **Podcast feed missing grid/cover toggle** — My Podcasts, Shows, and Episodes category items now have image keys.
 
 ## [3.3.0] - 2026-07-24
 ### Added
