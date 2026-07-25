@@ -2448,6 +2448,9 @@ sub _multiTypeSearch {
 # Per D-10: Top Result shown prominently above category sections.
 # Categories with 0 results are hidden entirely (D-10).
 # Per NAV-11: limit=10 per type (Dev Mode maximum).
+# Totals come from single-type calls via _multiTypeSearch so overview counts match
+# _searchTypeFeed drill-in totals (GH #130).  This issues 4 requests instead of 1;
+# all flow through Client.pm's central throttle (P-01/NFL-03).
 sub _searchFeed {
     my ($client, $callback, $args) = @_;
 
@@ -2459,14 +2462,9 @@ sub _searchFeed {
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->search($accountId, {
-        q      => $query,
-        type   => 'track,album,artist,playlist',
-        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => 0,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
+    _multiTypeSearch($accountId, $query, ['track', 'album', 'artist', 'playlist'], sub {
+        my ($results, $err) = @_;
+        if ($err) {
             $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
             return;
         }
@@ -2474,7 +2472,7 @@ sub _searchFeed {
         my @items;
 
         # D-10: Top Result — first track from search results, shown inline (not as sub-menu).
-        my $trackItems = $data->{tracks}{items} || [];
+        my $trackItems = $results->{track}{items} || [];
         if (@{$trackItems}) {
             my $topTrack = $trackItems->[0];
             push @items, {
@@ -2486,10 +2484,10 @@ sub _searchFeed {
         }
 
         # Category sections — skip those with 0 results (D-10).
-        my $tracksTotal    = $data->{tracks}{total}    // 0;
-        my $albumsTotal    = $data->{albums}{total}    // 0;
-        my $artistsTotal   = $data->{artists}{total}   // 0;
-        my $playlistsTotal = $data->{playlists}{total} // 0;
+        my $tracksTotal    = $results->{track}{total}     // 0;
+        my $albumsTotal    = $results->{album}{total}     // 0;
+        my $artistsTotal   = $results->{artist}{total}    // 0;
+        my $playlistsTotal = $results->{playlist}{total}  // 0;
 
         if ($tracksTotal > 0) {
             push @items, {
