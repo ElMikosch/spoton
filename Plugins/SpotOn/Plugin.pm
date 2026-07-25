@@ -1820,9 +1820,10 @@ sub _podcastsFeed {
 
     my @items = (
         {
-            name => cstring($client, 'PLUGIN_SPOTON_MY_PODCASTS'),
-            url  => \&_savedShowsFeed,
-            type => 'link',
+            name  => cstring($client, 'PLUGIN_SPOTON_MY_PODCASTS'),
+            url   => \&_savedShowsFeed,
+            type  => 'link',
+            image => 'plugins/SpotOn/html/images/podcasts.png',
         },
         {
             name => cstring($client, 'PLUGIN_SPOTON_PODCAST_SEARCH'),
@@ -2335,6 +2336,7 @@ sub _podcastSearchFeed {
                 url         => \&_podcastSearchTypeFeed,
                 passthrough => [{ query => $query, type => 'show' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/podcasts.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $showsTotal),
             };
         }
@@ -2344,6 +2346,7 @@ sub _podcastSearchFeed {
                 url         => \&_podcastSearchTypeFeed,
                 passthrough => [{ query => $query, type => 'episode' }],
                 type        => 'link',
+                image       => 'plugins/SpotOn/html/images/podcasts.png',
                 line2       => cstring($client, 'PLUGIN_SPOTON_N_RESULTS', $episodesTotal),
             };
         }
