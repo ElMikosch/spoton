@@ -2354,7 +2354,9 @@ sub _podcastSearchFeed {
 }
 
 # _podcastSearchTypeFeed($client, $callback, $args, $passthrough)
-# Typed search result list for shows or episodes.
+# Paginated drill-down into a single podcast search type (show or episode).
+# Maps LMS index to API offset; returns offset/total for OPMLBased/XMLBrowser
+# pagination (GH #130).
 # Per D-12: limit capped at 10 (Dev Mode). Dispatches to _showItem or _episodeItem.
 # Per Pitfall 4: episode search results use $episode->{show}{images} as artwork fallback.
 sub _podcastSearchTypeFeed {
@@ -2362,6 +2364,7 @@ sub _podcastSearchTypeFeed {
 
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'show';
+    my $offset = $args->{index}        // 0;
 
     my $accountId = _getAccountId($client);
 
@@ -2369,31 +2372,40 @@ sub _podcastSearchTypeFeed {
         q      => $query,
         type   => $type,
         limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => 0,
+        offset => $offset,
     }, sub {
         my ($data, $err) = @_;
         unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
             return;
         }
 
         my %typeToKey = (show => 'shows', episode => 'episodes');
         my $key      = $typeToKey{$type} // "${type}s";
         my $typeData = $data->{$key} || {};
-        my $results  = $typeData->{items} || [];
+        my $resultItems = $typeData->{items} || [];
 
-        my @items;
-        if ($type eq 'show') {
-            @items = map { _showItem($client, $_) } @{$results};
-        } elsif ($type eq 'episode') {
-            @items = map { _episodeItem($client, $_, undef) } @{$results};
-        }
+        # R-4: map nameless entries to { ignore => 1 } placeholders instead of
+        # filtering them out — XMLBrowser skips ignore-items and decrements
+        # totalCount, so offset/total stay aligned with the API's paging.
+        my @items = map {
+            if ($_->{name} && $_->{name} =~ /\S/) {
+                ($type eq 'show') ? _showItem($client, $_) : _episodeItem($client, $_, undef);
+            } else {
+                { ignore => 1 };
+            }
+        } @{$resultItems};
 
-        if (!@items) {
+        my $realCount = grep { !$_->{ignore} } @items;
+        if (!$realCount && !$offset) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
         }
 
-        $callback->({ items => \@items });
+        # R-5: Spotify search rejects offset >= 1000 — cap advertised total.
+        my $total = $typeData->{total} // 0;
+        $total = 1000 if $total > 1000;
+
+        $callback->({ items => \@items, offset => $offset, total => $total });
     });
 }
 
@@ -2549,7 +2561,6 @@ sub _searchTypeFeed {
     my $offset = $args->{index}        // 0;
 
     my $accountId = _getAccountId($client);
-    my $offset = $args->{index} // 0;
 
     Plugins::SpotOn::API::Client->search($accountId, {
         q      => $query,

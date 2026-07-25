@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Search overview counts now match drill-in totals** — the search overview ("Albums (57 results)") and the drill-in page now use the same single-type API calls. Previously, the combined multi-type search returned different totals than single-type searches for the same query, so the overview label disagreed with the drill-in's actual pagination total. ([#130](https://github.com/stiefenm/spoton/issues/130))
+- **Podcast search (Shows/Episodes) now paginates past the first 10 results** — `_podcastSearchTypeFeed` maps the LMS page index to the API offset and reports `offset`/`total` back to the menu framework, including the nameless-entry ignore placeholders and the 1000-total cap already shipped for music search in v3.3.0. ([#130](https://github.com/stiefenm/spoton/issues/130))
+
 ## [3.3.0] - 2026-07-24
 ### Added
 - **Seek from JiveLite/LMS UIs now works during Spotify Connect playback** — the seek slider was disabled for Connect streams (`canSeek` returned 0). Seeking now forwards the target position to the Connect binary via `/control/seek` without restarting the LMS stream. Relative seeks (`+N`/`-N`) and seek-to-0 are supported. ([#129](https://github.com/stiefenm/spoton/issues/129))
