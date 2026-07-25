@@ -2325,6 +2325,9 @@ sub _podcastSearchFeed {
 
         my $showsTotal    = $results->{show}{total}    // 0;
         my $episodesTotal = $results->{episode}{total} // 0;
+        # R-5: cap overview totals at 1000 (same as drill-in)
+        $showsTotal    = 1000 if $showsTotal    > 1000;
+        $episodesTotal = 1000 if $episodesTotal > 1000;
 
         if ($showsTotal > 0) {
             push @items, {
@@ -2389,7 +2392,7 @@ sub _podcastSearchTypeFeed {
         # filtering them out — XMLBrowser skips ignore-items and decrements
         # totalCount, so offset/total stay aligned with the API's paging.
         my @items = map {
-            if ($_->{name} && $_->{name} =~ /\S/) {
+            if (defined $_->{name} && $_->{name} =~ /\S/) {
                 ($type eq 'show') ? _showItem($client, $_) : _episodeItem($client, $_, undef);
             } else {
                 { ignore => 1 };
@@ -2500,6 +2503,11 @@ sub _searchFeed {
         my $albumsTotal    = $results->{album}{total}     // 0;
         my $artistsTotal   = $results->{artist}{total}    // 0;
         my $playlistsTotal = $results->{playlist}{total}  // 0;
+        # R-5: cap overview totals at 1000 (same as drill-in) to avoid count mismatch
+        $tracksTotal    = 1000 if $tracksTotal    > 1000;
+        $albumsTotal    = 1000 if $albumsTotal    > 1000;
+        $artistsTotal   = 1000 if $artistsTotal   > 1000;
+        $playlistsTotal = 1000 if $playlistsTotal > 1000;
 
         if ($tracksTotal > 0) {
             push @items, {
@@ -2596,7 +2604,7 @@ sub _searchTypeFeed {
         my $itemFn = $typeToItem{$type} // \&_trackItem;
 
         my @items = map {
-            ($_->{name} && $_->{name} =~ /\S/) ? $itemFn->($client, $_) : { ignore => 1 }
+            (defined $_->{name} && $_->{name} =~ /\S/) ? $itemFn->($client, $_) : { ignore => 1 }
         } @{$resultItems};
 
         my $realCount = grep { !$_->{ignore} } @items;
@@ -2631,24 +2639,28 @@ sub _artistFeed {
             url         => \&_artistAlbumsFeed,
             passthrough => [{ artistId => $artistId, includeGroups => 'album' }],
             type        => 'link',
+            image       => 'plugins/SpotOn/html/images/album.png',
         },
         {
             name        => cstring($client, 'PLUGIN_SPOTON_SINGLES'),
             url         => \&_artistAlbumsFeed,
             passthrough => [{ artistId => $artistId, includeGroups => 'single' }],
             type        => 'link',
+            image       => 'plugins/SpotOn/html/images/album.png',
         },
         {
             name        => cstring($client, 'PLUGIN_SPOTON_COMPILATIONS'),
             url         => \&_artistAlbumsFeed,
             passthrough => [{ artistId => $artistId, includeGroups => 'compilation' }],
             type        => 'link',
+            image       => 'plugins/SpotOn/html/images/album.png',
         },
         {
             name        => cstring($client, 'PLUGIN_SPOTON_APPEARS_ON'),
             url         => \&_artistAlbumsFeed,
             passthrough => [{ artistId => $artistId, includeGroups => 'appears_on' }],
             type        => 'link',
+            image       => 'plugins/SpotOn/html/images/album.png',
         },
     );
 
