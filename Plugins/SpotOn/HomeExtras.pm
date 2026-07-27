@@ -6,6 +6,8 @@ use warnings;
 Plugins::SpotOn::HomeExtraRecentlyPlayed->initPlugin();
 Plugins::SpotOn::HomeExtraTopTracks->initPlugin();
 Plugins::SpotOn::HomeExtraMadeForYou->initPlugin();
+Plugins::SpotOn::HomeExtraMainMenu->initPlugin();
+Plugins::SpotOn::HomeExtraPlaylists->initPlugin();
 
 1;
 
@@ -117,6 +119,46 @@ sub initPlugin {
         subtitle => 'PLUGIN_SPOTON',
         feed     => \&Plugins::SpotOn::Plugin::_madeForYouFeed,
         tag      => 'MadeForYou',
+    );
+}
+
+1;
+
+package Plugins::SpotOn::HomeExtraMainMenu;
+
+use strict;
+use warnings;
+
+use base qw(Plugins::SpotOn::HomeExtraBase);
+
+sub initPlugin {
+    my $class = shift;
+
+    $class->SUPER::initPlugin(
+        title    => 'PLUGIN_SPOTON_MAIN_MENU',
+        subtitle => 'PLUGIN_SPOTON',
+        feed     => \&Plugins::SpotOn::Plugin::handleFeed,
+        tag      => 'MainMenu',
+    );
+}
+
+1;
+
+package Plugins::SpotOn::HomeExtraPlaylists;
+
+use strict;
+use warnings;
+
+use base qw(Plugins::SpotOn::HomeExtraBase);
+
+sub initPlugin {
+    my $class = shift;
+
+    $class->SUPER::initPlugin(
+        title    => 'PLUGIN_SPOTON_PLAYLISTS',
+        subtitle => 'PLUGIN_SPOTON',
+        feed     => \&Plugins::SpotOn::Plugin::_userPlaylistsFeed,
+        tag      => 'Playlists',
     );
 }
 
