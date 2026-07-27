@@ -661,6 +661,19 @@ PLUGIN_SPOTON_MADE_FOR_YOU
 	PL	Stworzone dla Ciebie
 	SV	Gjort för dig
 
+PLUGIN_SPOTON_MAIN_MENU
+	CS	Hlavní nabídka
+	DA	Hovedmenu
+	DE	Hauptmenü
+	EN	Main Menu
+	ES	Menú principal
+	FR	Menu principal
+	IT	Menu principale
+	NL	Hoofdmenu
+	NO	Hovedmeny
+	PL	Menu główne
+	SV	Huvudmeny
+
 PLUGIN_SPOTON_TOP_TRACKS
 	CS	Nejlepší skladby
 	DA	Top numre
