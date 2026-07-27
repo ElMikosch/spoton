@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.2] - 2026-07-27
+
+### Added
+- **Material Skin: Main Menu and Playlists as HomeExtra scrolled rows** — SpotOn's top-level navigation (Home, Search, Library, Podcasts) and the user's playlists are now available as optional scrolled rows on the Material Skin home screen, matching Spotty's feature set. Enable them in Material Skin's home screen settings. ([#132](https://github.com/stiefenm/spoton/issues/132))
+
 ## [3.3.1] - 2026-07-25
 
 ### Fixed
