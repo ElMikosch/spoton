@@ -137,11 +137,14 @@ sub removeAccount {
 }
 
 # getAccountIds($class)
-# Returns list of known account IDs.
+# Returns list of known account IDs in sorted order.
+# Sorted to stabilize every consumer iteration (Status auth-health
+# collection, Settings account list).  Display determinism itself
+# lives in status.html's Object.keys().sort() (GH #138).
 sub getAccountIds {
     my ($class) = @_;
     my $accounts = $prefs->get('accounts') || {};
-    return keys %{$accounts};
+    return sort keys %{$accounts};
 }
 
 # getActiveAccountName($class, $client)
