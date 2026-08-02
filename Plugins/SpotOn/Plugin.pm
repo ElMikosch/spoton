@@ -566,7 +566,8 @@ sub _accountSwitcherFeed {
 }
 
 # _switchAccount()
-# Updates per-client activeAccount preference and navigates back to root.
+# Updates per-client activeAccount preference, refreshes Material Skin
+# home rows (GH #139), and navigates back to root.
 sub _switchAccount {
     my ($client, $callback, $args, $passthrough) = @_;
 
@@ -578,6 +579,11 @@ sub _switchAccount {
         $prefs->set('activeAccount', $accountId) unless $prefs->get('activeAccount');
         my $accounts = $prefs->get('accounts') || {};
         $name = $accounts->{$accountId}{displayName} if $accounts->{$accountId};
+
+        # GH #139: Refresh Material Skin home rows after account switch.
+        # Guard: HomeExtras.pm is only loaded when Material Skin is installed
+        # (see postinitPlugin's guarded require).
+        Plugins::SpotOn::HomeExtras::refresh() if $INC{'Plugins/SpotOn/HomeExtras.pm'};
     }
 
     my $msg = $name

@@ -25,6 +25,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Connect.pm",
     "$project_dir/Plugins/SpotOn/Connect/Daemon.pm",
     "$project_dir/Plugins/SpotOn/Status.pm",
+    "$project_dir/Plugins/SpotOn/HomeExtras.pm",
     "$project_dir/t/21_webplayer_mint_errors.t",
 );
 
@@ -331,6 +332,15 @@ END
 write_stub($stub_dir, 'Slim::Player::Source', <<'END');
 package Slim::Player::Source;
 sub songTime { 0 }
+1;
+END
+
+# Stub: Plugins::MaterialSkin::HomeExtraBase (base class for SpotOn HomeExtras)
+# perl -c compiles `use base` at BEGIN time but does not execute runtime
+# statements, so a minimal stub suffices.
+write_stub($stub_dir, 'Plugins::MaterialSkin::HomeExtraBase', <<'END');
+package Plugins::MaterialSkin::HomeExtraBase;
+sub initPlugin { 1 }
 1;
 END
 
