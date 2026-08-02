@@ -26,6 +26,7 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Connect/Daemon.pm",
     "$project_dir/Plugins/SpotOn/Status.pm",
     "$project_dir/Plugins/SpotOn/HomeExtras.pm",
+    "$project_dir/Plugins/SpotOn/Unified/Daemon.pm",
     "$project_dir/t/21_webplayer_mint_errors.t",
 );
 

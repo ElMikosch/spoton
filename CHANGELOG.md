@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Material Skin HomeExtra rows returned page 1 for every page** — the memoization cache key now includes pagination args (index/quantity) so subsequent pages within the 60s TTL return their own items instead of re-serving page 1. ([#133](https://github.com/stiefenm/spoton/issues/133))
+- **Menu shows the previous account name after switching** — the account switcher now returns to a re-fetched main menu via `nextWindow => 'grandparent'` so the active account name updates immediately. ([#136](https://github.com/stiefenm/spoton/issues/136))
+- **Connect always used digital volume attenuation** — players with Digital Volume Control disabled in LMS player settings now start librespot with `--volume-ctrl fixed` for external amps (full-scale output, Spotify-app slider does not attenuate). Players with digital volume enabled keep the existing linear behavior. ([#137](https://github.com/stiefenm/spoton/issues/137))
+- **Status page account order shuffled between auto-refreshes** — `getAccountIds()` now returns sorted keys and `renderAuthHealth` sorts `Object.keys()` at render time, pinning display order regardless of Perl hash randomization. ([#138](https://github.com/stiefenm/spoton/issues/138))
+- **Material Skin home rows did not refresh after account switch, authentication, or removal** — a new `refresh()` helper clears the HomeExtra memoization cache and signals Material Skin, wired at four state-change points. ([#139](https://github.com/stiefenm/spoton/issues/139))
+
 ## [3.3.2] - 2026-07-27
 
 ### Added

@@ -163,13 +163,29 @@ sub start {
 		    || $prefs->get('disableDiscovery');
 		push @helperArgs, '--disable-discovery' if $disableDiscovery;
 
-		# CON-02 / P-50: Volume synchronization at Connect session start.
-		# --volume-ctrl linear: matches squeezelite's SoftMixer linear curve so LMS volume
-		# maps 1:1 to librespot volume (no logarithmic mismatch).
-		# --initial-volume: seeds librespot with the current LMS player volume so the Spotify
-		# app shows the correct value immediately (no initial mismatch echo).
-		push @helperArgs, '--volume-ctrl', 'linear';
-		push @helperArgs, '--initial-volume', int($client->volume // 50);
+		# CON-02 / P-50 / GH #137: Volume mode depends on the player's
+		# Digital Volume Control server pref.
+		#
+		# digitalVolumeControl=0 (disabled — external amp / fixed-output):
+		#   --volume-ctrl fixed — librespot outputs full-scale PCM; the
+		#   Spotify-app volume slider still sends /control/volume to
+		#   Connect.pm which forwards to LMS, but under VolumeCtrl::Fixed
+		#   the mixer applies no attenuation — audio stays bit-perfect.
+		#   No --initial-volume needed (fixed = always full scale).
+		#
+		# digitalVolumeControl=1 or undefined (enabled, or player never
+		# stored the pref — ClientV5 migration defaults to 1):
+		#   --volume-ctrl linear — matches squeezelite's SoftMixer linear
+		#   curve so LMS volume maps 1:1 to librespot volume.
+		#   --initial-volume seeds librespot with the current LMS player
+		#   volume so the Spotify app shows the correct value immediately.
+		my $digitalVolume = $serverPrefs->client($client)->get('digitalVolumeControl');
+		if (defined $digitalVolume && !$digitalVolume) {
+			push @helperArgs, '--volume-ctrl', 'fixed';
+		} else {
+			push @helperArgs, '--volume-ctrl', 'linear';
+			push @helperArgs, '--initial-volume', int($client->volume // 50);
+		}
 
 		# D-09: Pass --autoplay on/off based on per-player pref, gated on binary capability
 		if ( Plugins::SpotOn::Helper->getCapability('autoplay') ) {
