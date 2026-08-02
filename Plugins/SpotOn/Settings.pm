@@ -224,6 +224,9 @@ sub handler {
                         $prefs->client($c)->remove('activeAccount');
                     }
                 }
+
+                # GH #139: refresh Material Skin home rows after account removal.
+                Plugins::SpotOn::HomeExtras::refresh() if $INC{'Plugins/SpotOn/HomeExtras.pm'};
             }
         }
 
@@ -243,6 +246,9 @@ sub handler {
                 for my $c (Slim::Player::Client::clients()) {
                     $prefs->client($c)->remove('activeAccount');
                 }
+
+                # GH #139: refresh Material Skin home rows after Settings account switch.
+                Plugins::SpotOn::HomeExtras::refresh() if $INC{'Plugins/SpotOn/HomeExtras.pm'};
             }
         }
 
@@ -644,6 +650,11 @@ sub _pkceStoreAccount {
         # successful (re-)authentication rather than waiting for the next
         # refresh timer cycle.
         Plugins::SpotOn::API::TokenManager->clearNeedsReauth($accountId);
+
+        # GH #139: refresh Material Skin home rows now that auth is complete.
+        # Fires for both first-time auth and re-auth.  Daemon lifecycle is
+        # intentionally not signaled — rows carry no daemon-derived content.
+        Plugins::SpotOn::HomeExtras::refresh() if $INC{'Plugins/SpotOn/HomeExtras.pm'};
 
         # D-01: eagerly derive librespot credentials right here, while the
         # PKCE access token is guaranteed fresh (it was exchanged seconds
