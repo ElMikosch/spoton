@@ -44,6 +44,8 @@ sub initPlugin {
             return;
         }
 
+        delete $_feedCache{$cacheKey} if $cached;
+
         $origFeed->($client, sub {
             my $result = shift;
             my @items = grep { ($_->{type} || '') ne 'textarea' }

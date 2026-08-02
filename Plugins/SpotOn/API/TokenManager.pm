@@ -144,7 +144,8 @@ sub removeAccount {
 sub getAccountIds {
     my ($class) = @_;
     my $accounts = $prefs->get('accounts') || {};
-    return sort keys %{$accounts};
+    my @ids = sort keys %{$accounts};
+    return @ids;
 }
 
 # getActiveAccountName($class, $client)

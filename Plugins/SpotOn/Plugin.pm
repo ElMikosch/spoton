@@ -542,13 +542,13 @@ sub handleFeed {
 
 # _accountSwitcherFeed()
 # Lists all configured accounts.  Each item carries nextWindow =>
-# 'grandparent' (GH #136): XMLBrowser propagates item-level nextWindow
+# 'parent' (GH #136): XMLBrowser propagates item-level nextWindow
 # into the jive go action (Bug 13247); Material Skin and jive clients
-# then execute _switchAccount server-side and navigate back two levels
-# (switcher list -> main menu) with a refresh instead of pushing the
-# confirmation as a new list — the main menu re-fetch renders the new
-# active-account name.  Classic Default web skin ignores nextWindow and
-# shows the text confirmation (coderef feeds are never session-cached
+# then execute _switchAccount server-side and navigate back one level
+# (switcher list -> SpotOn main menu) with a refresh instead of pushing
+# the confirmation as a new list — the main menu re-fetch renders the
+# new active-account name.  Classic Default web skin ignores nextWindow
+# and shows the text confirmation (coderef feeds are never session-cached
 # by XMLBrowser, so its next navigation re-fetches).
 sub _accountSwitcherFeed {
     my ($client, $callback, $args) = @_;
@@ -567,7 +567,7 @@ sub _accountSwitcherFeed {
             url         => \&_switchAccount,
             passthrough => [{ accountId => $id }],
             type        => 'link',
-            nextWindow  => 'grandparent',
+            nextWindow  => 'parent',
         };
     }
 
