@@ -95,13 +95,9 @@ sub start {
 		return;
 	}
 
-	# D-11: Use syncname() for synced non-group players; truncate to 60 chars (CON-06)
-	$self->name(substr(
-		($client->isSynced() && $client->model ne 'group')
-			? Slim::Player::Sync::syncname($client)
-			: $client->name,
-		0, 60
-	));
+	# GH #143: static group suffix instead of composed syncname; single
+	# source of truth lives in DaemonManager::deviceNameForClient (CON-06).
+	$self->name(Plugins::SpotOn::Unified::DaemonManager->deviceNameForClient($client));
 
 	# CON-01: Use account-level cache dir for Unified daemon credentials.
 	my $activeAccountId = $prefs->get('activeAccount') || '';
