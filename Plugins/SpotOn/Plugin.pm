@@ -541,15 +541,23 @@ sub handleFeed {
 }
 
 # _accountSwitcherFeed()
-# Lists all configured accounts.  Each item carries nextWindow =>
-# 'parent' (GH #136): XMLBrowser propagates item-level nextWindow
-# into the jive go action (Bug 13247); Material Skin and jive clients
-# then execute _switchAccount server-side and navigate back one level
-# (switcher list -> SpotOn main menu) with a refresh instead of pushing
-# the confirmation as a new list — the main menu re-fetch renders the
-# new active-account name.  Classic Default web skin ignores nextWindow
-# and shows the text confirmation (coderef feeds are never session-cached
-# by XMLBrowser, so its next navigation re-fetches).
+# Lists all configured accounts.  Cross-client behavior (GH #136):
+#
+# - JiveLite: item-level nextWindow => 'parent' propagates into the
+#   jive go action (Bug 13247) — switch executes, view navigates back
+#   one level to a re-fetched main menu showing the new account name.
+#
+# - Material Skin: relies on text-click coercion (browse-resp.js:296-300)
+#   which fires ONLY when the item has no 'type' key.  The coercion
+#   executes _switchAccount server-side, shows the confirmation as a
+#   toast, and refreshes the menu.  Adding type => 'link' (or any type)
+#   here REGRESSES Material — it bypasses coercion and drills into the
+#   confirmation as a new page.
+#
+# - Classic/Default web skin: ignores nextWindow, shows the text
+#   confirmation page.  This matches Spotty/Qobuz (ecosystem standard).
+#   Coderef feeds are never session-cached by XMLBrowser, so the next
+#   navigation re-fetches with the new active account.
 sub _accountSwitcherFeed {
     my ($client, $callback, $args) = @_;
 
@@ -566,7 +574,6 @@ sub _accountSwitcherFeed {
             name        => $name . ($isActive ? ' *' : ''),
             url         => \&_switchAccount,
             passthrough => [{ accountId => $id }],
-            type        => 'link',
             nextWindow  => 'parent',
         };
     }

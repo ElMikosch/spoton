@@ -5,6 +5,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Account switcher stranded Material Skin and Classic users on the confirmation page** — switcher items no longer carry `type => 'link'`, so Material Skin's inline action handling executes the switch and shows the confirmation as a toast instead of navigating into a new page; JiveLite keeps navigating back via `nextWindow => 'parent'`. Classic shows the confirmation page (ecosystem standard, same as Spotty). Follow-up to the v3.3.3 fix. ([#136](https://github.com/stiefenm/spoton/issues/136))
+
 ## [3.3.3] - 2026-08-02
 
 ### Fixed
