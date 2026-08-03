@@ -12,6 +12,7 @@ use JSON::XS::VersionOneAndTwo;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Strings qw(cstring);
 use Slim::Utils::Timers;
 use Slim::Networking::SimpleAsyncHTTP;
 
@@ -132,6 +133,20 @@ sub resolvePassthroughForClient {
     }
 
     return $result ? 1 : 0;
+}
+
+# Single source of truth for the librespot --name value (GH #143).
+# Static suffix instead of composed syncname: membership changes inside a
+# group no longer alter the name, so the daemon survives them.  Only the
+# synced<->unsynced transition changes the name.  60-char cap = CON-06.
+sub deviceNameForClient {
+    my ($class, $client) = @_;
+
+    if ($client->isSynced() && $client->model ne 'group') {
+        my $suffix = cstring($client, 'PLUGIN_SPOTON_SYNC_GROUP_SUFFIX');
+        return substr($client->name, 0, 60 - length($suffix) - 1) . ' ' . $suffix;
+    }
+    return substr($client->name, 0, 60);
 }
 
 sub scheduleInit {
@@ -624,18 +639,24 @@ sub startHelper {
     if ($helper && $helper->alive) {
         my $client = Slim::Player::Client::getClient($clientId);
         if ($client) {
-            my $expectedName = substr(
-                ($client->isSynced() && $client->model ne 'group')
-                    ? Slim::Player::Sync::syncname($client)
-                    : $client->name,
-                0, 60
-            );
+            my $expectedName = $class->deviceNameForClient($client);
             if (($helper->name || '') ne $expectedName) {
-                main::INFOLOG && $log->is_info && $log->info(
-                    "Name changed for $clientId (was '" . ($helper->name || '') . "', now '$expectedName') — restarting daemon"
-                );
-                $class->stopHelper($clientId);
-                $helper = undef;
+                # GH #143: defer name-change restart while daemon is actively streaming
+                my $health = $helper->_lastHealthSession;
+                if ($health && defined $health->{idle_secs} && $health->{idle_secs} < 300) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Name change for $clientId deferred — stream active (idle="
+                        . $health->{idle_secs} . "s); watchdog will retry"
+                    );
+                    # fall through WITHOUT restart; 60s watchdog re-evaluates
+                }
+                else {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Name changed for $clientId (was '" . ($helper->name || '') . "', now '$expectedName') — restarting daemon"
+                    );
+                    $class->stopHelper($clientId);
+                    $helper = undef;
+                }
             }
 
             if ($helper && $helper->alive) {
