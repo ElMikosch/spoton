@@ -144,9 +144,27 @@ sub deviceNameForClient {
 
     if ($client->isSynced() && $client->model ne 'group') {
         my $suffix = cstring($client, 'PLUGIN_SPOTON_SYNC_GROUP_SUFFIX');
-        return substr($client->name, 0, 60 - length($suffix) - 1) . ' ' . $suffix;
+        my $keep = 60 - length($suffix) - 1;
+        $keep = 0 if $keep < 0;
+        return substr($client->name, 0, $keep) . ' ' . $suffix;
     }
     return substr($client->name, 0, 60);
+}
+
+# WR-01: live LMS-side check as primary signal, health snapshot as fallback.
+# _lastHealthSession is polled only every ~60s and absent for young daemons,
+# so relying on it alone leaves a window where sync changes kill active streams.
+sub _isStreamActive {
+    my ($class, $helper, $client) = @_;
+    if ($client && $client->isPlaying
+        && $client->playingSong
+        && ($client->playingSong->track->url // '') =~ /^spoton/) {
+        return 1;
+    }
+    my $health = $helper->_lastHealthSession or return 0;
+    return 0 unless defined $health->{idle_secs};
+    return 0 if time() - ($health->{checked_at} // 0) > 120;
+    return $health->{idle_secs} < 300;
 }
 
 sub scheduleInit {
@@ -194,19 +212,17 @@ sub init {
         Slim::Utils::Timers::killTimers($class, \&initHelpers);
 
         # GH #143: only stop daemons whose device name actually changes.
-        # Covers synced<->unsynced transitions and players becoming slaves.
-        # A master gaining/losing a member keeps its name and its session.
+        # A master that remains synced keeps its name and session across
+        # membership changes; solo<->synced boundary transitions still
+        # rename and restart (idle-guarded).
         for my $clientId (@affected) {
             my $helper = $helperInstances{$clientId} or next;
             next unless $helper->alive;
             my $c = Slim::Player::Client::getClient($clientId) or next;
             if (($helper->name || '') ne $class->deviceNameForClient($c)) {
-                # Defer stop while daemon is actively streaming (GH #143)
-                my $health = $helper->_lastHealthSession;
-                if ($health && defined $health->{idle_secs} && $health->{idle_secs} < 300) {
+                if ($class->_isStreamActive($helper, $c)) {
                     main::INFOLOG && $log->is_info && $log->info(
-                        "Sync name change for $clientId deferred — stream active (idle="
-                        . $health->{idle_secs} . "s)"
+                        "Sync name change for $clientId deferred — stream active"
                     );
                 }
                 else {
@@ -659,12 +675,9 @@ sub startHelper {
         if ($client) {
             my $expectedName = $class->deviceNameForClient($client);
             if (($helper->name || '') ne $expectedName) {
-                # GH #143: defer name-change restart while daemon is actively streaming
-                my $health = $helper->_lastHealthSession;
-                if ($health && defined $health->{idle_secs} && $health->{idle_secs} < 300) {
+                if ($class->_isStreamActive($helper, $client)) {
                     main::INFOLOG && $log->is_info && $log->info(
-                        "Name change for $clientId deferred — stream active (idle="
-                        . $health->{idle_secs} . "s); watchdog will retry"
+                        "Name change for $clientId deferred — stream active; watchdog will retry"
                     );
                     # fall through WITHOUT restart; 60s watchdog re-evaluates
                 }

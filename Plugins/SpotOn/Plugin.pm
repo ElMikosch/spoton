@@ -562,9 +562,7 @@ sub _accountSwitcherFeed {
     my ($client, $callback, $args) = @_;
 
     my $accounts  = $prefs->get('accounts') || {};
-    my $activeId  = $prefs->client($client)->get('activeAccount')
-                 || $prefs->get('activeAccount')
-                 || '';
+    my $activeId  = _getAccountId($client);
 
     my @items;
     for my $id (sort keys %{$accounts}) {

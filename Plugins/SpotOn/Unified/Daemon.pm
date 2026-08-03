@@ -97,6 +97,7 @@ sub start {
 
 	# GH #143: static group suffix instead of composed syncname; single
 	# source of truth lives in DaemonManager::deviceNameForClient (CON-06).
+	require Plugins::SpotOn::Unified::DaemonManager;
 	$self->name(Plugins::SpotOn::Unified::DaemonManager->deviceNameForClient($client));
 
 	# CON-01: Use account-level cache dir for Unified daemon credentials.
