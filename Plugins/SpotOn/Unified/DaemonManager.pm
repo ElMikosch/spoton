@@ -188,13 +188,31 @@ sub init {
         }
 
         main::INFOLOG && $log->is_info && $log->info(
-            "Sync group changed - restarting affected Unified daemons: " . join(', ', @affected)
+            "Sync group changed — re-evaluating affected Unified daemons: " . join(', ', @affected)
         );
 
         Slim::Utils::Timers::killTimers($class, \&initHelpers);
 
+        # GH #143: only stop daemons whose device name actually changes.
+        # Covers synced<->unsynced transitions and players becoming slaves.
+        # A master gaining/losing a member keeps its name and its session.
         for my $clientId (@affected) {
-            $helperInstances{$clientId}->stopForSync() if $helperInstances{$clientId};
+            my $helper = $helperInstances{$clientId} or next;
+            next unless $helper->alive;
+            my $c = Slim::Player::Client::getClient($clientId) or next;
+            if (($helper->name || '') ne $class->deviceNameForClient($c)) {
+                # Defer stop while daemon is actively streaming (GH #143)
+                my $health = $helper->_lastHealthSession;
+                if ($health && defined $health->{idle_secs} && $health->{idle_secs} < 300) {
+                    main::INFOLOG && $log->is_info && $log->info(
+                        "Sync name change for $clientId deferred — stream active (idle="
+                        . $health->{idle_secs} . "s)"
+                    );
+                }
+                else {
+                    $helper->stopForSync();
+                }
+            }
         }
 
         Slim::Utils::Timers::setTimer($class, Time::HiRes::time() + 0.1, \&initHelpers);
