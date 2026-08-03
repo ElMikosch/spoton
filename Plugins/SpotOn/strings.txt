@@ -2923,3 +2923,16 @@ PLUGIN_SPOTON_PATHFINDER_HASH_HOWTO
 	PL	Jak przechwycić hash: 1) Otwórz open.spotify.com w przeglądarce i zaloguj się. 2) Otwórz narzędzia deweloperskie (F12) i przejdź do karty Sieć. 3) Filtruj po „pathfinder”. 4) Znajdź żądanie, którego Payload zawiera „operationName”:”home” — istnieje wiele żądań pathfinder, potrzebujesz dokładnie tego. 5) W Payload znajdź extensions.persistedQuery.sha256Hash. 6) Skopiuj ciąg szesnastkowy i wklej go tutaj.
 	SV	Så hämtar du hashen: 1) Öppna open.spotify.com i webbläsaren och logga in. 2) Öppna utvecklarverktygen (F12) och gå till fliken Nätverk. 3) Filtrera på „pathfinder”. 4) Hitta den förfrågan vars Payload innehåller „operationName”:”home” — det finns flera pathfinder-förfrågningar, du behöver just denna. 5) Hitta extensions.persistedQuery.sha256Hash i Payload. 6) Kopiera hex-strängen och klistra in den här.
 
+PLUGIN_SPOTON_SYNC_GROUP_SUFFIX
+	CS	(Skupina)
+	DA	(Gruppe)
+	DE	(Gruppe)
+	EN	(Group)
+	ES	(Grupo)
+	FR	(Groupe)
+	IT	(Gruppo)
+	NL	(Groep)
+	NO	(Gruppe)
+	PL	(Grupa)
+	SV	(Grupp)
+
