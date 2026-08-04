@@ -160,31 +160,53 @@ sub start {
 		    || $prefs->get('disableDiscovery');
 		push @helperArgs, '--disable-discovery' if $disableDiscovery;
 
-		# CON-02 / P-50 / GH #137: Volume mode depends on the player's
-		# Digital Volume Control server pref.
-		#
-		# digitalVolumeControl=0 (disabled — external amp / fixed-output):
-		#   --volume-ctrl fixed — librespot outputs full-scale PCM; the
-		#   Spotify-app volume slider still sends /control/volume to
-		#   Connect.pm which forwards to LMS, but under VolumeCtrl::Fixed
-		#   the mixer applies no attenuation — audio stays bit-perfect.
-		#   --initial-volume 100 seeds the Spotify app slider to 100%
-		#   (attenuation is a no-op under VolumeCtrl::Fixed; cosmetic only).
-		#   NOTE: flag is 0-100 scale (u8), NOT 0-65535 — daemon scales internally.
-		#
-		# digitalVolumeControl=1 or undefined (enabled, or player never
-		# stored the pref — ClientV5 migration defaults to 1):
-		#   --volume-ctrl linear — matches squeezelite's SoftMixer linear
-		#   curve so LMS volume maps 1:1 to librespot volume.
-		#   --initial-volume seeds librespot with the current LMS player
-		#   volume so the Spotify app shows the correct value immediately.
-		my $digitalVolume = $serverPrefs->client($client)->get('digitalVolumeControl');
-		if (defined $digitalVolume && !$digitalVolume) {
-			push @helperArgs, '--volume-ctrl', 'fixed';
-			push @helperArgs, '--initial-volume', 100;
+		# GH #144: the binary now uses a PassthroughMixer that tracks
+		# volume for the Spotify slider / VolumeChanged events but never
+		# attenuates decoded samples -- LMS/squeezelite is the single
+		# attenuator in every mode. No --volume-ctrl flag is needed or
+		# sent; --initial-volume is purely cosmetic slider seeding on the
+		# 0-100 scale (GH #144, GH #137). This also resolves GH #144
+		# sub-issue 3 (sync-group master digitalVolumeControl read
+		# without group aggregation) by construction: the pref below now
+		# only ever influences the cosmetic initial slider value, never
+		# audio attenuation semantics for the group.
+		if ( Plugins::SpotOn::Helper->getCapability('passthrough-mixer') ) {
+			my $digitalVolume = $serverPrefs->client($client)->get('digitalVolumeControl');
+			if (defined $digitalVolume && !$digitalVolume) {
+				push @helperArgs, '--initial-volume', 100;
+			} else {
+				push @helperArgs, '--initial-volume', int($client->volume // 50);
+			}
 		} else {
-			push @helperArgs, '--volume-ctrl', 'linear';
-			push @helperArgs, '--initial-volume', int($client->volume // 50);
+			# Legacy path for pre-passthrough-mixer binaries (mixed-version
+			# installs). Kept verbatim from the pre-GH #144 implementation.
+			#
+			# CON-02 / P-50 / GH #137: Volume mode depends on the player's
+			# Digital Volume Control server pref.
+			#
+			# digitalVolumeControl=0 (disabled -- external amp / fixed-output):
+			#   --volume-ctrl fixed -- librespot outputs full-scale PCM; the
+			#   Spotify-app volume slider still sends /control/volume to
+			#   Connect.pm which forwards to LMS, but under VolumeCtrl::Fixed
+			#   the mixer applies no attenuation -- audio stays bit-perfect.
+			#   --initial-volume 100 seeds the Spotify app slider to 100%
+			#   (attenuation is a no-op under VolumeCtrl::Fixed; cosmetic only).
+			#   NOTE: flag is 0-100 scale (u8), NOT 0-65535 -- daemon scales internally.
+			#
+			# digitalVolumeControl=1 or undefined (enabled, or player never
+			# stored the pref -- ClientV5 migration defaults to 1):
+			#   --volume-ctrl linear -- matches squeezelite's SoftMixer linear
+			#   curve so LMS volume maps 1:1 to librespot volume.
+			#   --initial-volume seeds librespot with the current LMS player
+			#   volume so the Spotify app shows the correct value immediately.
+			my $digitalVolume = $serverPrefs->client($client)->get('digitalVolumeControl');
+			if (defined $digitalVolume && !$digitalVolume) {
+				push @helperArgs, '--volume-ctrl', 'fixed';
+				push @helperArgs, '--initial-volume', 100;
+			} else {
+				push @helperArgs, '--volume-ctrl', 'linear';
+				push @helperArgs, '--initial-volume', int($client->volume // 50);
+			}
 		}
 
 		# D-09: Pass --autoplay on/off based on per-player pref, gated on binary capability
