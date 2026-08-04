@@ -419,10 +419,15 @@ sub _streamAlivePoll {
                     }
                 }
             }
-            # else: classifier returned undef -- do NOT write to cache. Preserve
-            # any existing 'denied' state that may have scrolled out of the
-            # stderr tail buffer; permanent denial is only ever set, never
-            # cleared by absence.
+            # GH #141: classifier returned undef — no error signature in current
+            # tail. If a stale 'denied' is cached and the account is actively
+            # streaming, audio keys ARE being granted — clear the false positive.
+            elsif (($cache->get("spoton_audiokey_state_" . $helper->_accountId) // '') eq 'denied') {
+                my $client = Slim::Player::Client::getClient($helper->mac);
+                if ($class->_isStreamActive($helper, $client)) {
+                    $cache->remove("spoton_audiokey_state_" . $helper->_accountId);
+                }
+            }
         }
 
         if ($helper->alive && $helper->_streamPort) {
