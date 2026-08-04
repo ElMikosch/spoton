@@ -168,7 +168,9 @@ sub start {
 		#   Spotify-app volume slider still sends /control/volume to
 		#   Connect.pm which forwards to LMS, but under VolumeCtrl::Fixed
 		#   the mixer applies no attenuation — audio stays bit-perfect.
-		#   No --initial-volume needed (fixed = always full scale).
+		#   --initial-volume 100 seeds the Spotify app slider to 100%
+		#   (attenuation is a no-op under VolumeCtrl::Fixed; cosmetic only).
+		#   NOTE: flag is 0-100 scale (u8), NOT 0-65535 — daemon scales internally.
 		#
 		# digitalVolumeControl=1 or undefined (enabled, or player never
 		# stored the pref — ClientV5 migration defaults to 1):
@@ -179,6 +181,7 @@ sub start {
 		my $digitalVolume = $serverPrefs->client($client)->get('digitalVolumeControl');
 		if (defined $digitalVolume && !$digitalVolume) {
 			push @helperArgs, '--volume-ctrl', 'fixed';
+			push @helperArgs, '--initial-volume', 100;
 		} else {
 			push @helperArgs, '--volume-ctrl', 'linear';
 			push @helperArgs, '--initial-volume', int($client->volume // 50);
