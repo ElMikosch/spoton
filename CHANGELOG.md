@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **PCM double attenuation in Connect fallback mode** — the binary now uses a PassthroughMixer that tracks the Spotify volume slider and keeps VolumeChanged events flowing but never attenuates decoded samples; LMS/squeezelite is the single volume attenuator in every mode (previously ~-6 dB extra at LMS volume 50 in PCM mode). Credit the analysis by @urknall in [#143](https://github.com/stiefenm/spoton/issues/143). ([#144](https://github.com/stiefenm/spoton/issues/144))
+- **Fixed-output players (Digital Volume Control off) and sync groups with a fixed-output master are now genuinely bit-perfect in PCM mode** — the broken `VolumeCtrl::Fixed` semantics of the previous volume path no longer apply. ([#144](https://github.com/stiefenm/spoton/issues/144))
+
+### Changed
+- **librespot dev-branch pin refreshed to `9c7d7561`** — descendant of the CDN-fallback fix ([librespot#1722](https://github.com/librespot-org/librespot/pull/1722)), which remains included.
+
 ## [3.3.5] - 2026-08-04
 
 ### Fixed
