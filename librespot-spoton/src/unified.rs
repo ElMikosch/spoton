@@ -28,7 +28,7 @@
 //   Pitfall 5: Rate-limiting is FORBIDDEN in BrowseHttpSink. Only HttpStreamSink is rate-limited.
 
 use std::io::Write as IoWrite;
-use std::sync::{Arc, atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering}};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -49,10 +49,9 @@ use librespot_core::cache::Cache;
 use librespot_core::config::SessionConfig;
 use librespot_core::Session;
 use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
+use librespot_playback::config::{AudioFormat, Bitrate, PlayerConfig};
 use librespot_playback::convert::Converter;
 use librespot_playback::decoder::AudioPacket;
-use librespot_playback::mixer::softmixer::SoftMixer;
 use librespot_playback::mixer::{Mixer, MixerConfig};
 use librespot_playback::player::{Player, PlayerEvent};
 use librespot_playback::{NUM_CHANNELS, SAMPLE_RATE};
@@ -103,6 +102,70 @@ fn advance_connect_track_generation(
             );
         }
     }
+}
+
+// -------------------------------------------------------------------------
+// PassthroughMixer — GH #144: eliminates PCM double attenuation
+// -------------------------------------------------------------------------
+//
+// A librespot Mixer that tracks Spirc's volume state (so the Spotify app
+// slider and VolumeChanged events keep working) but NEVER attenuates audio
+// samples. attenuation_factor() always returns 1.0 (the trait's default
+// NoOpVolume — see below), making LMS/squeezelite the single attenuator in
+// every SpotOn playback mode (Browse, Connect PCM fallback, Connect OGG
+// passthrough).
+//
+// Rationale (GH #144): in PCM fallback mode (normalization on, non-OGG
+// player, mixed sync group) users got ~-6 dB extra attenuation at LMS
+// volume 50 because both librespot's SoftMixer and squeezelite attenuated
+// the same PCM samples. VolumeCtrl::Fixed was also broken in the pinned
+// librespot rev (mappings.rs treats Fixed like Linear); upstream compensates
+// with disable_volume=true, which SpotOn cannot use because Spirc must keep
+// reporting/accepting volume changes for the Spotify app slider to work.
+//
+// Prior art: Music Assistant's librespot fork carries the identical pattern
+// — https://github.com/music-assistant/librespot/commit/1d68d603
+struct PassthroughMixer {
+    volume: AtomicU16,
+}
+
+impl Mixer for PassthroughMixer {
+    fn open(_config: MixerConfig) -> Result<Self, librespot_core::Error>
+    where
+        Self: Sized,
+    {
+        // MixerConfig::volume_ctrl (Fixed/Linear/Log) is intentionally ignored —
+        // ignoring the volume curve IS the GH #144 fix. There is no audio
+        // attenuation path left for a curve to apply to.
+        Ok(Self {
+            // Matches ConnectConfig::default().initial_volume; Spirc overwrites
+            // this immediately at startup from the real initial_volume
+            // (librespot connect/src/spirc.rs:269-277).
+            volume: AtomicU16::new(u16::MAX / 2),
+        })
+    }
+
+    fn volume(&self) -> u16 {
+        self.volume.load(Ordering::Relaxed)
+    }
+
+    fn set_volume(&self, volume: u16) {
+        log::debug!("[spoton/unified] PassthroughMixer::set_volume({volume})");
+        self.volume.store(volume, Ordering::Relaxed);
+    }
+
+    // Deliberately NOT overriding get_soft_volume(): the trait's default
+    // implementation returns NoOpVolume, whose attenuation_factor() is
+    // hardcoded 1.0. Do not "fix" this by adding an override that reads
+    // `self.volume` — that would reintroduce the double-attenuation bug
+    // this struct exists to eliminate (GH #144).
+}
+
+/// MixerFn-compatible constructor for PassthroughMixer — slots into the
+/// existing `mixer_fn_opt` reconnect plumbing used by both Spirc creation
+/// sites (initial startup and ZeroConf reconnect).
+fn passthrough_mixer(config: MixerConfig) -> Result<Arc<dyn Mixer>, librespot_core::Error> {
+    Ok(Arc::new(PassthroughMixer::open(config)?))
 }
 
 // -------------------------------------------------------------------------
@@ -1212,7 +1275,7 @@ async fn unified_http_server(
 ///   3. Session::new + session.connect() — IMMEDIATE (D-03)
 ///   4. Port binding + stream_port=N announcement (D-04, Pitfall 4)
 ///   5. Shared state initialisation (mode_state, spirc_active, spirc_handle, browse_cancel)
-///   6. [if enable_connect] SoftMixer + Connect Player (UnifiedHttpStreamSink) + LMS + Spirc
+///   6. [if enable_connect] PassthroughMixer + Connect Player (UnifiedHttpStreamSink) + LMS + Spirc
 ///   7. Spirc event watcher — D-09 takeover + spirc_active updates
 ///   8. Spawn unified_http_server (combined routes)
 ///   9. Main event loop (Spirc task + ZeroConf reconnect + ctrl_c)
@@ -1232,7 +1295,6 @@ pub async fn run_unified(
     buffer_latency_ms: u64,
     autoplay: Option<bool>,
     initial_volume: Option<u16>,
-    volume_ctrl_str: &str,
     passthrough: bool,
     bitrate_kbps: u32,
     enable_normalisation: bool,
@@ -1331,11 +1393,6 @@ pub async fn run_unified(
     let last_activity: Arc<std::sync::Mutex<Instant>> = Arc::new(std::sync::Mutex::new(Instant::now()));
 
     // 6. Conditional Connect infrastructure (D-01).
-    let volume_ctrl_enum = match volume_ctrl_str {
-        "linear" => VolumeCtrl::Linear,
-        "fixed" => VolumeCtrl::Fixed,
-        _ => VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE),
-    };
 
     // PCM + flush channels — only created when enable_connect (None in else branch).
     // The if/else branches below handle both cases.
@@ -1374,10 +1431,10 @@ pub async fn run_unified(
         ogg_header_serial_arc = Some(Arc::clone(&ogg_header_serial));
         ogg_headers_complete_arc = Some(Arc::clone(&ogg_headers_complete));
 
-        // SoftMixer — required for Spirc volume control.
-        let mixer_fn = librespot_playback::mixer::find(Some(SoftMixer::NAME))
-            .ok_or("SoftMixer not found")?;
-        let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig { volume_ctrl: volume_ctrl_enum, ..MixerConfig::default() })?;
+        // PassthroughMixer (GH #144) — tracks Spirc volume state without
+        // attenuating audio; LMS/squeezelite is the single attenuator.
+        let mixer_fn: librespot_playback::mixer::MixerFn = passthrough_mixer;
+        let mixer: Arc<dyn Mixer> = mixer_fn(MixerConfig::default())?;
         let soft_volume = mixer.get_soft_volume();
 
         // Connect Player with rate-limited UnifiedHttpStreamSink.
@@ -1685,7 +1742,7 @@ pub async fn run_unified(
                             new_session,
                             last_credentials.clone().unwrap(),
                             connect_player_opt.clone().unwrap(),
-                            mf(MixerConfig { volume_ctrl: volume_ctrl_enum, ..MixerConfig::default() }).unwrap_or_else(|_| panic!("mixer")),
+                            mf(MixerConfig::default()).unwrap_or_else(|_| panic!("mixer")),
                         ).await {
                             Ok((new_spirc, new_task)) => {
                                 {
@@ -2002,4 +2059,47 @@ pub async fn run_unified(
     }
 
     Ok(())
+}
+
+// -------------------------------------------------------------------------
+// PassthroughMixer unit tests (GH #144)
+// -------------------------------------------------------------------------
+
+#[cfg(test)]
+mod passthrough_mixer_tests {
+    use super::*;
+
+    /// SpircTask::set_volume's change-guard compares self.mixer.volume()
+    /// (connect/src/spirc.rs:1917) — unfaithful state breaks VolumeChanged
+    /// emission, so the mixer must round-trip volume exactly.
+    #[test]
+    fn volume_state_round_trip() {
+        for v in [0u16, 12345, u16::MAX] {
+            let mixer = PassthroughMixer::open(MixerConfig::default())
+                .expect("PassthroughMixer::open never fails");
+            mixer.set_volume(v);
+            assert_eq!(
+                mixer.volume(),
+                v,
+                "volume() must faithfully return the last set_volume value"
+            );
+        }
+    }
+
+    /// Regression test for the GH #144 double-attenuation fix: the audio
+    /// pipeline's VolumeGetter must be volume-independent at every setting.
+    #[test]
+    fn unity_attenuation_invariant() {
+        for v in [0u16, 1, 32767, u16::MAX] {
+            let mixer = PassthroughMixer::open(MixerConfig::default())
+                .expect("PassthroughMixer::open never fails");
+            mixer.set_volume(v);
+            let soft_volume = mixer.get_soft_volume();
+            assert_eq!(
+                soft_volume.attenuation_factor(),
+                1.0,
+                "attenuation_factor must be 1.0 at volume={v} — GH #144 regression test"
+            );
+        }
+    }
 }

@@ -97,7 +97,10 @@ async fn main() {
     let mut buffer_latency_ms: u64 = 2000;
     let mut autoplay: Option<bool> = None;
     let mut initial_volume_lms: Option<u8> = None;
-    let mut volume_ctrl_str = String::from("log");
+    // GH #144 (PassthroughMixer): no longer forwarded to run_unified — the
+    // flag is accepted and consumed for backward compatibility only (see
+    // the --volume-ctrl match arm below), never read.
+    let mut _volume_ctrl_str = String::from("log");
 
     // Phase 29: unified mode variable
     let mut enable_connect = false;
@@ -201,8 +204,13 @@ async fn main() {
                 }
             }
             "--volume-ctrl" => {
+                // No-op since GH #144 (PassthroughMixer): the binary never
+                // attenuates audio, so Fixed/Linear/Log curves have no effect.
+                // Flag + value are still consumed (not errored on) for backward
+                // compatibility with pre-PassthroughMixer Daemon.pm during
+                // mixed-version installs.
                 if i + 1 < args.len() {
-                    volume_ctrl_str = args[i + 1].clone();
+                    _volume_ctrl_str = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -264,6 +272,7 @@ async fn main() {
                 "lms-auth": true,
                 "ogg-direct": has_passthrough,
                 "passthrough": has_passthrough,
+                "passthrough-mixer": true, // Phase 64: PassthroughMixer (GH #144) — no PCM double attenuation
                 "token-env": true,        // Phase 51 CR-01: SPOTON_TOKEN env var support
                 "token-login": true,
                 "unified": true,          // Phase 29: unified Browse+Connect daemon capability
@@ -378,7 +387,6 @@ async fn main() {
                 buffer_latency_ms,
                 autoplay,
                 initial_volume_u16,
-                &volume_ctrl_str,
                 passthrough,
                 bitrate,
                 enable_normalisation,
