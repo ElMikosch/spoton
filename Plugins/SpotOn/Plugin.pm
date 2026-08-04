@@ -606,10 +606,11 @@ sub _switchAccount {
 
     # Belt-and-braces nextWindow for any client that drills into the
     # feed despite the item-level hint (GH #136).
+    # No type key — matches Like/Unlike confirmation shape. With type => 'text',
+    # Material Skin wraps the title in a <div> that renders as raw HTML in toasts.
     $callback->({ items => [
         {
             name       => $msg,
-            type       => 'text',
             nextWindow => 'grandparent',
         },
     ] });
