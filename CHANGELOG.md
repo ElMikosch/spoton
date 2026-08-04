@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.5] - 2026-08-04
+
+### Fixed
+- **Spotify app volume slider showed arbitrary default for fixed-volume players** — the `fixed` branch now seeds `--initial-volume 100` so the slider starts at 100% instead of librespot's internal default. Note: the flag is 0–100 scale (u8), scaled to 0–65535 internally by the daemon. ([#137](https://github.com/stiefenm/spoton/issues/137))
+- **Account switch toast in Material Skin showed raw HTML** — the confirmation item no longer carries `type => 'text'`, which triggered Material Skin's client-side div-wrapping. Matches the Like/Unlike confirmation shape that already toasts correctly. ([#136](https://github.com/stiefenm/spoton/issues/136))
+- **Auth Health Dashboard showed "Audio Key: Denied" after daemon crash-loop recovery** — the `denied` cache state (TTL `never`) was never cleared. Now clears the stale denial when no error signature is present and the player is actively streaming, proving audio keys are being granted. ([#141](https://github.com/stiefenm/spoton/issues/141))
+
 ## [3.3.4] - 2026-08-03
 
 ### Fixed
