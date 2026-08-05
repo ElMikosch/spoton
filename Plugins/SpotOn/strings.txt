@@ -2936,3 +2936,29 @@ PLUGIN_SPOTON_SYNC_GROUP_SUFFIX
 	PL	(Grupa)
 	SV	(Grupp)
 
+
+PLUGIN_SPOTON_NEW_SEARCH
+	CS	Nové hledání
+	DA	Ny søgning
+	DE	Neue Suche
+	EN	New Search
+	ES	Nueva búsqueda
+	FR	Nouvelle recherche
+	IT	Nuova ricerca
+	NL	Nieuwe zoekopdracht
+	NO	Nytt søk
+	PL	Nowe wyszukiwanie
+	SV	Ny sökning
+
+PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY
+	CS	Vymazat historii hledání
+	DA	Ryd søgehistorik
+	DE	Suchverlauf löschen
+	EN	Clear Search History
+	ES	Borrar historial de búsqueda
+	FR	Effacer l'historique des recherches
+	IT	Cancella la cronologia delle ricerche
+	NL	Zoekgeschiedenis wissen
+	NO	Tøm søkehistorikk
+	PL	Wyczyść historię wyszukiwania
+	SV	Rensa sökhistorik
