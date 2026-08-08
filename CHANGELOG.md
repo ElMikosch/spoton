@@ -5,9 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-08-08
+
+### Added
+- **Recent search history (last 50 entries, newest-first)** — the dedicated search page now shows a "New Search" input followed by previous queries, each with a context menu to delete a single entry or clear all history. History is stored, deduplicated, and capped at 50 entries. Contributed by @urknall in [PR #145](https://github.com/stiefenm/spoton/pull/145).
+
 ### Fixed
 - **PCM double attenuation in Connect fallback mode** — the binary now uses a PassthroughMixer that tracks the Spotify volume slider and keeps VolumeChanged events flowing but never attenuates decoded samples; LMS/squeezelite is the single volume attenuator in every mode (previously ~-6 dB extra at LMS volume 50 in PCM mode). Credit the analysis by @urknall in [#143](https://github.com/stiefenm/spoton/issues/143). ([#144](https://github.com/stiefenm/spoton/issues/144))
 - **Fixed-output players (Digital Volume Control off) and sync groups with a fixed-output master are now genuinely bit-perfect in PCM mode** — the broken `VolumeCtrl::Fixed` semantics of the previous volume path no longer apply. ([#144](https://github.com/stiefenm/spoton/issues/144))
+- **Classic Skin split the SpotOn main menu into separate sections** — the top-level Search entry used `type => 'search'`, which Classic Skin interprets as a section break. It now uses `type => 'link'` and navigates to the dedicated search page, matching Spotty's two-step UX pattern. ([PR #145](https://github.com/stiefenm/spoton/pull/145))
 
 ### Changed
 - **librespot dev-branch pin refreshed to `9c7d7561`** — descendant of the CDN-fallback fix ([librespot#1722](https://github.com/librespot-org/librespot/pull/1722)), which remains included.
