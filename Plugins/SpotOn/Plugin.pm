@@ -118,7 +118,7 @@ sub initPlugin {
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
         streamingMode        => 'direct', # COMPAT-01: global streaming mode default (direct|proxy); per-player override lives in same-name client pref (GH #96)
-        spoton_recent_search => [],    # ordered list of recent search strings (oldest first)
+        recentSearches => [],
     });
 
     # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
@@ -264,7 +264,7 @@ sub initPlugin {
     #                                                           |  |  |  |Function to call
     #                                                           C  Q  T  F
     Slim::Control::Request::addDispatch(['spoton', 'recentsearches'],
-                                                                [0, 0, 1, \&_recentSearchesCLI]
+                                                                [0, 1, 1, \&_recentSearchesCLI]
     );
 }
 
@@ -2501,67 +2501,48 @@ sub _multiTypeSearch {
 
 # Search History Helpers
 #
-# _hasRecentSearches()
-# Returns true if there is at least one stored recent search.
-sub _hasRecentSearches {
-    return scalar @{ $prefs->get('spoton_recent_search') || [] };
+sub _recentSearches {
+    my $list = $prefs->get('recentSearches');
+    return [] unless ref $list eq 'ARRAY';
+    return $list;
 }
 
-# _addRecentSearch($query)
-# Prepend $query to the recent-search list, removing duplicates and capping at
-# MAX_RECENT_SEARCHES entries (oldest are dropped).  List is stored oldest-first
-# so unshift at display time yields newest-first order.
 sub _addRecentSearch {
     my ($query) = @_;
     return unless defined $query && $query ne '';
+    $query =~ s/^\s+|\s+$//g;
+    return if $query eq '' || length($query) > 256;
 
-    my $list = $prefs->get('spoton_recent_search') || [];
+    my $list = _recentSearches();
 
-    # remove duplicates (case-sensitive, same as Spotty)
+    return if @$list && $list->[-1] eq $query;
+
     $list = [ grep { $_ ne $query } @$list ];
-
     push @$list, $query;
 
-    # trim to MAX_RECENT_SEARCHES (keep newest)
     $list = [ @{$list}[ (-1 * MAX_RECENT_SEARCHES)..-1 ] ] if scalar @$list > MAX_RECENT_SEARCHES;
 
-    $prefs->set('spoton_recent_search', $list);
+    $prefs->set('recentSearches', $list);
 }
 
-# _searchPageFeed($client, $callback, $args)
-# The dedicated Search page.  When there are saved searches it shows:
-#   • a `search` input item at the top (New Search)
-#   • history entries newest-first, each with a context-menu action to delete it
-# When there is no history at all it falls back to a plain `search` item so
-# the user still gets a working search box.
 sub _searchPageFeed {
     my ($client, $callback, $args) = @_;
 
-    # If called directly with a search query (e.g. from a type=search item),
-    # forward straight to _searchFeed instead of showing the search page.
     if (($args->{search} // '') ne '') {
         _searchFeed($client, $callback, $args);
         return;
     }
 
-    my $list = $prefs->get('spoton_recent_search') || [];
-
+    my $list = _recentSearches();
     my @items;
 
-    # Always put the live search input at the top of the dedicated page.
-    # No image key — keeps the row compact regardless of cover-size setting,
-    # matching Spotty's search-page layout.
     push @items, {
         name  => cstring($client, 'PLUGIN_SPOTON_NEW_SEARCH'),
         type  => 'search',
         url   => \&_searchFeed,
     };
 
-    # History is stored oldest-first; display newest-first below the search box.
-    # $i counts from the newest entry so deleteMenu indices match the stored list.
-    # No image key — history entries must not show the magnifying-glass icon.
-    my $last = $#$list;
-    for my $i ( reverse 0 .. $last ) {
+    for my $i ( reverse 0 .. $#$list ) {
         push @items, {
             name        => $list->[$i],
             type        => 'link',
@@ -2570,48 +2551,53 @@ sub _searchPageFeed {
             itemActions => {
                 info => {
                     command     => ['spoton', 'recentsearches'],
-                    fixedParams => { deleteMenu => $i },
+                    fixedParams => { delete => $list->[$i] },
                 },
             },
+        };
+    }
+
+    if (@$list) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY'),
+            type => 'link',
+            url  => sub {
+                my ($client, $cb) = @_;
+                $prefs->set('recentSearches', []);
+                _searchPageFeed($client, $cb, {});
+            },
+            nextWindow => 'refreshOrigin',
         };
     }
 
     $callback->({ items => \@items });
 }
 
-# _recentSearchesCLI($request)
-# CLI handler for `spoton recentsearches` — used by the itemActions context menu
-# on history entries.  Supports three modes:
-#   deleteMenu=N  — return a confirmation sub-menu (delete single / clear all)
-#   delete=N      — remove entry at index N
-#   deleteAll=1   — wipe the entire history
 sub _recentSearchesCLI {
     my $request = shift;
     my $client  = $request->client;
 
-    if ($request->isNotCommand([['spoton'], ['recentsearches']])) {
+    if ($request->isNotQuery([['spoton'], ['recentsearches']])) {
         $request->setStatusBadDispatch();
         return;
     }
 
-    my $list = $prefs->get('spoton_recent_search') || [];
+    my $list = _recentSearches();
 
-    if (defined $request->getParam('deleteMenu')) {
-        my $del = $request->getParam('deleteMenu') + 0;
-
-        if ($del >= scalar @$list) {
+    if (defined(my $q = $request->getParam('delete'))) {
+        unless (grep { $_ eq $q } @$list) {
             $request->setStatusBadParams();
             return;
         }
 
         my $items = [
             {
-                text => cstring($client, 'DELETE') . cstring($client, 'COLON') . ' "' . ($list->[$del] // '') . '"',
+                text => cstring($client, 'DELETE') . cstring($client, 'COLON') . ' "' . $q . '"',
                 actions => {
                     go => {
                         player => 0,
                         cmd    => ['spoton', 'recentsearches'],
-                        params => { delete => $del },
+                        params => { confirm_delete => $q },
                     },
                 },
                 nextWindow => 'parent',
@@ -2633,13 +2619,15 @@ sub _recentSearchesCLI {
         $request->addResult('count', scalar @$items);
         $request->addResult('item_loop', $items);
     }
-    elsif ($request->getParam('deleteAll')) {
-        $prefs->set('spoton_recent_search', []);
+    elsif (defined(my $cq = $request->getParam('confirm_delete'))) {
+        $prefs->set('recentSearches', [ grep { $_ ne $cq } @$list ]);
     }
-    elsif (defined $request->getParam('delete')) {
-        my $del = $request->getParam('delete') + 0;
-        splice(@$list, $del, 1);
-        $prefs->set('spoton_recent_search', $list);
+    elsif (defined $request->getParam('deleteAll')) {
+        $prefs->set('recentSearches', []);
+    }
+    else {
+        $request->setStatusBadParams();
+        return;
     }
 
     $request->setStatusDone;
