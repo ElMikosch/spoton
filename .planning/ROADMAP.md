@@ -366,13 +366,13 @@ Plans:
 **Goal:** Implement a PassthroughMixer in unified.rs that tracks volume and emits VolumeChanged events but always returns attenuation_factor 1.0, eliminating PCM double attenuation and fixing volume-ctrl Fixed semantics (#144). Merge upstream librespot changes (CDN fallback #1722) into the binary and rebuild via CI.
 **Requirements**: GH #144
 **Depends on:** None (independent Rust + binary rebuild)
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 
-- [ ] 64-01-PLAN.md — Rust: PassthroughMixer in unified.rs + --check capability + librespot dev pin refresh (#1722 verified included)
-- [ ] 64-02-PLAN.md — Perl: capability-gated Daemon.pm volume arg simplification + CHANGELOG + live volume verification on dev LMS
+- [x] 64-01-PLAN.md — Rust: PassthroughMixer in unified.rs + --check capability + librespot dev pin refresh (#1722 verified included)
+- [x] 64-02-PLAN.md — Perl: capability-gated Daemon.pm volume arg simplification + CHANGELOG + live volume verification on dev LMS
 
 ---
 *Roadmap created: 2026-05-26*
-*Last updated: 2026-08-04 — Phase 64: PassthroughMixer + Upstream Merge added*
+*Last updated: 2026-08-08 — Phase 64 complete*
