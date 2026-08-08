@@ -2548,6 +2548,7 @@ sub _searchPageFeed {
             type        => 'link',
             url         => \&_searchFromHistoryFeed,
             passthrough => [{ query => $list->[$i] }],
+            cachetime   => 0,
             itemActions => {
                 info => {
                     command     => ['spoton', 'recentsearches'],
