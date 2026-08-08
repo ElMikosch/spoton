@@ -20,7 +20,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 ## Features
 
-- **Browse** — Search tracks, albums, artists, and playlists; full artist discography with albums, singles, compilations
+- **Browse** — Search tracks, albums, artists, and playlists with search history (last 50 queries); full artist discography with albums, singles, compilations
 - **Podcasts** — Browse saved shows, search for shows and episodes, play episodes, follow/unfollow shows. Episode info view links back to the parent show with lazy-loaded metadata. Explicit episodes are marked. Duration and dates are localized in 11 languages.
 - **Library** — Liked Songs, Albums, Artists, Playlists, Recently Played, Top Tracks
 - **Like / Unlike** — Save or remove tracks from your Liked Songs directly from any track context menu. In Material Skin, open the track's "..." menu → "More" → "Like / Unlike" — the plugin checks Spotify for the current state and shows either "Like" (to save) or "Unlike" (to remove). In Classic Skin, the same flow is available via the Track Info panel. After the action, a popup confirms "Liked!" or "Removed" and the menu navigates back automatically.
