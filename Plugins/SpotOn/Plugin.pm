@@ -22,6 +22,7 @@ use File::Spec::Functions qw(catdir catfile);
 use constant KILL_PROCESS_INTERVAL => 3600;    # Hourly orphaned-process cleanup (STR-10)
 use constant SPOTON_CACHE_VERSION  => 4;       # Bump to flush all SpotOn cache entries (D-01/D-02)
 use constant FLUSH_BATCH           => 50;      # Items per event-loop tick in _flushDeferredMeta (FIX-01)
+use constant MAX_RECENT_SEARCHES   => 50;      # Maximum stored search history entries
 
 my $prefs = preferences('plugin.spoton');
 my $cache = Slim::Utils::Cache->new('spoton', SPOTON_CACHE_VERSION);
@@ -117,6 +118,7 @@ sub initPlugin {
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
         streamingMode        => 'direct', # COMPAT-01: global streaming mode default (direct|proxy); per-player override lives in same-name client pref (GH #96)
+        recentSearches => [],
     });
 
     # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
@@ -254,6 +256,16 @@ sub initPlugin {
         after  => 'lastplayed',
         func   => \&_infoUrl,
     ) );
+
+    # Search history CLI — used by itemActions context menu on recent search entries
+    #                                                           |requires Client
+    #                                                           |  |is a Query
+    #                                                           |  |  |has Tags
+    #                                                           |  |  |  |Function to call
+    #                                                           C  Q  T  F
+    Slim::Control::Request::addDispatch(['spoton', 'recentsearches'],
+                                                                [0, 1, 1, \&_recentSearchesCLI]
+    );
 }
 
 sub shutdownPlugin {
@@ -514,9 +526,9 @@ sub handleFeed {
         };
         push @items, {
             name  => cstring($client, 'PLUGIN_SPOTON_SEARCH'),
-            url   => \&_searchFeed,
+            url   => \&_searchPageFeed,
             image => 'plugins/SpotOn/html/images/search.png',
-            type  => 'search',
+            type  => 'link',
         };
         push @items, {
             name  => cstring($client, 'PLUGIN_SPOTON_LIBRARY'),
@@ -2487,6 +2499,150 @@ sub _multiTypeSearch {
     }
 }
 
+# Search History Helpers
+#
+sub _recentSearches {
+    my $list = $prefs->get('recentSearches');
+    return [] unless ref $list eq 'ARRAY';
+    return $list;
+}
+
+sub _addRecentSearch {
+    my ($query) = @_;
+    return unless defined $query && $query ne '';
+    $query =~ s/^\s+|\s+$//g;
+    return if $query eq '' || length($query) > 256;
+
+    my $list = _recentSearches();
+
+    return if @$list && $list->[-1] eq $query;
+
+    $list = [ grep { $_ ne $query } @$list ];
+    push @$list, $query;
+
+    $list = [ @{$list}[ (-1 * MAX_RECENT_SEARCHES)..-1 ] ] if scalar @$list > MAX_RECENT_SEARCHES;
+
+    $prefs->set('recentSearches', $list);
+}
+
+sub _searchPageFeed {
+    my ($client, $callback, $args) = @_;
+
+    if (($args->{search} // '') ne '') {
+        _searchFeed($client, $callback, $args);
+        return;
+    }
+
+    my $list = _recentSearches();
+    my @items;
+
+    push @items, {
+        name  => cstring($client, 'PLUGIN_SPOTON_NEW_SEARCH'),
+        type  => 'search',
+        url   => \&_searchFeed,
+    };
+
+    for my $i ( reverse 0 .. $#$list ) {
+        push @items, {
+            name        => $list->[$i],
+            type        => 'link',
+            url         => \&_searchFromHistoryFeed,
+            passthrough => [{ query => $list->[$i] }],
+            itemActions => {
+                info => {
+                    command     => ['spoton', 'recentsearches'],
+                    fixedParams => { delete => $list->[$i] },
+                },
+            },
+        };
+    }
+
+    if (@$list) {
+        push @items, {
+            name => cstring($client, 'PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY'),
+            type => 'link',
+            url  => sub {
+                my ($client, $cb) = @_;
+                $prefs->set('recentSearches', []);
+                _searchPageFeed($client, $cb, {});
+            },
+            nextWindow => 'refreshOrigin',
+        };
+    }
+
+    $callback->({ items => \@items });
+}
+
+sub _recentSearchesCLI {
+    my $request = shift;
+    my $client  = $request->client;
+
+    if ($request->isNotQuery([['spoton'], ['recentsearches']])) {
+        $request->setStatusBadDispatch();
+        return;
+    }
+
+    my $list = _recentSearches();
+
+    if (defined(my $q = $request->getParam('delete'))) {
+        unless (grep { $_ eq $q } @$list) {
+            $request->setStatusBadParams();
+            return;
+        }
+
+        my $items = [
+            {
+                text => cstring($client, 'DELETE') . cstring($client, 'COLON') . ' "' . $q . '"',
+                actions => {
+                    go => {
+                        player => 0,
+                        cmd    => ['spoton', 'recentsearches'],
+                        params => { confirm_delete => $q },
+                    },
+                },
+                nextWindow => 'parent',
+            },
+            {
+                text => cstring($client, 'PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY'),
+                actions => {
+                    go => {
+                        player => 0,
+                        cmd    => ['spoton', 'recentsearches'],
+                        params => { deleteAll => 1 },
+                    },
+                },
+                nextWindow => 'grandParent',
+            },
+        ];
+
+        $request->addResult('offset', 0);
+        $request->addResult('count', scalar @$items);
+        $request->addResult('item_loop', $items);
+    }
+    elsif (defined(my $cq = $request->getParam('confirm_delete'))) {
+        $prefs->set('recentSearches', [ grep { $_ ne $cq } @$list ]);
+    }
+    elsif (defined $request->getParam('deleteAll')) {
+        $prefs->set('recentSearches', []);
+    }
+    else {
+        $request->setStatusBadParams();
+        return;
+    }
+
+    $request->setStatusDone;
+}
+
+# _searchFromHistoryFeed($client, $callback, $args, $passthrough)
+# Thin shim that replays a recent search without re-adding it to history.
+# Called when the user taps a history entry from _searchPageFeed.
+sub _searchFromHistoryFeed {
+    my ($client, $callback, $args, $passthrough) = @_;
+    $args->{search} = $passthrough->{query} // '';
+    $args->{_fromHistory} = 1;
+    _searchFeed($client, $callback, $args);
+}
+
 # _searchFeed($client, $callback, $args)
 # Entry point for the Search type item. LMS passes the search query in $args->{search}.
 # Per D-10: Top Result shown prominently above category sections.
@@ -2581,6 +2737,9 @@ sub _searchFeed {
 
         if (!@items) {
             push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+        } else {
+            # Store successful search in history (skip if called from history replay)
+            _addRecentSearch($query) unless $args->{_fromHistory};
         }
 
         $callback->({ items => \@items });
