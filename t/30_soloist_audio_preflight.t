@@ -25,7 +25,7 @@ sub make_tools {
 
 my $root = tempdir(CLEANUP => 1);
 my $pulse_bin = catdir($root, 'pulse-bin');
-make_tools($pulse_bin, qw(soloist pactl parec ffmpeg));
+make_tools($pulse_bin, qw(soloist pulseaudio pactl parec ffmpeg));
 
 my $pulse = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
     os                  => 'linux',
@@ -35,11 +35,13 @@ my $pulse = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
 
 ok($pulse->{supportedOs}, 'Linux is supported');
 ok($pulse->{capture}{pulseReady}, 'Pulse monitor toolchain is detected');
+ok($pulse->{capture}{managedPulseReady}, 'managed PulseAudio toolchain is detected');
 ok(!$pulse->{capture}{pipewireReady}, 'incomplete native PipeWire toolchain is not ready');
 is($pulse->{capture}{preferredBackend}, 'pulse_monitor', 'Pulse monitor is preferred when complete');
 is($pulse->{encoder}{preferred}, 'ffmpeg', 'ffmpeg is the preferred encoder');
 ok($pulse->{controlReady}, 'Soloist plus LMS WebSocket support makes control ready');
 ok($pulse->{audioCaptureReady}, 'capture and encoding toolchain is ready');
+ok($pulse->{managedPulseAudioReady}, 'self-managed PulseAudio capture is ready');
 ok($pulse->{hardwareProbeReady}, 'complete toolchain is ready for the explicit hardware probe');
 is_deeply($pulse->{missing}, [], 'complete toolchain has no missing capability codes');
 like($pulse->{tools}{soloist}, qr{\Q$pulse_bin\E}, 'resolved executable path is reported');
@@ -53,6 +55,7 @@ my $pipewire = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
     websocket_available => 1,
 );
 ok($pipewire->{capture}{pipewireReady}, 'native PipeWire capture toolchain is detected');
+ok(!$pipewire->{capture}{managedPulseReady}, 'native PipeWire path needs no PulseAudio daemon');
 is(
     $pipewire->{capture}{preferredBackend},
     'pipewire_native',
@@ -70,6 +73,7 @@ my $missing = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
 );
 ok(!$missing->{controlReady}, 'missing Soloist and WebSocket support blocks control');
 ok(!$missing->{audioCaptureReady}, 'missing audio tools blocks capture');
+ok(!$missing->{managedPulseAudioReady}, 'missing PulseAudio daemon blocks managed capture');
 is_deeply(
     $missing->{missing},
     [qw(soloist_binary lms_simplews audio_capture_tools audio_encoder)],

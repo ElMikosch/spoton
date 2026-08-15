@@ -26,6 +26,10 @@ state layers deliberately have no LMS runtime dependency:
 - `AudioPreflight.pm` performs a non-invasive capability check for Soloist,
   LMS WebSocket support, PulseAudio/PipeWire capture tools, and an encoder. It
   never starts a program or connects to the host's audio server.
+- `PulseBridgeSpec.pm` describes the headless-container audio path as three
+  shell-free process specifications: a supervised PulseAudio null sink on a
+  private Unix socket, `parec` monitor capture as 44.1 kHz stereo PCM, and an
+  `ffmpeg` FLAC encoder suitable for the future LMS stream endpoint.
 
 SpotOn registers the diagnostics-only probe but does not start a Soloist
 connection automatically. Existing Connect and browse playback therefore remain
@@ -59,7 +63,9 @@ codes when the host is not ready.
 
 The discovery-only preflight currently recognizes:
 
-- Pulse monitor capture: `pactl` plus `parec`.
+- Pulse monitor capture: `pactl` plus `parec`. A plugin-managed headless
+  PulseAudio server additionally requires the `pulseaudio` executable and is
+  reported as `managedPulseReady`.
 - Native PipeWire capture: `pw-record` plus either `pw-dump` or `pw-cli`.
 - Encoding: `ffmpeg`, with `flac` and `sox` as fallback candidates.
 
@@ -105,6 +111,31 @@ Soloist:
 spoton soloistprobe action:stop
 ```
 
+## Headless Linux container path
+
+An LMS container does not need a physical or host-provided sound device. The
+prototype can run a per-LMS-user PulseAudio process containing only a null sink
+and capture that sink's automatically created monitor source. Soloist writes to
+the isolated sink, while SpotOn captures and encodes the same samples for LMS.
+
+`PulseBridgeSpec.pm` deliberately keeps this path constrained:
+
+- PulseAudio stays in the foreground so the plugin can supervise it.
+- Automatic exit, runtime module loading, realtime scheduling, and a shared PID
+  file are disabled.
+- Clients connect only to an explicit Unix socket; no TCP PulseAudio protocol is
+  loaded.
+- The native protocol uses anonymous authentication only because the containing
+  runtime directory must first be created with mode `0700` and owned by the LMS
+  service user. The lifecycle must refuse to start if that condition is not met.
+- Module-interpolated socket and sink names use restrictive validation in
+  addition to ordinary argv separation.
+
+This commit defines and tests the process boundary but does not yet launch the
+server or expose the FLAC pipe through LMS. A real container probe must first
+confirm the distribution packages, LMS service user, PulseAudio module
+availability, and startup/capture behavior.
+
 ## Planned architecture
 
 1. Run one Soloist process per eligible LMS sync master with its WebSocket bound
@@ -113,7 +144,8 @@ spoton soloistprobe action:stop
    process specification to an explicit, opt-in daemon lifecycle.
 3. Route Soloist audio into an isolated PipeWire/PulseAudio sink and capture the
    monitor stream.
-4. Encode and expose that captured audio through LMS's existing streaming path.
+4. Encode the captured PCM as FLAC and expose it through LMS's existing
+   streaming path.
 5. Adapt normalized events to SpotOn's Connect session and metadata lifecycle.
 6. Keep the Spotify Web API browse/library UI and its normal LMS-managed
    playback path available independently of Connect.
@@ -133,3 +165,7 @@ spoton soloistprobe action:stop
 
 Protocol reference:
 [Spotify Soloist WebSocket API](https://developer.spotify.com/documentation/soloist/reference/websocket-api).
+Runtime references:
+[Spotify Soloist downloads](https://developer.spotify.com/documentation/soloist/reference/downloads-and-updates),
+[PulseAudio null sink](https://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/User/Modules/),
+and [Debian `parec`](https://manpages.debian.org/trixie/pulseaudio-utils/parec.1.en.html).

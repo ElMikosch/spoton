@@ -9,6 +9,7 @@ use File::Spec;
 
 my @TOOLS = qw(
     soloist
+    pulseaudio
     pactl
     parec
     pw-record
@@ -45,6 +46,7 @@ sub inspect {
     }
 
     my $pulse_ready = $tools{pactl} && $tools{parec} ? 1 : 0;
+    my $managed_pulse_ready = $tools{pulseaudio} && $pulse_ready ? 1 : 0;
     my $pipewire_ready = $tools{pwRecord}
         && ($tools{pwDump} || $tools{pwCli}) ? 1 : 0;
 
@@ -70,6 +72,8 @@ sub inspect {
     my $websocket = $args{websocket_available} ? 1 : 0;
     my $control_ready = $supported_os && $tools{soloist} && $websocket ? 1 : 0;
     my $audio_capture_ready = $supported_os && $capture_backend && $encoder ? 1 : 0;
+    my $managed_pulse_audio_ready =
+        $supported_os && $managed_pulse_ready && $encoder ? 1 : 0;
     my $hardware_probe_ready = $control_ready && $audio_capture_ready ? 1 : 0;
 
     my @missing;
@@ -85,20 +89,22 @@ sub inspect {
         websocketAvailable   => $websocket,
         tools                => \%tools,
         capture              => {
-            pulseReady       => $pulse_ready,
-            pipewireReady    => $pipewire_ready,
-            preferredBackend => $capture_backend,
-            binary           => $capture_binary,
+            pulseReady        => $pulse_ready,
+            managedPulseReady => $managed_pulse_ready,
+            pipewireReady     => $pipewire_ready,
+            preferredBackend  => $capture_backend,
+            binary            => $capture_binary,
         },
         encoder              => {
             available => $encoder ? 1 : 0,
             preferred => $encoder,
             binary    => $encoder_binary,
         },
-        controlReady         => $control_ready,
-        audioCaptureReady    => $audio_capture_ready,
-        hardwareProbeReady   => $hardware_probe_ready,
-        missing              => \@missing,
+        controlReady           => $control_ready,
+        audioCaptureReady      => $audio_capture_ready,
+        managedPulseAudioReady => $managed_pulse_audio_ready,
+        hardwareProbeReady     => $hardware_probe_ready,
+        missing                => \@missing,
     };
 }
 
