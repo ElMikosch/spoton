@@ -30,6 +30,7 @@ sub build_server_spec {
     my $socket = _socket_path($args{socket_path});
     my $runtime_dir = dirname($socket);
     my $config_dir = File::Spec->catdir($runtime_dir, 'config');
+    my $cookie_path = File::Spec->catfile($config_dir, 'pulse', 'cookie');
     my $sink = _sink_name($args{sink_name});
     my $rate = _sample_rate($args{sample_rate});
     my $channels = _channels($args{channels});
@@ -49,18 +50,20 @@ sub build_server_spec {
             '--log-level=warning',
             '-n',
             '--load',
-            "module-native-protocol-unix socket=$socket auth-anonymous=1",
+            "module-native-protocol-unix socket=$socket auth-cookie=$cookie_path",
             '--load',
             "module-null-sink sink_name=$sink rate=$rate channels=$channels",
         ],
         env => {
             PULSE_SERVER    => "unix:$socket",
+            PULSE_COOKIE    => $cookie_path,
             XDG_CONFIG_HOME => $config_dir,
             XDG_RUNTIME_DIR => $runtime_dir,
         },
         socket_path  => $socket,
         runtime_dir  => $runtime_dir,
         config_dir   => $config_dir,
+        cookie_path  => $cookie_path,
         sink_name    => $sink,
         monitor      => "$sink.monitor",
         sample_rate  => $rate,
@@ -77,6 +80,12 @@ sub build_capture_spec {
 
     my $binary = _required_text($args{binary}, 'capture binary');
     my $socket = _socket_path($args{socket_path});
+    my $cookie_path = File::Spec->catfile(
+        dirname($socket),
+        'config',
+        'pulse',
+        'cookie',
+    );
     my $sink = _sink_name($args{sink_name});
     my $rate = _sample_rate($args{sample_rate});
     my $channels = _channels($args{channels});
@@ -101,6 +110,7 @@ sub build_capture_spec {
         ],
         env => {
             PULSE_SERVER => "unix:$socket",
+            PULSE_COOKIE => $cookie_path,
         },
         format      => 's16le',
         sample_rate => $rate,

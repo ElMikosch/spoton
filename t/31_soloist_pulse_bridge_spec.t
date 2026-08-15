@@ -28,6 +28,11 @@ my $server = build_server_spec(
 is($server->{monitor}, 'spoton_soloist.monitor', 'null sink monitor name is deterministic');
 is($server->{env}{PULSE_SERVER}, "unix:$socket", 'server exports the isolated socket address');
 is(
+    $server->{env}{PULSE_COOKIE},
+    '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
+    'server uses an explicit private authentication cookie',
+);
+is(
     $server->{env}{XDG_RUNTIME_DIR},
     '/var/cache/lyrion/spoton/pulse',
     'server keeps runtime state beside its private socket',
@@ -46,11 +51,17 @@ is_deeply(
     [ @{ $server->{argv} }[-4 .. -1] ],
     [
         '--load',
-        "module-native-protocol-unix socket=$socket auth-anonymous=1",
+        'module-native-protocol-unix socket=' . $socket
+            . ' auth-cookie=/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
         '--load',
         'module-null-sink sink_name=spoton_soloist rate=44100 channels=2',
     ],
     'server loads only a private native socket and null sink',
+);
+unlike(
+    join(' ', @{ $server->{argv} }),
+    qr/auth-anonymous/,
+    'server does not permit anonymous PulseAudio clients',
 );
 ok(
     (grep { $_ eq '--daemonize=no' } @{ $server->{argv} }),
@@ -66,6 +77,11 @@ my $capture = build_capture_spec(
     socket_path => $socket,
     sink_name   => 'spoton_soloist',
     latency_ms  => 80,
+);
+is(
+    $capture->{env}{PULSE_COOKIE},
+    '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
+    'capture client uses the same private cookie',
 );
 is_deeply(
     $capture->{argv},

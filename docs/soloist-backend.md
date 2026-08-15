@@ -129,9 +129,12 @@ the isolated sink, while SpotOn captures and encodes the same samples for LMS.
   tree. This is required for service accounts whose declared home directory is
   read-only or does not contain a writable `.config` parent, as is common for
   packaged LMS installations.
-- The native protocol uses anonymous authentication only because the containing
-  runtime directory must first be created with mode `0700` and owned by the LMS
-  service user. The lifecycle must refuse to start if that condition is not met.
+- The native protocol requires an explicit random authentication cookie under
+  the private config tree. Server, capture client, and Soloist receive the same
+  `PULSE_COOKIE` path; anonymous PulseAudio clients are not allowed.
+- The lifecycle must create the runtime/config directories with mode `0700` and
+  the cookie with mode `0600`, all owned by the LMS service user, and refuse to
+  start if those conditions are not met.
 - Module-interpolated socket and sink names use restrictive validation in
   addition to ordinary argv separation.
 
