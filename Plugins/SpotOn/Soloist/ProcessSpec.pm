@@ -17,6 +17,8 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     device_name
     initial_volume
     pipewire_device
+    pulse_cookie
+    pulse_server
     verbose
 );
 
@@ -38,6 +40,20 @@ sub build_process_spec {
     my $api_key    = _required_text($args{api_key},    'api_key');
     my $data_dir   = _required_text($args{data_dir},   'data_dir');
     my $cache_dir  = _required_text($args{cache_dir},  'cache_dir');
+
+    my $has_pulse_server = exists $args{pulse_server};
+    my $has_pulse_cookie = exists $args{pulse_cookie};
+    croak 'Soloist pulse_server and pulse_cookie must be provided together'
+        if $has_pulse_server != $has_pulse_cookie;
+
+    my %env;
+    if ($has_pulse_server) {
+        $env{PULSE_SERVER} = _pulse_server($args{pulse_server});
+        $env{PULSE_COOKIE} = _absolute_path(
+            $args{pulse_cookie},
+            'pulse_cookie',
+        );
+    }
 
     my @argv = (
         $binary,
@@ -80,6 +96,7 @@ sub build_process_spec {
     return {
         argv           => \@argv,
         redacted_argv  => \@redacted,
+        env            => \%env,
         websocket_bind => '127.0.0.1:0',
         data_dir       => $data_dir,
         cache_dir      => $cache_dir,
@@ -100,6 +117,22 @@ sub _integer {
     croak "Soloist $name must be an integer"
         unless defined $value && !ref($value) && $value =~ /\A-?\d+\z/;
     return 0 + $value;
+}
+
+sub _pulse_server {
+    my ($value) = @_;
+    $value = _required_text($value, 'pulse_server');
+    croak 'Soloist pulse_server must be an absolute Unix socket address'
+        unless $value =~ /\Aunix:\/[A-Za-z0-9._\/-]+\z/;
+    return $value;
+}
+
+sub _absolute_path {
+    my ($value, $name) = @_;
+    $value = _required_text($value, $name);
+    croak "Soloist $name must be an absolute path"
+        unless $value =~ /\A\/[A-Za-z0-9._\/-]+\z/;
+    return $value;
 }
 
 sub _boolean {

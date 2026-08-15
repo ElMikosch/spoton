@@ -24,6 +24,8 @@ my $spec = build_process_spec(
     cache_size      => 512,
     initial_volume  => 37,
     pipewire_device => 'spoton-sink',
+    pulse_server    => 'unix:/var/cache/lyrion/spoton/pulse/native',
+    pulse_cookie    => '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
     verbose         => 1,
 );
 
@@ -42,6 +44,21 @@ is_deeply(
         '--verbose',
     ],
     'process spec maps supported daemon options to an argv array',
+);
+
+is_deeply(
+    $spec->{env},
+    {
+        PULSE_SERVER => 'unix:/var/cache/lyrion/spoton/pulse/native',
+        PULSE_COOKIE => '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
+    },
+    'private Pulse server and cookie are passed through the process environment',
+);
+ok(
+    !(grep {
+        defined $_ && /\A(?:unix:\/var\/cache|\/var\/cache\/lyrion\/spoton\/pulse)/
+    } @{ $spec->{argv} }, @{ $spec->{redacted_argv} }),
+    'Pulse connection details do not leak into either argument array',
 );
 
 is($spec->{websocket_bind}, '127.0.0.1:0', 'WebSocket bind is fixed to loopback');
@@ -79,6 +96,7 @@ is_deeply(
     ],
     'optional daemon flags are omitted by default',
 );
+is_deeply($minimal->{env}, {}, 'Pulse environment is omitted by default');
 
 my $unlimited = build_process_spec(
     binary      => 'soloist',
@@ -92,6 +110,60 @@ is_deeply(
     [ @{ $unlimited->{argv} }[-2, -1] ],
     ['--cache-size', 0],
     'cache size zero preserves Soloist unlimited-cache semantics',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary       => 'soloist',
+        device_name  => 'Probe',
+        api_key      => 'key',
+        data_dir     => '/data',
+        cache_dir    => '/cache',
+        pulse_server => 'unix:/run/spoton/native',
+    ) },
+    qr/pulse_server and pulse_cookie must be provided together/,
+    'Pulse server cannot be configured without a cookie',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary       => 'soloist',
+        device_name  => 'Probe',
+        api_key      => 'key',
+        data_dir     => '/data',
+        cache_dir    => '/cache',
+        pulse_cookie => '/run/spoton/pulse/cookie',
+    ) },
+    qr/pulse_server and pulse_cookie must be provided together/,
+    'Pulse cookie cannot be configured without a server',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary       => 'soloist',
+        device_name  => 'Probe',
+        api_key      => 'key',
+        data_dir     => '/data',
+        cache_dir    => '/cache',
+        pulse_server => 'unix:/run/spoton/socket injected',
+        pulse_cookie => '/run/spoton/pulse/cookie',
+    ) },
+    qr/pulse_server must be an absolute Unix socket address/,
+    'unsafe Pulse server addresses are rejected',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary       => 'soloist',
+        device_name  => 'Probe',
+        api_key      => 'key',
+        data_dir     => '/data',
+        cache_dir    => '/cache',
+        pulse_server => 'unix:/run/spoton/native',
+        pulse_cookie => 'relative/cookie',
+    ) },
+    qr/pulse_cookie must be an absolute path/,
+    'relative Pulse cookie paths are rejected',
 );
 
 dies_like(

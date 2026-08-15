@@ -21,8 +21,9 @@ state layers deliberately have no LMS runtime dependency:
   into a current playback snapshot.
 - `ProcessSpec.pm` builds a shell-free daemon argument array, fixes the
   unauthenticated WebSocket listener to `127.0.0.1:0`, validates Soloist's
-  documented numeric ranges, and provides a separately redacted argument array
-  for logs.
+  documented numeric ranges, provides a separately redacted argument array for
+  logs, and passes the private Pulse socket and cookie only through the child
+  process environment.
 - `AudioPreflight.pm` performs a non-invasive capability check for Soloist,
   LMS WebSocket support, PulseAudio/PipeWire capture tools, and an encoder. It
   never starts a program or connects to the host's audio server.
@@ -132,6 +133,8 @@ the isolated sink, while SpotOn captures and encodes the same samples for LMS.
 - The native protocol requires an explicit random authentication cookie under
   the private config tree. Server, capture client, and Soloist receive the same
   `PULSE_COOKIE` path; anonymous PulseAudio clients are not allowed.
+- The managed Soloist process receives `PULSE_SERVER` and `PULSE_COOKIE` as a
+  validated pair. Neither value is added to the daemon argument arrays.
 - The lifecycle must create the runtime/config directories with mode `0700` and
   the cookie with mode `0600`, all owned by the LMS service user, and refuse to
   start if those conditions are not met.
