@@ -76,6 +76,7 @@ sub start {
         unless $websocket;
 
     require Plugins::SpotOn::Soloist::Runtime;
+    my $runtime_error;
     my $created = eval {
         $runtime = Plugins::SpotOn::Soloist::Runtime->new(
             api_key           => $api_key,
@@ -92,11 +93,17 @@ sub start {
             cache_size        => 100,
             verbose           => $prefs->get('diagnosticMode') ? 1 : 0,
         );
-        $runtime->start() ? 1 : 0;
+        my $started = $runtime->start() ? 1 : 0;
+        $runtime_error = $runtime->last_error() unless $started;
+        $started;
     };
+    my $exception = $@;
     $api_key = undef;
-    return _fail('runtime_start_failed', $@ || 'Managed runtime rejected start')
-        unless $created;
+    return _fail_runtime(
+        $runtime_error,
+        'runtime_start_failed',
+        $exception || 'Managed runtime rejected start',
+    ) unless $created;
 
     $state = 'starting';
     _schedule_poll(START_POLL_INTERVAL);
@@ -155,14 +162,10 @@ sub _poll {
 
     my $runtime_state = $runtime->poll();
     if (!$runtime_state || $runtime_state eq 'failed') {
-        my $runtime_error = $runtime->last_error();
-        _fail(
-            $runtime_error && $runtime_error->{code}
-                ? 'runtime_' . $runtime_error->{code}
-                : 'runtime_failed',
-            $runtime_error && $runtime_error->{message}
-                ? $runtime_error->{message}
-                : 'Managed runtime failed',
+        _fail_runtime(
+            $runtime->last_error(),
+            'runtime_failed',
+            'Managed runtime failed',
         );
         return;
     }
@@ -259,6 +262,16 @@ sub _fail {
     undef $stream_path;
     $state = 'failed';
     return 0;
+}
+
+sub _fail_runtime {
+    my ($runtime_error, $fallback_code, $fallback_message) = @_;
+    $runtime_error = {} unless ref($runtime_error) eq 'HASH';
+
+    my $code = $runtime_error->{code} || $fallback_code;
+    $code = 'runtime_' . $code unless $code =~ /\Aruntime_/;
+    my $message = $runtime_error->{message} || $fallback_message;
+    return _fail($code, $message);
 }
 
 sub _read_api_key {

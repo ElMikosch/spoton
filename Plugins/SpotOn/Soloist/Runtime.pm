@@ -148,7 +148,10 @@ sub start {
             $self->{pulse_log_fh},
         );
     };
-    return $self->_fail('pulse_spawn_failed', $@)
+    return $self->_fail(
+        'pulse_spawn_failed',
+        $@ || 'PulseAudio process was not created',
+    )
         unless $pulse;
 
     $self->{pulse_proc} = $pulse;
@@ -173,7 +176,10 @@ sub poll {
                     $self->{soloist_log_fh},
                 );
             };
-            return $self->_fail('soloist_spawn_failed', $@)
+            return $self->_fail(
+                'soloist_spawn_failed',
+                $@ || 'Soloist process was not created',
+            )
                 unless $soloist;
 
             $self->{soloist_proc} = $soloist;
@@ -339,6 +345,9 @@ sub _close_logs {
 sub _fail {
     my ($self, $code, $message) = @_;
     $message = '' unless defined $message;
+    if (defined $self->{api_key} && length($self->{api_key})) {
+        $message =~ s/\Q$self->{api_key}\E/[REDACTED]/g;
+    }
     $message =~ s/[\x00-\x1f\x7f]+/ /g;
     $message =~ s/^\s+|\s+$//g;
 
@@ -428,15 +437,39 @@ sub _spawn_process {
     my ($kind, $spec, $stdout_fh, $stderr_fh) = @_;
     require Proc::Background;
 
-    local %ENV = (%ENV, %{ $spec->{env} || {} });
-    return Proc::Background->new(
-        {
-            die_upon_destroy => 1,
-            stdout           => $stdout_fh,
-            stderr           => $stderr_fh,
-        },
-        @{ $spec->{argv} },
-    );
+    # LMS ties STDERR to Slim::Utils::Log::Trapper.  Proc::Background redirects
+    # the child handles during fork, which fails because the tied handle has no
+    # OPEN method.  Use the same short untie/re-tie window as SpotOn's existing
+    # Unified daemon launcher.
+    my $had_stderr_tie = defined tied(*STDERR);
+    untie *STDERR if $had_stderr_tie;
+
+    my ($process, $spawn_error);
+    {
+        local %ENV = (%ENV, %{ $spec->{env} || {} });
+        $process = eval {
+            Proc::Background->new(
+                {
+                    die_upon_destroy => 1,
+                    stdout           => $stdout_fh,
+                    stderr           => $stderr_fh,
+                },
+                @{ $spec->{argv} },
+            );
+        };
+        $spawn_error = $@;
+    }
+
+    if ($had_stderr_tie) {
+        my $restored = eval {
+            tie *STDERR, 'Slim::Utils::Log::Trapper';
+            1;
+        };
+        die "Unable to restore LMS STDERR logger: $@" unless $restored;
+    }
+
+    die $spawn_error if length($spawn_error);
+    return $process;
 }
 
 sub _process_alive {

@@ -189,6 +189,33 @@ my @unregistered;
     is($Local::Session::instances[-1]{stopped}, 1, 'stop detaches WebSocket session');
     is_deeply(\@unregistered, ['0123456789abcdef01234567'], 'stop revokes stream route');
     is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{state}, 'stopped', 'stop clears manager state');
+
+    {
+        no warnings 'redefine';
+        local *Local::Runtime::start = sub {
+            my ($self) = @_;
+            $self->{state} = 'failed';
+            $self->{last_error} = {
+                code    => 'pulse_spawn_failed',
+                message => 'PulseAudio child setup failed',
+            };
+            return 0;
+        };
+
+        ok(!Plugins::SpotOn::Soloist::Manager->start(), 'runtime rejection fails managed start');
+        my $failed = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
+        is(
+            $failed->{lastError}{code},
+            'runtime_pulse_spawn_failed',
+            'manager preserves the concrete runtime failure code',
+        );
+        is(
+            $failed->{lastError}{message},
+            'PulseAudio child setup failed',
+            'manager preserves the concrete runtime failure message',
+        );
+    }
+    Plugins::SpotOn::Soloist::Manager->stop();
 }
 
 unlink($key_file);

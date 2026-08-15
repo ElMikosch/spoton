@@ -284,4 +284,73 @@ is(
 );
 is(-s $log_target, 0, 'symlink target was not opened or modified');
 
+{
+    package Slim::Utils::Log::Trapper;
+    sub TIEHANDLE { bless {}, shift }
+    sub PRINT { 1 }
+
+    package Proc::Background;
+    our $stderr_was_tied;
+    our $pulse_server;
+    sub new {
+        my ($class, $options, @argv) = @_;
+        $stderr_was_tied = defined tied(*STDERR) ? 1 : 0;
+        $pulse_server = $ENV{PULSE_SERVER};
+        return Local::Process->new('default-spawn');
+    }
+}
+$INC{'Proc/Background.pm'} = __FILE__;
+
+my $spawn_log = '';
+open(my $spawn_log_fh, '>', \$spawn_log) or die "Cannot create spawn log handle: $!";
+tie *STDERR, 'Slim::Utils::Log::Trapper';
+my $default_process = Plugins::SpotOn::Soloist::Runtime::_spawn_process(
+    'pulse',
+    {
+        argv => ['/usr/bin/pulseaudio', '--daemonize=no'],
+        env  => { PULSE_SERVER => 'unix:/tmp/spoton-test-native' },
+    },
+    $spawn_log_fh,
+    $spawn_log_fh,
+);
+ok($default_process, 'default process launcher returns the background process');
+ok(!$Proc::Background::stderr_was_tied, 'default launcher unties LMS STDERR during child setup');
+is(
+    $Proc::Background::pulse_server,
+    'unix:/tmp/spoton-test-native',
+    'default launcher passes the private Pulse environment',
+);
+isa_ok(
+    tied(*STDERR),
+    'Slim::Utils::Log::Trapper',
+    'default launcher restores the LMS STDERR trapper',
+);
+untie *STDERR;
+close($spawn_log_fh);
+
+my $redaction_root = tempdir(CLEANUP => 1);
+my $redaction_runtime = Plugins::SpotOn::Soloist::Runtime->new(
+    api_key           => 'runtime-secret-value',
+    device_name       => 'Redaction Probe',
+    soloist_binary    => '/opt/soloist/soloist',
+    pulseaudio_binary => '/usr/bin/pulseaudio',
+    runtime_dir       => catdir($redaction_root, 'runtime'),
+    data_dir          => catdir($redaction_root, 'data'),
+    cache_dir         => catdir($redaction_root, 'cache'),
+    log_dir           => catdir($redaction_root, 'logs'),
+    random_bytes      => sub { return 'S' x $_[0] },
+    spawn              => sub { die 'spawn rejected runtime-secret-value' },
+);
+ok(!$redaction_runtime->start(), 'spawn exception fails runtime start');
+unlike(
+    $redaction_runtime->last_error()->{message},
+    qr/runtime-secret-value/,
+    'runtime failure message redacts the API key',
+);
+like(
+    $redaction_runtime->last_error()->{message},
+    qr/\[REDACTED\]/,
+    'runtime failure message marks the redacted value',
+);
+
 done_testing();
