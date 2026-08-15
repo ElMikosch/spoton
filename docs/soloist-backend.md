@@ -47,6 +47,11 @@ state layers deliberately have no LMS runtime dependency:
   an unbounded live stream in the LMS process, supports HTTP/1.0 close-delimited
   and HTTP/1.1 chunked clients, and destroys the per-connection pipeline on EOF,
   replacement, timeout, or socket failure.
+- `Manager.pm` now joins the managed runtime, WebSocket session, and registered
+  stream route behind explicit diagnostic CLI actions. It reads the API key
+  only from a fixed, owner-only cache file, validates the required executables,
+  polls startup and health through LMS timers, and revokes the stream before
+  stopping its session and child processes. Nothing starts at plugin load.
 
 SpotOn registers the diagnostics-only probe but does not start a Soloist
 connection automatically. Existing Connect and browse playback therefore remain
@@ -127,6 +132,37 @@ Soloist:
 ```text
 spoton soloistprobe action:stop
 ```
+
+### Managed diagnostic runtime
+
+The first end-to-end LMS integration remains diagnostic-only and must be
+started explicitly. Its status reports a fixed `apiKeyFile` path:
+
+```text
+spoton soloistprobe action:managed_status
+```
+
+Before start, that file must be a regular, non-symlink file owned by the LMS
+service user, with no group or other permission bits, and contain only the
+Soloist API key. The key is never accepted as a CLI parameter, returned by the
+status command, placed in a stream URL, or written to a SpotOn log.
+
+```text
+spoton soloistprobe action:managed_start
+spoton soloistprobe action:managed_status
+```
+
+Startup is asynchronous. `managed.state: running`, a connected session, and a
+non-empty `streamPath` prove that PulseAudio, Soloist, the local WebSocket, and
+the LMS HTTP route are attached. The route is random per start and is revoked
+before the runtime is stopped:
+
+```text
+spoton soloistprobe action:managed_stop
+```
+
+These actions require SpotOn diagnostic mode. They do not change any player's
+backend selection or stop the existing unified SpotOn helper.
 
 ## Headless Linux container path
 

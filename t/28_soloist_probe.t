@@ -42,6 +42,22 @@ BEGIN {
     our @dispatches;
     sub addDispatch { push @dispatches, [@_] }
     $INC{'Slim/Control/Request.pm'} = 1;
+
+    package Plugins::SpotOn::Soloist::Manager;
+    our $state = 'stopped';
+    our $init_calls = 0;
+    sub init { $init_calls++; 1 }
+    sub start { $state = 'starting'; 1 }
+    sub stop { $state = 'stopped'; 1 }
+    sub shutdown { $state = 'stopped'; 1 }
+    sub statusSnapshot {
+        return {
+            state       => $state,
+            apiKeyReady => 1,
+            streamPath  => undef,
+        };
+    }
+    $INC{'Plugins/SpotOn/Soloist/Manager.pm'} = 1;
 }
 
 use lib "$Bin/..";
@@ -179,6 +195,12 @@ $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
     Plugins::SpotOn::Soloist::Probe::_cli_handler($status);
     is($status->{status}, 'done', 'read-only status command succeeds');
     is($status->{results}{soloist}{endpoint}{pid}, 1234, 'status contains endpoint snapshot');
+
+    my $managed = Local::Request->new({ action => 'managed_start' });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($managed);
+    is($managed->{status}, 'done', 'managed diagnostic start is accepted');
+    is($managed->{results}{managed}{state}, 'starting', 'managed status is returned separately');
+    ok($Plugins::SpotOn::Soloist::Manager::init_calls, 'managed start initializes HTTP stream surface');
 
     my $stop = Local::Request->new({ action => 'stop' });
     Plugins::SpotOn::Soloist::Probe::_cli_handler($stop);

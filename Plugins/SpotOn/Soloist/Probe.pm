@@ -60,6 +60,9 @@ sub shutdown {
     $session->stop() if $session;
     undef $session;
     $retryAttempts = 0;
+    if ($INC{'Plugins/SpotOn/Soloist/Manager.pm'}) {
+        Plugins::SpotOn::Soloist::Manager->shutdown();
+    }
     return 1;
 }
 
@@ -190,6 +193,18 @@ sub _cli_handler {
     elsif ($action eq 'stop') {
         __PACKAGE__->stop();
     }
+    elsif ($action eq 'managed_start') {
+        require Plugins::SpotOn::Soloist::Manager;
+        Plugins::SpotOn::Soloist::Manager->init();
+        Plugins::SpotOn::Soloist::Manager->start();
+    }
+    elsif ($action eq 'managed_stop') {
+        require Plugins::SpotOn::Soloist::Manager;
+        Plugins::SpotOn::Soloist::Manager->stop();
+    }
+    elsif ($action eq 'managed_status') {
+        require Plugins::SpotOn::Soloist::Manager;
+    }
     elsif ($action ne 'status') {
         unless ($CONTROL_ACTIONS{$action}) {
             $request->addResult('error', 'unsupported_action');
@@ -206,6 +221,12 @@ sub _cli_handler {
     }
 
     $request->addResult('soloist', statusSnapshot());
+    if ($INC{'Plugins/SpotOn/Soloist/Manager.pm'}) {
+        $request->addResult(
+            'managed',
+            Plugins::SpotOn::Soloist::Manager->statusSnapshot(),
+        );
+    }
     $request->setStatusDone();
 }
 
