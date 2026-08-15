@@ -19,6 +19,13 @@ state layers deliberately have no LMS runtime dependency:
   JSON framing, and keeps all command/event mapping behind the protocol seam.
 - `Session.pm` owns connection state and reduces full and granular Soloist events
   into a current playback snapshot.
+- `ProcessSpec.pm` builds a shell-free daemon argument array, fixes the
+  unauthenticated WebSocket listener to `127.0.0.1:0`, validates Soloist's
+  documented numeric ranges, and provides a separately redacted argument array
+  for logs.
+- `AudioPreflight.pm` performs a non-invasive capability check for Soloist,
+  LMS WebSocket support, PulseAudio/PipeWire capture tools, and an encoder. It
+  never starts a program or connects to the host's audio server.
 
 SpotOn registers the diagnostics-only probe but does not start a Soloist
 connection automatically. Existing Connect and browse playback therefore remain
@@ -43,6 +50,19 @@ The fixed Soloist data directory is reported by:
 spoton soloistprobe action:status
 ```
 
+The response now also contains `soloist.preflight`. `hardwareProbeReady: 1`
+means that the required executables were found for one supported prototype
+path; it does not yet prove that the audio server is running or that its routing
+permissions are correct. The preferred capture path is reported as either
+`pulse_monitor` or `pipewire_native`, and `missing` contains stable capability
+codes when the host is not ready.
+
+The discovery-only preflight currently recognizes:
+
+- Pulse monitor capture: `pactl` plus `parec`.
+- Native PipeWire capture: `pw-record` plus either `pw-dump` or `pw-cli`.
+- Encoding: `ffmpeg`, with `flac` and `sox` as fallback candidates.
+
 Start Soloist manually on the LMS host with that directory and a loopback-only,
 automatically allocated WebSocket port:
 
@@ -56,7 +76,12 @@ soloist \
 ```
 
 Treat the API key as a secret. It is supplied directly to the official binary;
-SpotOn neither reads nor logs it in probe mode.
+SpotOn neither reads nor logs it in probe mode. Soloist currently requires the
+key as a command-line option, so a future managed launcher must also document
+that the live process argument can be visible to sufficiently privileged local
+users through tools such as `ps` or `/proc`. `ProcessSpec.pm` guarantees that
+the key is removed from the log-safe argument array, but cannot change the
+official binary's input interface.
 
 Attach the LMS session and inspect normalized state:
 
@@ -84,8 +109,8 @@ spoton soloistprobe action:stop
 
 1. Run one Soloist process per eligible LMS sync master with its WebSocket bound
    to loopback only.
-2. Connect the completed asynchronous local WebSocket/session layer to the
-   daemon lifecycle.
+2. Connect the completed asynchronous local WebSocket/session and validated
+   process specification to an explicit, opt-in daemon lifecycle.
 3. Route Soloist audio into an isolated PipeWire/PulseAudio sink and capture the
    monitor stream.
 4. Encode and expose that captured audio through LMS's existing streaming path.

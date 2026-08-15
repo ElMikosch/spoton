@@ -14,6 +14,7 @@ use Slim::Utils::Timers;
 
 use Plugins::SpotOn::Soloist::Session;
 use Plugins::SpotOn::Soloist::Transport;
+use Plugins::SpotOn::Soloist::AudioPreflight;
 
 use constant RETRY_INTERVAL     => 0.5;
 use constant MAX_RETRY_ATTEMPTS => 20;
@@ -125,10 +126,12 @@ sub sendAction {
 
 sub statusSnapshot {
     my $session_snapshot = $session ? $session->snapshot() : undef;
+    my $websocket_available =
+        Plugins::SpotOn::Soloist::Transport->websocket_available();
 
     return {
         enabled             => $running ? 1 : 0,
-        websocketAvailable  => Plugins::SpotOn::Soloist::Transport->websocket_available(),
+        websocketAvailable  => $websocket_available,
         dataDir             => dataDir(),
         status              => $session ? $session->status() : 'idle',
         endpoint            => $session ? $session->endpoint() : undef,
@@ -136,6 +139,9 @@ sub statusSnapshot {
         retryAttempts       => $retryAttempts,
         lastUpdate          => $lastUpdate,
         lastEventType       => $lastEventType,
+        preflight           => Plugins::SpotOn::Soloist::AudioPreflight->inspect(
+            websocket_available => $websocket_available,
+        ),
     };
 }
 

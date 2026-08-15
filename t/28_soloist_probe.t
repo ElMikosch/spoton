@@ -139,6 +139,9 @@ $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
     no warnings 'redefine';
     local *Plugins::SpotOn::Soloist::Session::new = \&Local::FakeSession::new;
     local *Plugins::SpotOn::Soloist::Transport::websocket_available = sub { 1 };
+    local *Plugins::SpotOn::Soloist::AudioPreflight::inspect = sub {
+        return { hardwareProbeReady => 1, missing => [] };
+    };
 
     my $start = Local::Request->new({ action => 'start' });
     Plugins::SpotOn::Soloist::Probe::_cli_handler($start);
@@ -146,6 +149,10 @@ $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
     is($start->{results}{soloist}{status}, 'connected', 'start returns connected state');
     ok($start->{results}{soloist}{enabled}, 'start marks probe enabled');
     ok($start->{results}{soloist}{websocketAvailable}, 'status reports LMS WebSocket support');
+    ok(
+        $start->{results}{soloist}{preflight}{hardwareProbeReady},
+        'status includes the non-invasive host preflight',
+    );
     like(
         $start->{results}{soloist}{dataDir},
         qr{\Q$cache_dir\E.*soloist-probe\z},
