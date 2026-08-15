@@ -27,6 +27,21 @@ my $server = build_server_spec(
 
 is($server->{monitor}, 'spoton_soloist.monitor', 'null sink monitor name is deterministic');
 is($server->{env}{PULSE_SERVER}, "unix:$socket", 'server exports the isolated socket address');
+is(
+    $server->{env}{XDG_RUNTIME_DIR},
+    '/var/cache/lyrion/spoton/pulse',
+    'server keeps runtime state beside its private socket',
+);
+is(
+    $server->{env}{XDG_CONFIG_HOME},
+    '/var/cache/lyrion/spoton/pulse/config',
+    'server avoids an unwritable LMS service-user home directory',
+);
+is(
+    $server->{config_dir},
+    '/var/cache/lyrion/spoton/pulse/config',
+    'lifecycle receives the private config directory it must create',
+);
 is_deeply(
     [ @{ $server->{argv} }[-4 .. -1] ],
     [

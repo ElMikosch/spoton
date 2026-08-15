@@ -5,6 +5,7 @@ use warnings;
 
 use Carp qw(croak);
 use Exporter qw(import);
+use File::Basename qw(dirname);
 use File::Spec;
 
 our @EXPORT_OK = qw(
@@ -27,6 +28,8 @@ sub build_server_spec {
 
     my $binary = _required_text($args{binary}, 'server binary');
     my $socket = _socket_path($args{socket_path});
+    my $runtime_dir = dirname($socket);
+    my $config_dir = File::Spec->catdir($runtime_dir, 'config');
     my $sink = _sink_name($args{sink_name});
     my $rate = _sample_rate($args{sample_rate});
     my $channels = _channels($args{channels});
@@ -51,13 +54,17 @@ sub build_server_spec {
             "module-null-sink sink_name=$sink rate=$rate channels=$channels",
         ],
         env => {
-            PULSE_SERVER => "unix:$socket",
+            PULSE_SERVER    => "unix:$socket",
+            XDG_CONFIG_HOME => $config_dir,
+            XDG_RUNTIME_DIR => $runtime_dir,
         },
-        socket_path => $socket,
-        sink_name   => $sink,
-        monitor     => "$sink.monitor",
-        sample_rate => $rate,
-        channels    => $channels,
+        socket_path  => $socket,
+        runtime_dir  => $runtime_dir,
+        config_dir   => $config_dir,
+        sink_name    => $sink,
+        monitor      => "$sink.monitor",
+        sample_rate  => $rate,
+        channels     => $channels,
     };
 }
 

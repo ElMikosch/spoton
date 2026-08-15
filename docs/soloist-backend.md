@@ -125,6 +125,10 @@ the isolated sink, while SpotOn captures and encodes the same samples for LMS.
   file are disabled.
 - Clients connect only to an explicit Unix socket; no TCP PulseAudio protocol is
   loaded.
+- `XDG_RUNTIME_DIR` and `XDG_CONFIG_HOME` both point into the private runtime
+  tree. This is required for service accounts whose declared home directory is
+  read-only or does not contain a writable `.config` parent, as is common for
+  packaged LMS installations.
 - The native protocol uses anonymous authentication only because the containing
   runtime directory must first be created with mode `0700` and owned by the LMS
   service user. The lifecycle must refuse to start if that condition is not met.
