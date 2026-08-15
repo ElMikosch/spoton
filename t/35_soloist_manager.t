@@ -245,6 +245,19 @@ my @unregistered;
         ),
         'a stale or guessed PCM token is rejected',
     );
+    isa_ok(
+        Plugins::SpotOn::Soloist::Manager->newStreamPipeline(
+            '0123456789abcdef01234567', 'pcm'
+        ),
+        'Local::Pipeline',
+        'active token creates a direct PCM capture pipeline',
+    );
+    ok(
+        !Plugins::SpotOn::Soloist::Manager->newStreamPipeline(
+            'aaaaaaaaaaaaaaaaaaaaaaaa', 'pcm'
+        ),
+        'stale token cannot create a direct capture pipeline',
+    );
 
     $Local::Session::instances[-1]{args}{on_error}->(
         'connect_failed', 'transient websocket failure'

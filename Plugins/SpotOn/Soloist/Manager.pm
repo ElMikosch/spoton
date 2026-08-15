@@ -212,9 +212,9 @@ sub attachPlayer {
     return 1;
 }
 
-# Resolve only a route belonging to the currently running managed session.
-# ProtocolHandler uses this to translate the logical Soloist PCM URL. Stale
-# playlist entries and guessed tokens must not recreate revoked stream routes.
+# Resolve only a diagnostic HTTP route belonging to the currently running
+# managed session. Stale playlist entries and guessed tokens must not recreate
+# revoked stream routes.
 sub resolveStreamPath {
     my ($class, $token, $format) = @_;
     $format = 'pcm' unless defined $format;
@@ -227,6 +227,25 @@ sub resolveStreamPath {
         && $format =~ /\A(?:flac|pcm)\z/;
 
     return $stream_paths->{$format};
+}
+
+# Create a capture pipeline only for the token belonging to the active managed
+# runtime. ProtocolHandler uses this for PCM so LMS can read the Pulse monitor
+# directly instead of synchronously requesting its own web server.
+sub newStreamPipeline {
+    my ($class, $token, $format) = @_;
+    $format = 'pcm' unless defined $format;
+
+    return unless $state eq 'running' && $runtime;
+    return unless defined $token && !ref($token)
+        && $token =~ /\A[0-9a-f]{24}\z/;
+    return unless defined $stream_token && $token eq $stream_token;
+    return unless defined $format && !ref($format)
+        && $format =~ /\A(?:flac|pcm)\z/;
+
+    my $pipeline = eval { $runtime->new_stream_pipeline($format) };
+    return $pipeline if blessed($pipeline);
+    return;
 }
 
 sub detachPlayer {

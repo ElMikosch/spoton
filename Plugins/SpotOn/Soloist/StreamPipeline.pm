@@ -125,6 +125,15 @@ sub output_fh {
     return $_[0]{output_fh};
 }
 
+# Transfer ownership of the pipeline output to an LMS protocol stream.  The
+# capture/encoder children remain owned by this object and are stopped when
+# the protocol stream closes, but StreamPipeline must no longer close the
+# transferred handle itself.
+sub take_output_fh {
+    my ($self) = @_;
+    return delete $self->{output_fh};
+}
+
 sub state {
     return $_[0]{state};
 }

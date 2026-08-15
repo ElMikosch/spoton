@@ -340,7 +340,7 @@ sub _streamPort { 39755 }
 1;
 END
 
-# Stub: managed Soloist token resolver used by the logical PCM proxy path.
+# Stub: managed Soloist pipeline resolver used by the logical PCM pipe path.
 write_stub($stub_dir, 'Plugins::SpotOn::Soloist::Manager', <<'END');
 package Plugins::SpotOn::Soloist::Manager;
 sub resolveStreamPath {
@@ -348,6 +348,24 @@ sub resolveStreamPath {
     return unless $token eq '0123456789abcdef01234567' && $format eq 'pcm';
     return "/plugins/SpotOn/soloist/stream/$token.soc";
 }
+sub newStreamPipeline {
+    my ($class, $token, $format) = @_;
+    return unless $token eq '0123456789abcdef01234567' && $format eq 'pcm';
+    return Local::SoloistPipeline->new();
+}
+
+package Local::SoloistPipeline;
+sub new {
+    pipe(my $read, my $write) or die "pipe failed: $!";
+    binmode($read);
+    binmode($write);
+    print {$write} 'PCM-DATA';
+    close($write);
+    return bless { output => $read, state => 'stopped' }, shift;
+}
+sub start { $_[0]{state} = 'running'; 1 }
+sub stop { $_[0]{state} = 'stopped'; close(delete $_[0]{output}) if $_[0]{output}; 1 }
+sub take_output_fh { delete $_[0]{output} }
 1;
 END
 
@@ -410,7 +428,7 @@ require_ok('Plugins::SpotOn::ProtocolHandler') or BAIL_OUT("Failed to load Proto
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
 $prefs->set('diagnosticMode', 0);
 
-subtest 'Soloist PCM uses the existing soc proxy/transcoding path' => sub {
+subtest 'Soloist PCM uses the existing soc transcoding path through a direct pipe' => sub {
     my $url = 'spoton://soloist-pcm:0123456789abcdef01234567';
     my $client = MockClient->new('soloist-pcm');
 
@@ -429,12 +447,12 @@ subtest 'Soloist PCM uses the existing soc proxy/transcoding path' => sub {
         url    => $url,
         client => $client,
     });
-    isa_ok($stream, 'Slim::Player::Protocols::HTTP', 'logical URL creates an HTTP proxy stream');
-    is(
-        $Slim::Player::Protocols::HTTP::last_args->{url},
-        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
-        'logical URL resolves to the current tokenized LMS PCM route',
-    );
+    isa_ok($stream, 'Plugins::SpotOn::Soloist::ProtocolStream', 'logical URL creates a direct capture stream');
+    is($stream->contentType(), 'soc', 'direct stream preserves the SpotOn coded input type');
+    my $bytes = '';
+    is($stream->sysread($bytes, 8), 8, 'direct capture stream is readable by LMS');
+    is($bytes, 'PCM-DATA', 'direct capture stream preserves raw PCM bytes');
+    ok($stream->close(), 'direct capture stream closes cleanly');
 
     my $stale = Plugins::SpotOn::ProtocolHandler->new({
         url    => 'spoton://soloist-pcm:aaaaaaaaaaaaaaaaaaaaaaaa',

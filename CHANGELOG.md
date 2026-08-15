@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.3] - 2026-08-15
+
+### Fixed
+- **Managed Soloist PCM failed after a 15-second LMS timeout** — playback now hands the nonblocking PulseAudio capture pipe directly to LMS while retaining the existing `soc -> pcm` identity profile. This removes the synchronous request from LMS back into its own single-threaded web server, which started `pacat` successfully but could not serve HTTP headers until `Song::open` had already timed out.
+- **Capture cleanup for direct PCM playback** — ownership of the pipeline output handle is transferred explicitly to a dedicated LMS protocol stream; closing or replacing playback also terminates and reaps the associated capture process.
+
 ## [3.5.2] - 2026-08-15
 
 ### Fixed

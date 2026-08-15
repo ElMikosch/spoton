@@ -418,6 +418,7 @@ sub canEnhanceHTTP {
 #     → stop the Connect daemon before returning normal stream object
 # (b) D-06 Sync-group proxy: spoton://connect-* URL for synced players
 #     → substitute HTTP URL so all sync members get audio from binary's HTTP server
+# (c) managed Soloist PCM: return a direct capture pipe after format selection
 #
 # Note: DaemonManager require is on-demand (not at top level) per plan acceptance criteria.
 sub new {
@@ -426,28 +427,28 @@ sub new {
     my $url = $args->{url} || '';
 
     # Translate only after LMS has selected SpotOn's soc -> pcm profile.
-    # Manager validates that the token belongs to the current session.
+    # Manager validates that the token belongs to the current session.  Return
+    # the capture pipe itself: an HTTP request back into LMS deadlocks while
+    # Song::open waits synchronously for that same event loop to serve headers.
     if (my $token = _soloistPcmToken($url)) {
         require Plugins::SpotOn::Soloist::Manager;
-        my $path = Plugins::SpotOn::Soloist::Manager->resolveStreamPath($token, 'pcm');
-        unless ($path) {
+        require Plugins::SpotOn::Soloist::ProtocolStream;
+        my $pipeline = Plugins::SpotOn::Soloist::Manager->newStreamPipeline($token, 'pcm');
+        unless ($pipeline) {
             main::INFOLOG && $log->is_info && $log->info(
                 "Soloist PCM URL has no active managed stream — returning undef"
             );
             return undef;
         }
-
-        my $host = Slim::Utils::Network::serverAddr();
-        my $port = $serverPrefs->get('httpport');
-        return undef unless defined $host && !ref($host) && length($host)
-            && $host !~ /[\x00-\x20\x7f\/@]/;
-        return undef unless defined $port && !ref($port) && $port =~ /\A\d+\z/
-            && $port >= 1 && $port <= 65_535;
-
-        $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
-        my $httpUrl = "http://$host:$port$path";
-        $log->warn("[DIAG] soloist_pcm_proxy: http_url=$httpUrl") if $prefs->get('diagnosticMode');
-        $args = { %$args, url => $httpUrl };
+        my $stream = Plugins::SpotOn::Soloist::ProtocolStream->from_pipeline(
+            pipeline => $pipeline,
+            url      => $url,
+            client   => $args->{client},
+            song     => $args->{song},
+        );
+        $log->warn("[DIAG] soloist_pcm_pipe: token=$token result=" . ($stream ? 'ready' : 'failed'))
+            if $prefs->get('diagnosticMode');
+        return $stream;
     }
 
     # (a) D-08: spoton:// (Browse/single-track) URL while Connect is active.

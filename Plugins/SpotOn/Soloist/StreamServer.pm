@@ -10,10 +10,10 @@ use Time::HiRes ();
 # LMS looks up raw handlers with URI->path(), which includes the leading slash.
 # Keep the slash optional because the handler normalizes it before extracting
 # the token and because older test/adaptor callers may already pass a bare path.
-# `.soc` is the LMS-facing suffix for decoded PCM. It keeps SpotOn's custom
-# input type attached after ProtocolHandler translates the logical URL to HTTP,
-# allowing the existing soc -> pcm identity profile to be selected. `.pcm`
-# remains accepted as a diagnostic/backward-compatible alias.
+# `.soc` keeps SpotOn's custom input type on the diagnostic HTTP PCM route.
+# Player playback uses ProtocolStream's direct pipe, while this route remains
+# useful for capture verification and compatibility. `.pcm` is accepted as a
+# backward-compatible alias.
 use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(flac|pcm|soc)\z};
 use constant MAX_CHUNK_BYTES => 32 * 1024;
 use constant PCM_BYTES_PER_SECOND => 44_100 * 2 * 2;
