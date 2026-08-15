@@ -137,6 +137,7 @@ ok(Plugins::SpotOn::Soloist::StreamServer->init(), 'stream server registers LMS 
 is(scalar @Slim::Web::Pages::raw, 1, 'one raw route is registered');
 like("/plugins/SpotOn/soloist/stream/$token.flac", $Slim::Web::Pages::raw[0][0], 'route matches the LMS URI path with its leading slash');
 like("/plugins/SpotOn/soloist/stream/$token.pcm", $Slim::Web::Pages::raw[0][0], 'route also matches low-latency PCM');
+like("/plugins/SpotOn/soloist/stream/$token.soc", $Slim::Web::Pages::raw[0][0], 'route matches the LMS SpotOn-coded PCM suffix');
 
 my $pipeline;
 my $path = Plugins::SpotOn::Soloist::StreamServer->register_runtime(
@@ -186,7 +187,7 @@ my $pcm_path = Plugins::SpotOn::Soloist::StreamServer->register_runtime_format(
     'pcm',
     sub { Local::Pipeline->new(['PCM-A', 'data'], ['', 'eof']) },
 );
-is($pcm_path, "/plugins/SpotOn/soloist/stream/$token.pcm", 'PCM route uses an explicit suffix');
+is($pcm_path, "/plugins/SpotOn/soloist/stream/$token.soc", 'PCM route preserves the SpotOn-coded LMS input type');
 my $now = 1_000;
 {
     no warnings 'redefine';

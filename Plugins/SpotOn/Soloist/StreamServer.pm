@@ -10,7 +10,11 @@ use Time::HiRes ();
 # LMS looks up raw handlers with URI->path(), which includes the leading slash.
 # Keep the slash optional because the handler normalizes it before extracting
 # the token and because older test/adaptor callers may already pass a bare path.
-use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(flac|pcm)\z};
+# `.soc` is the LMS-facing suffix for decoded PCM. It keeps SpotOn's custom
+# input type attached after ProtocolHandler translates the logical URL to HTTP,
+# allowing the existing soc -> pcm identity profile to be selected. `.pcm`
+# remains accepted as a diagnostic/backward-compatible alias.
+use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(flac|pcm|soc)\z};
 use constant MAX_CHUNK_BYTES => 32 * 1024;
 use constant PCM_BYTES_PER_SECOND => 44_100 * 2 * 2;
 use constant PCM_PACING_DELAY     => 2;
@@ -64,7 +68,8 @@ sub stream_path {
     _validate_token($token);
     $format = 'flac' unless defined $format;
     _validate_format($format);
-    return "/plugins/SpotOn/soloist/stream/$token.$format";
+    my $suffix = $format eq 'pcm' ? 'soc' : $format;
+    return "/plugins/SpotOn/soloist/stream/$token.$suffix";
 }
 
 sub shutdown {
@@ -107,7 +112,10 @@ sub _raw_handler {
     my $path = eval { $request->uri()->path() } || '';
     $path =~ s{\A/}{};
 
-    my ($token, $format) = $path =~ STREAM_ROUTE;
+    my ($token, $wire_format) = $path =~ STREAM_ROUTE;
+    my $format = defined $wire_format && $wire_format eq 'soc'
+        ? 'pcm'
+        : $wire_format;
     my $key = $token && $format ? _stream_key($token, $format) : '';
     return _error_response($http_client, $response, 404, 'not_found')
         unless $key && $factories{$key};

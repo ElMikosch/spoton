@@ -82,7 +82,7 @@ sub _isDaemonProxyURL {
     my ($url) = @_;
     return 0 unless defined $url && !ref($url);
     return 1 if $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)};
-    return 1 if $url =~ m{:\d+/plugins/SpotOn/soloist/stream/[0-9a-f]{24}\.pcm(?:\z|[?#])};
+    return 1 if $url =~ m{:\d+/plugins/SpotOn/soloist/stream/[0-9a-f]{24}\.(?:pcm|soc)(?:\z|[?#])};
     return 0;
 }
 

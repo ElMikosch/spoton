@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.2] - 2026-08-15
+
+### Fixed
+- **LMS rejected the translated Soloist PCM stream** — the internal HTTP route now uses SpotOn's `.soc` wire suffix while continuing to serve unmodified S16LE PCM. This prevents LMS from reclassifying the translated stream as generic `pcm` and preserves the existing `soc -> pcm` identity profile through command selection. The former `.pcm` route remains accepted as a diagnostic alias.
+
 ## [3.5.1] - 2026-08-15
 
 ### Fixed

@@ -181,7 +181,8 @@ my @unregistered;
     local *Plugins::SpotOn::Soloist::StreamServer::register_runtime_format = sub {
         my ($class, $token, $format, $factory) = @_;
         push @registered, [$token, $format, $factory];
-        return "/plugins/SpotOn/soloist/stream/$token.$format";
+        my $suffix = $format eq 'pcm' ? 'soc' : $format;
+        return "/plugins/SpotOn/soloist/stream/$token.$suffix";
     };
     local *Plugins::SpotOn::Soloist::StreamServer::unregister_runtime = sub {
         push @unregistered, $_[1];
@@ -228,14 +229,14 @@ my @unregistered;
     );
     is(
         $running->{streamPaths}{pcm},
-        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
         'manager reports the low-latency PCM path separately',
     );
     is(
         Plugins::SpotOn::Soloist::Manager->resolveStreamPath(
             '0123456789abcdef01234567', 'pcm'
         ),
-        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
         'active PCM token resolves to the registered route',
     );
     ok(

@@ -346,7 +346,7 @@ package Plugins::SpotOn::Soloist::Manager;
 sub resolveStreamPath {
     my ($class, $token, $format) = @_;
     return unless $token eq '0123456789abcdef01234567' && $format eq 'pcm';
-    return "/plugins/SpotOn/soloist/stream/$token.pcm";
+    return "/plugins/SpotOn/soloist/stream/$token.soc";
 }
 1;
 END
@@ -432,7 +432,7 @@ subtest 'Soloist PCM uses the existing soc proxy/transcoding path' => sub {
     isa_ok($stream, 'Slim::Player::Protocols::HTTP', 'logical URL creates an HTTP proxy stream');
     is(
         $Slim::Player::Protocols::HTTP::last_args->{url},
-        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
         'logical URL resolves to the current tokenized LMS PCM route',
     );
 
