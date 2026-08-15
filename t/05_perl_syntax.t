@@ -27,7 +27,11 @@ my @pm_files = (
     "$project_dir/Plugins/SpotOn/Status.pm",
     "$project_dir/Plugins/SpotOn/HomeExtras.pm",
     "$project_dir/Plugins/SpotOn/Unified/Daemon.pm",
+    "$project_dir/Plugins/SpotOn/Soloist/Endpoint.pm",
+    "$project_dir/Plugins/SpotOn/Soloist/Probe.pm",
     "$project_dir/Plugins/SpotOn/Soloist/Protocol.pm",
+    "$project_dir/Plugins/SpotOn/Soloist/Session.pm",
+    "$project_dir/Plugins/SpotOn/Soloist/Transport.pm",
     "$project_dir/t/21_webplayer_mint_errors.t",
 );
 

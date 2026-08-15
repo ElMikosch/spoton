@@ -6,25 +6,86 @@ but it is not a drop-in replacement for that helper: Soloist renders to a local
 PipeWire or PulseAudio device, while SpotOn's helper exposes an HTTP audio stream
 that LMS can buffer and distribute to Squeezebox players.
 
-The first integration seam lives in
-`Plugins/SpotOn/Soloist/Protocol.pm`. It deliberately has no LMS or WebSocket
-dependency and provides two operations:
+The first integration seam lives in `Plugins/SpotOn/Soloist/`. Its protocol and
+state layers deliberately have no LMS runtime dependency:
 
 - `build_commands($action, %args)` maps SpotOn/LMS control actions to the
   documented Soloist WebSocket command messages.
 - `normalize_event($event)` maps Soloist's event payloads and entity envelope to
   a stable internal shape suitable for an LMS adapter.
+- `Endpoint.pm` discovers `ws.addr`, `ws.port`, and `soloist.pid`, rejects every
+  non-loopback address, and produces the local WebSocket URL.
+- `Transport.pm` wraps LMS's asynchronous `Slim::Networking::SimpleWS`, performs
+  JSON framing, and keeps all command/event mapping behind the protocol seam.
+- `Session.pm` owns connection state and reduces full and granular Soloist events
+  into a current playback snapshot.
 
-Nothing loads this module in production yet. Existing Connect and browse
-playback therefore remain unchanged while the Soloist path is developed and
-tested incrementally.
+SpotOn registers the diagnostics-only probe but does not start a Soloist
+connection automatically. Existing Connect and browse playback therefore remain
+unchanged while the Soloist path is developed and tested incrementally.
+
+The direct WebSocket transport requires LMS 9.1 or newer, where
+`Slim::Networking::SimpleWS` became part of LMS. This requirement applies only
+to the experimental Soloist backend; the rest of SpotOn keeps its existing LMS
+compatibility. A `soloist ctl` subprocess fallback for older LMS versions can be
+added later if real installations require it.
+
+## Hardware probe
+
+`Plugins/SpotOn/Soloist/Probe.pm` provides a deliberately narrow LMS CLI probe.
+It never launches Soloist, never stores an API key, never changes the active
+SpotOn playback backend, and accepts no caller-selected data directory. The
+command is available only while SpotOn diagnostic mode is enabled.
+
+The fixed Soloist data directory is reported by:
+
+```text
+spoton soloistprobe action:status
+```
+
+Start Soloist manually on the LMS host with that directory and a loopback-only,
+automatically allocated WebSocket port:
+
+```sh
+soloist \
+  --device-name "SpotOn Soloist Probe" \
+  --api-key "$SOLOIST_API_KEY" \
+  --data-dir "/path/reported/by/status" \
+  --cache-dir "/path/reported/by/status/cache" \
+  --ws 127.0.0.1:0
+```
+
+Treat the API key as a secret. It is supplied directly to the official binary;
+SpotOn neither reads nor logs it in probe mode.
+
+Attach the LMS session and inspect normalized state:
+
+```text
+spoton soloistprobe action:start
+spoton soloistprobe action:status
+```
+
+Safe control-path checks can then use commands such as:
+
+```text
+spoton soloistprobe action:pause
+spoton soloistprobe action:play
+spoton soloistprobe action:volume volume:35
+```
+
+Stop detaches only the diagnostic WebSocket client; it does not terminate
+Soloist:
+
+```text
+spoton soloistprobe action:stop
+```
 
 ## Planned architecture
 
 1. Run one Soloist process per eligible LMS sync master with its WebSocket bound
    to loopback only.
-2. Add an asynchronous local WebSocket transport and feed decoded events through
-   the protocol boundary.
+2. Connect the completed asynchronous local WebSocket/session layer to the
+   daemon lifecycle.
 3. Route Soloist audio into an isolated PipeWire/PulseAudio sink and capture the
    monitor stream.
 4. Encode and expose that captured audio through LMS's existing streaming path.

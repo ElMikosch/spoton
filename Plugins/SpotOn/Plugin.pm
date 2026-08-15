@@ -266,6 +266,12 @@ sub initPlugin {
     Slim::Control::Request::addDispatch(['spoton', 'recentsearches'],
                                                                 [0, 1, 1, \&_recentSearchesCLI]
     );
+
+    # Experimental, diagnostics-only Soloist attachment. Registration is
+    # inert until explicitly started through the LMS CLI while diagnosticMode
+    # is enabled; the existing librespot daemon path remains untouched.
+    require Plugins::SpotOn::Soloist::Probe;
+    Plugins::SpotOn::Soloist::Probe->init();
 }
 
 sub shutdownPlugin {
@@ -290,6 +296,11 @@ sub shutdownPlugin {
     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->shutdown();
+    }
+
+    if ($INC{'Plugins/SpotOn/Soloist/Probe.pm'}) {
+        require Plugins::SpotOn::Soloist::Probe;
+        Plugins::SpotOn::Soloist::Probe->shutdown();
     }
 
     Slim::Utils::Timers::killTimers($class, \&_killOrphanedProcesses);
