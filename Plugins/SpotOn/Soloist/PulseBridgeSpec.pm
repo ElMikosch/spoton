@@ -98,6 +98,7 @@ sub build_capture_spec {
     return {
         argv => [
             $binary,
+            '--record',
             '--server', "unix:$socket",
             '--device', "$sink.monitor",
             '--format', 's16le',

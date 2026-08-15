@@ -128,7 +128,7 @@ use Plugins::SpotOn::Soloist::StreamServer;
 my $token = '0123456789abcdef01234567';
 ok(Plugins::SpotOn::Soloist::StreamServer->init(), 'stream server registers LMS raw route');
 is(scalar @Slim::Web::Pages::raw, 1, 'one raw route is registered');
-like("plugins/SpotOn/soloist/stream/$token.flac", $Slim::Web::Pages::raw[0][0], 'route matches tokenized FLAC URL');
+like("/plugins/SpotOn/soloist/stream/$token.flac", $Slim::Web::Pages::raw[0][0], 'route matches the LMS URI path with its leading slash');
 
 my $pipeline;
 my $path = Plugins::SpotOn::Soloist::StreamServer->register_runtime(

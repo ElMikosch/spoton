@@ -87,6 +87,7 @@ is_deeply(
     $capture->{argv},
     [
         '/usr/bin/parec',
+        '--record',
         '--server', "unix:$socket",
         '--device', 'spoton_soloist.monitor',
         '--format', 's16le',
@@ -97,7 +98,7 @@ is_deeply(
         '--client-name', 'SpotOn-Soloist-Capture',
         '--stream-name', 'SpotOn Soloist PCM',
     ],
-    'capture reads deterministic raw PCM from the null-sink monitor',
+    'capture explicitly records deterministic raw PCM from the null-sink monitor',
 );
 
 my $encoder = build_encoder_spec(binary => '/usr/bin/ffmpeg');

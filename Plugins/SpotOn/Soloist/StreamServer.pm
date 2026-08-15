@@ -6,7 +6,10 @@ use warnings;
 use Carp qw(croak);
 use Scalar::Util qw(blessed refaddr);
 
-use constant STREAM_ROUTE => qr{\Aplugins/SpotOn/soloist/stream/([0-9a-f]{24})\.flac\z};
+# LMS looks up raw handlers with URI->path(), which includes the leading slash.
+# Keep the slash optional because the handler normalizes it before extracting
+# the token and because older test/adaptor callers may already pass a bare path.
+use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.flac\z};
 use constant MAX_CHUNK_BYTES => 32 * 1024;
 
 my %factories;
