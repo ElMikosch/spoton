@@ -31,6 +31,11 @@ state layers deliberately have no LMS runtime dependency:
   shell-free process specifications: a supervised PulseAudio null sink on a
   private Unix socket, `parec` monitor capture as 44.1 kHz stereo PCM, and an
   `ffmpeg` FLAC encoder suitable for the future LMS stream endpoint.
+- `Runtime.pm` is the first opt-in lifecycle implementation. It creates and
+  validates private runtime/data/cache/log directories and a 256-byte Pulse
+  cookie, starts PulseAudio before Soloist, waits asynchronously for their
+  readiness markers, rejects non-loopback endpoints, redacts the API key from
+  diagnostics, and tears the child processes down in dependency order.
 
 SpotOn registers the diagnostics-only probe but does not start a Soloist
 connection automatically. Existing Connect and browse playback therefore remain
@@ -141,10 +146,11 @@ the isolated sink, while SpotOn captures and encodes the same samples for LMS.
 - Module-interpolated socket and sink names use restrictive validation in
   addition to ordinary argv separation.
 
-This commit defines and tests the process boundary but does not yet launch the
-server or expose the FLAC pipe through LMS. A real container probe must first
-confirm the distribution packages, LMS service user, PulseAudio module
-availability, and startup/capture behavior.
+The Pulse bridge has now been exercised successfully in a Debian 13 LXC under
+the packaged LMS service account. A real Soloist 1.3.7 Connect session produced
+continuous monitor PCM which encoded to a non-silent FLAC with matching
+duration. `Runtime.pm` deliberately remains unregistered until the LMS-facing
+opt-in manager and streaming endpoint are complete.
 
 ## Planned architecture
 
