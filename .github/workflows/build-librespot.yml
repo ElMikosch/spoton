@@ -2,7 +2,14 @@ name: Build librespot binaries
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to create or update
+        required: true
+        default: v3.5.0
   push:
+    branches:
+      - 'release/v3.5.0'
     tags:
       - 'v*'
 
@@ -26,8 +33,8 @@ jobs:
       - name: Detect Rust source changes
         id: check
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "workflow_dispatch detected — forcing full build"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${GITHUB_REF}" = "refs/heads/release/v3.5.0" ]; then
+            echo "Release build detected — forcing full build"
             RUST_CHANGED=true
           else
             PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
@@ -326,13 +333,29 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [detect-changes, build, build-windows, lipo, reuse-binaries]
-    if: startsWith(github.ref, 'refs/tags/') && !cancelled() && !failure()
+    if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/release/v3.5.0') && !cancelled() && !failure()
     permissions:
       contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ inputs.release_tag }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          else
+            RELEASE_TAG="v3.5.0"
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
 
       - name: Download all binary artifacts
         uses: actions/download-artifact@v4
@@ -367,7 +390,7 @@ jobs:
             chmod 755 "$dest"/*
             rm -f "$dest/.gitkeep"
           done
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${RELEASE_TAG}"
           zip -r "release-flat/SpotOn-${VERSION}.zip" Plugins/SpotOn/
           echo "=== Plugin zip ==="
           ls -lh "release-flat/SpotOn-${VERSION}.zip"
@@ -383,14 +406,14 @@ jobs:
       - name: Extract release notes from CHANGELOG.md
         id: changelog
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           # Extract section between this version header and the next version header
           NOTES=$(awk -v ver="$VERSION" '
             /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) found=1; next }
             found { print }
           ' CHANGELOG.md)
           if [ -z "$NOTES" ]; then
-            NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for details."
+            NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${RELEASE_TAG}/CHANGELOG.md) for details."
           fi
           {
             echo "notes<<CHANGELOG_EOF"
@@ -401,6 +424,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.RELEASE_TAG }}
           files: release-flat/*
           body: ${{ steps.changelog.outputs.notes }}
           draft: false

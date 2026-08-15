@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    LMS Custom Repository descriptor for SpotOn.
+    LMS Custom Repository descriptor for the ElMikosch SpotOn fork.
 
     USERS: Add the raw GitHub URL of this file to:
       LMS Settings → Plugins → Additional Repositories
-      URL: https://raw.githubusercontent.com/stiefenm/spoton/main/repo.xml
+      URL: https://raw.githubusercontent.com/ElMikosch/spoton/main/repo.xml
 
     MAINTAINERS: When publishing a new version, update sha (sha1sum of zip)
     and url (GitHub release asset URL).
@@ -17,12 +17,12 @@
     <plugins>
         <plugin
             name="SpotOn"
-            version="3.4.0"
+            version="3.5.0"
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="cefe1e3f1215a94c604987719ef15baf956296ef"
-            url="https://github.com/stiefenm/spoton/releases/download/v3.4.0/SpotOn-v3.4.0.zip"
+            sha="0000000000000000000000000000000000000000"
+            url="https://github.com/ElMikosch/spoton/releases/download/v3.5.0/SpotOn-v3.5.0.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
             email="sti@posteo.de"

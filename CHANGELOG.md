@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-08-15
+
+### Added
+- **Experimental official Spotify Soloist backend** — managed Soloist and private PulseAudio runtime, WebSocket playback-state handling, tokenized LMS audio streams, preflight diagnostics, and player attachment while retaining all existing SpotOn Browse and playback functionality.
+- **Low-latency direct PCM streaming** — exposes Soloist capture as `audio/L16` without an encoder and applies the same two-second pacing strategy used by SpotOn's existing PCM fallback. FLAC remains available as a fallback.
+
+### Changed
+- **Fork repository deployment** — version 3.5.0 is published from `ElMikosch/spoton` as a complete LMS-installable SpotOn update using the existing plugin ID, namespace, and preferences.
+
 ## [3.4.0] - 2026-08-08
 
 ### Added
