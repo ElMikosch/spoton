@@ -34,8 +34,13 @@ jobs:
         id: check
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${GITHUB_REF}" = "refs/heads/release/v3.5.0" ]; then
-            echo "Release build detected — forcing full build"
-            RUST_CHANGED=true
+            if git diff --quiet v3.4.0 HEAD -- librespot-spoton/; then
+              echo "No Rust changes since v3.4.0 — reusing the upstream release binaries"
+              RUST_CHANGED=false
+            else
+              echo "Rust changes detected since v3.4.0 — forcing a full build"
+              RUST_CHANGED=true
+            fi
           else
             PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
             if [ -z "$PREV_TAG" ]; then
@@ -258,15 +263,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           CURRENT_TAG="${GITHUB_REF_NAME}"
-          PREV_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --json tagName --jq '.[].tagName' | grep '^v' | grep -v "^${CURRENT_TAG}$" | head -1)
-          echo "Downloading binaries from $PREV_TAG"
+          PREV_REPO="$GITHUB_REPOSITORY"
+          PREV_TAG=$(gh release list --repo "$PREV_REPO" --limit 10 --json tagName --jq '.[].tagName' | grep '^v' | grep -v "^${CURRENT_TAG}$" | head -1 || true)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_REPO="stiefenm/spoton"
+            PREV_TAG="v3.4.0"
+          fi
+          echo "Downloading binaries from $PREV_REPO@$PREV_TAG"
+          echo "prev_repo=$PREV_REPO" >> $GITHUB_OUTPUT
           echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
 
       - name: Download binaries from previous release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "${{ steps.prev.outputs.prev_tag }}" --repo "$GITHUB_REPOSITORY" -p 'spoton-*' -D prev-binaries/
+          gh release download "${{ steps.prev.outputs.prev_tag }}" --repo "${{ steps.prev.outputs.prev_repo }}" -p 'spoton-*' -D prev-binaries/
 
       - name: Prepare artifacts
         run: |
