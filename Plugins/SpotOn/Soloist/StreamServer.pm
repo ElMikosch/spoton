@@ -1,0 +1,252 @@
+package Plugins::SpotOn::Soloist::StreamServer;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+use Scalar::Util qw(blessed refaddr);
+
+use constant STREAM_ROUTE => qr{\Aplugins/SpotOn/soloist/stream/([0-9a-f]{24})\.flac\z};
+use constant MAX_CHUNK_BYTES => 32 * 1024;
+
+my %factories;
+my %active;
+my $initialized = 0;
+
+sub init {
+    return 1 if $initialized;
+    require AnyEvent;
+    require AnyEvent::Handle;
+    require Slim::Web::HTTP;
+    require Slim::Web::Pages;
+    Slim::Web::Pages->addRawFunction(STREAM_ROUTE, \&_raw_handler);
+    $initialized = 1;
+    return 1;
+}
+
+sub register_runtime {
+    my ($class, $token, $factory) = @_;
+    _validate_token($token);
+    croak 'Soloist stream pipeline factory must be a code reference'
+        unless ref($factory) eq 'CODE';
+
+    $class->unregister_runtime($token) if $factories{$token};
+    $factories{$token} = $factory;
+    return stream_path($class, $token);
+}
+
+sub unregister_runtime {
+    my ($class, $token) = @_;
+    _validate_token($token);
+    delete $factories{$token};
+    _close_entry($token, 'runtime_unregistered');
+    return 1;
+}
+
+sub stream_path {
+    my ($class, $token) = @_;
+    _validate_token($token);
+    return "/plugins/SpotOn/soloist/stream/$token.flac";
+}
+
+sub shutdown {
+    _close_entry($_, 'shutdown') for keys %active;
+    %factories = ();
+    return 1;
+}
+
+sub status_snapshot {
+    my ($class, $token) = @_;
+    if (defined $token) {
+        _validate_token($token);
+        return {
+            registered => $factories{$token} ? 1 : 0,
+            active     => $active{$token} ? 1 : 0,
+            pipeline   => $active{$token} && $active{$token}{pipeline}->can('status_snapshot')
+                ? $active{$token}{pipeline}->status_snapshot()
+                : undef,
+        };
+    }
+
+    return {
+        registered => scalar(keys %factories),
+        active     => scalar(keys %active),
+    };
+}
+
+sub _raw_handler {
+    my ($http_client, $response) = @_;
+    my $request = $response->request();
+    my $path = eval { $request->uri()->path() } || '';
+    $path =~ s{\A/}{};
+
+    my ($token) = $path =~ STREAM_ROUTE;
+    return _error_response($http_client, $response, 404, 'not_found')
+        unless $token && $factories{$token};
+
+    my $method = eval { $request->method() } || '';
+    return _error_response($http_client, $response, 405, 'method_not_allowed')
+        unless $method eq 'GET' || $method eq 'HEAD';
+
+    $response->code(200);
+    $response->content_type('audio/flac');
+    $response->header('Accept-Ranges' => 'none');
+    $response->header('Cache-Control' => 'no-store');
+    $response->header('Connection' => 'close');
+
+    if ($method eq 'HEAD') {
+        my $empty = '';
+        Slim::Web::HTTP::addHTTPResponse($http_client, $response, \$empty, 1, 0);
+        return;
+    }
+
+    _close_entry($token, 'replaced') if $active{$token};
+
+    my $pipeline;
+    my $started = eval {
+        $pipeline = $factories{$token}->();
+        croak 'invalid pipeline' unless blessed($pipeline) && $pipeline->can('start');
+        $pipeline->start() ? 1 : 0;
+    };
+    if (!$started) {
+        eval { $pipeline->stop() } if blessed($pipeline) && $pipeline->can('stop');
+        return _error_response($http_client, $response, 503, 'pipeline_unavailable');
+    }
+
+    my $is_chunked = eval { $request->protocol() eq 'HTTP/1.1' } ? 1 : 0;
+    if ($is_chunked) {
+        $response->header('Transfer-Encoding' => 'chunked');
+        $response->header('Connection' => 'close');
+    }
+
+    my $entry = {
+        pipeline   => $pipeline,
+        http_client => $http_client,
+        done       => 0,
+    };
+    $active{$token} = $entry;
+
+    my ($handle, $writer, $cleanup);
+    $cleanup = sub {
+        my ($reason) = @_;
+        return if $entry->{done}++;
+
+        undef $entry->{read_watcher};
+        eval { $pipeline->stop() };
+        eval { $handle->destroy() } if $handle;
+        delete $active{$token}
+            if $active{$token} && refaddr($active{$token}) == refaddr($entry);
+        eval {
+            Slim::Web::HTTP::closeHTTPSocket($http_client)
+                if !$http_client->can('opened') || $http_client->opened();
+        };
+    };
+
+    $writer = sub {
+        return if $entry->{done};
+
+        if ($entry->{finish_after_drain}) {
+            $cleanup->('eof');
+            return;
+        }
+
+        if (defined $entry->{headers}) {
+            my $headers = delete $entry->{headers};
+            $handle->push_write($headers);
+            return;
+        }
+
+        my ($chunk, $status) = $pipeline->read_chunk(MAX_CHUNK_BYTES);
+        if ($status eq 'data') {
+            my $bytes = $is_chunked
+                ? sprintf('%X', length($chunk)) . "\r\n" . $chunk . "\r\n"
+                : $chunk;
+            $handle->push_write($bytes);
+            return;
+        }
+
+        if ($status eq 'would_block') {
+            return if $entry->{read_watcher};
+            my $output = $pipeline->output_fh();
+            unless ($output) {
+                $cleanup->('missing_output');
+                return;
+            }
+            $entry->{read_watcher} = AnyEvent->io(
+                fh   => $output,
+                poll => 'r',
+                cb   => sub {
+                    undef $entry->{read_watcher};
+                    $writer->();
+                },
+            );
+            return;
+        }
+
+        if ($status eq 'eof') {
+            if ($is_chunked) {
+                $entry->{finish_after_drain} = 1;
+                $handle->push_write("0\r\n\r\n");
+            }
+            else {
+                $cleanup->('eof');
+            }
+            return;
+        }
+
+        $cleanup->($status || 'read_failed');
+    };
+
+    $handle = AnyEvent::Handle->new(
+        fh       => $http_client,
+        linger   => 0,
+        timeout  => 300,
+        on_error => sub {
+            my ($hdl, $fatal, $message) = @_;
+            $cleanup->('socket_error');
+        },
+        on_timeout => sub {
+            $cleanup->('socket_timeout');
+        },
+    );
+    $entry->{handle} = $handle;
+    $entry->{headers} = Slim::Web::HTTP::_stringifyHeaders($response) . "\r\n";
+    $handle->on_drain($writer);
+    $writer->();
+    return;
+}
+
+sub _close_entry {
+    my ($token, $reason) = @_;
+    my $entry = delete $active{$token} || return;
+    return if $entry->{done}++;
+
+    undef $entry->{read_watcher};
+    eval { $entry->{pipeline}->stop() } if $entry->{pipeline};
+    eval { $entry->{handle}->destroy() } if $entry->{handle};
+    my $client = $entry->{http_client};
+    eval {
+        Slim::Web::HTTP::closeHTTPSocket($client)
+            if $client && (!$client->can('opened') || $client->opened());
+    };
+}
+
+sub _error_response {
+    my ($http_client, $response, $code, $error) = @_;
+    my $body = "$error\n";
+    $response->code($code);
+    $response->content_type('text/plain; charset=utf-8');
+    $response->header('Cache-Control' => 'no-store');
+    $response->header('Connection' => 'close');
+    Slim::Web::HTTP::addHTTPResponse($http_client, $response, \$body, 1, 0);
+    return;
+}
+
+sub _validate_token {
+    my ($token) = @_;
+    croak 'Soloist stream token must be 24 lowercase hexadecimal characters'
+        unless defined $token && !ref($token) && $token =~ /\A[0-9a-f]{24}\z/;
+    return $token;
+}
+
+1;

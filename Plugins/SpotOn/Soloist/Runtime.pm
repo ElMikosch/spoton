@@ -11,7 +11,11 @@ use Time::HiRes ();
 
 use Plugins::SpotOn::Soloist::Endpoint qw(discover_endpoint);
 use Plugins::SpotOn::Soloist::ProcessSpec qw(build_process_spec);
-use Plugins::SpotOn::Soloist::PulseBridgeSpec qw(build_server_spec);
+use Plugins::SpotOn::Soloist::PulseBridgeSpec qw(
+    build_capture_spec
+    build_encoder_spec
+    build_server_spec
+);
 
 use constant COOKIE_BYTES          => 256;
 use constant PULSE_START_TIMEOUT   => 10;
@@ -25,8 +29,10 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     data_dir
     device_name
     endpoint_discover
+    ffmpeg_binary
     initial_volume
     log_dir
+    parec_binary
     pulseaudio_binary
     pulse_start_timeout
     random_bytes
@@ -55,8 +61,10 @@ sub new {
         data_dir             => _absolute_path($args{data_dir}, 'data_dir'),
         device_name          => _required_text($args{device_name}, 'device_name'),
         endpoint_discover    => $args{endpoint_discover} || \&discover_endpoint,
+        ffmpeg_binary        => _optional_text($args{ffmpeg_binary}, 'ffmpeg_binary'),
         initial_volume       => exists $args{initial_volume} ? $args{initial_volume} : 100,
         log_dir              => _absolute_path($args{log_dir}, 'log_dir'),
+        parec_binary         => _optional_text($args{parec_binary}, 'parec_binary'),
         pulseaudio_binary    => _required_text($args{pulseaudio_binary}, 'pulseaudio_binary'),
         pulse_start_timeout  => _positive_number(
             $args{pulse_start_timeout},
@@ -127,6 +135,7 @@ sub start {
     my $logs_ready = eval {
         $self->{pulse_log_fh} = $self->_open_log('pulse.log');
         $self->{soloist_log_fh} = $self->_open_log('soloist.log');
+        $self->{stream_log_fh} = $self->_open_log('stream.log');
         1;
     };
     return $self->_fail('log_open_failed', $@) unless $logs_ready;
@@ -252,6 +261,32 @@ sub status_snapshot {
     };
 }
 
+sub new_stream_pipeline {
+    my ($self) = @_;
+    croak 'Soloist runtime must be running before opening a stream'
+        unless $self->{state} eq 'running';
+    croak 'Soloist runtime parec_binary is required for streaming'
+        unless $self->{parec_binary};
+    croak 'Soloist runtime ffmpeg_binary is required for streaming'
+        unless $self->{ffmpeg_binary};
+
+    my $capture_spec = build_capture_spec(
+        binary      => $self->{parec_binary},
+        socket_path => $self->{socket_path},
+        sink_name   => $self->{sink_name},
+    );
+    my $encoder_spec = build_encoder_spec(
+        binary => $self->{ffmpeg_binary},
+    );
+
+    require Plugins::SpotOn::Soloist::StreamPipeline;
+    return Plugins::SpotOn::Soloist::StreamPipeline->new(
+        capture_spec => $capture_spec,
+        encoder_spec => $encoder_spec,
+        log_fh       => $self->{stream_log_fh},
+    );
+}
+
 sub _prepare_layout {
     my ($self) = @_;
 
@@ -298,6 +333,7 @@ sub _close_logs {
     my ($self) = @_;
     close(delete $self->{pulse_log_fh}) if $self->{pulse_log_fh};
     close(delete $self->{soloist_log_fh}) if $self->{soloist_log_fh};
+    close(delete $self->{stream_log_fh}) if $self->{stream_log_fh};
 }
 
 sub _fail {
@@ -428,6 +464,12 @@ sub _required_text {
     croak "Soloist runtime $name contains a control character"
         if $value =~ /[\x00-\x1f\x7f]/;
     return $value;
+}
+
+sub _optional_text {
+    my ($value, $name) = @_;
+    return undef unless defined $value;
+    return _required_text($value, $name);
 }
 
 sub _absolute_path {

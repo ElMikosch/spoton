@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+no warnings 'once';
 
 use Test::More;
 use File::Spec::Functions qw(catdir catfile);
@@ -62,6 +63,8 @@ my $runtime = Plugins::SpotOn::Soloist::Runtime->new(
     device_name       => 'SpotOn Soloist Test',
     soloist_binary    => '/opt/soloist/soloist',
     pulseaudio_binary => '/usr/bin/pulseaudio',
+    parec_binary      => '/usr/bin/parec',
+    ffmpeg_binary     => '/usr/bin/ffmpeg',
     runtime_dir       => $runtime_dir,
     data_dir          => $data_dir,
     cache_dir         => $cache_dir,
@@ -141,6 +144,33 @@ is($runtime->poll(), 'starting_soloist', 'runtime waits for Soloist endpoint fil
 $endpoint_ready = 1;
 is($runtime->poll(), 'running', 'loopback endpoint marks runtime running');
 is($runtime->endpoint()->{port}, 19090, 'running runtime exposes normalized endpoint');
+
+require Plugins::SpotOn::Soloist::StreamPipeline;
+my $pipeline_args;
+{
+    no warnings 'redefine';
+    local *Plugins::SpotOn::Soloist::StreamPipeline::new = sub {
+        my ($class, %args) = @_;
+        $pipeline_args = \%args;
+        return bless {}, 'Local::BuiltPipeline';
+    };
+    ok($runtime->new_stream_pipeline(), 'running runtime builds its stream pipeline');
+}
+is(
+    $pipeline_args->{capture_spec}{env}{PULSE_COOKIE},
+    $cookie,
+    'runtime stream capture reuses the private Pulse cookie',
+);
+like(
+    join(' ', @{ $pipeline_args->{capture_spec}{argv} }),
+    qr/spoton_soloist\.monitor/,
+    'runtime stream capture reads its isolated monitor',
+);
+is(
+    $pipeline_args->{encoder_spec}{output_format},
+    'flac',
+    'runtime stream pipeline encodes FLAC for LMS',
+);
 
 @Local::Process::terminated = ();
 ok($runtime->stop(), 'runtime stops cleanly');

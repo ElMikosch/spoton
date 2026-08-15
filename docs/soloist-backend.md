@@ -36,6 +36,17 @@ state layers deliberately have no LMS runtime dependency:
   cookie, starts PulseAudio before Soloist, waits asynchronously for their
   readiness markers, rejects non-loopback endpoints, redacts the API key from
   diagnostics, and tears the child processes down in dependency order.
+- `StreamPipeline.pm` wires the monitor capture process directly into the FLAC
+  encoder with OS pipes and list-form `exec`; no shell command is constructed.
+  The encoded output is nonblocking for integration with LMS's event loop, and
+  disconnect cleanup terminates both children without touching the long-lived
+  Soloist/Pulse runtime.
+- `StreamServer.pm` exposes that pipeline through LMS's authenticated HTTP
+  server only after a runtime registers an opaque 96-bit route token. It uses
+  bounded nonblocking reads and socket-drain backpressure rather than buffering
+  an unbounded live stream in the LMS process, supports HTTP/1.0 close-delimited
+  and HTTP/1.1 chunked clients, and destroys the per-connection pipeline on EOF,
+  replacement, timeout, or socket failure.
 
 SpotOn registers the diagnostics-only probe but does not start a Soloist
 connection automatically. Existing Connect and browse playback therefore remain
