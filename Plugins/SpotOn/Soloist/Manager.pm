@@ -17,8 +17,10 @@ my $runtime;
 my $session;
 my $stream_token;
 my $stream_path;
+my $stream_paths = {};
 my $player_id;
 my $player_stream_url;
+my $player_stream_format;
 my $state = 'stopped';
 my $last_error;
 my $last_event_type;
@@ -129,18 +131,28 @@ sub stop {
     undef $runtime;
     undef $stream_token;
     undef $stream_path;
+    $stream_paths = {};
     undef $player_id;
     undef $player_stream_url;
+    undef $player_stream_format;
     $state = 'stopped';
     return 1;
 }
 
 sub attachPlayer {
-    my ($class, $client) = @_;
+    my ($class, $client, %args) = @_;
     _ensure_lms();
 
+    for my $key (keys %args) {
+        return _command_fail('player_option_invalid', 'Unsupported player stream option')
+            unless $key eq 'format';
+    }
+    my $format = defined $args{format} ? $args{format} : 'flac';
+    return _command_fail('player_format_invalid', 'Player stream format must be flac or pcm')
+        unless !ref($format) && $format =~ /\A(?:flac|pcm)\z/;
+
     return _command_fail('player_runtime_not_ready', 'Managed runtime is not running')
-        unless $state eq 'running' && $stream_path;
+        unless $state eq 'running' && $stream_paths->{$format};
     return _command_fail('player_required', 'An LMS player is required')
         unless blessed($client) && $client->can('id');
 
@@ -164,7 +176,7 @@ sub attachPlayer {
             && $port >= 1 && $port <= 65_535;
 
     $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
-    my $url = "http://$host:$port$stream_path";
+    my $url = "http://$host:$port$stream_paths->{$format}";
 
     require Slim::Control::Request;
     my $request_created = eval {
@@ -182,6 +194,7 @@ sub attachPlayer {
 
     $player_id = $id;
     $player_stream_url = $url;
+    $player_stream_format = $format;
     $last_error = undef
         if $last_error && ($last_error->{code} || '') =~ /\Aplayer_/;
     return 1;
@@ -195,6 +208,7 @@ sub detachPlayer {
     my $id = $player_id;
     undef $player_id;
     undef $player_stream_url;
+    undef $player_stream_format;
 
     require Slim::Control::Request;
     my $request_created = eval {
@@ -234,9 +248,11 @@ sub statusSnapshot {
         sessionStatus => $session ? $session->status() : 'idle',
         streamToken   => $stream_token,
         streamPath    => $stream_path,
+        streamPaths   => { %$stream_paths },
         playerAttached => $player_id ? 1 : 0,
         playerId      => $player_id,
         playerStreamUrl => $player_stream_url,
+        playerStreamFormat => $player_stream_format,
         lastEventType => $last_event_type,
         lastUpdate    => $last_update,
     };
@@ -280,8 +296,17 @@ sub _attach_running_runtime {
     $stream_token = _random_token();
     $stream_path = Plugins::SpotOn::Soloist::StreamServer->register_runtime(
         $stream_token,
-        sub { $runtime->new_stream_pipeline() },
+        sub { $runtime->new_stream_pipeline('flac') },
     );
+    my $pcm_path = Plugins::SpotOn::Soloist::StreamServer->register_runtime_format(
+        $stream_token,
+        'pcm',
+        sub { $runtime->new_stream_pipeline('pcm') },
+    );
+    $stream_paths = {
+        flac => $stream_path,
+        pcm  => $pcm_path,
+    };
 
     $session = Plugins::SpotOn::Soloist::Session->new(
         data_dir => catdir(baseDir(), 'data'),
@@ -345,8 +370,10 @@ sub _fail {
     undef $runtime;
     undef $stream_token;
     undef $stream_path;
+    $stream_paths = {};
     undef $player_id;
     undef $player_stream_url;
+    undef $player_stream_format;
     $state = 'failed';
     return 0;
 }

@@ -172,6 +172,34 @@ is(
     'runtime stream pipeline encodes FLAC for LMS',
 );
 
+{
+    no warnings 'redefine';
+    local *Plugins::SpotOn::Soloist::StreamPipeline::new = sub {
+        my ($class, %args) = @_;
+        $pipeline_args = \%args;
+        return bless {}, 'Local::BuiltPipeline';
+    };
+    ok(
+        $runtime->new_stream_pipeline('pcm'),
+        'running runtime builds a low-latency PCM pipeline',
+    );
+}
+is(
+    $pipeline_args->{encoder_spec},
+    undef,
+    'PCM pipeline bypasses the FLAC encoder',
+);
+
+my $bad_stream_format = eval {
+    $runtime->new_stream_pipeline('mp3');
+    '';
+} || $@;
+like(
+    $bad_stream_format,
+    qr/stream format must be flac or pcm/,
+    'runtime rejects unsupported stream formats',
+);
+
 @Local::Process::terminated = ();
 ok($runtime->stop(), 'runtime stops cleanly');
 is_deeply(

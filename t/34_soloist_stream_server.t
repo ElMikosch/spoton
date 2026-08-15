@@ -39,12 +39,19 @@ BEGIN {
 
     package AnyEvent;
     our @watchers;
+    our @timers;
     sub import { }
     sub io {
         my ($class, %args) = @_;
         my $watcher = bless { %args }, 'Local::Watcher';
         push @watchers, $watcher;
         return $watcher;
+    }
+    sub timer {
+        my ($class, %args) = @_;
+        my $timer = bless { %args }, 'Local::Timer';
+        push @timers, $timer;
+        return $timer;
     }
     $INC{'AnyEvent.pm'} = 1;
 
@@ -129,6 +136,7 @@ my $token = '0123456789abcdef01234567';
 ok(Plugins::SpotOn::Soloist::StreamServer->init(), 'stream server registers LMS raw route');
 is(scalar @Slim::Web::Pages::raw, 1, 'one raw route is registered');
 like("/plugins/SpotOn/soloist/stream/$token.flac", $Slim::Web::Pages::raw[0][0], 'route matches the LMS URI path with its leading slash');
+like("/plugins/SpotOn/soloist/stream/$token.pcm", $Slim::Web::Pages::raw[0][0], 'route also matches low-latency PCM');
 
 my $pipeline;
 my $path = Plugins::SpotOn::Soloist::StreamServer->register_runtime(
@@ -172,6 +180,38 @@ $handle->drain();
 ok($pipeline->{stopped}, 'EOF tears down capture pipeline');
 ok($handle->{destroyed}, 'EOF releases AnyEvent handle');
 ok(!$client->{opened}, 'EOF closes LMS HTTP socket');
+
+my $pcm_path = Plugins::SpotOn::Soloist::StreamServer->register_runtime_format(
+    $token,
+    'pcm',
+    sub { Local::Pipeline->new(['PCM-A', 'data'], ['', 'eof']) },
+);
+is($pcm_path, "/plugins/SpotOn/soloist/stream/$token.pcm", 'PCM route uses an explicit suffix');
+my $now = 1_000;
+{
+    no warnings 'redefine';
+    local *Plugins::SpotOn::Soloist::StreamServer::_now = sub { $now };
+    my $pcm_client = Local::HTTPClient->new();
+    my $pcm_response = Local::Response->new(Local::Request->new(path => $pcm_path));
+    $Slim::Web::Pages::raw[0][1]->($pcm_client, $pcm_response);
+    is(
+        $pcm_response->{content_type},
+        'audio/L16;rate=44100;channels=2',
+        'PCM route matches the original SpotOn live-stream content type',
+    );
+    my $format_status = Plugins::SpotOn::Soloist::StreamServer->status_snapshot($token);
+    ok($format_status->{formats}{flac}{registered}, 'status retains FLAC fallback');
+    ok($format_status->{formats}{pcm}{registered}, 'status exposes PCM alternative');
+    $AnyEvent::Handle::handles[-1]->drain();
+    is(scalar @AnyEvent::timers, 1, 'PCM waits asynchronously before sending audio');
+    cmp_ok($AnyEvent::timers[-1]{after}, '>=', 1.99, 'PCM uses the original two-second pacing offset');
+    $now += $AnyEvent::timers[-1]{after};
+    $AnyEvent::timers[-1]{cb}->();
+    is($AnyEvent::Handle::handles[-1]{writes}[-1], 'PCM-A', 'pacer releases raw PCM after its deadline');
+    $AnyEvent::Handle::handles[-1]->drain();
+    $now += $AnyEvent::timers[-1]{after};
+    $AnyEvent::timers[-1]{cb}->();
+}
 
 my $unknown_client = Local::HTTPClient->new();
 my $unknown_response = Local::Response->new(Local::Request->new(

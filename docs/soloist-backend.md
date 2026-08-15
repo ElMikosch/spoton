@@ -30,14 +30,16 @@ state layers deliberately have no LMS runtime dependency:
 - `PulseBridgeSpec.pm` describes the headless-container audio path as three
   shell-free process specifications: a supervised PulseAudio null sink on a
   private Unix socket, `parec` monitor capture as 44.1 kHz stereo PCM, and an
-  `ffmpeg` FLAC encoder suitable for the future LMS stream endpoint.
+  direct low-latency PCM output plus an `ffmpeg` FLAC encoder for the stable
+  fallback stream.
 - `Runtime.pm` is the first opt-in lifecycle implementation. It creates and
   validates private runtime/data/cache/log directories and a 256-byte Pulse
   cookie, starts PulseAudio before Soloist, waits asynchronously for their
   readiness markers, rejects non-loopback endpoints, redacts the API key from
   diagnostics, and tears the child processes down in dependency order.
-- `StreamPipeline.pm` wires the monitor capture process directly into the FLAC
-  encoder with OS pipes and list-form `exec`; no shell command is constructed.
+- `StreamPipeline.pm` either exposes monitor PCM directly or wires it into the
+  FLAC encoder with OS pipes and list-form `exec`; no shell command is
+  constructed and the PCM path starts no unnecessary encoder child.
   The encoded output is nonblocking for integration with LMS's event loop, and
   disconnect cleanup terminates both children without touching the long-lived
   Soloist/Pulse runtime.
@@ -46,7 +48,10 @@ state layers deliberately have no LMS runtime dependency:
   bounded nonblocking reads and socket-drain backpressure rather than buffering
   an unbounded live stream in the LMS process, supports HTTP/1.0 close-delimited
   and HTTP/1.1 chunked clients, and destroys the per-connection pipeline on EOF,
-  replacement, timeout, or socket failure.
+  replacement, timeout, or socket failure. Its PCM mode also mirrors the
+  original SpotOn Connect relay's two-second, timer-driven real-time pacing and
+  `audio/L16;rate=44100;channels=2` response so hardware input buffers cannot
+  accumulate an arbitrarily long compressed-audio backlog.
 - `Manager.pm` now joins the managed runtime, WebSocket session, and registered
   stream route behind explicit diagnostic CLI actions. It reads the API key
   only from a fixed, owner-only cache file, validates the required executables,
@@ -154,18 +159,23 @@ spoton soloistprobe action:managed_status
 
 Startup is asynchronous. `managed.state: running`, a connected session, and a
 non-empty `streamPath` prove that PulseAudio, Soloist, the local WebSocket, and
-the LMS HTTP route are attached. A second explicit diagnostic action can then
-replace one selected LMS player's current playlist with the tokenized live FLAC
-stream. The command must be addressed to that player:
+the LMS HTTP route are attached. `streamPaths` reports both the known-good FLAC
+route and an experimental raw 44.1 kHz, 16-bit little-endian stereo PCM route.
+A second explicit diagnostic action can then replace one selected LMS player's
+current playlist with either tokenized live stream. The command must be
+addressed to that player; FLAC remains the default:
 
 ```text
 spoton soloistprobe action:managed_player_play player_id:<player-id>
+spoton soloistprobe action:managed_player_play player_id:<player-id> stream_format:pcm
 spoton soloistprobe action:managed_player_stop
 ```
 
 Status exposes `playerAttached`, `playerId`, and the LMS-generated
-`playerStreamUrl`. No caller-supplied URL or host is accepted. The route is
-random per start and is revoked before the runtime is stopped:
+`playerStreamUrl`, plus `playerStreamFormat` for an A/B latency measurement. No
+caller-supplied URL or host is accepted. Only `flac` and `pcm` are allowed. The
+routes share a random token per start and are revoked before the runtime is
+stopped:
 
 ```text
 spoton soloistprobe action:managed_stop

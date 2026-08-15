@@ -67,6 +67,26 @@ ok($long_snapshot->{encoderPid} > 1, 'encoder PID is reported');
 ok($long_pipeline->alive(), 'both pipeline children are alive');
 ok($long_pipeline->stop(), 'disconnect stops long-running children');
 
+my $direct_capture = q{binmode STDOUT; print STDOUT "raw-pcm";};
+my $direct_pipeline = Plugins::SpotOn::Soloist::StreamPipeline->new(
+    capture_spec => { argv => [$^X, '-e', $direct_capture] },
+);
+ok($direct_pipeline->start(), 'capture-only PCM pipeline starts without an encoder');
+my $direct_output = '';
+for (1 .. 100) {
+    my ($chunk, $read_status) = $direct_pipeline->read_chunk(1024);
+    $direct_output .= $chunk if defined $chunk && length $chunk;
+    last if $read_status eq 'eof';
+    sleep(0.01) if $read_status eq 'would_block';
+}
+is($direct_output, 'raw-pcm', 'capture-only pipeline preserves PCM bytes exactly');
+is(
+    $direct_pipeline->status_snapshot()->{encoderPid},
+    undef,
+    'capture-only pipeline has no encoder child',
+);
+ok($direct_pipeline->stop(), 'capture-only pipeline stops cleanly');
+
 my $bad_spec_error = eval {
     Plugins::SpotOn::Soloist::StreamPipeline->new(
         capture_spec => { argv => [$^X, "bad\nargument"] },

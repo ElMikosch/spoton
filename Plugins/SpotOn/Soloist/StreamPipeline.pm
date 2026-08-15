@@ -24,7 +24,9 @@ sub new {
 
     return bless {
         capture_spec => _process_spec($args{capture_spec}, 'capture'),
-        encoder_spec => _process_spec($args{encoder_spec}, 'encoder'),
+        encoder_spec => $args{encoder_spec}
+            ? _process_spec($args{encoder_spec}, 'encoder')
+            : undef,
         log_fh       => $args{log_fh},
         state        => 'stopped',
         bytes_read   => 0,
@@ -36,6 +38,8 @@ sub start {
 
     return 1 if $self->{state} eq 'running';
     return 0 unless $self->{state} eq 'stopped';
+
+    return $self->_start_capture_only() unless $self->{encoder_spec};
 
     pipe(my $capture_read, my $capture_write)
         or return $self->_fail('capture_pipe_failed', "$!");
@@ -130,6 +134,7 @@ sub alive {
     return 0 unless $self->{state} eq 'running';
 
     my $capture = _reap($self, 'capture_pid');
+    return $capture unless $self->{encoder_spec};
     my $encoder = _reap($self, 'encoder_pid');
     return $capture && $encoder ? 1 : 0;
 }
@@ -168,6 +173,41 @@ sub _read_failure {
     };
     $self->{state} = 'failed';
     return (undef, 'read_failed');
+}
+
+sub _start_capture_only {
+    my ($self) = @_;
+
+    pipe(my $output_read, my $output_write)
+        or return $self->_fail('capture_pipe_failed', "$!");
+    binmode($_) for ($output_read, $output_write);
+
+    my $capture_pid = _fork_exec(
+        spec      => $self->{capture_spec},
+        stdin_fh  => undef,
+        stdout_fh => $output_write,
+        log_fh    => $self->{log_fh},
+        close_fhs => [$output_read, $output_write],
+    );
+    if (!$capture_pid) {
+        close($output_read);
+        close($output_write);
+        return $self->_fail('capture_spawn_failed', "$!");
+    }
+
+    close($output_write);
+    my $flags = fcntl($output_read, F_GETFL, 0);
+    if (!defined $flags || !fcntl($output_read, F_SETFL, $flags | O_NONBLOCK)) {
+        close($output_read);
+        _terminate_and_reap($capture_pid);
+        return $self->_fail('nonblocking_failed', "$!");
+    }
+
+    $self->{capture_pid} = $capture_pid;
+    $self->{output_fh} = $output_read;
+    $self->{state} = 'running';
+    $self->{last_error} = undef;
+    return 1;
 }
 
 sub _fail {

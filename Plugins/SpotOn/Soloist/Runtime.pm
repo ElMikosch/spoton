@@ -268,29 +268,33 @@ sub status_snapshot {
 }
 
 sub new_stream_pipeline {
-    my ($self) = @_;
+    my ($self, $format) = @_;
+    $format = 'flac' unless defined $format;
+    croak 'Soloist stream format must be flac or pcm'
+        unless !ref($format) && $format =~ /\A(?:flac|pcm)\z/;
     croak 'Soloist runtime must be running before opening a stream'
         unless $self->{state} eq 'running';
     croak 'Soloist runtime parec_binary is required for streaming'
         unless $self->{parec_binary};
-    croak 'Soloist runtime ffmpeg_binary is required for streaming'
-        unless $self->{ffmpeg_binary};
+    croak 'Soloist runtime ffmpeg_binary is required for FLAC streaming'
+        if $format eq 'flac' && !$self->{ffmpeg_binary};
 
     my $capture_spec = build_capture_spec(
         binary      => $self->{parec_binary},
         socket_path => $self->{socket_path},
         sink_name   => $self->{sink_name},
     );
-    my $encoder_spec = build_encoder_spec(
-        binary => $self->{ffmpeg_binary},
-    );
+    my $encoder_spec = $format eq 'flac'
+        ? build_encoder_spec(binary => $self->{ffmpeg_binary})
+        : undef;
 
     require Plugins::SpotOn::Soloist::StreamPipeline;
-    return Plugins::SpotOn::Soloist::StreamPipeline->new(
+    my %pipeline_args = (
         capture_spec => $capture_spec,
-        encoder_spec => $encoder_spec,
         log_fh       => $self->{stream_log_fh},
     );
+    $pipeline_args{encoder_spec} = $encoder_spec if $encoder_spec;
+    return Plugins::SpotOn::Soloist::StreamPipeline->new(%pipeline_args);
 }
 
 sub _prepare_layout {

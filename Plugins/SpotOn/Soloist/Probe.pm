@@ -229,7 +229,17 @@ sub _cli_handler {
             $request->setStatusBadParams();
             return;
         }
-        unless (Plugins::SpotOn::Soloist::Manager->attachPlayer($client)) {
+        my $stream_format = $request->getParam('stream_format') || 'flac';
+        unless (!ref($stream_format)
+            && $stream_format =~ /\A(?:flac|pcm)\z/) {
+            $request->addResult('error', 'stream_format_invalid');
+            $request->setStatusBadParams();
+            return;
+        }
+        unless (Plugins::SpotOn::Soloist::Manager->attachPlayer(
+            $client,
+            format => $stream_format,
+        )) {
             $request->addResult('error', 'managed_player_play_failed');
             $request->addResult(
                 'managed',

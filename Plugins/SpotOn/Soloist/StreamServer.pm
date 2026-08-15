@@ -5,12 +5,15 @@ use warnings;
 
 use Carp qw(croak);
 use Scalar::Util qw(blessed refaddr);
+use Time::HiRes ();
 
 # LMS looks up raw handlers with URI->path(), which includes the leading slash.
 # Keep the slash optional because the handler normalizes it before extracting
 # the token and because older test/adaptor callers may already pass a bare path.
-use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.flac\z};
+use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(flac|pcm)\z};
 use constant MAX_CHUNK_BYTES => 32 * 1024;
+use constant PCM_BYTES_PER_SECOND => 44_100 * 2 * 2;
+use constant PCM_PACING_DELAY     => 2;
 
 my %factories;
 my %active;
@@ -29,27 +32,39 @@ sub init {
 
 sub register_runtime {
     my ($class, $token, $factory) = @_;
+    return $class->register_runtime_format($token, 'flac', $factory);
+}
+
+sub register_runtime_format {
+    my ($class, $token, $format, $factory) = @_;
     _validate_token($token);
+    _validate_format($format);
     croak 'Soloist stream pipeline factory must be a code reference'
         unless ref($factory) eq 'CODE';
 
-    $class->unregister_runtime($token) if $factories{$token};
-    $factories{$token} = $factory;
-    return stream_path($class, $token);
+    my $key = _stream_key($token, $format);
+    _close_entry($key, 'runtime_replaced') if $factories{$key};
+    $factories{$key} = $factory;
+    return stream_path($class, $token, $format);
 }
 
 sub unregister_runtime {
     my ($class, $token) = @_;
     _validate_token($token);
-    delete $factories{$token};
-    _close_entry($token, 'runtime_unregistered');
+    for my $format (qw(flac pcm)) {
+        my $key = _stream_key($token, $format);
+        delete $factories{$key};
+        _close_entry($key, 'runtime_unregistered');
+    }
     return 1;
 }
 
 sub stream_path {
-    my ($class, $token) = @_;
+    my ($class, $token, $format) = @_;
     _validate_token($token);
-    return "/plugins/SpotOn/soloist/stream/$token.flac";
+    $format = 'flac' unless defined $format;
+    _validate_format($format);
+    return "/plugins/SpotOn/soloist/stream/$token.$format";
 }
 
 sub shutdown {
@@ -62,12 +77,21 @@ sub status_snapshot {
     my ($class, $token) = @_;
     if (defined $token) {
         _validate_token($token);
+        my %formats;
+        for my $format (qw(flac pcm)) {
+            my $key = _stream_key($token, $format);
+            $formats{$format} = {
+                registered => $factories{$key} ? 1 : 0,
+                active     => $active{$key} ? 1 : 0,
+                pipeline   => $active{$key} && $active{$key}{pipeline}->can('status_snapshot')
+                    ? $active{$key}{pipeline}->status_snapshot()
+                    : undef,
+            };
+        }
         return {
-            registered => $factories{$token} ? 1 : 0,
-            active     => $active{$token} ? 1 : 0,
-            pipeline   => $active{$token} && $active{$token}{pipeline}->can('status_snapshot')
-                ? $active{$token}{pipeline}->status_snapshot()
-                : undef,
+            registered => ($formats{flac}{registered} || $formats{pcm}{registered}) ? 1 : 0,
+            active     => ($formats{flac}{active} || $formats{pcm}{active}) ? 1 : 0,
+            formats    => \%formats,
         };
     }
 
@@ -83,16 +107,21 @@ sub _raw_handler {
     my $path = eval { $request->uri()->path() } || '';
     $path =~ s{\A/}{};
 
-    my ($token) = $path =~ STREAM_ROUTE;
+    my ($token, $format) = $path =~ STREAM_ROUTE;
+    my $key = $token && $format ? _stream_key($token, $format) : '';
     return _error_response($http_client, $response, 404, 'not_found')
-        unless $token && $factories{$token};
+        unless $key && $factories{$key};
 
     my $method = eval { $request->method() } || '';
     return _error_response($http_client, $response, 405, 'method_not_allowed')
         unless $method eq 'GET' || $method eq 'HEAD';
 
     $response->code(200);
-    $response->content_type('audio/flac');
+    $response->content_type(
+        $format eq 'pcm'
+            ? 'audio/L16;rate=44100;channels=2'
+            : 'audio/flac'
+    );
     $response->header('Accept-Ranges' => 'none');
     $response->header('Cache-Control' => 'no-store');
     $response->header('Connection' => 'close');
@@ -103,11 +132,11 @@ sub _raw_handler {
         return;
     }
 
-    _close_entry($token, 'replaced') if $active{$token};
+    _close_entry($key, 'replaced') if $active{$key};
 
     my $pipeline;
     my $started = eval {
-        $pipeline = $factories{$token}->();
+        $pipeline = $factories{$key}->();
         croak 'invalid pipeline' unless blessed($pipeline) && $pipeline->can('start');
         $pipeline->start() ? 1 : 0;
     };
@@ -126,8 +155,14 @@ sub _raw_handler {
         pipeline   => $pipeline,
         http_client => $http_client,
         done       => 0,
+        format     => $format,
     };
-    $active{$token} = $entry;
+    if ($format eq 'pcm') {
+        $entry->{pace_started_at} = _now();
+        $entry->{pace_bytes} = 0;
+        $entry->{pace_not_before} = $entry->{pace_started_at} + PCM_PACING_DELAY;
+    }
+    $active{$key} = $entry;
 
     my ($handle, $writer, $cleanup);
     $cleanup = sub {
@@ -135,10 +170,11 @@ sub _raw_handler {
         return if $entry->{done}++;
 
         undef $entry->{read_watcher};
+        undef $entry->{pace_timer};
         eval { $pipeline->stop() };
         eval { $handle->destroy() } if $handle;
-        delete $active{$token}
-            if $active{$token} && refaddr($active{$token}) == refaddr($entry);
+        delete $active{$key}
+            if $active{$key} && refaddr($active{$key}) == refaddr($entry);
         eval {
             Slim::Web::HTTP::closeHTTPSocket($http_client)
                 if !$http_client->can('opened') || $http_client->opened();
@@ -159,8 +195,29 @@ sub _raw_handler {
             return;
         }
 
+        if ($entry->{format} eq 'pcm') {
+            my $wait = $entry->{pace_not_before} - _now();
+            if ($wait > 0) {
+                return if $entry->{pace_timer};
+                $entry->{pace_timer} = AnyEvent->timer(
+                    after => $wait,
+                    cb    => sub {
+                        undef $entry->{pace_timer};
+                        $writer->();
+                    },
+                );
+                return;
+            }
+        }
+
         my ($chunk, $status) = $pipeline->read_chunk(MAX_CHUNK_BYTES);
         if ($status eq 'data') {
+            if ($entry->{format} eq 'pcm') {
+                $entry->{pace_bytes} += length($chunk);
+                $entry->{pace_not_before} = $entry->{pace_started_at}
+                    + PCM_PACING_DELAY
+                    + ($entry->{pace_bytes} / PCM_BYTES_PER_SECOND);
+            }
             my $bytes = $is_chunked
                 ? sprintf('%X', length($chunk)) . "\r\n" . $chunk . "\r\n"
                 : $chunk;
@@ -225,6 +282,7 @@ sub _close_entry {
     return if $entry->{done}++;
 
     undef $entry->{read_watcher};
+    undef $entry->{pace_timer};
     eval { $entry->{pipeline}->stop() } if $entry->{pipeline};
     eval { $entry->{handle}->destroy() } if $entry->{handle};
     my $client = $entry->{http_client};
@@ -250,6 +308,23 @@ sub _validate_token {
     croak 'Soloist stream token must be 24 lowercase hexadecimal characters'
         unless defined $token && !ref($token) && $token =~ /\A[0-9a-f]{24}\z/;
     return $token;
+}
+
+sub _validate_format {
+    my ($format) = @_;
+    croak 'Soloist stream format must be flac or pcm'
+        unless defined $format && !ref($format)
+            && $format =~ /\A(?:flac|pcm)\z/;
+    return $format;
+}
+
+sub _stream_key {
+    my ($token, $format) = @_;
+    return "$token:$format";
+}
+
+sub _now {
+    return Time::HiRes::time();
 }
 
 1;

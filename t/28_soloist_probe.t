@@ -47,12 +47,18 @@ BEGIN {
     our $state = 'stopped';
     our $init_calls = 0;
     our $player_id;
+    our $player_format;
     sub init { $init_calls++; 1 }
     sub start { $state = 'starting'; 1 }
-    sub stop { $state = 'stopped'; undef $player_id; 1 }
-    sub shutdown { $state = 'stopped'; undef $player_id; 1 }
-    sub attachPlayer { $player_id = $_[1]->id; 1 }
-    sub detachPlayer { undef $player_id; 1 }
+    sub stop { $state = 'stopped'; undef $player_id; undef $player_format; 1 }
+    sub shutdown { $state = 'stopped'; undef $player_id; undef $player_format; 1 }
+    sub attachPlayer {
+        my ($class, $player, %args) = @_;
+        $player_id = $player->id;
+        $player_format = $args{format};
+        return 1;
+    }
+    sub detachPlayer { undef $player_id; undef $player_format; 1 }
     sub statusSnapshot {
         return {
             state          => $state,
@@ -60,6 +66,7 @@ BEGIN {
             streamPath     => undef,
             playerAttached => $player_id ? 1 : 0,
             playerId       => $player_id,
+            playerStreamFormat => $player_format,
         };
     }
     $INC{'Plugins/SpotOn/Soloist/Manager.pm'} = 1;
@@ -239,6 +246,33 @@ $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
         '00:11:22:33:44:55',
         'managed player status returns selected player ID',
     );
+    is(
+        $player_play->{results}{managed}{playerStreamFormat},
+        'flac',
+        'managed player action defaults to the known-good FLAC stream',
+    );
+
+    my $pcm_play = Local::Request->new({
+        action        => 'managed_player_play',
+        player_id     => $player->id,
+        stream_format => 'pcm',
+    });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($pcm_play);
+    is($pcm_play->{status}, 'done', 'managed player action accepts PCM A/B mode');
+    is(
+        $pcm_play->{results}{managed}{playerStreamFormat},
+        'pcm',
+        'managed status returns selected PCM mode',
+    );
+
+    my $bad_format = Local::Request->new({
+        action        => 'managed_player_play',
+        player_id     => $player->id,
+        stream_format => 'mp3',
+    });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($bad_format);
+    is($bad_format->{status}, 'bad_params', 'unknown diagnostic stream format is rejected');
+    is($bad_format->{results}{error}, 'stream_format_invalid', 'invalid format has stable error');
 
     my $player_stop = Local::Request->new({ action => 'managed_player_stop' });
     Plugins::SpotOn::Soloist::Probe::_cli_handler($player_stop);

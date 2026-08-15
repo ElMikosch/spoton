@@ -72,6 +72,7 @@ use Plugins::SpotOn::Soloist::StreamServer;
 {
     package Local::Runtime;
     our @instances;
+    our @pipeline_formats;
     sub new {
         my ($class, %args) = @_;
         my $self = bless {
@@ -92,7 +93,10 @@ use Plugins::SpotOn::Soloist::StreamServer;
     sub last_error { $_[0]{last_error} }
     sub stop { $_[0]{stopped}++; $_[0]{state} = 'stopped'; 1 }
     sub status_snapshot { return { state => $_[0]{state}, soloistArgv => ['--api-key', '[REDACTED]'] } }
-    sub new_stream_pipeline { return bless {}, 'Local::Pipeline' }
+    sub new_stream_pipeline {
+        push @pipeline_formats, defined $_[1] ? $_[1] : 'flac';
+        return bless {}, 'Local::Pipeline';
+    }
 }
 
 {
@@ -171,8 +175,13 @@ my @unregistered;
     };
     local *Plugins::SpotOn::Soloist::StreamServer::register_runtime = sub {
         my ($class, $token, $factory) = @_;
-        push @registered, [$token, $factory];
+        push @registered, [$token, 'flac', $factory];
         return "/plugins/SpotOn/soloist/stream/$token.flac";
+    };
+    local *Plugins::SpotOn::Soloist::StreamServer::register_runtime_format = sub {
+        my ($class, $token, $format, $factory) = @_;
+        push @registered, [$token, $format, $factory];
+        return "/plugins/SpotOn/soloist/stream/$token.$format";
     };
     local *Plugins::SpotOn::Soloist::StreamServer::unregister_runtime = sub {
         push @unregistered, $_[1];
@@ -209,8 +218,19 @@ my @unregistered;
         '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.flac',
         'manager registers tokenized LMS stream path',
     );
-    is(scalar @registered, 1, 'runtime is registered once with stream server');
-    isa_ok($registered[0][1]->(), 'Local::Pipeline', 'stream factory delegates to running runtime');
+    is(scalar @registered, 2, 'runtime registers FLAC and PCM stream variants');
+    isa_ok($registered[0][2]->(), 'Local::Pipeline', 'FLAC stream factory delegates to running runtime');
+    isa_ok($registered[1][2]->(), 'Local::Pipeline', 'PCM stream factory delegates to running runtime');
+    is_deeply(
+        \@Local::Runtime::pipeline_formats,
+        ['flac', 'pcm'],
+        'each stream factory requests its explicit pipeline format',
+    );
+    is(
+        $running->{streamPaths}{pcm},
+        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        'manager reports the low-latency PCM path separately',
+    );
 
     my $player = Local::Player->new('00:11:22:33:44:55');
     ok(
@@ -244,6 +264,27 @@ my @unregistered;
         !Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerAttached},
         'detach clears player attachment status',
     );
+
+    ok(
+        Plugins::SpotOn::Soloist::Manager->attachPlayer($player, format => 'pcm'),
+        'explicit diagnostic action can select low-latency PCM',
+    );
+    is_deeply(
+        $Slim::Control::Request::requests[-1]{command},
+        [
+            'playlist',
+            'play',
+            'http://192.0.2.10:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+            'SpotOn Soloist Managed Test',
+        ],
+        'PCM handoff uses only the LMS-generated tokenized URL',
+    );
+    is(
+        Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerStreamFormat},
+        'pcm',
+        'status identifies the selected player stream format',
+    );
+    ok(Plugins::SpotOn::Soloist::Manager->detachPlayer(), 'PCM player detaches explicitly');
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops explicitly');
     is($Local::Runtime::instances[-1]{stopped}, 1, 'stop terminates managed runtime');
