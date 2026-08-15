@@ -86,7 +86,7 @@ package Slim::Utils::Prefs;
 use parent 'Exporter';
 our \@EXPORT_OK = qw(preferences);
 my %_store;
-my %_ns_store = ( server => { cachedir => '$prefs_cache_dir' } );
+my %_ns_store = ( server => { cachedir => '$prefs_cache_dir', httpport => 9000 } );
 
 sub import {
     my \$class = shift;
@@ -279,7 +279,12 @@ END
 # Stub: Slim::Player::Protocols::HTTP
 write_stub($stub_dir, 'Slim::Player::Protocols::HTTP', <<'END');
 package Slim::Player::Protocols::HTTP;
-sub new { bless {}, shift }
+our $last_args;
+sub new {
+    my ($class, $args) = @_;
+    $last_args = { %{$args || {}} };
+    return bless { %{$args || {}} }, $class;
+}
 sub AUTOLOAD { }
 sub can { 1 }
 1;
@@ -335,6 +340,17 @@ sub _streamPort { 39755 }
 1;
 END
 
+# Stub: managed Soloist token resolver used by the logical PCM proxy path.
+write_stub($stub_dir, 'Plugins::SpotOn::Soloist::Manager', <<'END');
+package Plugins::SpotOn::Soloist::Manager;
+sub resolveStreamPath {
+    my ($class, $token, $format) = @_;
+    return unless $token eq '0123456789abcdef01234567' && $format eq 'pcm';
+    return "/plugins/SpotOn/soloist/stream/$token.pcm";
+}
+1;
+END
+
 # ============================================================
 # main:: constants
 # ============================================================
@@ -365,7 +381,9 @@ unshift @INC, $stub_dir, $project_dir;
 require Plugins::SpotOn::Helper;
 require Plugins::SpotOn::API::Client;
 require Plugins::SpotOn::Unified::DaemonManager;
+require Plugins::SpotOn::Soloist::Manager;
 require Slim::Control::Request;
+require Slim::Player::Protocols::HTTP;
 
 # ============================================================
 # Load ProtocolHandler.pm
@@ -390,6 +408,40 @@ require_ok('Plugins::SpotOn::ProtocolHandler') or BAIL_OUT("Failed to load Proto
 }
 
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
+$prefs->set('diagnosticMode', 0);
+
+subtest 'Soloist PCM uses the existing soc proxy/transcoding path' => sub {
+    my $url = 'spoton://soloist-pcm:0123456789abcdef01234567';
+    my $client = MockClient->new('soloist-pcm');
+
+    is(
+        Plugins::SpotOn::ProtocolHandler->getFormatForURL($url),
+        'soc',
+        'logical Soloist PCM URL advertises SpotOn coded input',
+    );
+    is(
+        Plugins::SpotOn::ProtocolHandler->canDirectStream($client, $url),
+        0,
+        'logical Soloist PCM URL is always LMS-proxied',
+    );
+
+    my $stream = Plugins::SpotOn::ProtocolHandler->new({
+        url    => $url,
+        client => $client,
+    });
+    isa_ok($stream, 'Slim::Player::Protocols::HTTP', 'logical URL creates an HTTP proxy stream');
+    is(
+        $Slim::Player::Protocols::HTTP::last_args->{url},
+        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        'logical URL resolves to the current tokenized LMS PCM route',
+    );
+
+    my $stale = Plugins::SpotOn::ProtocolHandler->new({
+        url    => 'spoton://soloist-pcm:aaaaaaaaaaaaaaaaaaaaaaaa',
+        client => $client,
+    });
+    ok(!defined $stale, 'stale Soloist PCM token fails closed');
+};
 
 # ============================================================
 # Group A: COMPAT-02 canDirectStream proxy gate + global resolution (GH #96)

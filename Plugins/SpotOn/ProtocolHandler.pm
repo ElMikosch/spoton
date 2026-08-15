@@ -71,6 +71,21 @@ use constant MAX_BROWSE_404_RETRIES => 3;
 use constant BROWSE_404_RETRY_DELAY => 2;   # seconds between retries
 my %_browse404Retries;  # "$clientId|$trackUrl" => attempt_count
 
+sub _soloistPcmToken {
+    my ($url) = @_;
+    return unless defined $url && !ref($url);
+    return $1 if $url =~ m{\Aspoton://soloist-pcm:([0-9a-f]{24})\z};
+    return;
+}
+
+sub _isDaemonProxyURL {
+    my ($url) = @_;
+    return 0 unless defined $url && !ref($url);
+    return 1 if $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)};
+    return 1 if $url =~ m{:\d+/plugins/SpotOn/soloist/stream/[0-9a-f]{24}\.pcm(?:\z|[?#])};
+    return 0;
+}
+
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
@@ -94,6 +109,7 @@ sub trackGain {
 # - 'son' for single-track Browse URLs (default)
 sub getFormatForURL {
     my ($class, $url) = @_;
+    return 'soc' if _soloistPcmToken($url);
     return 'soc' if $url && $url =~ m{spoton://connect-};
     return 'pcm' if $url && $url =~ m{:\d+/stream\b};
     return 'soc' if $url && $url =~ m{:\d+/(?:track|episode)/};  # Phase 28: Browse daemon HTTP URLs
@@ -111,6 +127,13 @@ sub formatOverride {
 
     my $client = $song->master;
     my $url = $song->track->url || '';
+
+    # Soloist exposes decoded PCM. Never let the normal per-player OGG
+    # passthrough preference relabel this logical stream as 'son'.
+    if (_soloistPcmToken($url)) {
+        $log->warn("[DIAG] formatOverride: mac=" . ($client ? $client->id : 'none') . " url=$url result=soc") if $prefs->get('diagnosticMode');
+        return 'soc';
+    }
 
     require Plugins::SpotOn::Unified::DaemonManager;
     my $fmt = Plugins::SpotOn::Unified::DaemonManager->resolvePassthroughForClient($client)
@@ -149,6 +172,11 @@ sub canDirectStream {
     my ($class, $client, $url) = @_;
 
     return 0 unless $client;
+
+    # The logical Soloist PCM URL must enter LMS's soc -> pcm conversion path.
+    # Returning its HTTP route here repeats the direct handoff that is silent
+    # on affected Squeezebox hardware.
+    return 0 if _soloistPcmToken($url);
 
     # COMPAT-02: per-player streamingMode=proxy (or per-player 'global' resolving
     # to a global streamingMode=proxy default) forces LMS-relayed streaming for
@@ -251,7 +279,7 @@ sub canDirectStream {
 sub requestString {
     my ($self, $client, $url, $post, $seekdata) = @_;
 
-    if ($url && $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)}) {
+    if (_isDaemonProxyURL($url)) {
         # Phase 28: also suppress Range for Browse daemon /track/ URLs (same reason as /stream).
         my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
         my $host = ($port == 80) ? $server : "$server:$port";
@@ -372,7 +400,7 @@ sub _skipUnavailable {
 sub canEnhanceHTTP {
     my ($self, $client, $url) = @_;
 
-    if ($url && $url =~ m{:\d+/(?:stream\b|(?:track|episode)/)}) {
+    if (_isDaemonProxyURL($url)) {
         # Phase 28: also return 0 for Browse daemon /track/ URLs (same reason as /stream).
         $log->warn("[DIAG] canEnhanceHTTP: url=$url result=0 reason=daemon_proxy_infinite_stream") if $prefs->get('diagnosticMode');
         main::INFOLOG && $log->is_info && $log->info(
@@ -396,6 +424,31 @@ sub new {
     my ($class, $args) = @_;
 
     my $url = $args->{url} || '';
+
+    # Translate only after LMS has selected SpotOn's soc -> pcm profile.
+    # Manager validates that the token belongs to the current session.
+    if (my $token = _soloistPcmToken($url)) {
+        require Plugins::SpotOn::Soloist::Manager;
+        my $path = Plugins::SpotOn::Soloist::Manager->resolveStreamPath($token, 'pcm');
+        unless ($path) {
+            main::INFOLOG && $log->is_info && $log->info(
+                "Soloist PCM URL has no active managed stream — returning undef"
+            );
+            return undef;
+        }
+
+        my $host = Slim::Utils::Network::serverAddr();
+        my $port = $serverPrefs->get('httpport');
+        return undef unless defined $host && !ref($host) && length($host)
+            && $host !~ /[\x00-\x20\x7f\/@]/;
+        return undef unless defined $port && !ref($port) && $port =~ /\A\d+\z/
+            && $port >= 1 && $port <= 65_535;
+
+        $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
+        my $httpUrl = "http://$host:$port$path";
+        $log->warn("[DIAG] soloist_pcm_proxy: http_url=$httpUrl") if $prefs->get('diagnosticMode');
+        $args = { %$args, url => $httpUrl };
+    }
 
     # (a) D-08: spoton:// (Browse/single-track) URL while Connect is active.
     # Unified daemon handles Browse/Connect mutual exclusion internally via D-09/D-10 ActiveMode mutex.

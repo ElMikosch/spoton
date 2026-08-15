@@ -231,6 +231,33 @@ my @unregistered;
         '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
         'manager reports the low-latency PCM path separately',
     );
+    is(
+        Plugins::SpotOn::Soloist::Manager->resolveStreamPath(
+            '0123456789abcdef01234567', 'pcm'
+        ),
+        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+        'active PCM token resolves to the registered route',
+    );
+    ok(
+        !Plugins::SpotOn::Soloist::Manager->resolveStreamPath(
+            'aaaaaaaaaaaaaaaaaaaaaaaa', 'pcm'
+        ),
+        'a stale or guessed PCM token is rejected',
+    );
+
+    $Local::Session::instances[-1]{args}{on_error}->(
+        'connect_failed', 'transient websocket failure'
+    );
+    is(
+        Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
+        'session_connect_failed',
+        'session callback reports a transient connection failure',
+    );
+    $Local::Session::instances[-1]{args}{on_status}->('connected');
+    ok(
+        !Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError},
+        'successful reconnect clears resolved session transport errors',
+    );
 
     my $player = Local::Player->new('00:11:22:33:44:55');
     ok(
@@ -274,10 +301,10 @@ my @unregistered;
         [
             'playlist',
             'play',
-            'http://192.0.2.10:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.pcm',
+            'spoton://soloist-pcm:0123456789abcdef01234567',
             'SpotOn Soloist Managed Test',
         ],
-        'PCM handoff uses only the LMS-generated tokenized URL',
+        'PCM handoff uses SpotOn logical protocol for LMS transcoding',
     );
     is(
         Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerStreamFormat},

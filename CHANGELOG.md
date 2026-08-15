@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-08-15
+
+### Fixed
+- **Soloist PCM playback on Squeezebox hardware** — routes managed PCM through SpotOn's existing logical `spoton://` protocol and `soc -> pcm` conversion profile instead of handing the raw HTTP endpoint directly to the player. This restores audible low-latency PCM playback while retaining FLAC as a fallback.
+- **Resolved WebSocket errors remained visible after reconnect** — a successful Soloist session connection now clears stale transient `session_*` errors from managed status.
+
+### Security
+- **Managed PCM route validation** — logical playback URLs resolve only while their exact 24-character token belongs to the currently running managed Soloist session; stale or guessed playlist URLs fail closed.
+
 ## [3.5.0] - 2026-08-15
 
 ### Added

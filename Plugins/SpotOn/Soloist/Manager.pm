@@ -165,18 +165,30 @@ sub attachPlayer {
         unless defined $id && !ref($id)
             && $id =~ /\A[0-9A-Za-z:._-]{1,128}\z/;
 
-    require Slim::Utils::Network;
-    my $host = Slim::Utils::Network::serverAddr();
-    my $port = $server_prefs->get('httpport');
-    return _command_fail('player_server_address', 'LMS server address is unavailable')
-        unless defined $host && !ref($host) && length($host)
-            && $host !~ /[\x00-\x20\x7f\/@]/;
-    return _command_fail('player_server_port', 'LMS HTTP port is unavailable')
-        unless defined $port && !ref($port) && $port =~ /\A\d+\z/
-            && $port >= 1 && $port <= 65_535;
+    my $url;
+    if ($format eq 'pcm') {
+        # Keep raw PCM behind SpotOn's logical protocol. This makes LMS select
+        # the existing soc -> pcm profile, matching original Connect playback.
+        # Direct .pcm HTTP playlist entries leave some Squeezeboxes silent.
+        return _command_fail('player_stream_token_invalid', 'Managed PCM stream token is unavailable')
+            unless defined $stream_token && !ref($stream_token)
+                && $stream_token =~ /\A[0-9a-f]{24}\z/;
+        $url = "spoton://soloist-pcm:$stream_token";
+    }
+    else {
+        require Slim::Utils::Network;
+        my $host = Slim::Utils::Network::serverAddr();
+        my $port = $server_prefs->get('httpport');
+        return _command_fail('player_server_address', 'LMS server address is unavailable')
+            unless defined $host && !ref($host) && length($host)
+                && $host !~ /[\x00-\x20\x7f\/@]/;
+        return _command_fail('player_server_port', 'LMS HTTP port is unavailable')
+            unless defined $port && !ref($port) && $port =~ /\A\d+\z/
+                && $port >= 1 && $port <= 65_535;
 
-    $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
-    my $url = "http://$host:$port$stream_paths->{$format}";
+        $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
+        $url = "http://$host:$port$stream_paths->{$format}";
+    }
 
     require Slim::Control::Request;
     my $request_created = eval {
@@ -198,6 +210,23 @@ sub attachPlayer {
     $last_error = undef
         if $last_error && ($last_error->{code} || '') =~ /\Aplayer_/;
     return 1;
+}
+
+# Resolve only a route belonging to the currently running managed session.
+# ProtocolHandler uses this to translate the logical Soloist PCM URL. Stale
+# playlist entries and guessed tokens must not recreate revoked stream routes.
+sub resolveStreamPath {
+    my ($class, $token, $format) = @_;
+    $format = 'pcm' unless defined $format;
+
+    return unless $state eq 'running';
+    return unless defined $token && !ref($token)
+        && $token =~ /\A[0-9a-f]{24}\z/;
+    return unless defined $stream_token && $token eq $stream_token;
+    return unless defined $format && !ref($format)
+        && $format =~ /\A(?:flac|pcm)\z/;
+
+    return $stream_paths->{$format};
 }
 
 sub detachPlayer {
@@ -319,7 +348,8 @@ sub _attach_running_runtime {
             my ($new_status) = @_;
             if ($new_status eq 'connected') {
                 $last_error = undef
-                    if $last_error && $last_error->{code} eq 'session_disconnected';
+                    if $last_error
+                        && ($last_error->{code} || '') =~ /\Asession_/;
             }
             elsif ($state eq 'running' && $new_status eq 'disconnected') {
                 $last_error = {
