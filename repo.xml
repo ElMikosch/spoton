@@ -21,7 +21,7 @@
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="0000000000000000000000000000000000000000"
+            sha="c378b6c3e133850942dd596aa74df8abba18da8b"
             url="https://github.com/ElMikosch/spoton/releases/download/v3.5.2/SpotOn-v3.5.2.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
