@@ -154,15 +154,27 @@ spoton soloistprobe action:managed_status
 
 Startup is asynchronous. `managed.state: running`, a connected session, and a
 non-empty `streamPath` prove that PulseAudio, Soloist, the local WebSocket, and
-the LMS HTTP route are attached. The route is random per start and is revoked
-before the runtime is stopped:
+the LMS HTTP route are attached. A second explicit diagnostic action can then
+replace one selected LMS player's current playlist with the tokenized live FLAC
+stream. The command must be addressed to that player:
+
+```text
+spoton soloistprobe action:managed_player_play player_id:<player-id>
+spoton soloistprobe action:managed_player_stop
+```
+
+Status exposes `playerAttached`, `playerId`, and the LMS-generated
+`playerStreamUrl`. No caller-supplied URL or host is accepted. The route is
+random per start and is revoked before the runtime is stopped:
 
 ```text
 spoton soloistprobe action:managed_stop
 ```
 
-These actions require SpotOn diagnostic mode. They do not change any player's
-backend selection or stop the existing unified SpotOn helper.
+These actions require SpotOn diagnostic mode. They do not change any persistent
+player backend preference or stop the existing unified SpotOn helper. The play
+action does replace playback on the explicitly selected player, while every
+other player and SpotOn Browse playback remain untouched.
 
 ## Headless Linux container path
 

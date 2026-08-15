@@ -46,15 +46,20 @@ BEGIN {
     package Plugins::SpotOn::Soloist::Manager;
     our $state = 'stopped';
     our $init_calls = 0;
+    our $player_id;
     sub init { $init_calls++; 1 }
     sub start { $state = 'starting'; 1 }
-    sub stop { $state = 'stopped'; 1 }
-    sub shutdown { $state = 'stopped'; 1 }
+    sub stop { $state = 'stopped'; undef $player_id; 1 }
+    sub shutdown { $state = 'stopped'; undef $player_id; 1 }
+    sub attachPlayer { $player_id = $_[1]->id; 1 }
+    sub detachPlayer { undef $player_id; 1 }
     sub statusSnapshot {
         return {
-            state       => $state,
-            apiKeyReady => 1,
-            streamPath  => undef,
+            state          => $state,
+            apiKeyReady    => 1,
+            streamPath     => undef,
+            playerAttached => $player_id ? 1 : 0,
+            playerId       => $player_id,
         };
     }
     $INC{'Plugins/SpotOn/Soloist/Manager.pm'} = 1;
@@ -126,10 +131,24 @@ use Plugins::SpotOn::Soloist::Probe;
     sub new { bless { params => $_[1] || {}, results => {} }, $_[0] }
     sub isNotQuery { $_[0]{not_query} || 0 }
     sub getParam { $_[0]{params}{ $_[1] } }
+    sub client { $_[0]{params}{_client} }
     sub addResult { $_[0]{results}{ $_[1] } = $_[2] }
     sub setStatusDone { $_[0]{status} = 'done' }
     sub setStatusBadParams { $_[0]{status} = 'bad_params' }
     sub setStatusBadDispatch { $_[0]{status} = 'bad_dispatch' }
+}
+
+{
+    package Slim::Player::Client;
+    our %clients;
+    sub getClient { $clients{ $_[0] } }
+    $INC{'Slim/Player/Client.pm'} = 1;
+}
+
+{
+    package Local::Player;
+    sub new { bless { id => $_[1] }, $_[0] }
+    sub id { $_[0]{id} }
 }
 
 my $cache_dir = tempdir(CLEANUP => 1);
@@ -201,6 +220,33 @@ $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
     is($managed->{status}, 'done', 'managed diagnostic start is accepted');
     is($managed->{results}{managed}{state}, 'starting', 'managed status is returned separately');
     ok($Plugins::SpotOn::Soloist::Manager::init_calls, 'managed start initializes HTTP stream surface');
+
+    my $missing_player = Local::Request->new({ action => 'managed_player_play' });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($missing_player);
+    is($missing_player->{status}, 'bad_params', 'managed player action requires an LMS client');
+    is($missing_player->{results}{error}, 'player_required', 'missing player has stable error');
+
+    my $player = Local::Player->new('00:11:22:33:44:55');
+    $Slim::Player::Client::clients{$player->id} = $player;
+    my $player_play = Local::Request->new({
+        action    => 'managed_player_play',
+        player_id => $player->id,
+    });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($player_play);
+    is($player_play->{status}, 'done', 'managed stream can be sent to an explicit LMS player');
+    is(
+        $player_play->{results}{managed}{playerId},
+        '00:11:22:33:44:55',
+        'managed player status returns selected player ID',
+    );
+
+    my $player_stop = Local::Request->new({ action => 'managed_player_stop' });
+    Plugins::SpotOn::Soloist::Probe::_cli_handler($player_stop);
+    is($player_stop->{status}, 'done', 'managed player detaches explicitly');
+    ok(
+        !$player_stop->{results}{managed}{playerAttached},
+        'managed player stop clears attachment state',
+    );
 
     my $stop = Local::Request->new({ action => 'stop' });
     Plugins::SpotOn::Soloist::Probe::_cli_handler($stop);

@@ -39,6 +39,26 @@ BEGIN {
     sub setTimer { push @set, [@_] }
     sub killTimers { push @killed, [@_] }
     $INC{'Slim/Utils/Timers.pm'} = 1;
+
+    package Slim::Utils::Network;
+    sub serverAddr { '192.0.2.10' }
+    $INC{'Slim/Utils/Network.pm'} = 1;
+
+    package Slim::Control::Request;
+    our @requests;
+    sub new {
+        my ($class, $client_id, $command) = @_;
+        my $self = bless {
+            client_id => $client_id,
+            command   => [@$command],
+            executed  => 0,
+        }, $class;
+        push @requests, $self;
+        return $self;
+    }
+    sub source { $_[0]{source} = $_[1] }
+    sub execute { $_[0]{executed} = 1; 1 }
+    $INC{'Slim/Control/Request.pm'} = 1;
 }
 
 use lib "$Bin/..";
@@ -103,8 +123,16 @@ use Plugins::SpotOn::Soloist::StreamServer;
     sub stop { 1 }
 }
 
+{
+    package Local::Player;
+    sub new { bless { id => $_[1] }, $_[0] }
+    sub id { $_[0]{id} }
+    sub master { $_[0] }
+}
+
 my $root = tempdir(CLEANUP => 1);
 $Slim::Utils::Prefs::values{server}{cachedir} = $root;
+$Slim::Utils::Prefs::values{server}{httpport} = 9000;
 $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
 
 my $base = catdir($root, 'spoton', 'soloist-managed');
@@ -183,6 +211,39 @@ my @unregistered;
     );
     is(scalar @registered, 1, 'runtime is registered once with stream server');
     isa_ok($registered[0][1]->(), 'Local::Pipeline', 'stream factory delegates to running runtime');
+
+    my $player = Local::Player->new('00:11:22:33:44:55');
+    ok(
+        Plugins::SpotOn::Soloist::Manager->attachPlayer($player),
+        'explicit diagnostic action attaches one LMS player',
+    );
+    my $play_request = $Slim::Control::Request::requests[-1];
+    is($play_request->{client_id}, '00:11:22:33:44:55', 'player request targets the selected LMS player');
+    is_deeply(
+        $play_request->{command},
+        [
+            'playlist',
+            'play',
+            'http://192.0.2.10:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.flac',
+            'SpotOn Soloist Managed Test',
+        ],
+        'player receives only the LMS-generated tokenized FLAC URL',
+    );
+    ok($play_request->{executed}, 'player play request is executed');
+    my $player_status = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
+    ok($player_status->{playerAttached}, 'status exposes diagnostic player attachment');
+    is($player_status->{playerId}, '00:11:22:33:44:55', 'status identifies attached player');
+
+    ok(Plugins::SpotOn::Soloist::Manager->detachPlayer(), 'diagnostic player detaches explicitly');
+    is_deeply(
+        $Slim::Control::Request::requests[-1]{command},
+        ['stop'],
+        'detach issues a bounded stop to the attached player',
+    );
+    ok(
+        !Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerAttached},
+        'detach clears player attachment status',
+    );
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops explicitly');
     is($Local::Runtime::instances[-1]{stopped}, 1, 'stop terminates managed runtime');

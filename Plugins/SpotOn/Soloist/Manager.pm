@@ -5,6 +5,7 @@ use warnings;
 
 use File::Path qw(make_path);
 use File::Spec::Functions qw(catdir catfile);
+use Scalar::Util qw(blessed);
 use Time::HiRes ();
 
 use constant START_POLL_INTERVAL  => 0.2;
@@ -16,6 +17,8 @@ my $runtime;
 my $session;
 my $stream_token;
 my $stream_path;
+my $player_id;
+my $player_stream_url;
 my $state = 'stopped';
 my $last_error;
 my $last_event_type;
@@ -126,7 +129,86 @@ sub stop {
     undef $runtime;
     undef $stream_token;
     undef $stream_path;
+    undef $player_id;
+    undef $player_stream_url;
     $state = 'stopped';
+    return 1;
+}
+
+sub attachPlayer {
+    my ($class, $client) = @_;
+    _ensure_lms();
+
+    return _command_fail('player_runtime_not_ready', 'Managed runtime is not running')
+        unless $state eq 'running' && $stream_path;
+    return _command_fail('player_required', 'An LMS player is required')
+        unless blessed($client) && $client->can('id');
+
+    if ($client->can('master')) {
+        my $master = eval { $client->master() };
+        $client = $master if $master;
+    }
+    my $id = eval { $client->id() };
+    return _command_fail('player_invalid', 'Unable to identify LMS player')
+        unless defined $id && !ref($id)
+            && $id =~ /\A[0-9A-Za-z:._-]{1,128}\z/;
+
+    require Slim::Utils::Network;
+    my $host = Slim::Utils::Network::serverAddr();
+    my $port = $server_prefs->get('httpport');
+    return _command_fail('player_server_address', 'LMS server address is unavailable')
+        unless defined $host && !ref($host) && length($host)
+            && $host !~ /[\x00-\x20\x7f\/@]/;
+    return _command_fail('player_server_port', 'LMS HTTP port is unavailable')
+        unless defined $port && !ref($port) && $port =~ /\A\d+\z/
+            && $port >= 1 && $port <= 65_535;
+
+    $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
+    my $url = "http://$host:$port$stream_path";
+
+    require Slim::Control::Request;
+    my $request_created = eval {
+        my $request = Slim::Control::Request->new(
+            $id,
+            ['playlist', 'play', $url, 'SpotOn Soloist Managed Test'],
+        );
+        die 'Unable to create LMS player request' unless $request;
+        $request->source(__PACKAGE__) if $request->can('source');
+        $request->execute();
+        1;
+    };
+    return _command_fail('player_play_failed', $@ || 'Unable to start LMS player')
+        unless $request_created;
+
+    $player_id = $id;
+    $player_stream_url = $url;
+    $last_error = undef
+        if $last_error && ($last_error->{code} || '') =~ /\Aplayer_/;
+    return 1;
+}
+
+sub detachPlayer {
+    my ($class) = @_;
+    _ensure_lms();
+    return 1 unless $player_id;
+
+    my $id = $player_id;
+    undef $player_id;
+    undef $player_stream_url;
+
+    require Slim::Control::Request;
+    my $request_created = eval {
+        my $request = Slim::Control::Request->new($id, ['stop']);
+        die 'Unable to create LMS player stop request' unless $request;
+        $request->source(__PACKAGE__) if $request->can('source');
+        $request->execute();
+        1;
+    };
+    return _command_fail('player_stop_failed', $@ || 'Unable to stop LMS player')
+        unless $request_created;
+
+    $last_error = undef
+        if $last_error && ($last_error->{code} || '') =~ /\Aplayer_/;
     return 1;
 }
 
@@ -152,6 +234,9 @@ sub statusSnapshot {
         sessionStatus => $session ? $session->status() : 'idle',
         streamToken   => $stream_token,
         streamPath    => $stream_path,
+        playerAttached => $player_id ? 1 : 0,
+        playerId      => $player_id,
+        playerStreamUrl => $player_stream_url,
         lastEventType => $last_event_type,
         lastUpdate    => $last_update,
     };
@@ -260,7 +345,18 @@ sub _fail {
     undef $runtime;
     undef $stream_token;
     undef $stream_path;
+    undef $player_id;
+    undef $player_stream_url;
     $state = 'failed';
+    return 0;
+}
+
+sub _command_fail {
+    my ($code, $message) = @_;
+    $last_error = {
+        code    => $code,
+        message => _clean_message($message),
+    };
     return 0;
 }
 

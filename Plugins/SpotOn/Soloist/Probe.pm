@@ -205,6 +205,52 @@ sub _cli_handler {
     elsif ($action eq 'managed_status') {
         require Plugins::SpotOn::Soloist::Manager;
     }
+    elsif ($action eq 'managed_player_play') {
+        require Plugins::SpotOn::Soloist::Manager;
+        my $client = eval { $request->client() };
+        if (!$client && defined $request->getParam('player_id')) {
+            my $player_id = $request->getParam('player_id');
+            unless (!ref($player_id)
+                && $player_id =~ /\A[0-9A-Za-z:._-]{1,128}\z/) {
+                $request->addResult('error', 'player_invalid');
+                $request->setStatusBadParams();
+                return;
+            }
+            require Slim::Player::Client;
+            $client = Slim::Player::Client::getClient($player_id);
+            unless ($client) {
+                $request->addResult('error', 'player_not_found');
+                $request->setStatusBadParams();
+                return;
+            }
+        }
+        unless ($client) {
+            $request->addResult('error', 'player_required');
+            $request->setStatusBadParams();
+            return;
+        }
+        unless (Plugins::SpotOn::Soloist::Manager->attachPlayer($client)) {
+            $request->addResult('error', 'managed_player_play_failed');
+            $request->addResult(
+                'managed',
+                Plugins::SpotOn::Soloist::Manager->statusSnapshot(),
+            );
+            $request->setStatusBadParams();
+            return;
+        }
+    }
+    elsif ($action eq 'managed_player_stop') {
+        require Plugins::SpotOn::Soloist::Manager;
+        unless (Plugins::SpotOn::Soloist::Manager->detachPlayer()) {
+            $request->addResult('error', 'managed_player_stop_failed');
+            $request->addResult(
+                'managed',
+                Plugins::SpotOn::Soloist::Manager->statusSnapshot(),
+            );
+            $request->setStatusBadParams();
+            return;
+        }
+    }
     elsif ($action ne 'status') {
         unless ($CONTROL_ACTIONS{$action}) {
             $request->addResult('error', 'unsupported_action');
