@@ -69,6 +69,7 @@ my %_translatedConnectUrls;
 # Per-client retry state for transient Browse daemon 404s (audio-key throttle)
 use constant MAX_BROWSE_404_RETRIES => 3;
 use constant BROWSE_404_RETRY_DELAY => 2;   # seconds between retries
+use constant SOLOIST_PCM_BUFFER_THRESHOLD_KB => 20;
 my %_browse404Retries;  # "$clientId|$trackUrl" => attempt_count
 
 sub _soloistPcmToken {
@@ -89,6 +90,44 @@ sub _isDaemonProxyURL {
 sub contentType { 'son' }
 
 sub isRemote    { 1 }
+
+# LMS normally derives the input-buffer threshold for remote streams from the
+# reported bitrate and its global bufferSecs preference.  Raw 44.1 kHz stereo
+# PCM therefore reaches the firmware's 255 KB ceiling, which adds roughly
+# 1.45 seconds of control and track-change latency to a live Soloist stream.
+# One 32 KB HTTP chunk already exceeds 20 KB and represents about 186 ms of
+# audio, so use LMS's own conservative fallback threshold for Soloist PCM.
+#
+# Defining this hook affects every URL handled by this class.  Preserve LMS's
+# bitrate-based calculation for original SpotOn Browse/Connect streams so the
+# existing OGG/PCM behaviour is unchanged.
+sub bufferThreshold {
+    my ($class, $client, $url) = @_;
+
+    if (_soloistPcmToken($url)
+        || (defined $url && !ref($url)
+            && $url =~ m{/plugins/SpotOn/soloist/stream/[0-9a-f]{24}\.(?:pcm|soc)(?:\z|[?#])})) {
+        return SOLOIST_PCM_BUFFER_THRESHOLD_KB;
+    }
+
+    my $bitrate;
+    if ($client && blessed($client)) {
+        for my $accessor (qw(streamingSong playingSong)) {
+            my $song = eval { $client->$accessor() };
+            next unless blessed($song) && $song->can('streambitrate');
+            $bitrate = eval { $song->streambitrate() };
+            last if defined $bitrate && !ref($bitrate) && $bitrate =~ /\A\d+(?:\.\d+)?\z/ && $bitrate > 0;
+            undef $bitrate;
+        }
+    }
+
+    # This is LMS's pre-bitrate fallback for remote streams.
+    return 20 unless defined $bitrate;
+
+    my $bufferSecs = $serverPrefs->get('bufferSecs') || 3;
+    my $threshold = (int($bitrate / 8) * $bufferSecs) / 1000;
+    return $threshold > 255 ? 255 : $threshold;
+}
 
 sub trackGain {
     my ($class, $client, $url) = @_;

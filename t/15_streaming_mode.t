@@ -427,6 +427,15 @@ require_ok('Plugins::SpotOn::ProtocolHandler') or BAIL_OUT("Failed to load Proto
     package MockSyncedClient;
     our @ISA = qw(MockClient);
     sub isSynced { 1 }
+
+    package MockBufferedSong;
+    sub new { bless { bitrate => $_[1] }, $_[0] }
+    sub streambitrate { $_[0]{bitrate} }
+
+    package MockBufferedClient;
+    sub new { bless { bitrate => $_[1] }, $_[0] }
+    sub streamingSong { MockBufferedSong->new($_[0]{bitrate}) }
+    sub playingSong { undef }
 }
 
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
@@ -463,6 +472,40 @@ subtest 'Soloist PCM uses the existing soc transcoding path through a direct pip
         client => $client,
     });
     ok(!defined $stale, 'stale Soloist PCM token fails closed');
+};
+
+subtest 'Soloist PCM starts with a low live-stream buffer without changing original SpotOn thresholds' => sub {
+    my $client = MockClient->new('soloist-buffer');
+    is(
+        Plugins::SpotOn::ProtocolHandler->bufferThreshold(
+            $client,
+            'spoton://soloist-pcm:0123456789abcdef01234567',
+        ),
+        20,
+        'logical Soloist PCM uses LMS conservative 20 KB startup threshold',
+    );
+    is(
+        Plugins::SpotOn::ProtocolHandler->bufferThreshold(
+            $client,
+            'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
+        ),
+        20,
+        'direct Soloist PCM route uses the same 20 KB threshold',
+    );
+
+    my $oggClient = MockBufferedClient->new(320_000);
+    is(
+        Plugins::SpotOn::ProtocolHandler->bufferThreshold($oggClient, 'spoton://track:ABC123'),
+        120,
+        'original 320 kbit/s SpotOn stream retains LMS three-second threshold',
+    );
+
+    my $pcmClient = MockBufferedClient->new(44_100 * 16 * 2);
+    is(
+        Plugins::SpotOn::ProtocolHandler->bufferThreshold($pcmClient, 'spoton://connect-existing'),
+        255,
+        'original PCM SpotOn stream retains LMS 255 KB ceiling',
+    );
 };
 
 subtest 'Soloist PCM keeps the direct capture pipe for sync groups' => sub {

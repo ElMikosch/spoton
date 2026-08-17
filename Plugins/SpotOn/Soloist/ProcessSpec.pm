@@ -18,9 +18,12 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     initial_volume
     pipewire_device
     pulse_cookie
+    pulse_latency_ms
     pulse_server
     verbose
 );
+
+use constant DEFAULT_PULSE_LATENCY_MS => 100;
 
 # Build the Soloist daemon invocation as an argv array.  There is deliberately
 # no shell-form command string: device names and paths must remain data, never
@@ -45,14 +48,26 @@ sub build_process_spec {
     my $has_pulse_cookie = exists $args{pulse_cookie};
     croak 'Soloist pulse_server and pulse_cookie must be provided together'
         if $has_pulse_server != $has_pulse_cookie;
+    croak 'Soloist pulse_latency_ms requires pulse_server and pulse_cookie'
+        if exists $args{pulse_latency_ms} && !$has_pulse_server;
 
     my %env;
     if ($has_pulse_server) {
+        my $latency = exists $args{pulse_latency_ms}
+            ? _integer($args{pulse_latency_ms}, 'pulse_latency_ms')
+            : DEFAULT_PULSE_LATENCY_MS;
+        croak 'Soloist pulse_latency_ms must be between 20 and 2000'
+            if $latency < 20 || $latency > 2_000;
+
         $env{PULSE_SERVER} = _pulse_server($args{pulse_server});
         $env{PULSE_COOKIE} = _absolute_path(
             $args{pulse_cookie},
             'pulse_cookie',
         );
+        # libpulse applies this in pa_stream's buffer-attribute patching.  It
+        # keeps Soloist's playback queue aligned with our 100 ms monitor
+        # capture instead of accepting the observed one-second default.
+        $env{PULSE_LATENCY_MSEC} = "$latency";
     }
 
     my @argv = (

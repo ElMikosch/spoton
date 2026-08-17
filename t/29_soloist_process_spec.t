@@ -49,10 +49,11 @@ is_deeply(
 is_deeply(
     $spec->{env},
     {
-        PULSE_SERVER => 'unix:/var/cache/lyrion/spoton/pulse/native',
-        PULSE_COOKIE => '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
+        PULSE_SERVER       => 'unix:/var/cache/lyrion/spoton/pulse/native',
+        PULSE_COOKIE       => '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
+        PULSE_LATENCY_MSEC => '100',
     },
-    'private Pulse server and cookie are passed through the process environment',
+    'private Pulse connection and low-latency playback request use the process environment',
 );
 ok(
     !(grep {
@@ -97,6 +98,22 @@ is_deeply(
     'optional daemon flags are omitted by default',
 );
 is_deeply($minimal->{env}, {}, 'Pulse environment is omitted by default');
+
+my $custom_latency = build_process_spec(
+    binary           => 'soloist',
+    device_name      => 'SpotOn Probe',
+    api_key          => 'key',
+    data_dir         => '/data',
+    cache_dir        => '/cache',
+    pulse_server     => 'unix:/run/spoton/native',
+    pulse_cookie     => '/run/spoton/config/pulse/cookie',
+    pulse_latency_ms => 60,
+);
+is(
+    $custom_latency->{env}{PULSE_LATENCY_MSEC},
+    '60',
+    'explicit Pulse playback latency is validated and exported',
+);
 
 my $unlimited = build_process_spec(
     binary      => 'soloist',
@@ -164,6 +181,34 @@ dies_like(
     ) },
     qr/pulse_cookie must be an absolute path/,
     'relative Pulse cookie paths are rejected',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary           => 'soloist',
+        device_name      => 'Probe',
+        api_key          => 'key',
+        data_dir         => '/data',
+        cache_dir        => '/cache',
+        pulse_latency_ms => 100,
+    ) },
+    qr/pulse_latency_ms requires pulse_server and pulse_cookie/,
+    'Pulse latency cannot be configured without a private Pulse connection',
+);
+
+dies_like(
+    sub { build_process_spec(
+        binary           => 'soloist',
+        device_name      => 'Probe',
+        api_key          => 'key',
+        data_dir         => '/data',
+        cache_dir        => '/cache',
+        pulse_server     => 'unix:/run/spoton/native',
+        pulse_cookie     => '/run/spoton/config/pulse/cookie',
+        pulse_latency_ms => 19,
+    ) },
+    qr/pulse_latency_ms must be between 20 and 2000/,
+    'unsafe Pulse playback latency is rejected',
 );
 
 dies_like(

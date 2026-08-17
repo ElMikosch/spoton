@@ -122,10 +122,11 @@ is_deeply(
 is_deeply(
     $spawns[1]{spec}{env},
     {
-        PULSE_SERVER => 'unix:' . catfile($runtime_dir, 'native'),
-        PULSE_COOKIE => $cookie,
+        PULSE_SERVER       => 'unix:' . catfile($runtime_dir, 'native'),
+        PULSE_COOKIE       => $cookie,
+        PULSE_LATENCY_MSEC => '100',
     },
-    'Soloist receives the private Pulse connection pair',
+    'Soloist receives the private Pulse connection and 100 ms playback request',
 );
 
 my $starting = $runtime->status_snapshot();

@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.5] - 2026-08-17
+
+### Changed
+- **Measured low-latency PulseAudio request for Soloist** — the managed Soloist process now exports `PULSE_LATENCY_MSEC=100`. PulseAudio applies this directly to playback stream buffer attributes, reducing the measured Soloist sink-input queue from roughly 1.02 seconds toward 100 ms without changing the private null sink, capture process, or original SpotOn backend.
+- **20 KB Soloist PCM startup threshold** — LMS no longer applies its bitrate-derived 255 KB remote-stream ceiling to managed Soloist PCM. The first 32 KB live chunk now exceeds the startup threshold, saving roughly 1.3 seconds at 44.1 kHz/16-bit/stereo.
+
+### Fixed
+- **Original SpotOn buffering remains unchanged** — Browse and legacy Connect streams retain LMS's normal bitrate-derived buffering, including OGG passthrough and PCM fallback; the lower threshold is restricted to tokenized Soloist PCM URLs.
+
 ## [3.5.4] - 2026-08-17
 
 ### Changed
