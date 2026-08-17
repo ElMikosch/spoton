@@ -118,6 +118,8 @@ sub initPlugin {
         cacheSchemaVersion   => 0,     # D-02: migration marker — triggers cache clear on version bump
         diagnosticMode       => 0,     # #3: diagnostic logging toggle, default off
         streamingMode        => 'direct', # COMPAT-01: global streaming mode default (direct|proxy); per-player override lives in same-name client pref (GH #96)
+        soloistEnabled       => 0,     # official Connect backend; Browse remains on the Unified daemon
+        soloistConfigured    => 0,     # one-time migration marker for existing API-key installs
         recentSearches => [],
     });
 
@@ -267,9 +269,9 @@ sub initPlugin {
                                                                 [0, 1, 1, \&_recentSearchesCLI]
     );
 
-    # Experimental, diagnostics-only Soloist attachment. Registration is
-    # inert until explicitly started through the LMS CLI while diagnosticMode
-    # is enabled; the existing librespot daemon path remains untouched.
+    # Register Soloist diagnostics and managed-control dispatches.  The
+    # per-player manager itself starts from _startUnifiedDaemons only after the
+    # LMS player list and existing API-key migration state are available.
     require Plugins::SpotOn::Soloist::Probe;
     Plugins::SpotOn::Soloist::Probe->init();
 }
@@ -364,6 +366,11 @@ sub _refreshAllTokens {
 sub _startUnifiedDaemons {
     require Plugins::SpotOn::Connect;
     Plugins::SpotOn::Connect->initConnectHandlers();
+    # Initialize Soloist first: existing API-key installations are migrated to
+    # the official Connect backend before Unified daemons evaluate whether they
+    # should advertise their legacy Connect devices. Browse remains enabled.
+    require Plugins::SpotOn::Soloist::Manager;
+    Plugins::SpotOn::Soloist::Manager->init();
     require Plugins::SpotOn::Unified::DaemonManager;
     Plugins::SpotOn::Unified::DaemonManager->init();
 }

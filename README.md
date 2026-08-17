@@ -26,7 +26,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 - **Like / Unlike** — Save or remove tracks from your Liked Songs directly from any track context menu. In Material Skin, open the track's "..." menu → "More" → "Like / Unlike" — the plugin checks Spotify for the current state and shows either "Like" (to save) or "Unlike" (to remove). In Classic Skin, the same flow is available via the Track Info panel. After the action, a popup confirms "Liked!" or "Removed" and the menu navigates back automatically.
 - **Streaming** — Per-player format selection (OGG passthrough, FLAC, PCM, MP3) with 96/160/320 kbps bitrate and volume normalization
 - **Spotify Connect** — Full bidirectional control: appear as a Connect device, control from any Spotify client, state syncs both ways
-- **Soloist backend (experimental)** — Uses Spotify's official Soloist runtime, captures its audio through a private PulseAudio sink, and streams it to a selected LMS player. The existing Browse playback and librespot-based Connect implementation remain available.
+- **Official Soloist Connect backend** — Publishes every standalone LMS player (or sync-group master) as its own Spotify Connect device, captures official Soloist audio through an isolated PulseAudio sink, and keeps track metadata and transport state synchronized with the Squeezebox display. Existing SpotOn Browse/library playback remains available.
 - **Made For You** — Daily Mixes, Discover Weekly, Daylist, Release Radar with locale-aware sorting
 - **Don't Stop The Music** — Automatic queue extension with multi-artist search, diversity pool from your top tracks, and anti-bubble deduplication
 - **Material Skin Integration** — Menu icons for all navigation entries, fallback artwork for grid/cover-view compatibility, and optional home-screen rows (Recently Played, Top Tracks, Made For You, Main Menu, Playlists)
@@ -36,7 +36,7 @@ SpotOn is not a fork or a competitor. It is a from-scratch rewrite designed arou
 
 - LMS 8.0+ (LMS 9.x recommended)
 - Spotify Premium account
-- For the experimental Soloist backend on Linux: the official `soloist` binary, PulseAudio (`pulseaudio`, `pactl`, `pacat`/`parec`), and `ffmpeg` or `flac`. These are host dependencies and are not bundled in the LMS plugin ZIP.
+- For the Soloist backend on Linux: LMS 9.1+, the official `soloist` binary, PulseAudio (`pulseaudio`, `pactl`, `pacat`/`parec`), and `ffmpeg`. These are host dependencies and are not bundled in the LMS plugin ZIP.
 - Spotify Developer App — **recommended**. SpotOn authenticates via PKCE OAuth (browser-based login). Creating your own Client ID takes a couple of minutes at [developer.spotify.com](https://developer.spotify.com/dashboard) — the setup wizard in **SpotOn Settings** walks you through it, including the redirect URI to register. If you don't want to create a Developer App, SpotOn ships a bundled fallback Client ID — just leave the Client ID field empty in Settings and authenticate via the copy-paste flow.
 - Supported platforms: x86_64 Linux, i386 Linux, aarch64 Linux (Pi 4+), armhf Linux (Pi 2/3), arm Linux, x86_64 Windows, macOS (Universal Binary: Intel + Apple Silicon). On macOS, if you download the binary manually (not via LMS plugin manager), you may need to run `xattr -d com.apple.quarantine /path/to/spoton` in Terminal before first use.
 

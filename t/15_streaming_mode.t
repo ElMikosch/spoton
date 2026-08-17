@@ -508,6 +508,49 @@ subtest 'Soloist PCM starts with a stable low-latency buffer without changing or
     );
 };
 
+subtest 'Soloist token metadata follows the live WebSocket item' => sub {
+    require Plugins::SpotOn::Soloist::Manager;
+    no warnings 'redefine';
+    local *Plugins::SpotOn::Soloist::Manager::metadataForToken = sub {
+        my ($class, $token) = @_;
+        return unless $token eq '0123456789abcdef01234567';
+        return {
+            title    => 'Cosmic Love',
+            artist   => 'Florence + The Machine',
+            album    => 'Lungs',
+            duration => 255.906,
+            cover    => 'https://example.test/cosmic.jpg',
+            icon     => 'https://example.test/cosmic.jpg',
+            type     => 'PCM, Spotify Connect (Soloist)',
+        };
+    };
+
+    my $url = 'spoton://soloist-pcm:0123456789abcdef01234567';
+    my $meta = Plugins::SpotOn::ProtocolHandler->getMetadataFor(undef, $url);
+    is($meta->{title}, 'Cosmic Love', 'live title is returned for the stream token');
+    is($meta->{artist}, 'Florence + The Machine', 'live artist is returned for the stream token');
+    is($meta->{album}, 'Lungs', 'live album is returned for the stream token');
+    is(
+        Plugins::SpotOn::ProtocolHandler->getIcon($url),
+        'https://example.test/cosmic.jpg',
+        'live cover is returned for the stream token',
+    );
+
+    my $direct_url =
+        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/'
+        . '0123456789abcdef01234567.soc';
+    is(
+        Plugins::SpotOn::ProtocolHandler->getMetadataFor(undef, $direct_url)->{title},
+        'Cosmic Love',
+        'direct-stream HTTP URL resolves the same live title',
+    );
+    is(
+        Plugins::SpotOn::ProtocolHandler->getIcon($direct_url),
+        'https://example.test/cosmic.jpg',
+        'direct-stream HTTP URL resolves the same live cover',
+    );
+};
+
 subtest 'Soloist PCM keeps the direct capture pipe for sync groups' => sub {
     my $url = 'spoton://soloist-pcm:0123456789abcdef01234567';
     my $client = bless \(my $id = 'soloist-synced'), 'MockSyncedClient';

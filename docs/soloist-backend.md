@@ -1,10 +1,11 @@
-# Experimental Spotify Soloist backend
+# Spotify Soloist backend
 
-SpotOn currently uses its bundled librespot helper for both Spotify Connect and
-LMS-managed playback. Spotify Soloist is an official Spotify Connect client,
-but it is not a drop-in replacement for that helper: Soloist renders to a local
-PipeWire or PulseAudio device, while SpotOn's helper exposes an HTTP audio stream
-that LMS can buffer and distribute to Squeezebox players.
+Spotify Soloist is the official Spotify Connect client used by this optional
+Linux backend. It is not a drop-in replacement for SpotOn's bundled helper:
+Soloist renders to a local PulseAudio device, so SpotOn creates an isolated null
+sink per LMS player (or sync group), captures its monitor, and distributes the
+PCM stream to the matching Squeezebox. The bundled helper remains responsible
+for Browse/library playback.
 
 The first integration seam lives in `Plugins/SpotOn/Soloist/`. Its protocol and
 state layers deliberately have no LMS runtime dependency:
@@ -32,7 +33,7 @@ state layers deliberately have no LMS runtime dependency:
   private Unix socket, `parec` monitor capture as 44.1 kHz stereo PCM, and an
   direct low-latency PCM output plus an `ffmpeg` FLAC encoder for the stable
   fallback stream.
-- `Runtime.pm` is the first opt-in lifecycle implementation. It creates and
+- `Runtime.pm` implements the supervised per-device lifecycle. It creates and
   validates private runtime/data/cache/log directories and a 256-byte Pulse
   cookie, starts PulseAudio before Soloist, waits asynchronously for their
   readiness markers, rejects non-loopback endpoints, redacts the API key from
@@ -48,23 +49,27 @@ state layers deliberately have no LMS runtime dependency:
   bounded nonblocking reads and socket-drain backpressure rather than buffering
   an unbounded live stream in the LMS process, supports HTTP/1.0 close-delimited
   and HTTP/1.1 chunked clients, and destroys the per-connection pipeline on EOF,
-  replacement, timeout, or socket failure. Its PCM mode also mirrors the
-  original SpotOn Connect relay's two-second, timer-driven real-time pacing and
+  replacement, timeout, or socket failure. Its PCM mode also provides
+  timer-driven real-time pacing and
   `audio/L16;rate=44100;channels=2` response so hardware input buffers cannot
   accumulate an arbitrarily long compressed-audio backlog.
-- `Manager.pm` now joins the managed runtime, WebSocket session, and registered
-  stream route behind explicit diagnostic CLI actions. It reads the API key
-  only from a fixed, owner-only cache file, validates the required executables,
-  polls startup and health through LMS timers, and revokes the stream before
-  stopping its session and child processes. Nothing starts at plugin load.
+- `PlayerRuntime.pm` owns one isolated PulseAudio/Soloist process pair, local
+  WebSocket session, stream token, and LMS player attachment.
+- `Manager.pm` discovers LMS players and sync masters, staggers process startup,
+  keeps one `PlayerRuntime` per desired Spotify device, and adapts Soloist state
+  into LMS transport and metadata updates. It reads the API key only from a
+  fixed owner-only cache file, validates required executables, and defers
+  topology/name changes while a Spotify session is active.
 
-SpotOn registers the diagnostics-only probe but does not start a Soloist
-connection automatically. Existing Connect and browse playback therefore remain
-unchanged while the Soloist path is developed and tested incrementally.
+When the protected API-key file exists, SpotOn enables and starts the managed
+Soloist backend automatically after the LMS player list is available. Each
+standalone player appears separately in Spotify; a synchronized set appears once
+under its master with the localized static `(Group)` suffix. The diagnostic CLI
+remains available for preflight and status inspection.
 
 The direct WebSocket transport requires LMS 9.1 or newer, where
 `Slim::Networking::SimpleWS` became part of LMS. This requirement applies only
-to the experimental Soloist backend; the rest of SpotOn keeps its existing LMS
+to the Soloist backend; the rest of SpotOn keeps its existing LMS
 compatibility. A `soloist ctl` subprocess fallback for older LMS versions can be
 added later if real installations require it.
 
@@ -138,10 +143,10 @@ Soloist:
 spoton soloistprobe action:stop
 ```
 
-### Managed diagnostic runtime
+### Managed runtime diagnostics
 
-The first end-to-end LMS integration remains diagnostic-only and must be
-started explicitly. Its status reports a fixed `apiKeyFile` path:
+The status response reports the fixed `apiKeyFile` path and a `players` map for
+all managed runtimes:
 
 ```text
 spoton soloistprobe action:managed_status
@@ -157,13 +162,12 @@ spoton soloistprobe action:managed_start
 spoton soloistprobe action:managed_status
 ```
 
-Startup is asynchronous. `managed.state: running`, a connected session, and a
-non-empty `streamPath` prove that PulseAudio, Soloist, the local WebSocket, and
-the LMS HTTP route are attached. `streamPaths` reports both the known-good FLAC
-route and an experimental raw 44.1 kHz, 16-bit little-endian stereo PCM route.
-A second explicit diagnostic action can then replace one selected LMS player's
-current playlist with either tokenized live stream. The command must be
-addressed to that player; FLAC remains the default:
+Startup is asynchronous. `managed.state: running` and entries below
+`managed.players` prove that the corresponding PulseAudio, Soloist, local
+WebSocket, and LMS routes are attached. Each player snapshot reports both FLAC
+and raw 44.1 kHz, 16-bit little-endian stereo PCM routes. Playback normally
+attaches automatically when that Soloist device becomes active; the explicit
+commands remain available for diagnostics:
 
 ```text
 spoton soloistprobe action:managed_player_play player_id:<player-id>
@@ -181,10 +185,10 @@ stopped:
 spoton soloistprobe action:managed_stop
 ```
 
-These actions require SpotOn diagnostic mode. They do not change any persistent
-player backend preference or stop the existing unified SpotOn helper. The play
-action does replace playback on the explicitly selected player, while every
-other player and SpotOn Browse playback remain untouched.
+These actions require SpotOn diagnostic mode. `managed_stop` disables the
+Soloist backend persistently until `managed_start` is called again. The Unified
+helper remains available for SpotOn Browse playback, but its legacy Connect
+advertisement is disabled while Soloist is enabled.
 
 ## Headless Linux container path
 
@@ -218,15 +222,15 @@ the isolated sink, while SpotOn captures and encodes the same samples for LMS.
 The Pulse bridge has now been exercised successfully in a Debian 13 LXC under
 the packaged LMS service account. A real Soloist 1.3.7 Connect session produced
 continuous monitor PCM which encoded to a non-silent FLAC with matching
-duration. `Runtime.pm` deliberately remains unregistered until the LMS-facing
-opt-in manager and streaming endpoint are complete.
+duration. The per-player manager and streaming endpoint now supervise this path
+automatically on configured installations.
 
-## Planned architecture
+## Implemented architecture
 
 1. Run one Soloist process per eligible LMS sync master with its WebSocket bound
    to loopback only.
-2. Connect the completed asynchronous local WebSocket/session and validated
-   process specification to an explicit, opt-in daemon lifecycle.
+2. Connect the asynchronous local WebSocket/session and validated process
+   specification to an API-key-gated daemon lifecycle.
 3. Route Soloist audio into an isolated PipeWire/PulseAudio sink and capture the
    monitor stream.
 4. Encode the captured PCM as FLAC and expose it through LMS's existing
@@ -235,18 +239,16 @@ opt-in manager and streaming endpoint are complete.
 6. Keep the Spotify Web API browse/library UI and its normal LMS-managed
    playback path available independently of Connect.
 
-## Constraints to prove before enabling the backend
+## Operational constraints
 
 - Soloist currently supports Linux on its published architectures and emits
   audio only through PipeWire or PulseAudio.
 - Its local WebSocket API has no authentication or TLS, so SpotOn must bind it
   to loopback and must not proxy it to the LAN.
 - Soloist builds expire after 90 days and cannot simply be bundled with SpotOn;
-  installation and updates need a user-owned API key and explicit lifecycle UI.
-- The capture relay must preserve correct volume behavior, startup buffering,
-  seek/skip transitions, sync-group behavior, and clean teardown.
-- The official backend must remain opt-in until those behaviors pass on real LMS
-  and Squeezebox hardware.
+  installation and updates need a user-owned API key and current host binary.
+- Buffering, volume, seek/skip, sync-group behavior, and clean teardown remain
+  covered by regression tests and real Squeezebox hardware checks.
 
 Protocol reference:
 [Spotify Soloist WebSocket API](https://developer.spotify.com/documentation/soloist/reference/websocket-api).

@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-08-17
+
+### Added
+- **One official Spotify Connect device per LMS player** — SpotOn now supervises an isolated Soloist/PulseAudio runtime for every standalone Squeezebox and one runtime per LMS sync group. New or reconnected players are discovered automatically and daemon startup is staggered to avoid discovery contention.
+- **Live Soloist metadata on LMS and Squeezebox displays** — title, artist, album, duration, artwork, Spotify URI, playback state, and position now follow Soloist's WebSocket events on the continuous PCM stream. Track changes refresh the display without reopening the audio stream, including when LMS addresses the direct HTTP stream URL.
+
+### Changed
+- **Soloist becomes the Connect backend for configured installations** — an existing protected Soloist API-key file enables the official backend automatically. The original Unified daemon stays available for Browse/library playback but no longer publishes duplicate legacy Connect devices.
+
+### Fixed
+- **Sync-group changes preserve active Spotify playback** — Soloist now uses SpotOn's static localized group suffix and one-runtime-per-master topology from the v3.3.4 grouping fix. Name/process changes are deferred while Spotify is active, an active member remains authoritative if LMS changes the sync master, and idle slave endpoints are reconciled without interrupting the live session.
+- **Direct-stream metadata lookup** — token metadata and artwork resolve from both the logical `spoton://soloist-pcm:` URL and the low-latency LMS HTTP route.
+
 ## [3.5.6] - 2026-08-17
 
 ### Fixed

@@ -251,7 +251,8 @@ sub _cli_handler {
     }
     elsif ($action eq 'managed_player_stop') {
         require Plugins::SpotOn::Soloist::Manager;
-        unless (Plugins::SpotOn::Soloist::Manager->detachPlayer()) {
+        my $client = eval { $request->client() };
+        unless (Plugins::SpotOn::Soloist::Manager->detachPlayer($client)) {
             $request->addResult('error', 'managed_player_stop_failed');
             $request->addResult(
                 'managed',

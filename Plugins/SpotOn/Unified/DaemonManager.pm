@@ -80,6 +80,7 @@ sub _maskAccountId {
 # Rust binary. Does NOT gate whether the daemon starts at all — that is credential-gated.
 sub _isConnectEnabled {
     my $client = shift;
+    return 0 if $prefs->get('soloistEnabled');
     return $prefs->client($client)->get('enableSpotifyConnect')
         // $prefs->get('enableSpotifyConnect');
 }

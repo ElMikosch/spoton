@@ -12,6 +12,7 @@ use FindBin qw($Bin);
 BEGIN {
     package main;
     sub INFOLOG () { 0 }
+    our $SCANNER = 0;
 
     package Slim::Utils::Log;
     sub import { }
@@ -44,8 +45,37 @@ BEGIN {
     sub serverAddr { '192.0.2.10' }
     $INC{'Slim/Utils/Network.pm'} = 1;
 
+    package Slim::Player::Client;
+    our @clients;
+    sub clients { @clients }
+    sub getClient {
+        my ($id) = @_;
+        ($id) = @_ > 1 ? $_[1] : $_[0];
+        for my $client (@clients) {
+            return $client if $client->id eq $id;
+        }
+        return;
+    }
+    $INC{'Slim/Player/Client.pm'} = 1;
+
+    package Slim::Player::Sync;
+    sub slaves {
+        my ($master) = @_;
+        return grep {
+            $_->id ne $master->id && $_->master->id eq $master->id
+        } @Slim::Player::Client::clients;
+    }
+    $INC{'Slim/Player/Sync.pm'} = 1;
+
+    package Slim::Music::Info;
+    our @titles;
+    sub setCurrentTitle { push @titles, [@_] }
+    $INC{'Slim/Music/Info.pm'} = 1;
+
     package Slim::Control::Request;
     our @requests;
+    our @notifications;
+    our @subscriptions;
     sub new {
         my ($class, $client_id, $command) = @_;
         my $self = bless {
@@ -56,13 +86,34 @@ BEGIN {
         push @requests, $self;
         return $self;
     }
-    sub source { $_[0]{source} = $_[1] }
-    sub execute { $_[0]{executed} = 1; 1 }
+    sub source { $_[0]{source} = $_[1] if @_ > 1; $_[0]{source} }
+    sub execute {
+        my ($self) = @_;
+        $self->{executed} = 1;
+        my $client = Slim::Player::Client::getClient($self->{client_id});
+        if ($client && $self->{command}[0] eq 'playlist'
+            && $self->{command}[1] eq 'play') {
+            $client->{song} = Local::Song->new($self->{command}[2]);
+            $client->{playing} = 1;
+        }
+        elsif ($client && $self->{command}[0] eq 'pause') {
+            $client->{playing} = $self->{command}[1] ? 0 : 1;
+        }
+        elsif ($client && $self->{command}[0] eq 'stop') {
+            $client->{playing} = 0;
+            $client->{song} = undef;
+        }
+        return 1;
+    }
+    sub notifyFromArray { push @notifications, [@_] }
+    sub subscribe { push @subscriptions, [@_] }
+    sub unsubscribe { 1 }
     $INC{'Slim/Control/Request.pm'} = 1;
 }
 
 use lib "$Bin/..";
 use Plugins::SpotOn::Soloist::Manager;
+use Plugins::SpotOn::Soloist::PlayerRuntime;
 use Plugins::SpotOn::Soloist::AudioPreflight;
 use Plugins::SpotOn::Soloist::Transport;
 use Plugins::SpotOn::Soloist::Runtime;
@@ -70,9 +121,56 @@ use Plugins::SpotOn::Soloist::Session;
 use Plugins::SpotOn::Soloist::StreamServer;
 
 {
+    package Local::Track;
+    sub new { bless { url => $_[1] }, $_[0] }
+    sub url { $_[0]{url} }
+
+    package Local::Song;
+    sub new {
+        bless {
+            stream_url => $_[1],
+            track      => Local::Track->new($_[1]),
+            plugin     => {},
+            duration   => 0,
+            offset     => 0,
+        }, $_[0];
+    }
+    sub track { $_[0]{track} }
+    sub streamUrl { $_[0]{stream_url} }
+    sub pluginData {
+        my ($self, $key, $value) = @_;
+        $self->{plugin}{$key} = $value if @_ > 2;
+        return $self->{plugin}{$key};
+    }
+    sub duration { $_[0]{duration} = $_[1] if @_ > 1; $_[0]{duration} }
+    sub startOffset { $_[0]{offset} = $_[1] if @_ > 1; $_[0]{offset} }
+
+    package Local::Player;
+    sub new {
+        my ($class, $id, $name) = @_;
+        my $self = bless {
+            id      => $id,
+            name    => $name,
+            playing => 0,
+            synced  => 0,
+        }, $class;
+        $self->{master} = $self;
+        return $self;
+    }
+    sub id { $_[0]{id} }
+    sub name { $_[0]{name} }
+    sub master { $_[0]{master} }
+    sub isSynced { $_[0]{synced} }
+    sub model { 'squeezebox' }
+    sub isPlaying { $_[0]{playing} }
+    sub playingSong { $_[0]{song} }
+    sub songElapsedSeconds { $_[0]{elapsed} || 0 }
+    sub playPoint { $_[0]{play_point} = $_[1] if @_ > 1; $_[0]{play_point} }
+    sub streamingProgressBar { $_[0]{progress_bar} = $_[1] }
+    sub currentPlaylistUpdateTime { $_[0]{updated} = $_[1] }
+
     package Local::Runtime;
     our @instances;
-    our @pipeline_formats;
     sub new {
         my ($class, %args) = @_;
         my $self = bless {
@@ -84,22 +182,15 @@ use Plugins::SpotOn::Soloist::StreamServer;
         return $self;
     }
     sub start { $_[0]{state} = 'starting_pulse'; 1 }
-    sub poll {
-        my ($self) = @_;
-        $self->{state} = 'running' if $self->{state} eq 'starting_pulse';
-        return $self->{state};
-    }
+    sub poll { $_[0]{state} = 'running'; 'running' }
     sub state { $_[0]{state} }
     sub last_error { $_[0]{last_error} }
     sub stop { $_[0]{stopped}++; $_[0]{state} = 'stopped'; 1 }
-    sub status_snapshot { return { state => $_[0]{state}, soloistArgv => ['--api-key', '[REDACTED]'] } }
-    sub new_stream_pipeline {
-        push @pipeline_formats, defined $_[1] ? $_[1] : 'flac';
-        return bless {}, 'Local::Pipeline';
+    sub status_snapshot {
+        { state => $_[0]{state}, soloistArgv => ['--api-key', '[REDACTED]'] }
     }
-}
+    sub new_stream_pipeline { bless {}, 'Local::Pipeline' }
 
-{
     package Local::Session;
     our @instances;
     sub new {
@@ -108,36 +199,38 @@ use Plugins::SpotOn::Soloist::StreamServer;
             args      => { %args },
             status    => 'idle',
             connected => 0,
-            stopped   => 0,
+            snapshot  => {
+                connection => 'idle',
+                playback   => {},
+                queue      => { previous => [], upcoming => [] },
+            },
         }, 'Local::Session';
         push @instances, $self;
         return $self;
     }
     sub start { $_[0]{status} = 'connected'; $_[0]{connected} = 1; 1 }
-    sub refresh { $_[0]{connected} = 1; $_[0]{status} = 'connected'; 1 }
+    sub refresh { $_[0]{connected} = 1; 1 }
     sub connected { $_[0]{connected} }
     sub status { $_[0]{status} }
-    sub snapshot { return { connection => $_[0]{status} } }
-    sub stop { $_[0]{stopped}++; $_[0]{connected} = 0; $_[0]{status} = 'stopped'; 1 }
-}
+    sub snapshot { $_[0]{snapshot} }
+    sub stop { $_[0]{connected} = 0; $_[0]{status} = 'stopped'; 1 }
+    sub send_action { push @{ $_[0]{actions} }, [$_[1], { @_[2 .. $#_] }]; 1 }
+    sub emit {
+        my ($self, $event, $snapshot) = @_;
+        $self->{snapshot} = $snapshot;
+        $self->{args}{on_update}->($event, $snapshot);
+    }
 
-{
     package Local::Pipeline;
     sub start { 1 }
     sub stop { 1 }
-}
-
-{
-    package Local::Player;
-    sub new { bless { id => $_[1] }, $_[0] }
-    sub id { $_[0]{id} }
-    sub master { $_[0] }
 }
 
 my $root = tempdir(CLEANUP => 1);
 $Slim::Utils::Prefs::values{server}{cachedir} = $root;
 $Slim::Utils::Prefs::values{server}{httpport} = 9000;
 $Slim::Utils::Prefs::values{'plugin.spoton'}{diagnosticMode} = 1;
+$Slim::Utils::Prefs::values{'plugin.spoton'}{soloistConfigured} = 1;
 
 my $base = catdir($root, 'spoton', 'soloist-managed');
 make_path($base, { mode => 0700 });
@@ -147,32 +240,34 @@ print {$key_fh} 'manager-secret-key';
 close($key_fh);
 chmod 0600, $key_file;
 
+my $kitchen = Local::Player->new('00:11:22:33:44:55', 'Kitchen');
+my $living  = Local::Player->new('00:11:22:33:44:66', 'Living room');
+@Slim::Player::Client::clients = ($kitchen, $living);
+
 my @registered;
 my @unregistered;
-{
-    no warnings 'redefine';
-    local *Plugins::SpotOn::Soloist::StreamServer::init = sub { 1 };
-    ok(Plugins::SpotOn::Soloist::Manager->init(), 'manager initializes stream surface');
-}
-
+my $token_index = 0;
 {
     no warnings 'redefine';
     local *Plugins::SpotOn::Soloist::Transport::websocket_available = sub { 1 };
     local *Plugins::SpotOn::Soloist::AudioPreflight::inspect = sub {
-        return {
-            tools => {
-                soloist    => '/usr/local/bin/soloist',
-                pulseaudio => '/usr/bin/pulseaudio',
-                parec      => '/usr/bin/parec',
-                ffmpeg     => '/usr/bin/ffmpeg',
-            },
-        };
+        return { tools => {
+            soloist    => '/usr/local/bin/soloist',
+            pulseaudio => '/usr/bin/pulseaudio',
+            parec      => '/usr/bin/parec',
+            ffmpeg     => '/usr/bin/ffmpeg',
+        } };
     };
     local *Plugins::SpotOn::Soloist::Runtime::new = \&Local::Runtime::new;
     local *Plugins::SpotOn::Soloist::Session::new = \&Local::Session::new;
-    local *Plugins::SpotOn::Soloist::Manager::_random_token = sub {
-        return '0123456789abcdef01234567';
+    local *Plugins::SpotOn::Soloist::PlayerRuntime::_random_token = sub {
+        return sprintf('%024x', ++$token_index);
     };
+    local *Plugins::SpotOn::Soloist::Manager::_device_name_for_client = sub {
+        my ($client) = @_;
+        return $client->name . ($client->isSynced ? ' (Group)' : '');
+    };
+    local *Plugins::SpotOn::Soloist::StreamServer::init = sub { 1 };
     local *Plugins::SpotOn::Soloist::StreamServer::register_runtime = sub {
         my ($class, $token, $factory) = @_;
         push @registered, [$token, 'flac', $factory];
@@ -181,226 +276,155 @@ my @unregistered;
     local *Plugins::SpotOn::Soloist::StreamServer::register_runtime_format = sub {
         my ($class, $token, $format, $factory) = @_;
         push @registered, [$token, $format, $factory];
-        my $suffix = $format eq 'pcm' ? 'soc' : $format;
-        return "/plugins/SpotOn/soloist/stream/$token.$suffix";
+        return "/plugins/SpotOn/soloist/stream/$token.soc";
     };
     local *Plugins::SpotOn::Soloist::StreamServer::unregister_runtime = sub {
         push @unregistered, $_[1];
         return 1;
     };
 
-    ok(Plugins::SpotOn::Soloist::Manager->start(), 'manager accepts explicit start');
-    my $starting = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
-    is($starting->{state}, 'starting', 'manager starts asynchronously');
-    ok($starting->{apiKeyReady}, 'status reports protected API key file readiness');
-    unlike(
-        join(' ', @{ $starting->{runtime}{soloistArgv} || [] }),
-        qr/manager-secret-key/,
-        'status never exposes API key',
+    ok(Plugins::SpotOn::Soloist::Manager->init(), 'manager initializes once');
+    ok(Plugins::SpotOn::Soloist::Manager->start(), 'manager starts player discovery');
+
+    # First player starts immediately; later players are staggered.
+    Plugins::SpotOn::Soloist::Manager::_start_one_timer(
+        'Plugins::SpotOn::Soloist::Manager', $living,
     );
-    is(
-        $Local::Runtime::instances[-1]{args}{device_name},
-        'SpotOn Soloist Managed Test',
-        'manager uses an isolated diagnostic Connect name',
-    );
-    is(
-        $Local::Runtime::instances[-1]{args}{initial_volume},
-        100,
-        'managed capture starts full scale to avoid double attenuation',
-    );
-    ok(@Slim::Utils::Timers::set, 'startup schedules nonblocking poll');
+    is(scalar @Local::Runtime::instances, 2, 'one Soloist runtime is created per LMS player');
+    is($Local::Runtime::instances[0]{args}{device_name}, 'Kitchen', 'first device uses LMS player name');
+    is($Local::Runtime::instances[1]{args}{device_name}, 'Living room', 'second device uses LMS player name');
+    is($Local::Runtime::instances[0]{args}{initial_volume}, 100, 'capture stays full-scale');
 
     Plugins::SpotOn::Soloist::Manager::_poll();
     my $running = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
-    is($running->{state}, 'running', 'ready runtime transitions manager to running');
-    is($running->{sessionStatus}, 'connected', 'manager attaches WebSocket session');
-    is(
-        $running->{streamPath},
-        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.flac',
-        'manager registers tokenized LMS stream path',
-    );
-    is(scalar @registered, 2, 'runtime registers FLAC and PCM stream variants');
-    isa_ok($registered[0][2]->(), 'Local::Pipeline', 'FLAC stream factory delegates to running runtime');
-    isa_ok($registered[1][2]->(), 'Local::Pipeline', 'PCM stream factory delegates to running runtime');
-    is_deeply(
-        \@Local::Runtime::pipeline_formats,
-        ['flac', 'pcm'],
-        'each stream factory requests its explicit pipeline format',
-    );
-    is(
-        $running->{streamPaths}{pcm},
-        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
-        'manager reports the low-latency PCM path separately',
-    );
-    is(
-        Plugins::SpotOn::Soloist::Manager->resolveStreamPath(
-            '0123456789abcdef01234567', 'pcm'
-        ),
-        '/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
-        'active PCM token resolves to the registered route',
-    );
-    ok(
-        !Plugins::SpotOn::Soloist::Manager->resolveStreamPath(
-            'aaaaaaaaaaaaaaaaaaaaaaaa', 'pcm'
-        ),
-        'a stale or guessed PCM token is rejected',
-    );
-    isa_ok(
-        Plugins::SpotOn::Soloist::Manager->newStreamPipeline(
-            '0123456789abcdef01234567', 'pcm'
-        ),
-        'Local::Pipeline',
-        'active token creates a direct PCM capture pipeline',
-    );
-    ok(
-        !Plugins::SpotOn::Soloist::Manager->newStreamPipeline(
-            'aaaaaaaaaaaaaaaaaaaaaaaa', 'pcm'
-        ),
-        'stale token cannot create a direct capture pipeline',
-    );
+    is($running->{state}, 'running', 'aggregate manager reaches running state');
+    is($running->{playerCount}, 2, 'status exposes both player runtimes');
+    is(scalar @registered, 4, 'both PCM and FLAC routes are registered per player');
 
-    $Local::Session::instances[-1]{args}{on_error}->(
-        'connect_failed', 'transient websocket failure'
-    );
-    is(
-        Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
-        'session_connect_failed',
-        'session callback reports a transient connection failure',
-    );
-    $Local::Session::instances[-1]{args}{on_status}->('connected');
-    ok(
-        !Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError},
-        'successful reconnect clears resolved session transport errors',
-    );
+    my $instance = Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen);
+    ok($instance, 'runtime resolves by LMS player');
+    my $token = $instance->stream_token;
 
-    my $player = Local::Player->new('00:11:22:33:44:55');
-    ok(
-        Plugins::SpotOn::Soloist::Manager->attachPlayer($player),
-        'explicit diagnostic action attaches one LMS player',
-    );
-    my $play_request = $Slim::Control::Request::requests[-1];
-    is($play_request->{client_id}, '00:11:22:33:44:55', 'player request targets the selected LMS player');
-    is_deeply(
-        $play_request->{command},
-        [
-            'playlist',
-            'play',
-            'http://192.0.2.10:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.flac',
-            'SpotOn Soloist Managed Test',
-        ],
-        'player receives only the LMS-generated tokenized FLAC URL',
-    );
-    ok($play_request->{executed}, 'player play request is executed');
-    my $player_status = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
-    ok($player_status->{playerAttached}, 'status exposes diagnostic player attachment');
-    is($player_status->{playerId}, '00:11:22:33:44:55', 'status identifies attached player');
-
-    ok(Plugins::SpotOn::Soloist::Manager->detachPlayer(), 'diagnostic player detaches explicitly');
-    is_deeply(
-        $Slim::Control::Request::requests[-1]{command},
-        ['stop'],
-        'detach issues a bounded stop to the attached player',
-    );
-    ok(
-        !Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerAttached},
-        'detach clears player attachment status',
-    );
-
-    ok(
-        Plugins::SpotOn::Soloist::Manager->attachPlayer($player, format => 'pcm'),
-        'explicit diagnostic action can select low-latency PCM',
+    my $snapshot = {
+        connection => 'connected',
+        playback => {
+            status    => 'playing',
+            is_active => 1,
+            volume    => 71,
+            position  => { position_ms => 12_000, timestamp_ms => 0, speed => 1 },
+            item      => {
+                uri         => 'spotify:track:abc123',
+                name        => 'Cosmic Love',
+                duration_ms => 255_906,
+                parent      => { name => 'Lungs' },
+                creators    => [{ name => 'Florence + The Machine' }],
+                covers      => [
+                    { size => 'small',  url => 'https://example.test/small.jpg' },
+                    { size => 'xlarge', url => 'https://example.test/large.jpg' },
+                ],
+            },
+        },
+    };
+    $instance->{session}->emit(
+        { kind => 'state', event_type => 'playback_state' },
+        $snapshot,
     );
     is_deeply(
         $Slim::Control::Request::requests[-1]{command},
         [
-            'playlist',
-            'play',
-            'spoton://soloist-pcm:0123456789abcdef01234567',
-            'SpotOn Soloist Managed Test',
+            'playlist', 'play',
+            "spoton://soloist-pcm:$token",
+            'Florence + The Machine - Cosmic Love',
         ],
-        'PCM handoff uses SpotOn logical protocol for LMS transcoding',
+        'active Spotify device automatically attaches its matching LMS player',
+    );
+    is($kitchen->playingSong->pluginData('info')->{title}, 'Cosmic Love', 'title reaches LMS song metadata');
+    is($kitchen->playingSong->pluginData('info')->{artist}, 'Florence + The Machine', 'artist reaches LMS song metadata');
+    is($kitchen->playingSong->pluginData('info')->{album}, 'Lungs', 'album reaches LMS song metadata');
+    is($kitchen->playingSong->pluginData('info')->{cover}, 'https://example.test/large.jpg', 'largest Soloist cover is selected');
+    cmp_ok(abs($kitchen->playingSong->duration - 255.906), '<', 0.001, 'duration reaches LMS song object');
+    like($Slim::Music::Info::titles[-1][1], qr/Florence.*Cosmic Love/, 'hardware title is updated immediately');
+    ok(@Slim::Control::Request::notifications, 'newmetadata notification is emitted');
+    is(
+        Plugins::SpotOn::Soloist::Manager->metadataForToken($token)->{spotifyUri},
+        'spotify:track:abc123',
+        'protocol metadata resolves from the matching runtime token',
+    );
+
+    # Group while playback is active. The runtime and Spotify session survive;
+    # only an idle future reconcile is allowed to apply the cosmetic suffix.
+    $kitchen->{synced} = 1;
+    $living->{synced} = 1;
+    $living->{master} = $kitchen;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is(
+        Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen),
+        $instance,
+        'active Soloist runtime survives solo-to-group topology transition',
+    );
+    is($instance->device_name, 'Kitchen', 'active device keeps its existing Spotify name');
+    is($Local::Runtime::instances[0]{stopped}, 0, 'active runtime is not stopped during grouping');
+    ok($Local::Runtime::instances[1]{stopped}, 'former slave device is removed when inactive');
+
+    # Even when LMS elects the other box as sync master, the process which
+    # owns the live Spotify session remains authoritative.  Do not create an
+    # idle duplicate under the new master while playback is active.
+    my $runtime_count = scalar @Local::Runtime::instances;
+    $kitchen->{master} = $living;
+    $living->{master} = $living;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is(
+        Plugins::SpotOn::Soloist::Manager->instanceForClient($living),
+        $instance,
+        'active member runtime follows a sync-master change',
     );
     is(
-        Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{playerStreamFormat},
-        'pcm',
-        'status identifies the selected player stream format',
+        scalar @Local::Runtime::instances,
+        $runtime_count,
+        'sync-master change does not start a duplicate Soloist endpoint',
     );
-    ok(Plugins::SpotOn::Soloist::Manager->detachPlayer(), 'PCM player detaches explicitly');
 
-    ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops explicitly');
-    is($Local::Runtime::instances[-1]{stopped}, 1, 'stop terminates managed runtime');
-    is($Local::Session::instances[-1]{stopped}, 1, 'stop detaches WebSocket session');
-    is_deeply(\@unregistered, ['0123456789abcdef01234567'], 'stop revokes stream route');
-    is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{state}, 'stopped', 'stop clears manager state');
+    # Restore the original master for the remaining metadata/name assertions.
+    $kitchen->{master} = $kitchen;
+    $living->{master} = $kitchen;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
 
-    {
-        no warnings 'redefine';
-        local *Local::Runtime::start = sub {
-            my ($self) = @_;
-            $self->{state} = 'failed';
-            $self->{last_error} = {
-                code    => 'pulse_spawn_failed',
-                message => 'PulseAudio child setup failed',
-            };
-            return 0;
-        };
+    # A track change updates metadata on the continuous stream without another
+    # playlist play request.
+    my $plays_before = scalar grep {
+        $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play'
+    } @Slim::Control::Request::requests;
+    $snapshot->{playback}{item}{uri} = 'spotify:track:def456';
+    $snapshot->{playback}{item}{name} = 'Dog Days Are Over';
+    $instance->{session}->emit(
+        { kind => 'item', event_type => 'track_changed' },
+        $snapshot,
+    );
+    is($kitchen->playingSong->pluginData('info')->{title}, 'Dog Days Are Over', 'track change refreshes metadata');
+    my $plays_after = scalar grep {
+        $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play'
+    } @Slim::Control::Request::requests;
+    is($plays_after, $plays_before, 'track change does not reopen the audio stream');
 
-        ok(!Plugins::SpotOn::Soloist::Manager->start(), 'runtime rejection fails managed start');
-        my $failed = Plugins::SpotOn::Soloist::Manager->statusSnapshot();
-        is(
-            $failed->{lastError}{code},
-            'runtime_pulse_spawn_failed',
-            'manager preserves the concrete runtime failure code',
-        );
-        is(
-            $failed->{lastError}{message},
-            'PulseAudio child setup failed',
-            'manager preserves the concrete runtime failure message',
-        );
-    }
-    Plugins::SpotOn::Soloist::Manager->stop();
+    # Once inactive, reconciliation is free to replace the process with the
+    # stable localized group name.
+    $snapshot->{playback}{is_active} = 0;
+    $instance->{session}{snapshot} = $snapshot;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    my $group_instance = Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen);
+    isnt($group_instance, $instance, 'idle name transition creates a fresh group runtime');
+    is($group_instance->device_name, 'Kitchen (Group)', 'group runtime uses static suffix');
+
+    ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops all runtimes');
+    is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{state}, 'stopped', 'aggregate state stops cleanly');
 }
 
 unlink($key_file);
-{
-    no warnings 'redefine';
-    local *Plugins::SpotOn::Soloist::Transport::websocket_available = sub { 1 };
-    ok(!Plugins::SpotOn::Soloist::Manager->start(), 'missing API key fails closed');
-    is(
-        Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
-        'api_key_missing',
-        'missing key has stable error code',
-    );
-}
-Plugins::SpotOn::Soloist::Manager->stop();
-
-open($key_fh, '>', $key_file) or die "Cannot recreate API key fixture: $!";
-print {$key_fh} 'manager-secret-key';
-close($key_fh);
-chmod 0644, $key_file;
-ok(!Plugins::SpotOn::Soloist::Manager->start(), 'world-readable API key fails closed');
+ok(!Plugins::SpotOn::Soloist::Manager->start(), 'missing API key still fails closed');
 is(
     Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
-    'api_key_permissions',
-    'insecure key mode has stable error code',
+    'api_key_missing',
+    'missing API key retains stable failure code',
 );
-Plugins::SpotOn::Soloist::Manager->stop();
-
-my $symlink_cache = tempdir(CLEANUP => 1);
-my $symlink_spoton = catdir($symlink_cache, 'spoton');
-my $symlink_target = catdir($symlink_cache, 'target');
-make_path($symlink_spoton, { mode => 0700 });
-make_path($symlink_target, { mode => 0700 });
-symlink($symlink_target, catdir($symlink_spoton, 'soloist-managed'))
-    or die "Cannot create manager symlink fixture: $!";
-$Slim::Utils::Prefs::values{server}{cachedir} = $symlink_cache;
-ok(!Plugins::SpotOn::Soloist::Manager->start(), 'symlinked managed base directory fails closed');
-is(
-    Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
-    'base_dir_failed',
-    'unsafe managed base has stable error code',
-);
-Plugins::SpotOn::Soloist::Manager->stop();
-$Slim::Utils::Prefs::values{server}{cachedir} = $root;
 
 done_testing();

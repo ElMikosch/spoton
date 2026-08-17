@@ -142,6 +142,7 @@ sub start {
 	# is only passed when Spotify Connect is enabled for this player.
 	my $connectEnabled = $prefs->client($client)->get('enableSpotifyConnect')
 		// $prefs->get('enableSpotifyConnect');
+	$connectEnabled = 0 if $prefs->get('soloistEnabled');
 	$self->_connectEnabled($connectEnabled ? 1 : 0);
 
 	if ($connectEnabled) {

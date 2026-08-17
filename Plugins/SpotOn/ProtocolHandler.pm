@@ -79,6 +79,16 @@ sub _soloistPcmToken {
     return;
 }
 
+sub _soloistStreamToken {
+    my ($url) = @_;
+    return unless defined $url && !ref($url);
+    my $logical = _soloistPcmToken($url);
+    return $logical if $logical;
+    return $1
+        if $url =~ m{(?:\A|/)plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(?:flac|pcm|soc)(?:\z|[?#])};
+    return;
+}
+
 sub _isDaemonProxyURL {
     my ($url) = @_;
     return 0 unless defined $url && !ref($url);
@@ -877,6 +887,7 @@ sub isRepeatingStream {
     my (undef, $song) = @_;
     return unless $song;
     my $url = $song->track->url || '';
+    return 1 if _soloistPcmToken($url);
     return $url =~ m{spoton://connect-} ? 1 : 0;
 }
 
@@ -910,6 +921,10 @@ sub getSeekData {
     # - Seek beyond track duration (CLI only): LMS _Skip fires before
     #   getSeekData. No handler hook exists; accepted as known limitation.
     return undef if Plugins::SpotOn::Connect->isSpotifyConnect($client);
+    if ($INC{'Plugins/SpotOn/Soloist/Manager.pm'}
+        && Plugins::SpotOn::Soloist::Manager->isSoloistPlayer($client)) {
+        return undef;
+    }
 
     return { timeOffset => $newtime };
 }
@@ -930,6 +945,12 @@ sub canDoAction {
         main::DEBUGLOG && $log->is_debug && $log->debug(
             "Connect mode: blocking LMS-side restart for 'rew' (seek-to-0 handled by binary)"
         );
+        return 0;
+    }
+
+    if ($action eq 'rew'
+        && $INC{'Plugins/SpotOn/Soloist/Manager.pm'}
+        && Plugins::SpotOn::Soloist::Manager->isSoloistPlayer($client)) {
         return 0;
     }
 
@@ -955,6 +976,19 @@ sub getMetadataFor {
     # Must happen BEFORE any early returns so $song->duration can be set below.
     if ($client && !$song && $client->can('currentSongForUrl')) {
         $song = $client->currentSongForUrl($url);
+    }
+
+    # Soloist keeps one continuous PCM stream while Spotify changes tracks.
+    # Its WebSocket state is therefore the authoritative per-token metadata
+    # source; a normal URL cache entry would stay stuck on the first track.
+    if (my $token = _soloistStreamToken($url)) {
+        require Plugins::SpotOn::Soloist::Manager;
+        my $meta = Plugins::SpotOn::Soloist::Manager->metadataForToken($token);
+        if ($meta) {
+            _applyRuntimeMetadata($client, $song, $url, $meta);
+            return $meta;
+        }
+        return _placeholderMeta($url);
     }
 
     # For Connect streams: try pluginData info first (set by Connect.pm _fetchTrackMetadata)
@@ -1072,6 +1106,11 @@ sub getIcon {
     my ($class, $url) = @_;
 
     if ($url) {
+        if (my $token = _soloistStreamToken($url)) {
+            require Plugins::SpotOn::Soloist::Manager;
+            my $meta = Plugins::SpotOn::Soloist::Manager->metadataForToken($token);
+            return $meta->{cover} if $meta && $meta->{cover};
+        }
         my $canonical = $url;
         if ($canonical =~ m{^spoton:(?!//)}) {
             $canonical =~ s{^spoton:}{spoton://};
