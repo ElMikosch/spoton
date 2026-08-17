@@ -69,7 +69,7 @@ my %_translatedConnectUrls;
 # Per-client retry state for transient Browse daemon 404s (audio-key throttle)
 use constant MAX_BROWSE_404_RETRIES => 3;
 use constant BROWSE_404_RETRY_DELAY => 2;   # seconds between retries
-use constant SOLOIST_PCM_BUFFER_THRESHOLD_KB => 20;
+use constant SOLOIST_PCM_BUFFER_THRESHOLD_KB => 128;
 my %_browse404Retries;  # "$clientId|$trackUrl" => attempt_count
 
 sub _soloistPcmToken {
@@ -95,8 +95,10 @@ sub isRemote    { 1 }
 # reported bitrate and its global bufferSecs preference.  Raw 44.1 kHz stereo
 # PCM therefore reaches the firmware's 255 KB ceiling, which adds roughly
 # 1.45 seconds of control and track-change latency to a live Soloist stream.
-# One 32 KB HTTP chunk already exceeds 20 KB and represents about 186 ms of
-# audio, so use LMS's own conservative fallback threshold for Soloist PCM.
+# Hardware testing showed that the 20 KB fallback starts a real-time stream
+# before it has enough reserve for scheduler and network jitter.  128 KB is
+# about 743 ms of 44.1 kHz/16-bit/stereo audio: comfortably below the former
+# 255 KB ceiling while large enough to avoid repeated player underruns.
 #
 # Defining this hook affects every URL handled by this class.  Preserve LMS's
 # bitrate-based calculation for original SpotOn Browse/Connect streams so the

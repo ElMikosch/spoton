@@ -23,7 +23,7 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     verbose
 );
 
-use constant DEFAULT_PULSE_LATENCY_MS => 100;
+use constant DEFAULT_PULSE_LATENCY_MS => 400;
 
 # Build the Soloist daemon invocation as an argv array.  There is deliberately
 # no shell-form command string: device names and paths must remain data, never
@@ -65,8 +65,8 @@ sub build_process_spec {
             'pulse_cookie',
         );
         # libpulse applies this in pa_stream's buffer-attribute patching.  It
-        # keeps Soloist's playback queue aligned with our 100 ms monitor
-        # capture instead of accepting the observed one-second default.
+        # keeps Soloist's playback queue below the observed one-second default
+        # while retaining enough reserve for Spotify decode/network jitter.
         $env{PULSE_LATENCY_MSEC} = "$latency";
     }
 

@@ -474,23 +474,23 @@ subtest 'Soloist PCM uses the existing soc transcoding path through a direct pip
     ok(!defined $stale, 'stale Soloist PCM token fails closed');
 };
 
-subtest 'Soloist PCM starts with a low live-stream buffer without changing original SpotOn thresholds' => sub {
+subtest 'Soloist PCM starts with a stable low-latency buffer without changing original SpotOn thresholds' => sub {
     my $client = MockClient->new('soloist-buffer');
     is(
         Plugins::SpotOn::ProtocolHandler->bufferThreshold(
             $client,
             'spoton://soloist-pcm:0123456789abcdef01234567',
         ),
-        20,
-        'logical Soloist PCM uses LMS conservative 20 KB startup threshold',
+        128,
+        'logical Soloist PCM uses a 128 KB jitter-resistant startup threshold',
     );
     is(
         Plugins::SpotOn::ProtocolHandler->bufferThreshold(
             $client,
             'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
         ),
-        20,
-        'direct Soloist PCM route uses the same 20 KB threshold',
+        128,
+        'direct Soloist PCM route uses the same 128 KB threshold',
     );
 
     my $oggClient = MockBufferedClient->new(320_000);

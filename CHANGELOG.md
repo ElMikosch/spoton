@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.6] - 2026-08-17
+
+### Fixed
+- **Stable low-latency Soloist playback on hardware** — raises the Soloist-only LMS startup reserve from 20 KB to 128 KB after hardware testing showed that the nearly instant start repeatedly underruns a real-time PCM stream. This is about 743 ms of audio and remains half the previous 255 KB ceiling.
+- **Spotify decode jitter reserve** — requests a 400 ms PulseAudio playback queue instead of the unstable 100 ms value. The measured pre-3.5.5 default was roughly 1.02 seconds, so control latency remains substantially lower while avoiding the buffer growth and audible stutter caused by underruns.
+
 ## [3.5.5] - 2026-08-17
 
 ### Changed

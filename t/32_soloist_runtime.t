@@ -124,9 +124,9 @@ is_deeply(
     {
         PULSE_SERVER       => 'unix:' . catfile($runtime_dir, 'native'),
         PULSE_COOKIE       => $cookie,
-        PULSE_LATENCY_MSEC => '100',
+        PULSE_LATENCY_MSEC => '400',
     },
-    'Soloist receives the private Pulse connection and 100 ms playback request',
+    'Soloist receives the private Pulse connection and 400 ms playback request',
 );
 
 my $starting = $runtime->status_snapshot();

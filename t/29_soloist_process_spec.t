@@ -51,9 +51,9 @@ is_deeply(
     {
         PULSE_SERVER       => 'unix:/var/cache/lyrion/spoton/pulse/native',
         PULSE_COOKIE       => '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',
-        PULSE_LATENCY_MSEC => '100',
+        PULSE_LATENCY_MSEC => '400',
     },
-    'private Pulse connection and low-latency playback request use the process environment',
+    'private Pulse connection and stable low-latency playback request use the process environment',
 );
 ok(
     !(grep {
