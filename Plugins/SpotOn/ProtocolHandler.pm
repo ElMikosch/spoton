@@ -173,11 +173,6 @@ sub canDirectStream {
 
     return 0 unless $client;
 
-    # The logical Soloist PCM URL must enter LMS's soc -> pcm conversion path.
-    # Returning its HTTP route here repeats the direct handoff that is silent
-    # on affected Squeezebox hardware.
-    return 0 if _soloistPcmToken($url);
-
     # COMPAT-02: per-player streamingMode=proxy (or per-player 'global' resolving
     # to a global streamingMode=proxy default) forces LMS-relayed streaming for
     # BOTH Browse and Connect (D-02) — one gate at the top covers both branches
@@ -202,6 +197,36 @@ sub canDirectStream {
             );
             return 0;
         }
+    }
+
+    # Managed Soloist PCM follows the same topology as original SpotOn Connect:
+    # an unsynced player pulls the live HTTP stream itself after LMS has selected
+    # the soc -> pcm identity profile.  Sync groups and explicit proxy mode keep
+    # using ProtocolStream's direct capture pipe through LMS.
+    if (my $token = _soloistPcmToken($url)) {
+        my $soloistClient = $client->can('master') ? $client->master : $client;
+        if ($soloistClient->isSynced()) {
+            $log->warn("[DIAG] canDirectStream: soloist pcm result=0 reason=synced")
+                if $prefs->get('diagnosticMode');
+            return 0;
+        }
+
+        require Plugins::SpotOn::Soloist::Manager;
+        my $path = Plugins::SpotOn::Soloist::Manager->resolveStreamPath($token, 'pcm');
+        return 0 unless $path;
+
+        my $host = Slim::Utils::Network::serverAddr();
+        my $port = $serverPrefs->get('httpport');
+        return 0 unless defined $host && !ref($host) && length($host)
+            && $host !~ /[\x00-\x20\x7f\/@]/;
+        return 0 unless defined $port && !ref($port) && $port =~ /\A\d+\z/
+            && $port >= 1 && $port <= 65_535;
+
+        $host = "[$host]" if $host =~ /:/ && $host !~ /\A\[.*\]\z/;
+        my $directUrl = "http://$host:$port$path";
+        $log->warn("[DIAG] canDirectStream: soloist pcm url=$directUrl")
+            if $prefs->get('diagnosticMode');
+        return $directUrl;
     }
 
     # Browse URL: direct stream to unified daemon /track/{id}

@@ -204,12 +204,9 @@ my $now = 1_000;
     ok($format_status->{formats}{flac}{registered}, 'status retains FLAC fallback');
     ok($format_status->{formats}{pcm}{registered}, 'status exposes PCM alternative');
     $AnyEvent::Handle::handles[-1]->drain();
-    is(scalar @AnyEvent::timers, 1, 'PCM waits asynchronously before sending audio');
-    cmp_ok($AnyEvent::timers[-1]{after}, '>=', 1.99, 'PCM uses the original two-second pacing offset');
-    $now += $AnyEvent::timers[-1]{after};
-    $AnyEvent::timers[-1]{cb}->();
-    is($AnyEvent::Handle::handles[-1]{writes}[-1], 'PCM-A', 'pacer releases raw PCM after its deadline');
+    is($AnyEvent::Handle::handles[-1]{writes}[-1], 'PCM-A', 'PCM begins immediately without an artificial startup wait');
     $AnyEvent::Handle::handles[-1]->drain();
+    is(scalar @AnyEvent::timers, 1, 'PCM still applies real-time pacing after the first chunk');
     $now += $AnyEvent::timers[-1]{after};
     $AnyEvent::timers[-1]{cb}->();
 }

@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.4] - 2026-08-17
+
+### Changed
+- **Lower-latency Soloist PCM for individual players** — after LMS selects the existing `soc -> pcm` identity profile, an unsynchronized Squeezebox now pulls the tokenized live stream directly from the plugin, matching original SpotOn Connect's streaming topology and removing the extra LMS relay buffer.
+- **Immediate PCM stream startup** — the diagnostic/direct HTTP route no longer holds the first audio bytes for an artificial two-second delay. PulseAudio capture already produces data at real-time speed, so the additional startup wait was unnecessary.
+
+### Fixed
+- **Safe fallback retained for proxy playback and sync groups** — explicit proxy mode and synchronized players continue to use the stable direct capture pipe introduced in 3.5.3, so one group member is never handed a private direct stream.
+
 ## [3.5.3] - 2026-08-15
 
 ### Fixed

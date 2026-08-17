@@ -423,6 +423,10 @@ require_ok('Plugins::SpotOn::ProtocolHandler') or BAIL_OUT("Failed to load Proto
     sub id { ${$_[0]} }
     sub playingSong { undef }
     sub currentPlaylistUpdateTime { 1 }
+
+    package MockSyncedClient;
+    our @ISA = qw(MockClient);
+    sub isSynced { 1 }
 }
 
 my $prefs = Slim::Utils::Prefs::preferences('plugin.spoton');
@@ -439,8 +443,8 @@ subtest 'Soloist PCM uses the existing soc transcoding path through a direct pip
     );
     is(
         Plugins::SpotOn::ProtocolHandler->canDirectStream($client, $url),
-        0,
-        'logical Soloist PCM URL is always LMS-proxied',
+        'http://127.0.0.1:9000/plugins/SpotOn/soloist/stream/0123456789abcdef01234567.soc',
+        'unsynced Soloist PCM uses the tokenized direct stream after soc format selection',
     );
 
     my $stream = Plugins::SpotOn::ProtocolHandler->new({
@@ -459,6 +463,22 @@ subtest 'Soloist PCM uses the existing soc transcoding path through a direct pip
         client => $client,
     });
     ok(!defined $stale, 'stale Soloist PCM token fails closed');
+};
+
+subtest 'Soloist PCM keeps the direct capture pipe for sync groups' => sub {
+    my $url = 'spoton://soloist-pcm:0123456789abcdef01234567';
+    my $client = bless \(my $id = 'soloist-synced'), 'MockSyncedClient';
+
+    is(
+        Plugins::SpotOn::ProtocolHandler->canDirectStream($client, $url),
+        0,
+        'sync group does not hand one member a private direct stream',
+    );
+    isa_ok(
+        Plugins::SpotOn::ProtocolHandler->new({ url => $url, client => $client }),
+        'Plugins::SpotOn::Soloist::ProtocolStream',
+        'sync group fallback remains the working LMS capture pipe',
+    );
 };
 
 # ============================================================

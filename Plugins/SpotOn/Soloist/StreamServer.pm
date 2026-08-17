@@ -17,7 +17,7 @@ use Time::HiRes ();
 use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})\.(flac|pcm|soc)\z};
 use constant MAX_CHUNK_BYTES => 32 * 1024;
 use constant PCM_BYTES_PER_SECOND => 44_100 * 2 * 2;
-use constant PCM_PACING_DELAY     => 2;
+use constant PCM_PACING_DELAY     => 0;
 
 my %factories;
 my %active;
