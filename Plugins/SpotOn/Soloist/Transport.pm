@@ -14,7 +14,7 @@ sub new {
     return bless {
         ws_factory       => $args{ws_factory},
         json_encode      => $args{json_encode} || \&JSON::PP::encode_json,
-        json_decode      => $args{json_decode} || \&JSON::PP::decode_json,
+        json_decode      => $args{json_decode} || \&_decode_frame,
         on_connected     => $args{on_connected},
         on_disconnected  => $args{on_disconnected},
         on_event         => $args{on_event},
@@ -250,6 +250,17 @@ sub _close_socket {
 
     eval { $socket->endListenAsync() if $socket->can('endListenAsync') };
     eval { $socket->close() };
+}
+
+# LMS's Protocol::WebSocket hands over text frames already decoded from
+# UTF-8 to Perl characters.  Decoding those as UTF-8 again fails for every
+# non-ASCII character (device names such as "Küche", titles such as
+# "Beyoncé"), so only raw byte strings are UTF-8 decoded here.
+sub _decode_frame {
+    my ($frame) = @_;
+    return utf8::is_utf8($frame)
+        ? JSON::PP->new->decode($frame)
+        : JSON::PP::decode_json($frame);
 }
 
 sub _default_ws_factory {

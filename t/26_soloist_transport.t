@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Test::More;
+use Encode ();
 use FindBin qw($Bin);
 use JSON::PP ();
 
@@ -112,6 +113,23 @@ is(scalar @events, 1, 'valid JSON event reaches callback');
 is($events[0][0]{kind}, 'auth', 'incoming event is normalized');
 is($events[0][0]{logged_in}, 1, 'normalized auth state retains login flag');
 is($events[0][1]{type}, 'auth_state', 'raw decoded event is available to adapter');
+
+# Text frames from LMS's Protocol::WebSocket arrive as decoded Perl
+# characters; raw UTF-8 bytes from other sources must work as well.
+{
+    use utf8;
+    my $characters = Encode::decode('UTF-8', Encode::encode('UTF-8',
+        '{"type":"auth_state","logged_in":true,"is_active":false,"device_name":"Küche"}'));
+    my $before = scalar @events;
+    $socket->emit($characters);
+    is(scalar @events, $before + 1, 'decoded text frame with umlaut is accepted');
+    is($events[-1][0]{device_name}, "K\x{fc}che", 'umlaut survives a decoded text frame');
+
+    $socket->emit(Encode::encode('UTF-8',
+        '{"type":"track_changed","item":{"uri":"spotify:track:x","entity_type":"track","decorations":{"identity":{"name":"Beyoncé – Halo"}}}}'));
+    is(scalar @events, $before + 2, 'raw UTF-8 byte frame is accepted');
+    is($events[-1][0]{item}{name}, "Beyonc\x{e9} \x{2013} Halo", 'raw UTF-8 bytes are decoded once');
+}
 
 $socket->emit('{broken json');
 is($errors[-1][0], 'invalid_json', 'invalid JSON reports stable transport error');

@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.5] - 2026-10-20
+
+### Fixed
+- **Soloist events with umlauts or accents were dropped** (`session_invalid_json: malformed UTF-8 character`) — LMS's WebSocket client already decodes text frames to Perl characters, and SpotOn decoded them as UTF-8 a second time. Every event containing a non-ASCII character was discarded: device names such as "Küche", but also track, artist and album names such as "Beyoncé", which could leave metadata stale and miss play/pause transitions. Frames are now decoded exactly once.
+
+
 ## [3.6.4] - 2026-10-20
 
 ### Added
