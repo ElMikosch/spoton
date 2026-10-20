@@ -18,10 +18,22 @@ use constant STREAM_ROUTE => qr{\A/?plugins/SpotOn/soloist/stream/([0-9a-f]{24})
 use constant MAX_CHUNK_BYTES => 32 * 1024;
 use constant PCM_BYTES_PER_SECOND => 44_100 * 2 * 2;
 use constant PCM_PACING_DELAY     => 0;
+use constant HOLD_POLL_INTERVAL   => 0.1;
 
 my %factories;
 my %active;
 my $initialized = 0;
+my $hold_check;
+
+# Returns true while the LMS player of a stream token is paused.  A paused
+# Squeezebox keeps filling its large input buffer, and everything buffered
+# then plays after resuming as added latency.  While held, the live capture
+# is discarded instead of sent, and pacing restarts at the live edge.
+sub set_hold_check {
+    my ($class, $callback) = @_;
+    $hold_check = ref($callback) eq 'CODE' ? $callback : undef;
+    return 1;
+}
 
 sub init {
     return 1 if $initialized;
@@ -201,6 +213,34 @@ sub _raw_handler {
             my $headers = delete $entry->{headers};
             $handle->push_write($headers);
             return;
+        }
+
+        if ($entry->{format} eq 'pcm'
+            && $hold_check && eval { $hold_check->($token) }) {
+            my $status;
+            do {
+                (undef, $status) = $pipeline->read_chunk(MAX_CHUNK_BYTES);
+            } while ($status eq 'data');
+            if ($status ne 'would_block') {
+                $cleanup->($status || 'read_failed');
+                return;
+            }
+            $entry->{held} = 1;
+            # Nothing is written while held; keep the idle connection open.
+            eval { $handle->timeout_reset() };
+            $entry->{pace_timer} ||= AnyEvent->timer(
+                after => HOLD_POLL_INTERVAL,
+                cb    => sub {
+                    undef $entry->{pace_timer};
+                    $writer->();
+                },
+            );
+            return;
+        }
+        if (delete $entry->{held}) {
+            $entry->{pace_started_at} = _now();
+            $entry->{pace_bytes} = 0;
+            $entry->{pace_not_before} = $entry->{pace_started_at};
         }
 
         if ($entry->{format} eq 'pcm') {

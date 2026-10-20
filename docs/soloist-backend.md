@@ -89,6 +89,23 @@ installs a new build when they change. A managed binary takes precedence over
 `soloist` in `PATH`. Whenever the binary in use changes, idle devices restart
 with it on the next reconcile pass and active devices once playback has ended.
 
+### Latency
+
+The capture is live: PulseAudio renders the null sink in real time, including
+silence while Soloist is paused. Anything that is captured but not played
+immediately becomes permanent latency, because the player then plays at real
+time behind it. SpotOn therefore keeps both stream paths at the live edge:
+
+- Direct HTTP stream (single players): output is paced at real time. While the
+  attached LMS player is paused, the capture is read and discarded every
+  100 ms instead of being sent (a paused Squeezebox would otherwise keep
+  filling its input buffer), the idle connection's timeout is reset, and
+  pacing restarts from the live edge when playback resumes.
+- Capture pipe read by LMS (sync groups and proxy mode): `ProtocolStream`
+  overrides `sysread`. While the player is paused it drains the pipe and
+  reports `EWOULDBLOCK`; whenever LMS has read more than 0.5 s less than real
+  time would have produced, the queued backlog is discarded before reading.
+
 ### Volume
 
 Soloist sets its volume with `pa_context_set_sink_input_volume`, i.e. as

@@ -48,6 +48,66 @@ is($pipeline->state(), 'stopped', 'closing the protocol stream stops the capture
 ok(!$stream->opened(), 'protocol handle is closed after teardown');
 ok($stream->close(), 'a repeated close remains safe');
 
+# Live edge: a backlog after a read stall and capture during a pause are
+# discarded, so latency never grows over a session.
+{
+    package Local::PipePipeline;
+    sub new { bless { fh => $_[1] }, $_[0] }
+    sub start { 1 }
+    sub stop { $_[0]{stopped}++; 1 }
+    sub take_output_fh { delete $_[0]{fh} }
+
+    package Local::PausableClient;
+    sub new { bless { paused => 0 }, $_[0] }
+    sub master { $_[0] }
+    sub isPaused { $_[0]{paused} }
+}
+{
+    use Errno qw(EWOULDBLOCK);
+    use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+    pipe(my $reader, my $writer) or die "pipe: $!";
+    binmode($_) for $reader, $writer;
+    fcntl($reader, F_SETFL, fcntl($reader, F_GETFL, 0) | O_NONBLOCK) or die $!;
+    my $client = Local::PausableClient->new();
+    my $live = Plugins::SpotOn::Soloist::ProtocolStream->from_pipeline(
+        pipeline => Local::PipePipeline->new($reader),
+        url      => 'spoton://soloist-pcm:0123456789abcdef01234567',
+        client   => $client,
+    );
+    my $clock = 100;
+    no warnings 'redefine';
+    local *Time::HiRes::time = sub { $clock };
+    my $put = sub { syswrite($writer, $_[0]) == length($_[0]) or die "write: $!" };
+    my $buffer;
+
+    $put->('A' x 1000);
+    is($live->sysread($buffer, 4096), 1000, 'live capture is read normally');
+
+    $clock += 0.1;
+    $put->('B' x 2000);
+    is($live->sysread($buffer, 4096), 2000, 'data within the live window is kept');
+
+    $clock += 3;
+    $put->('C' x 30_000);
+    my $read = $live->sysread($buffer, 65536);
+    ok(!defined $read && $! == EWOULDBLOCK, 'a backlog after a read stall is discarded');
+    $put->('D' x 500);
+    $clock += 0.01;
+    is($live->sysread($buffer, 65536), 500, 'reading continues at the live edge');
+    is($buffer, 'D' x 500, 'only fresh capture is delivered after the stall');
+
+    $client->{paused} = 1;
+    $put->('E' x 800);
+    $read = $live->sysread($buffer, 65536);
+    ok(!defined $read && $! == EWOULDBLOCK, 'nothing is delivered while the player is paused');
+    $client->{paused} = 0;
+    $put->('F' x 300);
+    is($live->sysread($buffer, 65536), 300, 'capture from the pause is discarded on resume');
+    is($buffer, 'F' x 300, 'resumed playback starts with live audio');
+    close($writer);
+    $live->close();
+}
+
 {
     package Local::FailedPipeline;
     sub start { 0 }

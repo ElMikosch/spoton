@@ -68,6 +68,7 @@ sub init {
     _ensure_lms();
     require Plugins::SpotOn::Soloist::StreamServer;
     Plugins::SpotOn::Soloist::StreamServer->init();
+    Plugins::SpotOn::Soloist::StreamServer->set_hold_check(\&_stream_held);
     _subscribe() unless $initialized;
     $initialized = 1;
 
@@ -880,6 +881,15 @@ sub _push_lms_volume {
     my $current = ((($instance->session_snapshot() || {})->{playback}) || {})->{volume};
     return if defined $current && int($current + 0.5) == $volume;
     $instance->send_action('volume', volume => $volume);
+}
+
+sub _stream_held {
+    my ($token) = @_;
+    my $instance = __PACKAGE__->instanceForToken($token) or return 0;
+    my $id = $instance->player_id() or return 0;
+    my $client = _get_client($id) or return 0;
+    $client = _canonical_client($client) || $client;
+    return eval { $client->isPaused() } ? 1 : 0;
 }
 
 sub _soloist_status {

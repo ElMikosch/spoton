@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.8] - 2026-10-20
+
+### Fixed
+- **Latency grew over a session until pause and track changes lagged by seconds** — the Soloist capture is live and keeps running while LMS is paused. A paused Squeezebox kept filling its large input buffer with that capture (silence while Spotify was paused), and after resuming it played everything buffered first, so every pause added its own duration to the latency for the rest of the session. While the LMS player is paused, SpotOn now discards the capture instead of sending it and resumes at the live edge with fresh real-time pacing, for single players (direct HTTP stream) and sync groups (LMS-read capture pipe) alike. If LMS stops reading the capture pipe for more than half a second for any other reason, the backlog is discarded as well.
+- **Long pauses could end the stream** — the direct HTTP stream was closed after 300 seconds without write activity; a held stream now keeps its connection open.
+
+
 ## [3.6.7] - 2026-10-20
 
 ### Fixed

@@ -74,6 +74,7 @@ BEGIN {
     sub push_write { push @{ $_[0]{writes} }, $_[1] }
     sub drain { $_[0]{on_drain}->() }
     sub destroy { $_[0]{destroyed} = 1 }
+    sub timeout_reset { $_[0]{timeout_resets}++ }
 }
 
 use lib "$Bin/..";
@@ -209,6 +210,51 @@ my $now = 1_000;
     is(scalar @AnyEvent::timers, 1, 'PCM still applies real-time pacing after the first chunk');
     $now += $AnyEvent::timers[-1]{after};
     $AnyEvent::timers[-1]{cb}->();
+}
+
+# While the LMS player is paused, the live capture is discarded instead of
+# filling the player's buffer; afterwards streaming resumes at the live edge.
+{
+    my $held_token = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+    my $held = 0;
+    Plugins::SpotOn::Soloist::StreamServer->set_hold_check(sub { $_[0] eq $held_token && $held });
+    my $held_path = Plugins::SpotOn::Soloist::StreamServer->register_runtime_format(
+        $held_token,
+        'pcm',
+        sub {
+            Local::Pipeline->new(
+                ['LIVE-1', 'data'],
+                ['PAUSED-1', 'data'], ['PAUSED-2', 'data'], ['', 'would_block'],
+                ['LIVE-2', 'data'],
+            );
+        },
+    );
+    no warnings 'redefine';
+    my $clock = 5_000;
+    local *Plugins::SpotOn::Soloist::StreamServer::_now = sub { $clock };
+    $Slim::Web::Pages::raw[0][1]->(
+        Local::HTTPClient->new(),
+        Local::Response->new(Local::Request->new(path => $held_path)),
+    );
+    my $held_handle = $AnyEvent::Handle::handles[-1];
+    $held_handle->drain();
+    is($held_handle->{writes}[-1], 'LIVE-1', 'audio streams while the player is playing');
+
+    $held = 1;
+    $clock += 30;
+    my $writes = scalar @{ $held_handle->{writes} };
+    my $timers = scalar @AnyEvent::timers;
+    $held_handle->drain();
+    is(scalar @{ $held_handle->{writes} }, $writes, 'nothing is sent while the player is paused');
+    is(scalar @AnyEvent::timers, $timers + 1, 'a paused stream polls for resume');
+    ok($held_handle->{timeout_resets}, 'the idle connection is kept open during a pause');
+
+    $held = 0;
+    $AnyEvent::timers[-1]{cb}->();
+    is($held_handle->{writes}[-1], 'LIVE-2', 'playback resumes with live audio after the pause');
+    ok(!grep({ /PAUSED/ } @{ $held_handle->{writes} }), 'audio captured during the pause is never sent');
+    Plugins::SpotOn::Soloist::StreamServer->set_hold_check(undef);
+    Plugins::SpotOn::Soloist::StreamServer->unregister_runtime($held_token);
 }
 
 my $unknown_client = Local::HTTPClient->new();
