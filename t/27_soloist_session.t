@@ -200,6 +200,23 @@ ok($session->stop(), 'session stops cleanly');
 is($session->status, 'stopped', 'stop updates session status');
 ok($transport->{closed}, 'stop closes transport');
 
+# auth_state carries the Connect activation as well.
+{
+    my $auth_dir = tempdir(CLEANUP => 1);
+    write_file(catfile($auth_dir, 'ws.addr'), "127.0.0.1\n");
+    write_file(catfile($auth_dir, 'ws.port'), "19192\n");
+    my $auth_transport = Local::FakeTransport->new();
+    my $auth_session = Plugins::SpotOn::Soloist::Session->new(
+        data_dir  => $auth_dir,
+        transport => $auth_transport,
+    );
+    $auth_session->start();
+    $auth_transport->emit({ kind => 'auth', event_type => 'auth_state', logged_in => 1, is_active => 1 });
+    is($auth_session->snapshot->{playback}{is_active}, 1, 'auth_state activation updates playback state');
+    $auth_transport->emit({ kind => 'auth', event_type => 'auth_state', logged_in => 1, is_active => 0 });
+    is($auth_session->snapshot->{playback}{is_active}, 0, 'auth_state deactivation updates playback state');
+}
+
 # Idle liveness: a quiet connection is probed, any frame proves liveness, and
 # an unanswered probe closes the socket so the runtime can reconnect.
 {

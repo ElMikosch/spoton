@@ -203,6 +203,10 @@ sub _apply_event {
             is_active   => $event->{is_active},
             device_name => $event->{device_name},
         };
+        # auth_state reports the same Connect activation as device_changed
+        # and may be the only notification of it.
+        $self->{state}{playback}{is_active} = $event->{is_active}
+            if defined $event->{is_active};
         return;
     }
 

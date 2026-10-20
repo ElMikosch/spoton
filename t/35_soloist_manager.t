@@ -601,6 +601,59 @@ my $token_index = 0;
     is($runtime->player_id, undef, 'player stays released after a stale track change');
 
 
+    # ---- Moving playback to another device and back. ----
+    {
+        my $base_playback = { %{ $playing->{playback} } };
+        my $emit = sub {
+            my ($kind, %playback) = @_;
+            $session->emit({ kind => $kind }, { %$playing, playback => { %$base_playback, %playback } });
+        };
+        $clock += 10;
+        $emit->('playback', status => 'playing', is_active => 1);
+        ok($runtime->player_id, 'player is attached before switching away');
+
+        $emit->('device', status => 'playing', is_active => 0);
+        is($runtime->player_id, undef, 'switching to another device releases the LMS player');
+        ok(!$kitchen->isPlaying, 'switching away stops the LMS player');
+
+        # Back to this speaker: "playing" arrives before the activation.
+        $emit->('playback', status => 'playing', is_active => 0);
+        is($runtime->player_id, undef, 'inactive device does not attach on a playing status');
+        $emit->('device', status => 'playing', is_active => 1);
+        ok($runtime->player_id, 'activation after the playing status attaches the player');
+        is($kitchen->playingSong->track->url, "spoton://soloist-pcm:$live_token",
+            'switching back resumes the live Soloist stream');
+
+        # Activation reported only through auth_state.
+        $clock += 10;
+        $emit->('auth', status => 'playing', is_active => 0);
+        is($runtime->player_id, undef, 'auth_state deactivation releases the player');
+        $emit->('auth', status => 'playing', is_active => 1);
+        ok($runtime->player_id, 'auth_state activation attaches the player');
+
+        # Safety net: a missed activation is caught by the health check.
+        $clock += 10;
+        $runtime->detach_player();
+        $emit->('health', status => 'playing', is_active => 1);
+        ok($runtime->player_id, 'health check attaches a playing device whose events were missed');
+
+        # The health check never reclaims a player the user just stopped.
+        $clock += 10;
+        $kitchen->{playing} = 0;
+        $kitchen->{paused} = 0;
+        $session->{snapshot}{playback}{status} = 'playing';
+        $subscribers{'pause,stop'}->(Slim::Control::Request->notification($kitchen, 'playlist', 'stop'));
+        my $plays = grep { $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play' } @Slim::Control::Request::requests;
+        $emit->('health', status => 'playing', is_active => 1);
+        $emit->('auth', status => 'playing', is_active => 1);
+        my $plays_after = grep { $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play' } @Slim::Control::Request::requests;
+        is($plays_after, $plays, 'health check and auth probe respect an LMS stop');
+        $emit->('playback', status => 'paused', is_active => 1);
+        $emit->('playback', status => 'playing', is_active => 1);
+        ok($kitchen->isPlaying, 'pressing play in Spotify afterwards attaches again');
+        $session->{snapshot} = $playing;
+    }
+
     # ---- Volume: Spotify and LMS share one volume, LMS attenuates. ----
     {
         my $runtime_obj = $runtime->{runtime};

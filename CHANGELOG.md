@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.7] - 2026-10-20
+
+### Fixed
+- **No sound after moving playback to another device and back** — the LMS player was only re-attached on a "playing" status while the device was already known to be active. When Soloist reported the activation after the status, or only through `auth_state`, the combination was never seen and the speaker stayed silent until a seek produced a new status. Activation events (`device_changed`, `auth_state`) now attach the player as well, `auth_state` updates the activation state, and the five-second health check attaches a playing, active device whose events were missed. The health check, track changes and auth probes never reclaim a player the user has just stopped in LMS or switched to other content; only a new status from Spotify does.
+
+
 ## [3.6.6] - 2026-10-20
 
 ### Changed

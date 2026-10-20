@@ -921,7 +921,7 @@ sub _on_instance_update {
         _apply_volume($instance, $playback->{volume});
     }
 
-    if (($kind eq 'state' || $kind eq 'device')
+    if (($kind eq 'state' || $kind eq 'device' || $kind eq 'auth')
         && defined $playback->{is_active}
         && !$playback->{is_active}) {
         $instance->detach_player() if $instance->player_id();
@@ -929,14 +929,19 @@ sub _on_instance_update {
     }
 
     # Attach on activation, and re-attach when Spotify plays while the LMS
-    # player was stopped or switched to other content in the meantime.  A
-    # track change carries no status of its own: its snapshot can still say
-    # "playing" just after LMS asked Soloist to pause, so it may only perform
-    # a first attach and never reclaim a player the user just took over.
-    my $attach_event = $kind eq 'state' || $kind eq 'playback'
-        || ($kind eq 'item'
-            && !$instance->player_id()
-            && ($attach_block{ $instance->client_id() } || 0) <= Time::HiRes::time());
+    # player was stopped or switched to other content in the meantime.
+    # Activation can arrive before or after the "playing" status (as
+    # device_changed or auth_state), so each of these events re-evaluates.
+    # Track changes, auth_state (also SpotOn's own liveness probe) and the
+    # periodic health check carry no fresh playback status: just after the
+    # user stopped LMS or started other content there, the snapshot can still
+    # say "playing", so they never reclaim a player until Spotify has reported
+    # a new state.
+    my $genuine = $kind eq 'state' || $kind eq 'playback' || $kind eq 'device';
+    delete $attach_block{ $instance->client_id() } if $genuine;
+    my $attach_event = $genuine
+        || (($kind eq 'item' || $kind eq 'auth' || $kind eq 'health')
+            && !$attach_block{ $instance->client_id() });
     if ($attach_event
         && $playback->{is_active}
         && ($playback->{status} || '') eq 'playing'
@@ -1149,6 +1154,7 @@ sub _subscribe {
         }
         else {
             return unless $status eq 'playing' || $status eq 'buffering';
+            $attach_block{ $instance->client_id() } = 1;
             $instance->send_action('pause');
         }
     };
@@ -1186,7 +1192,7 @@ sub _subscribe {
         return unless $instance->player_id();
         return if _player_on_stream($instance);
         $instance->detach_player(silent => 1);
-        $attach_block{ $instance->client_id() } = Time::HiRes::time() + REATTACH_GRACE;
+        $attach_block{ $instance->client_id() } = 1;
         my $status = _soloist_status($instance);
         $instance->send_action('pause')
             if $status eq 'playing' || $status eq 'buffering';

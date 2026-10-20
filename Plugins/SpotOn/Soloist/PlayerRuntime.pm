@@ -139,8 +139,12 @@ sub poll_now {
         eval { $self->{session}->refresh() }
             unless $self->{session}->connected();
         # Catch stream volume changes whose event was missed or that came
-        # with a new Soloist output stream.
-        $self->compensate_volume() if $self->is_active();
+        # with a new Soloist output stream, and let the manager re-check the
+        # player attachment in case an activation event was missed.
+        if ($self->is_active()) {
+            $self->compensate_volume();
+            $self->_notify('on_update', $self, { kind => 'health' }, $self->session_snapshot());
+        }
     }
 
     $self->_schedule_poll(
