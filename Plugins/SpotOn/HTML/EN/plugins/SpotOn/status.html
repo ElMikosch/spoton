@@ -536,6 +536,18 @@ footer {
             if (m === 'linux') body.appendChild(createMetricRow('Platform', 'Linux only', 'dot-dead'));
         });
         if (s.version) body.appendChild(createMetricRow('Version', s.version));
+        if (s.binarySource) {
+            body.appendChild(createMetricRow('Binary', s.binarySource === 'managed' ? 'managed by SpotOn' : 'from the system'));
+        }
+        var inst = s.installer || {};
+        if (inst.supported) {
+            body.appendChild(createMetricRow('Auto Update', s.autoUpdate ? 'daily' : 'off', s.autoUpdate ? 'dot-alive' : 'muted'));
+            if (inst.state === 'downloading' || inst.state === 'extracting') {
+                body.appendChild(createMetricRow('Download', inst.state + '...', 'rate-limited'));
+            } else if (inst.state === 'failed') {
+                body.appendChild(createMetricRow('Download', 'failed: ' + val(inst.error) + (inst.message ? ' (' + inst.message + ')' : ''), 'dot-dead'));
+            }
+        }
         if (s.expiresInDays !== null && s.expiresInDays !== undefined) {
             var exp = s.expiresInDays + ' days (built ' + val(s.buildDate) + ')';
             body.appendChild(createMetricRow('Build Expires', exp, s.expiresInDays < 14 ? 'rate-limited' : ''));

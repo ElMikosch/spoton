@@ -8,6 +8,7 @@ use Fcntl qw(O_CREAT O_EXCL O_WRONLY);
 use File::Path qw(make_path);
 use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
+use Cwd qw(abs_path);
 use Scalar::Util qw(blessed);
 use Time::HiRes ();
 use Time::Local qw(timegm);
@@ -40,7 +41,11 @@ use constant MAX_SOCKET_PATH       => 100;
 
 # Spotify Soloist builds stop working 90 days after their build date.
 use constant BUILD_LIFETIME_DAYS   => 90;
-use constant VERSION_TIMEOUT       => 2;
+use constant VERSION_TIMEOUT       => 5;
+
+# Optional automatic updates of the SpotOn-managed Soloist binary.
+use constant UPDATE_CHECK_FIRST    => 600;
+use constant UPDATE_CHECK_INTERVAL => 86_400;
 
 my @REQUIRED_TOOLS = qw(soloist pulseaudio parec ffmpeg);
 
@@ -55,6 +60,8 @@ my %failures;
 my %lms_echo;
 my %attach_block;
 my %version_cache;
+my %instance_binary;
+my $installer;
 
 sub init {
     _ensure_lms();
@@ -71,6 +78,8 @@ sub init {
         $prefs->set('soloistConfigured', 1);
         $prefs->set('soloistEnabled', 1);
     }
+
+    __PACKAGE__->scheduleUpdateCheck(UPDATE_CHECK_FIRST) unless $::SCANNER;
 
     if ($prefs->get('soloistEnabled') && !$::SCANNER) {
         $enabled = 1;
@@ -150,6 +159,7 @@ sub stop {
     %failures = ();
     %lms_echo = ();
     %attach_block = ();
+    %instance_binary = ();
     return 1;
 }
 
@@ -163,6 +173,8 @@ sub shutdown {
     }
     @subscriptions = ();
     $initialized = 0;
+    Slim::Utils::Timers::killTimers(__PACKAGE__, \&_update_check)
+        if $INC{'Slim/Utils/Timers.pm'};
     if ($INC{'Plugins/SpotOn/Soloist/StreamServer.pm'}) {
         Plugins::SpotOn::Soloist::StreamServer->shutdown();
     }
@@ -194,6 +206,21 @@ sub reconcile {
             if $instance && $instance->state() eq 'running'
                 && $instance->running_since()
                 && $now - $instance->running_since() >= STABLE_AFTER;
+    }
+
+    # A replaced Soloist binary (downloaded by SpotOn or installed by hand)
+    # takes effect as soon as a device is idle; playback is never cut off.
+    my $current_binary = _binary_identity($tools->{soloist});
+    for my $id (keys %instances) {
+        my $instance = $instances{$id};
+        next if $instance->is_active() || $instance->state() eq 'failed';
+        next unless defined $current_binary && defined $instance_binary{$id}
+            && $instance_binary{$id} ne $current_binary;
+        $log->info('Soloist device "' . $instance->device_name()
+            . '" restarts with the new Soloist build') if $log->is_info;
+        $instance->stop();
+        delete $instances{$id};
+        delete $instance_binary{$id};
     }
 
     my @clients = _desired_clients();
@@ -281,10 +308,17 @@ sub setupStatus {
     require Plugins::SpotOn::Soloist::AudioPreflight;
     require Plugins::SpotOn::Soloist::Transport;
     my $websocket = Plugins::SpotOn::Soloist::Transport->websocket_available();
+    my $soloist_installer = _installer();
+    my $managed = $soloist_installer->installed_binary();
     my $found = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
         websocket_available => $websocket,
+        ($managed ? (soloist_binary => $managed) : ()),
     )->{tools} || {};
     my %tools = map { $_ => $found->{$_} } @REQUIRED_TOOLS;
+    my $managed_path = $managed ? (abs_path($managed) || $managed) : undef;
+    my $binary_source = !$tools{soloist} ? undef
+        : defined $managed_path && $tools{soloist} eq $managed_path ? 'managed'
+        : 'system';
     my @missing = grep { !$tools{$_} } @REQUIRED_TOOLS;
     push @missing, 'lms_simplews' unless $websocket;
     unshift @missing, 'linux' unless $^O eq 'linux';
@@ -343,6 +377,9 @@ sub setupStatus {
         tools        => \%tools,
         missing      => \@missing,
         version      => $build{version},
+        binarySource => $binary_source,
+        installer    => $soloist_installer->status(),
+        autoUpdate   => $prefs->get('soloistAutoUpdate') ? 1 : 0,
         buildDate    => $build{build_date},
         expiresAt    => $build{expires_at},
         expiresInDays => defined $build{expires_at}
@@ -351,6 +388,39 @@ sub setupStatus {
         devices      => \@devices,
         lastError    => $last_error,
     };
+}
+
+sub managedBinary {
+    _ensure_lms();
+    return _installer()->installed_binary();
+}
+
+# Download the current Soloist build for this host from Spotify and install
+# it into the private data directory.  Asynchronous; see installerStatus().
+sub installLatest {
+    my ($class) = @_;
+    _ensure_lms();
+    my $prepared = eval { _secure_directory(baseDir()); 1 };
+    return (0, 'base_dir_failed') unless $prepared;
+    $log->info('Soloist: downloading the current build from Spotify');
+    my ($ok, $error) = _installer()->install(on_done => \&_on_binary_installed);
+    return $ok ? (1) : (0, $error);
+}
+
+sub installerStatus {
+    _ensure_lms();
+    return _installer()->status();
+}
+
+sub scheduleUpdateCheck {
+    my ($class, $delay) = @_;
+    require Slim::Utils::Timers;
+    Slim::Utils::Timers::killTimers(__PACKAGE__, \&_update_check);
+    Slim::Utils::Timers::setTimer(
+        __PACKAGE__,
+        Time::HiRes::time() + (defined $delay ? $delay : UPDATE_CHECK_INTERVAL),
+        \&_update_check,
+    );
 }
 
 sub attachPlayer {
@@ -509,6 +579,64 @@ sub _poll {
     $_->poll_now() for values %instances;
 }
 
+sub _installer {
+    $installer ||= do {
+        require Plugins::SpotOn::Soloist::Installer;
+        Plugins::SpotOn::Soloist::Installer->new(
+            base_dir   => baseDir(),
+            version_of => \&_binary_version,
+        );
+    };
+    return $installer;
+}
+
+sub _on_binary_installed {
+    my ($ok, $info_or_code, $message) = @_;
+    unless ($ok) {
+        $log->warn('Soloist: download of the current build failed ('
+            . ($info_or_code || 'unknown') . ')'
+            . (defined $message && length $message ? ": $message" : ''));
+        return;
+    }
+
+    $log->info('Soloist: installed ' . ($info_or_code->{version} || 'new build'));
+    # Re-run preflight so the managed binary is picked up, and give failed
+    # devices (for example after an expired build) an immediate retry.
+    $tools = undef;
+    %failures = ();
+    %version_cache = ();
+    if ($enabled) {
+        _schedule_reconcile(RECONCILE_DELAY);
+    }
+    elsif ($prefs->get('soloistEnabled')) {
+        __PACKAGE__->start();
+    }
+}
+
+sub _update_check {
+    __PACKAGE__->scheduleUpdateCheck(UPDATE_CHECK_INTERVAL);
+    return unless $prefs->get('soloistAutoUpdate');
+    my $soloist_installer = _installer();
+    return if $soloist_installer->busy() || !$soloist_installer->supported();
+    $soloist_installer->check_for_update(sub {
+        my ($available, $detail) = @_;
+        if (!defined $available) {
+            $log->warn("Soloist: update check failed: " . _clean_message($detail));
+            return;
+        }
+        return unless $available;
+        $log->info('Soloist: a new build is available');
+        __PACKAGE__->installLatest();
+    });
+}
+
+sub _binary_identity {
+    my ($path) = @_;
+    return undef unless defined $path;
+    my @stat = stat($path) or return undef;
+    return join(':', $path, @stat[0, 1, 7, 9]);
+}
+
 sub _autostart {
     return if __PACKAGE__->start();
     return unless $prefs->get('soloistEnabled');
@@ -632,6 +760,7 @@ sub _ensure_instance {
         },
     );
     $instances{$id} = $instance;
+    $instance_binary{$id} = _binary_identity($tools->{soloist});
     unless ($instance->start()) {
         $last_error = $instance->status_snapshot()->{lastError};
         return;
@@ -1086,8 +1215,10 @@ sub _preflight {
     require Plugins::SpotOn::Soloist::Transport;
     my $websocket = Plugins::SpotOn::Soloist::Transport->websocket_available();
     return (undef, 'lms_simplews_missing') unless $websocket;
+    my $managed = _installer()->installed_binary();
     my $preflight = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
         websocket_available => $websocket,
+        ($managed ? (soloist_binary => $managed) : ()),
     );
     my $found = $preflight->{tools} || {};
     for my $required (qw(soloist pulseaudio parec ffmpeg)) {
@@ -1149,11 +1280,12 @@ sub _write_api_key {
 
 # Version line of the installed Soloist binary and, when it carries an ISO
 # build date, the date the 90-day build lifetime ends.  Cached per binary
-# path, size and mtime so a replaced binary is picked up immediately.
+# file identity so a replaced binary is picked up immediately.
 sub _binary_version {
     my ($path) = @_;
     my @stat = stat($path) or return ();
-    my $cache_key = join(':', $path, $stat[7], $stat[9]);
+    # Release archives carry a fixed mtime, so include inode and ctime.
+    my $cache_key = join(':', $path, @stat[0, 1, 7, 9, 10]);
     return %{ $version_cache{$cache_key} } if $version_cache{$cache_key};
 
     my ($output, $pid) = ('');
@@ -1182,13 +1314,23 @@ sub _binary_version {
     $line = _clean_message($line);
     $line = substr($line, 0, 120);
 
-    my %build = (version => $line);
-    if ($output =~ /\b(20\d{2})-(\d{2})-(\d{2})\b/) {
-        my $date = eval { timegm(0, 0, 0, $3, $2 - 1, $1) };
-        if (defined $date) {
-            $build{build_date} = "$1-$2-$3";
-            $build{expires_at} = $date + BUILD_LIFETIME_DAYS * 86_400;
-        }
+    # Soloist prints e.g. "soloist 1.3.9.38 build 1792476110 (20261020)
+    # (g440165f200) (linux/x86_64)": a build timestamp, its date, a commit and
+    # the platform.  Show only the version and derive the 90-day expiry.
+    my %build = (
+        version => $line =~ /\A(soloist\s+\d[\w.+-]*)/ ? $1 : $line,
+    );
+    my $built;
+    if ($line =~ /\bbuild\s+(\d{9,11})\b/) {
+        $built = $1;
+    }
+    elsif ($output =~ /\b(20\d{2})-?(\d{2})-?(\d{2})\b/) {
+        $built = eval { timegm(0, 0, 0, $3, $2 - 1, $1) };
+    }
+    if (defined $built) {
+        my @date = gmtime($built);
+        $build{build_date} = sprintf('%04d-%02d-%02d', $date[5] + 1900, $date[4] + 1, $date[3]);
+        $build{expires_at} = $built + BUILD_LIFETIME_DAYS * 86_400;
     }
     %version_cache = ($cache_key => { %build });
     return %build;

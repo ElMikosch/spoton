@@ -76,6 +76,19 @@ lifetime when the version output contains an ISO build date, and one entry per
 Spotify device with its connection, playback, LMS attachment, last error and
 next restart. Saving the settings page retries failed devices immediately.
 
+"Download the latest Soloist from Spotify" fetches
+`https://soloist-builds.spotifycdn.com/soloist_release_<arch>.tar.gz` for the
+host (`x86_64`, `arm64`, or `arm32` for ARMv7 hard-float userlands) with LMS's
+asynchronous HTTP client, extracts only the `soloist` member with `tar` in a
+background process, rejects symlinks, hard links and implausible sizes, requires
+`soloist --version` to answer, and renames the binary to
+`<cachedir>/spoton/soloist-managed/bin/soloist` (mode `0700`). The CDN's ETag and
+Last-Modified headers are stored next to it in `soloist.json`; with automatic
+updates enabled SpotOn compares them once a day using a HEAD request and
+installs a new build when they change. A managed binary takes precedence over
+`soloist` in `PATH`. Whenever the binary in use changes, idle devices restart
+with it on the next reconcile pass and active devices once playback has ended.
+
 ### Runtime layout and recovery
 
 Per player, SpotOn keeps Soloist's persistent data (including the stored

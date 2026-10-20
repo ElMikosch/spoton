@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.4] - 2026-10-20
+
+### Added
+- **Download the Soloist binary from SpotOn Settings** — "Download the latest Soloist from Spotify" fetches the official build for this host (Linux x86_64, ARM64 or ARMv7) from Spotify's CDN (`soloist-builds.spotifycdn.com`), unpacks only the `soloist` executable, verifies it (regular file, no hard link, plausible size, `soloist --version` answers) and installs it as `<cachedir>/spoton/soloist-managed/bin/soloist`. A failed download or a rejected archive leaves the previous build untouched. The page shows progress and the result without a reload. SpotOn never redistributes Soloist; the LMS server downloads it directly from Spotify.
+- **Keep Soloist up to date automatically** — an optional daily check compares the CDN's ETag with the installed build and installs a new build when Spotify publishes one, so the 90-day build expiry no longer needs manual attention.
+
+### Changed
+- **New Soloist builds take effect without cutting off playback** — after a SpotOn-managed download or a manual replacement of the binary, idle devices restart with the new build on the next reconcile pass; a device with active Spotify playback restarts once playback has ended. A SpotOn-managed binary takes precedence over `soloist` in `PATH`; settings and status page show which one is used.
+
+### Fixed
+- **Build expiry was never shown** — Soloist reports its build as `build <unix time> (<YYYYMMDD>)`, not as an ISO date. The expiry is now derived from that timestamp, and the version is shown as `soloist <number>`.
+
+
 ## [3.6.3] - 2026-10-20
 
 ### Added

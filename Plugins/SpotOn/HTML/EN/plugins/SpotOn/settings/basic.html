@@ -356,7 +356,9 @@
 			<div style="margin-left:12px">
 				[% IF soloist.tools.$tool %]
 				<span style="color: green">&#10003;</span> [% tool %] <span class="mono" style="opacity:0.7">[% soloist.tools.$tool | html %]</span>
-				[% IF tool == 'soloist' && soloist.version %]<span style="opacity:0.7">([% soloist.version | html %])</span>[% END %]
+				[% IF tool == 'soloist' %]
+				<span style="opacity:0.7">([% IF soloist.version %][% soloist.version | html %], [% END %][% IF soloist.binarySource == 'managed' %][% 'PLUGIN_SPOTON_SOLOIST_SOURCE_MANAGED' | string %][% ELSE %][% 'PLUGIN_SPOTON_SOLOIST_SOURCE_SYSTEM' | string %][% END %])</span>
+				[% END %]
 				[% ELSE %]
 				<span style="color: red">&#10007;</span> [% tool %] &mdash; [% 'PLUGIN_SPOTON_SOLOIST_NOT_FOUND' | string %]
 				[% END %]
@@ -373,6 +375,31 @@
 				[% 'PLUGIN_SPOTON_SOLOIST_EXPIRES_IN' | string %]: [% soloist.expiresInDays %] ([% soloist.buildDate | html %])
 			</div>
 			[% END %]
+		</div>
+
+		<div style="margin-top:12px">
+		[% IF soloist.installer.supported %]
+			<button type="button" class="submit" id="soloistInstallBtn" onclick="spotonSoloistInstall()"
+			        data-running="[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_RUNNING' | string | html %]"
+			        data-done="[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_DONE' | string | html %]"
+			        data-failed="[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_FAILED' | string | html %]"
+			        [% IF soloist.installer.state == 'downloading' || soloist.installer.state == 'extracting' %]disabled[% END %]>
+				[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD' | string %]
+			</button>
+			<span id="soloistInstallStatus" style="margin-left:8px">
+				[% IF soloist.installer.state == 'failed' %]<span style="color: red">[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_FAILED' | string %] [% soloist.installer.error | html %][% IF soloist.installer.message %] ([% soloist.installer.message | html %])[% END %]</span>[% END %]
+			</span>
+			<div style="font-size:0.85em; opacity:0.75; margin-top:4px">
+				[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_HINT' | string %] ([% soloist.installer.arch | html %])
+			</div>
+			<div style="margin-top:8px">
+				<input type="checkbox" class="stdedit" name="pref_soloistAutoUpdate" id="pref_soloistAutoUpdate"
+				       value="1" [% IF soloist.autoUpdate %]checked[% END %]/>
+				<label for="pref_soloistAutoUpdate">[% 'PLUGIN_SPOTON_SOLOIST_AUTO_UPDATE' | string %]</label>
+			</div>
+		[% ELSE %]
+			<div style="opacity:0.75">[% 'PLUGIN_SPOTON_SOLOIST_DOWNLOAD_UNSUPPORTED' | string %]</div>
+		[% END %]
 		</div>
 
 		<details style="margin-top:10px">
@@ -445,6 +472,74 @@
 	[% END %]
 
 	<script type="text/javascript">
+	// ============================================================
+	// Spotify Soloist binary download
+	// ============================================================
+	function spotonSoloistInstallStatus(text, color) {
+		var statusEl = document.getElementById('soloistInstallStatus');
+		if (!statusEl) { return; }
+		statusEl.textContent = text;
+		statusEl.style.color = color || '';
+	}
+
+	function spotonSoloistInstall() {
+		var btn = document.getElementById('soloistInstallBtn');
+		btn.disabled = true;
+		spotonSoloistInstallStatus(btn.dataset.running);
+
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', '/plugins/SpotOn/settings/soloist/install', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.onload = function() {
+			var data;
+			try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+			if (xhr.status === 200 && data && data.status === 'ok') {
+				setTimeout(spotonSoloistInstallPoll, 1000);
+			} else {
+				btn.disabled = false;
+				spotonSoloistInstallStatus(btn.dataset.failed + ' ' + ((data && data.reason) || xhr.status), 'red');
+			}
+		};
+		xhr.onerror = function() {
+			btn.disabled = false;
+			spotonSoloistInstallStatus(btn.dataset.failed, 'red');
+		};
+		xhr.send('');
+	}
+
+	function spotonSoloistInstallPoll() {
+		var btn = document.getElementById('soloistInstallBtn');
+		var xhr = new XMLHttpRequest();
+		xhr.open('GET', '/plugins/SpotOn/settings/soloist/install/status', true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.onload = function() {
+			var data;
+			try { data = JSON.parse(xhr.responseText); } catch(e) { data = null; }
+			if (!data || data.state === 'downloading' || data.state === 'extracting') {
+				setTimeout(spotonSoloistInstallPoll, 1000);
+				return;
+			}
+			if (data.state === 'installed') {
+				spotonSoloistInstallStatus(btn.dataset.done + ' ' + (data.version || ''), 'green');
+				setTimeout(function() { window.location.reload(); }, 1500);
+				return;
+			}
+			btn.disabled = false;
+			spotonSoloistInstallStatus(btn.dataset.failed + ' ' + (data.error || '')
+				+ (data.message ? ' (' + data.message + ')' : ''), 'red');
+		};
+		xhr.onerror = function() { setTimeout(spotonSoloistInstallPoll, 2000); };
+		xhr.send();
+	}
+
+	document.addEventListener('DOMContentLoaded', function() {
+		var btn = document.getElementById('soloistInstallBtn');
+		if (btn && btn.disabled) {
+			spotonSoloistInstallStatus(btn.dataset.running);
+			spotonSoloistInstallPoll();
+		}
+	});
+
 	function spotonPkceStart() {
 		var btn      = document.getElementById('pkceConnectBtn');
 		var statusEl = document.getElementById('pkce-status');

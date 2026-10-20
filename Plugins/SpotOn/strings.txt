@@ -3629,14 +3629,131 @@ PLUGIN_SPOTON_SOLOIST_HOWTO_TITLE
 	SV	Så konfigurerar du Soloist
 
 PLUGIN_SPOTON_SOLOIST_HOWTO
-	CS	1. Nainstalujte na server LMS balíčky pulseaudio, pulseaudio-utils a ffmpeg. 2. Stáhněte program soloist pro svou architekturu ze stránky Spotify for Developers a nainstalujte jej jako /usr/local/bin/soloist. 3. Vytvořte API klíč Soloist ve Spotify for Developers a vložte jej výše. Sestavení Soloist vyprší po 90 dnech: nahraďte program a znovu uložte tato nastavení, aby se zařízení ihned restartovala.
-	DA	1. Installer pakkerne pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Hent programmet soloist til din arkitektur fra Spotify for Developers og installer det som /usr/local/bin/soloist. 3. Opret en Soloist-API-nøgle i Spotify for Developers og indsæt den ovenfor. Soloist-builds udløber efter 90 dage: udskift programmet og gem disse indstillinger igen for at genstarte enhederne med det samme.
-	DE	1. Installiere auf dem LMS-Server die Pakete pulseaudio, pulseaudio-utils und ffmpeg. 2. Lade das Programm soloist für deine Architektur bei Spotify for Developers herunter und installiere es als /usr/local/bin/soloist. 3. Erstelle bei Spotify for Developers einen Soloist-API-Key und füge ihn oben ein. Soloist-Builds laufen nach 90 Tagen ab: Programm ersetzen und diese Einstellungen erneut speichern, damit die Geräte sofort neu starten.
-	EN	1. Install the pulseaudio, pulseaudio-utils and ffmpeg packages on the LMS server. 2. Download the soloist program for your architecture from Spotify for Developers and install it as /usr/local/bin/soloist. 3. Create a Soloist API key in Spotify for Developers and paste it above. Soloist builds expire after 90 days: replace the program and save these settings again to restart the devices immediately.
-	ES	1. Instala los paquetes pulseaudio, pulseaudio-utils y ffmpeg en el servidor LMS. 2. Descarga el programa soloist para tu arquitectura desde Spotify for Developers e instálalo como /usr/local/bin/soloist. 3. Crea una clave de API de Soloist en Spotify for Developers y pégala arriba. Las versiones de Soloist caducan a los 90 días: sustituye el programa y vuelve a guardar estos ajustes para reiniciar los dispositivos de inmediato.
-	FR	1. Installez les paquets pulseaudio, pulseaudio-utils et ffmpeg sur le serveur LMS. 2. Téléchargez le programme soloist pour votre architecture depuis Spotify for Developers et installez-le sous /usr/local/bin/soloist. 3. Créez une clé API Soloist dans Spotify for Developers et collez-la ci-dessus. Les versions de Soloist expirent après 90 jours : remplacez le programme et enregistrez à nouveau ces réglages pour redémarrer immédiatement les appareils.
-	IT	1. Installa sul server LMS i pacchetti pulseaudio, pulseaudio-utils e ffmpeg. 2. Scarica il programma soloist per la tua architettura da Spotify for Developers e installalo come /usr/local/bin/soloist. 3. Crea una chiave API Soloist in Spotify for Developers e incollala qui sopra. Le build di Soloist scadono dopo 90 giorni: sostituisci il programma e salva di nuovo queste impostazioni per riavviare subito i dispositivi.
-	NL	1. Installeer de pakketten pulseaudio, pulseaudio-utils en ffmpeg op de LMS-server. 2. Download het programma soloist voor uw architectuur via Spotify for Developers en installeer het als /usr/local/bin/soloist. 3. Maak een Soloist-API-sleutel aan in Spotify for Developers en plak deze hierboven. Soloist-builds verlopen na 90 dagen: vervang het programma en sla deze instellingen opnieuw op om de apparaten direct opnieuw te starten.
-	NO	1. Installer pakkene pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Last ned programmet soloist for din arkitektur fra Spotify for Developers og installer det som /usr/local/bin/soloist. 3. Opprett en Soloist-API-nøkkel i Spotify for Developers og lim den inn ovenfor. Soloist-builds utløper etter 90 dager: bytt ut programmet og lagre disse innstillingene på nytt for å starte enhetene på nytt umiddelbart.
-	PL	1. Zainstaluj na serwerze LMS pakiety pulseaudio, pulseaudio-utils i ffmpeg. 2. Pobierz program soloist dla swojej architektury ze Spotify for Developers i zainstaluj go jako /usr/local/bin/soloist. 3. Utwórz klucz API Soloist w Spotify for Developers i wklej go powyżej. Wersje Soloist wygasają po 90 dniach: zastąp program i zapisz ponownie te ustawienia, aby od razu ponownie uruchomić urządzenia.
-	SV	1. Installera paketen pulseaudio, pulseaudio-utils och ffmpeg på LMS-servern. 2. Ladda ner programmet soloist för din arkitektur från Spotify for Developers och installera det som /usr/local/bin/soloist. 3. Skapa en Soloist-API-nyckel i Spotify for Developers och klistra in den ovan. Soloist-versioner går ut efter 90 dagar: byt ut programmet och spara inställningarna igen för att starta om enheterna direkt.
+	CS	1. Nainstalujte na server LMS balíčky pulseaudio, pulseaudio-utils a ffmpeg. 2. Klikněte na „Stáhnout nejnovější Soloist od Spotify“ (nebo nainstalujte soloist sami jako /usr/local/bin/soloist). 3. Vytvořte API klíč Soloist ve Spotify for Developers a vložte jej výše. Sestavení Soloist vyprší po 90 dnech; s volbou „Udržovat automaticky aktuální“ se o to postará SpotOn.
+	DA	1. Installer pakkerne pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Klik på „Hent den nyeste Soloist fra Spotify“ (eller installer soloist selv som /usr/local/bin/soloist). 3. Opret en Soloist-API-nøgle i Spotify for Developers og indsæt den ovenfor. Soloist-builds udløber efter 90 dage; med „Hold automatisk opdateret“ klarer SpotOn det.
+	DE	1. Installiere auf dem LMS-Server die Pakete pulseaudio, pulseaudio-utils und ffmpeg. 2. Klicke auf „Neueste Soloist-Version von Spotify laden“ (oder installiere soloist selbst als /usr/local/bin/soloist). 3. Erstelle bei Spotify for Developers einen Soloist-API-Key und füge ihn oben ein. Soloist-Builds laufen nach 90 Tagen ab; mit „Automatisch aktuell halten“ kümmert sich SpotOn darum.
+	EN	1. Install the pulseaudio, pulseaudio-utils and ffmpeg packages on the LMS server. 2. Click "Download the latest Soloist from Spotify" (or install soloist yourself as /usr/local/bin/soloist). 3. Create a Soloist API key in Spotify for Developers and paste it above. Soloist builds expire after 90 days; with "Keep up to date automatically" SpotOn takes care of that.
+	ES	1. Instala los paquetes pulseaudio, pulseaudio-utils y ffmpeg en el servidor LMS. 2. Haz clic en «Descargar el Soloist más reciente de Spotify» (o instala soloist tú mismo como /usr/local/bin/soloist). 3. Crea una clave de API de Soloist en Spotify for Developers y pégala arriba. Las versiones de Soloist caducan a los 90 días; con «Mantener actualizado automáticamente» SpotOn se encarga de ello.
+	FR	1. Installez les paquets pulseaudio, pulseaudio-utils et ffmpeg sur le serveur LMS. 2. Cliquez sur « Télécharger le dernier Soloist depuis Spotify » (ou installez soloist vous-même sous /usr/local/bin/soloist). 3. Créez une clé API Soloist dans Spotify for Developers et collez-la ci-dessus. Les versions de Soloist expirent après 90 jours ; avec « Maintenir à jour automatiquement », SpotOn s'en charge.
+	IT	1. Installa sul server LMS i pacchetti pulseaudio, pulseaudio-utils e ffmpeg. 2. Fai clic su «Scarica l'ultimo Soloist da Spotify» (oppure installa soloist manualmente come /usr/local/bin/soloist). 3. Crea una chiave API Soloist in Spotify for Developers e incollala qui sopra. Le build di Soloist scadono dopo 90 giorni; con «Mantieni aggiornato automaticamente» se ne occupa SpotOn.
+	NL	1. Installeer de pakketten pulseaudio, pulseaudio-utils en ffmpeg op de LMS-server. 2. Klik op 'Nieuwste Soloist van Spotify downloaden' (of installeer soloist zelf als /usr/local/bin/soloist). 3. Maak een Soloist-API-sleutel aan in Spotify for Developers en plak deze hierboven. Soloist-builds verlopen na 90 dagen; met 'Automatisch up-to-date houden' regelt SpotOn dat.
+	NO	1. Installer pakkene pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Klikk på «Last ned nyeste Soloist fra Spotify» (eller installer soloist selv som /usr/local/bin/soloist). 3. Opprett en Soloist-API-nøkkel i Spotify for Developers og lim den inn ovenfor. Soloist-builds utløper etter 90 dager; med «Hold automatisk oppdatert» tar SpotOn seg av det.
+	PL	1. Zainstaluj na serwerze LMS pakiety pulseaudio, pulseaudio-utils i ffmpeg. 2. Kliknij „Pobierz najnowszy Soloist ze Spotify” (lub zainstaluj soloist samodzielnie jako /usr/local/bin/soloist). 3. Utwórz klucz API Soloist w Spotify for Developers i wklej go powyżej. Wersje Soloist wygasają po 90 dniach; z opcją „Aktualizuj automatycznie” zajmie się tym SpotOn.
+	SV	1. Installera paketen pulseaudio, pulseaudio-utils och ffmpeg på LMS-servern. 2. Klicka på ”Hämta senaste Soloist från Spotify” (eller installera soloist själv som /usr/local/bin/soloist). 3. Skapa en Soloist-API-nyckel i Spotify for Developers och klistra in den ovan. Soloist-versioner går ut efter 90 dagar; med ”Håll uppdaterad automatiskt” sköter SpotOn det.
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD
+	CS	Stáhnout nejnovější Soloist od Spotify
+	DA	Hent den nyeste Soloist fra Spotify
+	DE	Neueste Soloist-Version von Spotify laden
+	EN	Download the latest Soloist from Spotify
+	ES	Descargar el Soloist más reciente de Spotify
+	FR	Télécharger le dernier Soloist depuis Spotify
+	IT	Scarica l'ultimo Soloist da Spotify
+	NL	Nieuwste Soloist van Spotify downloaden
+	NO	Last ned nyeste Soloist fra Spotify
+	PL	Pobierz najnowszy Soloist ze Spotify
+	SV	Hämta senaste Soloist från Spotify
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD_HINT
+	CS	Stáhne oficiální archiv pro tuto platformu přímo od Spotify a nainstaluje jej do datového adresáře SpotOn. Probíhající přehrávání se nepřeruší; zařízení se spustí s novým sestavením, jakmile budou volná.
+	DA	Henter det officielle arkiv til denne platform direkte fra Spotify og installerer det i SpotOns datamappe. Igangværende afspilning afbrydes ikke; enhederne starter med den nye build, så snart de er ledige.
+	DE	Lädt das offizielle Archiv für diese Plattform direkt von Spotify und installiert es im SpotOn-Datenverzeichnis. Laufende Wiedergabe wird nicht unterbrochen; Geräte starten mit dem neuen Build, sobald sie frei sind.
+	EN	Downloads the official archive for this platform directly from Spotify and installs it in SpotOn's data directory. Ongoing playback is not interrupted; devices restart with the new build as soon as they are idle.
+	ES	Descarga el archivo oficial para esta plataforma directamente de Spotify y lo instala en el directorio de datos de SpotOn. La reproducción en curso no se interrumpe; los dispositivos se reinician con la nueva versión en cuanto quedan libres.
+	FR	Télécharge l'archive officielle pour cette plateforme directement depuis Spotify et l'installe dans le répertoire de données de SpotOn. La lecture en cours n'est pas interrompue ; les appareils redémarrent avec la nouvelle version dès qu'ils sont libres.
+	IT	Scarica l'archivio ufficiale per questa piattaforma direttamente da Spotify e lo installa nella cartella dati di SpotOn. La riproduzione in corso non viene interrotta; i dispositivi si riavviano con la nuova build non appena sono liberi.
+	NL	Downloadt het officiële archief voor dit platform rechtstreeks van Spotify en installeert het in de gegevensmap van SpotOn. Lopende weergave wordt niet onderbroken; apparaten starten met de nieuwe build zodra ze vrij zijn.
+	NO	Laster ned det offisielle arkivet for denne plattformen direkte fra Spotify og installerer det i SpotOns datamappe. Pågående avspilling avbrytes ikke; enhetene starter med den nye builden så snart de er ledige.
+	PL	Pobiera oficjalne archiwum dla tej platformy bezpośrednio ze Spotify i instaluje je w katalogu danych SpotOn. Trwające odtwarzanie nie zostanie przerwane; urządzenia uruchomią się z nową wersją, gdy tylko będą wolne.
+	SV	Hämtar det officiella arkivet för den här plattformen direkt från Spotify och installerar det i SpotOns datakatalog. Pågående uppspelning avbryts inte; enheterna startar med den nya versionen så snart de är lediga.
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD_RUNNING
+	CS	Stahuje se a instaluje …
+	DA	Hentes og installeres …
+	DE	Wird heruntergeladen und installiert …
+	EN	Downloading and installing …
+	ES	Descargando e instalando …
+	FR	Téléchargement et installation …
+	IT	Download e installazione in corso …
+	NL	Bezig met downloaden en installeren …
+	NO	Lastes ned og installeres …
+	PL	Pobieranie i instalowanie …
+	SV	Hämtar och installerar …
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD_DONE
+	CS	Nainstalováno:
+	DA	Installeret:
+	DE	Installiert:
+	EN	Installed:
+	ES	Instalado:
+	FR	Installé :
+	IT	Installato:
+	NL	Geïnstalleerd:
+	NO	Installert:
+	PL	Zainstalowano:
+	SV	Installerad:
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD_FAILED
+	CS	Stažení selhalo:
+	DA	Download mislykkedes:
+	DE	Download fehlgeschlagen:
+	EN	Download failed:
+	ES	Error en la descarga:
+	FR	Échec du téléchargement :
+	IT	Download non riuscito:
+	NL	Downloaden mislukt:
+	NO	Nedlasting mislyktes:
+	PL	Pobieranie nie powiodło się:
+	SV	Hämtningen misslyckades:
+
+PLUGIN_SPOTON_SOLOIST_DOWNLOAD_UNSUPPORTED
+	CS	Pro tuto platformu Spotify nenabízí sestavení Soloist (podporováno: Linux x86_64, ARM64 a ARMv7).
+	DA	Spotify tilbyder ingen Soloist-build til denne platform (understøttet: Linux x86_64, ARM64 og ARMv7).
+	DE	Für diese Plattform bietet Spotify keinen Soloist-Build an (unterstützt: Linux x86_64, ARM64 und ARMv7).
+	EN	Spotify offers no Soloist build for this platform (supported: Linux x86_64, ARM64 and ARMv7).
+	ES	Spotify no ofrece una versión de Soloist para esta plataforma (compatibles: Linux x86_64, ARM64 y ARMv7).
+	FR	Spotify ne propose pas de version de Soloist pour cette plateforme (prises en charge : Linux x86_64, ARM64 et ARMv7).
+	IT	Spotify non offre una build di Soloist per questa piattaforma (supportate: Linux x86_64, ARM64 e ARMv7).
+	NL	Spotify biedt geen Soloist-build voor dit platform (ondersteund: Linux x86_64, ARM64 en ARMv7).
+	NO	Spotify tilbyr ingen Soloist-build for denne plattformen (støttet: Linux x86_64, ARM64 og ARMv7).
+	PL	Spotify nie oferuje wersji Soloist dla tej platformy (obsługiwane: Linux x86_64, ARM64 i ARMv7).
+	SV	Spotify erbjuder ingen Soloist-version för den här plattformen (stöds: Linux x86_64, ARM64 och ARMv7).
+
+PLUGIN_SPOTON_SOLOIST_AUTO_UPDATE
+	CS	Udržovat automaticky aktuální (denně kontroluje, zda Spotify nabízí nové sestavení)
+	DA	Hold automatisk opdateret (tjekker dagligt, om Spotify tilbyder en ny build)
+	DE	Automatisch aktuell halten (prüft täglich, ob Spotify einen neuen Build anbietet)
+	EN	Keep up to date automatically (checks daily whether Spotify offers a new build)
+	ES	Mantener actualizado automáticamente (comprueba a diario si Spotify ofrece una nueva versión)
+	FR	Maintenir à jour automatiquement (vérifie chaque jour si Spotify propose une nouvelle version)
+	IT	Mantieni aggiornato automaticamente (controlla ogni giorno se Spotify offre una nuova build)
+	NL	Automatisch up-to-date houden (controleert dagelijks of Spotify een nieuwe build aanbiedt)
+	NO	Hold automatisk oppdatert (sjekker daglig om Spotify tilbyr en ny build)
+	PL	Aktualizuj automatycznie (codziennie sprawdza, czy Spotify oferuje nową wersję)
+	SV	Håll uppdaterad automatiskt (kontrollerar dagligen om Spotify erbjuder en ny version)
+
+PLUGIN_SPOTON_SOLOIST_SOURCE_MANAGED
+	CS	spravuje SpotOn
+	DA	administreret af SpotOn
+	DE	von SpotOn verwaltet
+	EN	managed by SpotOn
+	ES	gestionado por SpotOn
+	FR	géré par SpotOn
+	IT	gestito da SpotOn
+	NL	beheerd door SpotOn
+	NO	administrert av SpotOn
+	PL	zarządzany przez SpotOn
+	SV	hanteras av SpotOn
+
+PLUGIN_SPOTON_SOLOIST_SOURCE_SYSTEM
+	CS	ze systému
+	DA	fra systemet
+	DE	vom System
+	EN	from the system
+	ES	del sistema
+	FR	du système
+	IT	dal sistema
+	NL	van het systeem
+	NO	fra systemet
+	PL	z systemu
+	SV	från systemet

@@ -88,6 +88,17 @@ sub new {
         \&_playerAuthBrowserManualHandler
     );
 
+    # Spotify Soloist binary download from Spotify's CDN (POST starts it,
+    # GET reports progress; neither returns anything secret).
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/soloist/install/status',
+        \&_soloistInstallStatusHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/soloist/install',
+        \&_soloistInstallHandler
+    );
+
     return $self;
 }
 
@@ -320,6 +331,13 @@ sub handler {
         }
         $soloistKey = undef;
         $paramRef->{soloistKeyError} = $soloistError unless $soloistOk;
+
+        my $autoUpdate = $paramRef->{pref_soloistAutoUpdate} ? 1 : 0;
+        my $wasAutoUpdate = $prefs->get('soloistAutoUpdate') ? 1 : 0;
+        $prefs->set('soloistAutoUpdate', $autoUpdate);
+        # Check right away instead of waiting for the daily timer.
+        Plugins::SpotOn::Soloist::Manager->scheduleUpdateCheck(5)
+            if $autoUpdate && !$wasAutoUpdate;
     }
     delete $paramRef->{pref_soloistApiKey};
 
@@ -711,6 +729,26 @@ sub _playerAuthStartHandler {
 # JSON passthrough of Credentials->pairingStatus(). Same unguarded class as
 # diagnosticBundle: read-only, exposes symbolic state only (T-65-07).
 # ============================================================
+# /plugins/SpotOn/settings/soloist/install (POST, CSRF-guarded)
+sub _soloistInstallHandler {
+    my ($httpClient, $response) = @_;
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::Soloist::Manager;
+    my ($ok, $reason) = Plugins::SpotOn::Soloist::Manager->installLatest();
+    _jsonResponse($httpClient, $response, $ok
+        ? { status => 'ok' }
+        : { status => 'error', reason => $reason });
+}
+
+# /plugins/SpotOn/settings/soloist/install/status (GET, read-only)
+sub _soloistInstallStatusHandler {
+    my ($httpClient, $response) = @_;
+    require Plugins::SpotOn::Soloist::Manager;
+    _jsonResponse($httpClient, $response,
+        Plugins::SpotOn::Soloist::Manager->installerStatus());
+}
+
 sub _playerAuthStatusHandler {
     my ($httpClient, $response) = @_;
 

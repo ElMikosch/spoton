@@ -664,28 +664,77 @@ my $token_index = 0;
         is_deeply($missing->{missing}, ['parec', 'ffmpeg'], 'missing programs are listed');
     }
     ok($M->stop(), 'manager stops after API key checks');
+
+    # ---- A replaced Soloist binary restarts idle devices, never live ones. ----
+    {
+        my $fake_bin = catfile($root, 'soloist-bin');
+        open(my $bin_fh, '>', $fake_bin) or die $!;
+        print {$bin_fh} "build-1\n";
+        close($bin_fh);
+        chmod 0755, $fake_bin;
+        no warnings 'redefine';
+        local *Plugins::SpotOn::Soloist::AudioPreflight::inspect = sub {
+            return { tools => {
+                soloist => $fake_bin, pulseaudio => '/usr/bin/pulseaudio',
+                parec => '/usr/bin/parec', ffmpeg => '/usr/bin/ffmpeg',
+            } };
+        };
+        use warnings 'redefine';
+
+        @Slim::Player::Client::clients = ($kitchen, $living);
+        $_->{playing} = $_->{paused} = 0 for $kitchen, $living;
+        ok($M->start(), 'manager starts for binary replacement checks');
+        $M->_start_one_timer($living);
+        Plugins::SpotOn::Soloist::Manager::_poll();
+        my $kitchen_runtime = $M->instanceForClient($kitchen);
+        my $living_runtime = $M->instanceForClient($living);
+        $kitchen_runtime->{session}->emit(
+            { kind => 'state', event_type => 'playback_state' },
+            { connection => 'connected', playback => { status => 'playing', is_active => 1,
+                item => { name => 'Live', duration_ms => 1000 } } },
+        );
+
+        open($bin_fh, '>', $fake_bin) or die $!;
+        print {$bin_fh} "build-2 is larger\n";
+        close($bin_fh);
+        $M->reconcile();
+        isnt($M->instanceForClient($living), $living_runtime, 'idle device restarts with the replaced binary');
+        is($M->instanceForClient($kitchen), $kitchen_runtime, 'device with live playback keeps running');
+
+        $kitchen_runtime->{session}{snapshot}{playback}{is_active} = 0;
+        $M->reconcile();
+        isnt($M->instanceForClient($kitchen), $kitchen_runtime, 'device restarts once playback has ended');
+        ok($M->stop(), 'manager stops after binary replacement checks');
+    }
 }
 
 unlink($key_file);
 ok(!Plugins::SpotOn::Soloist::Manager->start(), 'missing API key still fails closed');
 
-# soloist --version parsing: version line plus the 90-day build lifetime.
+# soloist --version parsing: version plus the 90-day build lifetime.
 {
     my $bin = catfile($root, 'fake-soloist');
-    open(my $fh, '>', $bin) or die $!;
-    print {$fh} "#!/bin/sh\necho 'soloist 1.4.2 (built 2026-10-01)'\necho extra\n";
-    close($fh);
-    chmod 0755, $bin;
+    my $write = sub {
+        open(my $fh, '>', $bin) or die $!;
+        print {$fh} "#!/bin/sh\necho '$_[0]'\n";
+        close($fh);
+        chmod 0755, $bin;
+    };
+    # Real Soloist 1.3.9 output.
+    $write->('soloist 1.3.9.38 build 1792476110 (20261020) (g440165f200) (linux/x86_64)');
     my %build = Plugins::SpotOn::Soloist::Manager::_binary_version($bin);
-    is($build{version}, 'soloist 1.4.2 (built 2026-10-01)', 'first version line is reported');
-    is($build{build_date}, '2026-10-01', 'ISO build date is recognized');
-    is($build{expires_at}, 1790812800 + 90 * 86400, 'expiry is 90 days after the build date');
+    is($build{version}, 'soloist 1.3.9.38', 'version is shortened to name and number');
+    is($build{build_date}, '2026-10-20', 'build timestamp gives the build date');
+    is($build{expires_at}, 1792476110 + 90 * 86400, 'expiry is 90 days after the build timestamp');
 
-    open($fh, '>', $bin) or die $!;
-    print {$fh} "#!/bin/sh\necho 'soloist 1.5.0-dev'\n";
-    close($fh);
+    $write->('soloist 1.4.2 (built 2026-10-01) extra');
     %build = Plugins::SpotOn::Soloist::Manager::_binary_version($bin);
-    is($build{version}, 'soloist 1.5.0-dev', 'replaced binary is detected without a restart');
+    is($build{version}, 'soloist 1.4.2', 'replaced binary is detected without a restart');
+    is($build{expires_at}, 1790812800 + 90 * 86400, 'ISO build dates are recognized as a fallback');
+
+    $write->('soloist 1.5.0-dev');
+    %build = Plugins::SpotOn::Soloist::Manager::_binary_version($bin);
+    is($build{version}, 'soloist 1.5.0-dev', 'development versions are reported');
     ok(!exists $build{expires_at}, 'no expiry is guessed without a build date');
 }
 is(

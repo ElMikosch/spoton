@@ -120,6 +120,7 @@ sub initPlugin {
         streamingMode        => 'direct', # COMPAT-01: global streaming mode default (direct|proxy); per-player override lives in same-name client pref (GH #96)
         soloistEnabled       => 0,     # official Connect backend; Browse remains on the Unified daemon
         soloistConfigured    => 0,     # one-time migration marker for existing API-key installs
+        soloistAutoUpdate    => 0,     # daily check for a newer SpotOn-managed Soloist build
         recentSearches => [],
         credProvenanceMigrated => 0,   # GH #147 plan 65-03: one-shot legacy-credential provenance migration marker
     });
