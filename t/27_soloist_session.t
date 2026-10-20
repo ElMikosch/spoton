@@ -200,4 +200,46 @@ ok($session->stop(), 'session stops cleanly');
 is($session->status, 'stopped', 'stop updates session status');
 ok($transport->{closed}, 'stop closes transport');
 
+# Idle liveness: a quiet connection is probed, any frame proves liveness, and
+# an unanswered probe closes the socket so the runtime can reconnect.
+{
+    my $live_dir = tempdir(CLEANUP => 1);
+    write_file(catfile($live_dir, 'ws.addr'), "127.0.0.1\n");
+    write_file(catfile($live_dir, 'ws.port'), "19191\n");
+    my $now = 1000;
+    my @statuses;
+    my $live_transport = Local::FakeTransport->new();
+    my $live = Plugins::SpotOn::Soloist::Session->new(
+        data_dir  => $live_dir,
+        transport => $live_transport,
+        clock     => sub { $now },
+        on_status => sub { push @statuses, $_[0] },
+    );
+    ok($live->start(), 'liveness fixture connects');
+    @{ $live_transport->{actions} } = ();
+
+    $now += 29;
+    ok($live->check_liveness(), 'recent connection needs no probe');
+    is(scalar @{ $live_transport->{actions} }, 0, 'no probe before the idle threshold');
+
+    $now += 1;
+    ok($live->check_liveness(), 'idle connection is probed');
+    is_deeply($live_transport->{actions}, [['auth_state', {}]], 'probe asks for the auth state');
+
+    $live_transport->emit({ kind => 'auth', event_type => 'auth_state', logged_in => 1 });
+    $now += 20;
+    ok($live->check_liveness(), 'answered probe keeps the connection');
+    ok(!$live_transport->{closed}, 'answered probe does not close the socket');
+
+    $now += 10;
+    $live->check_liveness();
+    is(scalar @{ $live_transport->{actions} }, 2, 'next idle period sends another probe');
+    $now += 15;
+    ok(!$live->check_liveness(), 'unanswered probe reports a dead connection');
+    ok($live_transport->{closed}, 'dead connection is closed');
+    is($statuses[-1], 'disconnected', 'dead connection reports disconnected status');
+    ok($live->refresh(), 'runtime refresh reconnects after a heartbeat timeout');
+    ok($live->connected(), 'session is connected again');
+}
+
 done_testing();

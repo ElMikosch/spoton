@@ -24,6 +24,7 @@ sub new {
         client_id       => $client_id,
         device_name     => _required_text($args{device_name}, 'device_name'),
         base_dir        => _required_text($args{base_dir}, 'base_dir'),
+        runtime_dir     => $args{runtime_dir},
         api_key         => _required_text($args{api_key}, 'api_key'),
         tools           => { %{ $args{tools} } },
         verbose         => $args{verbose} ? 1 : 0,
@@ -52,7 +53,8 @@ sub start {
             pulseaudio_binary => $tools->{pulseaudio},
             parec_binary      => $tools->{parec},
             ffmpeg_binary     => $tools->{ffmpeg},
-            runtime_dir       => catdir($self->{base_dir}, 'runtime'),
+            runtime_dir       => $self->{runtime_dir}
+                || catdir($self->{base_dir}, 'runtime'),
             data_dir          => catdir($self->{base_dir}, 'data'),
             cache_dir         => catdir($self->{base_dir}, 'cache'),
             log_dir           => catdir($self->{base_dir}, 'logs'),
@@ -98,7 +100,8 @@ sub stop {
 
     delete @$self{qw(
         session runtime stream_token stream_path player_id player_stream_url
-        player_stream_format last_event_type last_update
+        player_stream_format last_event_type last_update running_since
+        attached_at
     )};
     $self->{stream_paths} = {};
     $self->{state} = 'stopped';
@@ -125,13 +128,15 @@ sub poll_now {
         my $attached = eval { $self->_attach_running_runtime(); 1 };
         return $self->_fail('runtime_attach_failed', $@) unless $attached;
         $self->{state} = 'running';
+        $self->{running_since} = Time::HiRes::time();
         $self->_notify('on_status', 'running', $self->status_snapshot());
     }
 
-    if ($self->{state} eq 'running'
-        && $self->{session}
-        && !$self->{session}->connected()) {
-        eval { $self->{session}->refresh() };
+    if ($self->{state} eq 'running' && $self->{session}) {
+        eval { $self->{session}->check_liveness() }
+            if $self->{session}->can('check_liveness');
+        eval { $self->{session}->refresh() }
+            unless $self->{session}->connected();
     }
 
     $self->_schedule_poll(
@@ -217,6 +222,7 @@ sub attach_player {
     ) unless $request_created;
 
     $self->{player_id} = $id;
+    $self->{attached_at} = Time::HiRes::time();
     $self->{player_stream_url} = $url;
     $self->{player_stream_format} = $format;
     delete $self->{last_error}
@@ -229,7 +235,7 @@ sub detach_player {
     my ($self, %args) = @_;
     return 1 unless $self->{player_id};
     my $id = delete $self->{player_id};
-    delete @$self{qw(player_stream_url player_stream_format)};
+    delete @$self{qw(player_stream_url player_stream_format attached_at)};
     return 1 if $args{silent};
 
     require Slim::Control::Request;
@@ -330,6 +336,8 @@ sub device_name { $_[0]{device_name} }
 sub state { $_[0]{state} }
 sub stream_token { $_[0]{stream_token} }
 sub player_id { $_[0]{player_id} }
+sub running_since { $_[0]{running_since} }
+sub attached_at { $_[0]{attached_at} }
 
 sub _attach_running_runtime {
     my ($self) = @_;
@@ -443,7 +451,10 @@ sub _fail {
     }
     eval { $self->{session}->stop() } if $self->{session};
     eval { $self->{runtime}->stop() } if $self->{runtime};
-    delete @$self{qw(session runtime stream_token stream_path player_id player_stream_url player_stream_format)};
+    delete @$self{qw(
+        session runtime stream_token stream_path player_id player_stream_url
+        player_stream_format running_since attached_at
+    )};
     $self->{stream_paths} = {};
     $self->{state} = 'failed';
     $self->_notify('on_error', $self, $code, $self->{last_error}{message});

@@ -20,6 +20,15 @@ use Plugins::SpotOn::Soloist::PulseBridgeSpec qw(
 use constant COOKIE_BYTES          => 256;
 use constant PULSE_START_TIMEOUT   => 10;
 use constant SOLOIST_START_TIMEOUT => 15;
+use constant ORPHAN_TERM_TIMEOUT   => 3;
+use constant LOG_TAIL_BYTES        => 600;
+
+# Documented Soloist daemon exit code for a build past its 90-day lifetime.
+use constant SOLOIST_EXIT_EXPIRED  => 10;
+
+# Runtime files Soloist writes into its data directory.  They are normally
+# removed on a clean shutdown but survive a crash or SIGKILL.
+my @SOLOIST_RUNTIME_FILES = qw(ws.addr ws.port soloist.pid);
 
 my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     api_key
@@ -33,11 +42,14 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     initial_volume
     log_dir
     parec_binary
+    proc_root
     pulseaudio_binary
     pulse_start_timeout
     random_bytes
     runtime_dir
+    signal_process
     sink_name
+    sleep
     socket_ready
     soloist_binary
     soloist_start_timeout
@@ -65,6 +77,7 @@ sub new {
         initial_volume       => exists $args{initial_volume} ? $args{initial_volume} : 100,
         log_dir              => _absolute_path($args{log_dir}, 'log_dir'),
         parec_binary         => _optional_text($args{parec_binary}, 'parec_binary'),
+        proc_root            => defined $args{proc_root} ? $args{proc_root} : '/proc',
         pulseaudio_binary    => _required_text($args{pulseaudio_binary}, 'pulseaudio_binary'),
         pulse_start_timeout  => _positive_number(
             $args{pulse_start_timeout},
@@ -73,6 +86,8 @@ sub new {
         ),
         random_bytes         => $args{random_bytes} || \&_random_bytes,
         runtime_dir          => _absolute_path($args{runtime_dir}, 'runtime_dir'),
+        signal_process       => $args{signal_process} || sub { kill($_[0], $_[1]) },
+        sleep                => $args{sleep} || sub { Time::HiRes::sleep($_[0]) },
         sink_name            => defined $args{sink_name} ? $args{sink_name} : 'spoton_soloist',
         socket_ready         => $args{socket_ready} || sub { -S $_[0] ? 1 : 0 },
         soloist_binary       => _required_text($args{soloist_binary}, 'soloist_binary'),
@@ -104,6 +119,13 @@ sub start {
     $self->{last_error} = undef;
     my $prepared = eval { $self->_prepare_layout(); 1 };
     return $self->_fail('runtime_prepare_failed', $@) unless $prepared;
+
+    # A crashed or SIGKILLed LMS leaves its PulseAudio/Soloist children and
+    # their runtime files behind.  Soloist refuses a data directory which is
+    # still held by another process, and a stale ws.port or Pulse socket
+    # would make the readiness checks below succeed against a dead endpoint.
+    my $cleaned = eval { $self->_cleanup_previous_run(); 1 };
+    return $self->_fail('runtime_cleanup_failed', $@) unless $cleaned;
 
     my $pulse_spec = eval {
         build_server_spec(
@@ -164,8 +186,10 @@ sub poll {
     my ($self) = @_;
 
     if ($self->{state} eq 'starting_pulse') {
-        return $self->_fail('pulse_exited', 'PulseAudio exited before readiness')
-            unless _process_alive($self->{pulse_proc});
+        return $self->_fail(
+            'pulse_exited',
+            $self->_with_log_tail('PulseAudio exited before readiness', 'pulse.log'),
+        ) unless _process_alive($self->{pulse_proc});
 
         if ($self->{socket_ready}->($self->{socket_path})) {
             my $soloist = eval {
@@ -196,7 +220,7 @@ sub poll {
     if ($self->{state} eq 'starting_soloist') {
         return $self->_fail('pulse_exited', 'PulseAudio exited during Soloist startup')
             unless _process_alive($self->{pulse_proc});
-        return $self->_fail('soloist_exited', 'Soloist exited before endpoint readiness')
+        return $self->_fail_soloist_exit('before endpoint readiness')
             unless _process_alive($self->{soloist_proc});
 
         my ($endpoint, $error) = $self->{endpoint_discover}->($self->{data_dir});
@@ -218,7 +242,7 @@ sub poll {
     if ($self->{state} eq 'running') {
         return $self->_fail('pulse_exited', 'PulseAudio exited while running')
             unless _process_alive($self->{pulse_proc});
-        return $self->_fail('soloist_exited', 'Soloist exited while running')
+        return $self->_fail_soloist_exit('while running')
             unless _process_alive($self->{soloist_proc});
     }
 
@@ -319,6 +343,104 @@ sub _prepare_layout {
     );
     _secure_cookie($cookie, $self->{random_bytes});
     return 1;
+}
+
+sub _cleanup_previous_run {
+    my ($self) = @_;
+
+    my @orphans = $self->_find_orphans();
+    if (@orphans) {
+        $self->{signal_process}->('TERM', $_) for @orphans;
+        my $deadline = $self->{clock}->() + ORPHAN_TERM_TIMEOUT;
+        while (@orphans = grep { $self->{signal_process}->(0, $_) } @orphans) {
+            last if $self->{clock}->() >= $deadline;
+            $self->{sleep}->(0.1);
+        }
+        $self->{signal_process}->('KILL', $_) for @orphans;
+    }
+
+    for my $path (
+        $self->{socket_path},
+        map { File::Spec->catfile($self->{data_dir}, $_) } @SOLOIST_RUNTIME_FILES,
+    ) {
+        next unless -e $path || -l $path;
+        unlink($path) or croak "Unable to remove stale Soloist runtime file: $!";
+    }
+    return 1;
+}
+
+# Find processes of this service user that still belong to this runtime: the
+# PulseAudio server bound to our private socket, capture clients of it, and a
+# Soloist daemon holding our data directory.  Linux-only, like Soloist itself.
+sub _find_orphans {
+    my ($self) = @_;
+    my $root = $self->{proc_root};
+    return () unless defined $root && -d $root;
+    opendir(my $dh, $root) or return ();
+    my @entries = grep { /\A\d+\z/ && $_ != $$ } readdir($dh);
+    closedir($dh);
+
+    my $socket = $self->{socket_path};
+    my @orphans;
+    for my $pid (@entries) {
+        my $dir = File::Spec->catdir($root, $pid);
+        my @stat = stat($dir);
+        next unless @stat && $stat[4] == $>;
+        open(my $fh, '<', File::Spec->catfile($dir, 'cmdline')) or next;
+        binmode($fh);
+        local $/;
+        my $cmdline = <$fh>;
+        close($fh);
+        next unless defined $cmdline && length($cmdline);
+        my @argv = split /\0/, $cmdline;
+
+        my $owned = grep {
+            index($_, "socket=$socket ") >= 0 || $_ eq "unix:$socket"
+        } @argv;
+        for my $index (0 .. $#argv - 1) {
+            $owned = 1 if $argv[$index] eq '--data-dir'
+                && $argv[$index + 1] eq $self->{data_dir};
+        }
+        push @orphans, 0 + $pid if $owned;
+    }
+    return @orphans;
+}
+
+sub _fail_soloist_exit {
+    my ($self, $phase) = @_;
+    my $exit_code = _process_exit_code($self->{soloist_proc});
+    if (defined $exit_code && $exit_code == SOLOIST_EXIT_EXPIRED) {
+        return $self->_fail(
+            'soloist_build_expired',
+            'Soloist build has expired; install a current soloist binary',
+        );
+    }
+    my $message = "Soloist exited $phase";
+    $message .= " (exit code $exit_code)" if defined $exit_code;
+    return $self->_fail(
+        'soloist_exited',
+        $self->_with_log_tail($message, 'soloist.log'),
+    );
+}
+
+# Append the last few log lines so a failure in LMS's own log and status is
+# actionable without shell access to the private runtime directory.
+sub _with_log_tail {
+    my ($self, $message, $name) = @_;
+    my $path = File::Spec->catfile($self->{log_dir}, $name);
+    open(my $fh, '<', $path) or return $message;
+    binmode($fh);
+    my $size = -s $fh || 0;
+    seek($fh, $size > LOG_TAIL_BYTES ? $size - LOG_TAIL_BYTES : 0, 0);
+    local $/;
+    my $tail = <$fh>;
+    close($fh);
+    return $message unless defined $tail;
+
+    my @lines = grep { /\S/ } split /\r?\n/, $tail;
+    shift @lines if $size > LOG_TAIL_BYTES && @lines > 1;
+    @lines = @lines[-3 .. -1] if @lines > 3;
+    return @lines ? "$message: " . join(' | ', @lines) : $message;
 }
 
 sub _open_log {
@@ -479,6 +601,13 @@ sub _spawn_process {
 sub _process_alive {
     my ($process) = @_;
     return $process && eval { $process->alive() } ? 1 : 0;
+}
+
+sub _process_exit_code {
+    my ($process) = @_;
+    return undef unless $process && $process->can('exit_code');
+    my $code = eval { $process->exit_code() };
+    return defined $code && $code =~ /\A\d+\z/ ? 0 + $code : undef;
 }
 
 sub _process_pid {

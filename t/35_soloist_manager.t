@@ -8,6 +8,8 @@ use File::Path qw(make_path);
 use File::Spec::Functions qw(catdir catfile);
 use File::Temp qw(tempdir);
 use FindBin qw($Bin);
+use Digest::MD5 ();
+use File::Spec ();
 
 BEGIN {
     package main;
@@ -95,17 +97,44 @@ BEGIN {
             && $self->{command}[1] eq 'play') {
             $client->{song} = Local::Song->new($self->{command}[2]);
             $client->{playing} = 1;
+            $client->{paused} = 0;
         }
         elsif ($client && $self->{command}[0] eq 'pause') {
             $client->{playing} = $self->{command}[1] ? 0 : 1;
+            $client->{paused} = $self->{command}[1] ? 1 : 0;
         }
         elsif ($client && $self->{command}[0] eq 'stop') {
             $client->{playing} = 0;
+            $client->{paused} = 0;
             $client->{song} = undef;
         }
         return 1;
     }
     sub notifyFromArray { push @notifications, [@_] }
+
+    # Minimal notification request as delivered to subscribers.
+    sub notification {
+        my ($class, $client, @command) = @_;
+        return bless { client => $client, command => [@command] }, 'Local::Notification';
+    }
+
+    package Local::Notification;
+    sub client { $_[0]{client} }
+    sub source { undef }
+    sub getParam {
+        my ($self, $name) = @_;
+        return $self->{command}[2] if $name eq '_newvalue' || $name eq '_index';
+        return;
+    }
+    sub isCommand {
+        my ($self, $spec) = @_;
+        my ($first, $second) = map { { map { $_ => 1 } @$_ } } @$spec;
+        return $first->{ $self->{command}[0] }
+            && (!$second || $second->{ $self->{command}[1] }) ? 1 : 0;
+    }
+    sub isNotCommand { !$_[0]->isCommand($_[1]) }
+
+    package Slim::Control::Request;
     sub subscribe { push @subscriptions, [@_] }
     sub unsubscribe { 1 }
     $INC{'Slim/Control/Request.pm'} = 1;
@@ -163,6 +192,8 @@ use Plugins::SpotOn::Soloist::StreamServer;
     sub isSynced { $_[0]{synced} }
     sub model { 'squeezebox' }
     sub isPlaying { $_[0]{playing} }
+    sub isPaused { $_[0]{paused} }
+    sub isStopped { !$_[0]{playing} && !$_[0]{paused} }
     sub playingSong { $_[0]{song} }
     sub songElapsedSeconds { $_[0]{elapsed} || 0 }
     sub playPoint { $_[0]{play_point} = $_[1] if @_ > 1; $_[0]{play_point} }
@@ -182,7 +213,16 @@ use Plugins::SpotOn::Soloist::StreamServer;
         return $self;
     }
     sub start { $_[0]{state} = 'starting_pulse'; 1 }
-    sub poll { $_[0]{state} = 'running'; 'running' }
+    sub poll {
+        my ($self) = @_;
+        if ($self->{fail_with}) {
+            $self->{state} = 'failed';
+            $self->{last_error} = { code => $self->{fail_with}, message => 'fixture failure' };
+            return 'failed';
+        }
+        $self->{state} = 'running';
+        return 'running';
+    }
     sub state { $_[0]{state} }
     sub last_error { $_[0]{last_error} }
     sub stop { $_[0]{stopped}++; $_[0]{state} = 'stopped'; 1 }
@@ -417,6 +457,141 @@ my $token_index = 0;
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops all runtimes');
     is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{state}, 'stopped', 'aggregate state stops cleanly');
+
+    # ---- Runtime layout: the Pulse socket path must fit sun_path. ----
+    my $long_cache = catdir($root, 'x' x 40);
+    $Slim::Utils::Prefs::values{server}{cachedir} = '/var/lib/squeezeboxserver/cache';
+    my $hash = Digest::MD5::md5_hex('00:11:22:33:44:55');
+    my $packaged = Plugins::SpotOn::Soloist::Manager::_runtime_dir_for($hash);
+    is(
+        $packaged,
+        '/var/lib/squeezeboxserver/cache/spoton/soloist-managed/run/' . substr($hash, 0, 12),
+        'packaged LMS cache keeps the runtime tree below the cache directory',
+    );
+    cmp_ok(length(catfile($packaged, 'native')), '<=', 100, 'packaged LMS Pulse socket path fits');
+    $Slim::Utils::Prefs::values{server}{cachedir} = $long_cache;
+    my $fallback = Plugins::SpotOn::Soloist::Manager::_runtime_dir_for($hash);
+    like($fallback, qr{/spoton-soloist-$>/[0-9a-f]{12}\z}, 'overlong cache path falls back to a private temp directory');
+    cmp_ok(length(catfile($fallback, 'native')), '<=', 100, 'fallback Pulse socket path fits');
+    is((stat(File::Spec->catdir(File::Spec->tmpdir(), "spoton-soloist-$>")))[2] & 07777, 0700,
+        'fallback parent directory is private');
+    $Slim::Utils::Prefs::values{server}{cachedir} = $root;
+
+    # ---- Restart backoff. ----
+    $_->{synced} = 0 for $kitchen, $living;
+    $_->{master} = $_ for $kitchen, $living;
+    @Slim::Player::Client::clients = ($kitchen);
+    my $clock = 10_000;
+    no warnings 'redefine';
+    local *Time::HiRes::time = sub { $clock };
+    use warnings 'redefine';
+    @Local::Runtime::instances = ();
+    ok(Plugins::SpotOn::Soloist::Manager->start(), 'manager restarts for backoff checks');
+    is(scalar @Local::Runtime::instances, 1, 'single player runtime starts');
+    $Local::Runtime::instances[0]{fail_with} = 'soloist_exited';
+    Plugins::SpotOn::Soloist::Manager::_poll();
+    is(Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen)->state, 'failed',
+        'runtime failure is detected by the health poll');
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is(scalar @Local::Runtime::instances, 1, 'failed runtime is not restarted immediately');
+    my $retry = Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{retries}{'00:11:22:33:44:55'};
+    is($retry->{count}, 1, 'status reports the failure count');
+    is($retry->{nextTry}, $clock + 15, 'first retry waits 15 seconds');
+
+    $clock += 16;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is(scalar @Local::Runtime::instances, 2, 'failed runtime restarts after its backoff');
+    $Local::Runtime::instances[1]{fail_with} = 'soloist_exited';
+    Plugins::SpotOn::Soloist::Manager::_poll();
+    is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{retries}{'00:11:22:33:44:55'}{nextTry},
+        $clock + 30, 'second consecutive failure doubles the backoff');
+
+    $clock += 31;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is(scalar @Local::Runtime::instances, 3, 'runtime restarts after the doubled backoff');
+    $Local::Runtime::instances[2]{fail_with} = 'soloist_build_expired';
+    Plugins::SpotOn::Soloist::Manager::_poll();
+    is(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{retries}{'00:11:22:33:44:55'}{nextTry},
+        $clock + 3600, 'expired Soloist build is retried only hourly');
+
+    ok(Plugins::SpotOn::Soloist::Manager->start(), 'explicit start resets backoff');
+    is(scalar @Local::Runtime::instances, 4, 'explicit start retries an expired build immediately');
+    Plugins::SpotOn::Soloist::Manager::_poll();
+    $clock += 121;
+    Plugins::SpotOn::Soloist::Manager->reconcile();
+    is_deeply(Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{retries}, {},
+        'stable runtime clears its failure history');
+
+    # ---- LMS <-> Spotify control synchronization. ----
+    my %subscribers;
+    for my $subscription (@Slim::Control::Request::subscriptions) {
+        my ($callback, $filter) = @$subscription;
+        $subscribers{ join(',', @{ $filter->[1] || [] }) } = $callback;
+    }
+    my $runtime = Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen);
+    my $session = $runtime->{session};
+    my $live_token = $runtime->stream_token;
+    my $playing = {
+        connection => 'connected',
+        playback   => {
+            status    => 'playing',
+            is_active => 1,
+            item      => { uri => 'spotify:track:x', name => 'Song', duration_ms => 1000 },
+        },
+    };
+    $session->emit({ kind => 'state', event_type => 'playback_state' }, $playing);
+    ok($kitchen->isPlaying, 'Spotify playback attaches the LMS player');
+
+    # Spotify app pauses: LMS is paused and its echo is not sent back.
+    $session->{actions} = [];
+    my $paused = { %$playing, playback => { %{ $playing->{playback} }, status => 'paused' } };
+    $session->emit({ kind => 'playback', event_type => 'playback_changed' }, $paused);
+    ok($kitchen->isPaused, 'Spotify pause pauses the LMS player');
+    $subscribers{'pause,stop'}->(
+        Slim::Control::Request->notification($kitchen, 'playlist', 'pause', 1),
+    );
+    is_deeply($session->{actions}, [], 'LMS echo of a Spotify pause is not sent back to Soloist');
+
+    # A real LMS unpause is forwarded once.
+    $subscribers{'pause,stop'}->(
+        Slim::Control::Request->notification($kitchen, 'playlist', 'pause', 0),
+    );
+    is_deeply($session->{actions}, [['play', {}]], 'LMS unpause resumes Spotify');
+
+    # Spotify resumes after the user stopped the LMS player: re-attach.
+    $clock += 10;
+    $session->{actions} = [];
+    $kitchen->{playing} = 0;
+    $kitchen->{paused} = 0;
+    $subscribers{'pause,stop'}->(
+        Slim::Control::Request->notification($kitchen, 'playlist', 'stop'),
+    );
+    is_deeply($session->{actions}, [], 'LMS stop is not forwarded while Spotify is already paused');
+    my $plays = grep { $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play' }
+        @Slim::Control::Request::requests;
+    $session->emit({ kind => 'playback', event_type => 'playback_changed' }, $playing);
+    my $plays_after_resume = grep { $_->{command}[0] eq 'playlist' && $_->{command}[1] eq 'play' }
+        @Slim::Control::Request::requests;
+    is($plays_after_resume, $plays + 1, 'Spotify play re-attaches a stopped LMS player');
+    is($kitchen->playingSong->track->url, "spoton://soloist-pcm:$live_token",
+        'LMS player is back on the live Soloist stream');
+
+    # The user starts other content on the player: release it and pause Spotify.
+    $clock += 10;
+    $kitchen->{song} = Local::Song->new('file:///music/local.flac');
+    $subscribers{'newsong'}->(
+        Slim::Control::Request->notification($kitchen, 'playlist', 'newsong'),
+    );
+    is($runtime->player_id, undef, 'LMS content change releases the Soloist player');
+    is_deeply($session->{actions}, [['pause', {}]], 'LMS content change pauses Spotify');
+    is($kitchen->playingSong->track->url, 'file:///music/local.flac',
+        'releasing the player does not stop the new LMS content');
+    $session->emit({ kind => 'item', event_type => 'track_changed' }, $playing);
+    is($kitchen->playingSong->track->url, 'file:///music/local.flac',
+        'stale track change does not reclaim the player the user took over');
+    is($runtime->player_id, undef, 'player stays released after a stale track change');
+
+    ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops after control checks');
 }
 
 unlink($key_file);

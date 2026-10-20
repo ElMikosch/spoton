@@ -3,8 +3,17 @@ package Plugins::SpotOn::Soloist::Session;
 use strict;
 use warnings;
 
+use Time::HiRes ();
+
 use Plugins::SpotOn::Soloist::Endpoint qw(discover_endpoint);
 use Plugins::SpotOn::Soloist::Transport;
+
+# Soloist sends nothing while idle.  After this much silence, ask for the auth
+# state; if not even that is answered, the socket is treated as dead.  LMS's
+# SimpleWS stops polling without reporting a failure when a frame read dies
+# inside its timer, so a connected state alone does not prove liveness.
+use constant IDLE_PROBE_AFTER => 30;
+use constant PROBE_TIMEOUT    => 15;
 
 sub new {
     my ($class, %args) = @_;
@@ -16,6 +25,7 @@ sub new {
         on_update         => $args{on_update},
         on_status         => $args{on_status},
         on_error          => $args{on_error},
+        clock             => $args{clock} || sub { Time::HiRes::time() },
         endpoint          => undef,
         status            => 'idle',
         state             => {
@@ -64,8 +74,38 @@ sub refresh {
     return $self->start();
 }
 
+# Called periodically by the owning runtime.  Returns 0 after it has closed a
+# connection which stopped responding, so the caller can reconnect.
+sub check_liveness {
+    my ($self) = @_;
+    return 1 unless $self->connected;
+
+    my $now = $self->{clock}->();
+    my $last = $self->{last_frame_at};
+    $last = $self->{last_frame_at} = $now unless defined $last;
+
+    if (defined $self->{probe_sent_at}) {
+        return 1 if $now - $self->{probe_sent_at} < PROBE_TIMEOUT;
+        delete $self->{probe_sent_at};
+        $self->_record_error(
+            'heartbeat_timeout',
+            'Soloist WebSocket stopped responding',
+        );
+        $self->{transport}->close();
+        $self->_set_status('disconnected');
+        return 0;
+    }
+
+    if ($now - $last >= IDLE_PROBE_AFTER) {
+        $self->{probe_sent_at} = $now;
+        $self->{transport}->send_action('auth_state');
+    }
+    return 1;
+}
+
 sub stop {
     my ($self) = @_;
+    delete @$self{qw(probe_sent_at last_frame_at)};
     $self->{transport}->close() if $self->{transport};
     $self->_set_status('stopped');
     return 1;
@@ -118,6 +158,8 @@ sub _create_transport {
 
 sub _transport_connected {
     my ($self) = @_;
+    $self->{last_frame_at} = $self->{clock}->();
+    delete $self->{probe_sent_at};
     $self->_set_status('connected');
 
     # Soloist sends auth_state on connect by contract. Query it as well so a
@@ -144,6 +186,8 @@ sub _transport_error {
 
 sub _transport_event {
     my ($self, $event) = @_;
+    $self->{last_frame_at} = $self->{clock}->();
+    delete $self->{probe_sent_at};
 
     $self->_apply_event($event);
     $self->_callback('on_update', $event, $self->snapshot());

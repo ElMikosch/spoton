@@ -5,6 +5,7 @@ no warnings 'once';
 
 use Test::More;
 use File::Spec::Functions qw(catdir catfile);
+use File::Path ();
 use File::Temp qw(tempdir);
 use FindBin qw($Bin);
 
@@ -381,5 +382,140 @@ like(
     qr/\[REDACTED\]/,
     'runtime failure message marks the redacted value',
 );
+
+# A crashed LMS leaves its children and Soloist's runtime files behind.  The
+# next start must terminate exactly those processes and remove stale files
+# before PulseAudio readiness or endpoint discovery can be trusted.
+{
+    my $stale_root = tempdir(CLEANUP => 1);
+    my $stale_runtime_dir = catdir($stale_root, 'runtime');
+    my $stale_data_dir = catdir($stale_root, 'data');
+    my $proc_root = catdir($stale_root, 'proc');
+    my $socket = catfile($stale_runtime_dir, 'native');
+    my %cmdlines = (
+        4101 => ['/usr/bin/pulseaudio', '--daemonize=no', '--load',
+            "module-native-protocol-unix socket=$socket auth-cookie=/x"],
+        4102 => ['/opt/soloist/soloist', '--device-name', 'Kitchen',
+            '--data-dir', $stale_data_dir, '--ws', '127.0.0.1:0'],
+        4103 => ['/usr/bin/parec', '--record', '--server', "unix:$socket"],
+        4104 => ['/opt/soloist/soloist', '--data-dir', '/elsewhere/data'],
+        4105 => ['/usr/bin/pulseaudio', '--load',
+            'module-native-protocol-unix socket=/elsewhere/native auth-cookie=/x'],
+    );
+    for my $pid (keys %cmdlines) {
+        my $dir = catdir($proc_root, $pid);
+        File::Path::make_path($dir);
+        open(my $fh, '>', catfile($dir, 'cmdline')) or die $!;
+        print {$fh} join("\0", @{ $cmdlines{$pid} }), "\0";
+        close($fh);
+    }
+    File::Path::make_path($stale_runtime_dir, $stale_data_dir, { mode => 0700 });
+    for my $file (map { catfile($stale_data_dir, $_) } qw(ws.addr ws.port soloist.pid)) {
+        open(my $fh, '>', $file) or die $!;
+        print {$fh} "stale\n";
+        close($fh);
+    }
+    open(my $sock_fh, '>', $socket) or die $!;
+    close($sock_fh);
+
+    my %alive = map { $_ => 1 } keys %cmdlines;
+    my @signals;
+    my $stale_now = 50;
+    my $stale = Plugins::SpotOn::Soloist::Runtime->new(
+        api_key           => 'key',
+        device_name       => 'Stale Probe',
+        soloist_binary    => '/opt/soloist/soloist',
+        pulseaudio_binary => '/usr/bin/pulseaudio',
+        runtime_dir       => $stale_runtime_dir,
+        data_dir          => $stale_data_dir,
+        cache_dir         => catdir($stale_root, 'cache'),
+        log_dir           => catdir($stale_root, 'logs'),
+        proc_root         => $proc_root,
+        clock             => sub { $stale_now },
+        sleep             => sub { $stale_now += $_[0] },
+        random_bytes      => sub { return 'O' x $_[0] },
+        signal_process    => sub {
+            my ($signal, $pid) = @_;
+            push @signals, [$signal, $pid] if $signal;
+            # The Soloist orphan ignores TERM and needs KILL.
+            delete $alive{$pid} if $signal eq 'KILL'
+                || ($signal eq 'TERM' && $pid != 4102);
+            return $alive{$pid} ? 1 : 0;
+        },
+        spawn             => sub { Local::Process->new($_[0]) },
+    );
+    ok($stale->start(), 'runtime starts after an unclean previous shutdown');
+    is_deeply(
+        [ sort { $a <=> $b } map { $_->[1] } grep { $_->[0] eq 'TERM' } @signals ],
+        [4101, 4102, 4103],
+        'only processes owning this runtime socket or data directory are terminated',
+    );
+    is_deeply(
+        [ grep { $_->[0] eq 'KILL' } @signals ],
+        [['KILL', 4102]],
+        'an orphan ignoring TERM is killed after the grace period',
+    );
+    ok(!-e $socket, 'stale PulseAudio socket is removed before readiness polling');
+    ok(!-e catfile($stale_data_dir, $_), "stale Soloist $_ is removed")
+        for qw(ws.addr ws.port soloist.pid);
+    $stale->stop();
+}
+
+# Soloist documents exit code 10 for an expired build.  Report it distinctly
+# instead of as a generic crash so the manager can stop hammering restarts.
+{
+    package Local::ExitedProcess;
+    our @ISA = ('Local::Process');
+    sub new {
+        my ($class, $kind, $code) = @_;
+        my $self = Local::Process::new($class, $kind);
+        $self->{exit_code} = $code;
+        return $self;
+    }
+    sub exit_code { $_[0]{alive} ? undef : $_[0]{exit_code} }
+}
+for my $case ([10, 'soloist_build_expired'], [1, 'soloist_exited']) {
+    my ($code, $expected) = @$case;
+    my $exit_root = tempdir(CLEANUP => 1);
+    my $soloist_proc;
+    my $exit_runtime = Plugins::SpotOn::Soloist::Runtime->new(
+        api_key           => 'exit-secret-key',
+        device_name       => 'Exit Probe',
+        soloist_binary    => '/opt/soloist/soloist',
+        pulseaudio_binary => '/usr/bin/pulseaudio',
+        runtime_dir       => catdir($exit_root, 'runtime'),
+        data_dir          => catdir($exit_root, 'data'),
+        cache_dir         => catdir($exit_root, 'cache'),
+        log_dir           => catdir($exit_root, 'logs'),
+        proc_root         => catdir($exit_root, 'no-proc'),
+        random_bytes      => sub { return 'E' x $_[0] },
+        socket_ready      => sub { 1 },
+        endpoint_discover => sub { return (undef, 'not_ready') },
+        spawn             => sub {
+            my ($kind, $spec, $stdout) = @_;
+            return Local::Process->new($kind) unless $kind eq 'soloist';
+            syswrite($stdout, "starting with exit-secret-key\nerror: another process holds the data directory\n");
+            $soloist_proc = Local::ExitedProcess->new($kind, $code);
+            return $soloist_proc;
+        },
+    );
+    ok($exit_runtime->start(), "exit-code $code fixture starts");
+    is($exit_runtime->poll(), 'starting_soloist', "exit-code $code fixture spawns Soloist");
+    $soloist_proc->{alive} = 0;
+    ok(!$exit_runtime->poll(), "Soloist exit code $code fails the runtime");
+    is($exit_runtime->last_error()->{code}, $expected, "exit code $code maps to $expected");
+    if ($code == 1) {
+        like(
+            $exit_runtime->last_error()->{message},
+            qr/exit code 1.*another process holds the data directory/,
+            'generic Soloist exit reports its exit code and log tail',
+        );
+        unlike(
+            $exit_runtime->last_error()->{message},
+            qr/exit-secret-key/,
+            'log tail in failure message is redacted',
+        );
+    }
+}
 
 done_testing();

@@ -5,6 +5,7 @@ use warnings;
 
 use Digest::MD5 qw(md5_hex);
 use File::Path qw(make_path);
+use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 use Time::HiRes ();
@@ -14,6 +15,26 @@ use constant RECONCILE_INTERVAL    => 15;
 use constant START_STAGGER         => 2;
 use constant MAX_API_KEY_BYTES     => 1024;
 use constant DEFAULT_STREAM_FORMAT => 'pcm';
+use constant AUTOSTART_RETRY       => 60;
+
+# Failed runtimes are restarted with exponential backoff instead of on every
+# reconcile pass.  An expired Soloist build cannot recover without a new
+# binary, so it is retried rarely; managed_start resets all backoff.
+use constant RETRY_BASE            => 15;
+use constant RETRY_MAX             => 600;
+use constant RETRY_EXPIRED         => 3600;
+use constant STABLE_AFTER          => 120;
+
+# LMS reports our own pause/stop requests back as unsourced notifications.
+# Ignore those echoes so they cannot override a newer Spotify app command.
+use constant ECHO_WINDOW           => 2;
+
+# A freshly requested LMS stream needs a moment before playingSong reflects it.
+use constant REATTACH_GRACE        => 5;
+
+# PulseAudio's Unix socket path must fit sockaddr_un.sun_path (108 bytes);
+# Runtime rejects anything above this conservative limit.
+use constant MAX_SOCKET_PATH       => 100;
 
 my ($log, $prefs, $server_prefs);
 my %instances;
@@ -22,6 +43,9 @@ my $initialized = 0;
 my $tools;
 my $last_error;
 my @subscriptions;
+my %failures;
+my %lms_echo;
+my %attach_block;
 
 sub init {
     _ensure_lms();
@@ -78,6 +102,9 @@ sub start {
         unless $runtime_tools;
     $tools = $runtime_tools;
 
+    # An explicit (re)start is the user's signal that the host changed, for
+    # example after installing a newer Soloist build.
+    %failures = ();
     $enabled = 1;
     $prefs->set('soloistConfigured', 1);
     $prefs->set('soloistEnabled', 1);
@@ -111,6 +138,9 @@ sub stop {
         eval { $instance->stop() };
     }
     %instances = ();
+    %failures = ();
+    %lms_echo = ();
+    %attach_block = ();
     return 1;
 }
 
@@ -134,6 +164,10 @@ sub reconcile {
     my ($class) = @_;
     return 1 unless $enabled;
 
+    # Keep reconciling even when this pass cannot proceed: a transiently
+    # unreadable key file must not stop supervision for good.
+    _schedule_reconcile(RECONCILE_INTERVAL);
+
     my ($api_key, $key_error) = _read_api_key(apiKeyFile());
     return _manager_fail($key_error, 'Soloist API key file is unavailable')
         unless $api_key;
@@ -143,6 +177,15 @@ sub reconcile {
     return _manager_fail($preflight_error, 'Soloist runtime preflight failed')
         unless $runtime_tools;
     $tools = $runtime_tools;
+
+    my $now = Time::HiRes::time();
+    for my $id (keys %failures) {
+        my $instance = $instances{$id};
+        delete $failures{$id}
+            if $instance && $instance->state() eq 'running'
+                && $instance->running_since()
+                && $now - $instance->running_since() >= STABLE_AFTER;
+    }
 
     my @clients = _desired_clients();
     my %desired = map { $_->id => $_ } @clients;
@@ -159,7 +202,6 @@ sub reconcile {
 
     _start_clients($api_key, @clients);
     $api_key = undef;
-    _schedule_reconcile(RECONCILE_INTERVAL);
     return 1;
 }
 
@@ -301,6 +343,15 @@ sub statusSnapshot {
         apiKeyReady => _api_key_file_ready(apiKeyFile()),
         playerCount => scalar(@ordered),
         players     => \%players,
+        retries     => {
+            map {
+                $_ => {
+                    count  => $failures{$_}{count},
+                    code   => $failures{$_}{code},
+                    nextTry => $failures{$_}{next_try},
+                }
+            } sort keys %failures
+        },
         lastError   => $last_error || $single->{lastError},
     };
 }
@@ -310,7 +361,19 @@ sub _poll {
     $_->poll_now() for values %instances;
 }
 
-sub _autostart { __PACKAGE__->start() }
+sub _autostart {
+    return if __PACKAGE__->start();
+    return unless $prefs->get('soloistEnabled');
+
+    # The API key or a host dependency may appear after LMS has started.
+    require Slim::Utils::Timers;
+    Slim::Utils::Timers::killTimers(__PACKAGE__, \&_autostart);
+    Slim::Utils::Timers::setTimer(
+        __PACKAGE__,
+        Time::HiRes::time() + AUTOSTART_RETRY,
+        \&_autostart,
+    );
+}
 
 sub _start_clients {
     my ($api_key, @clients) = @_;
@@ -334,7 +397,7 @@ sub _start_clients {
         if ($instances{$id} && $instances{$id}->state() ne 'failed') {
             _ensure_instance($client, $api_key);
         }
-        else {
+        elsif (!_retry_pending($id)) {
             push @pending, $client;
         }
     }
@@ -388,16 +451,27 @@ sub _ensure_instance {
     return $instance if $instance;
 
     require Plugins::SpotOn::Soloist::PlayerRuntime;
-    my $player_dir = catdir(baseDir(), 'players', md5_hex($id));
+    my $hash = md5_hex($id);
+    my $player_dir = catdir(baseDir(), 'players', $hash);
+    my $runtime_dir = eval { _runtime_dir_for($hash) };
+    unless ($runtime_dir) {
+        _manager_fail('runtime_dir_failed', $@);
+        return;
+    }
     $instance = Plugins::SpotOn::Soloist::PlayerRuntime->new(
         client_id   => $id,
         device_name => $device_name,
         base_dir    => $player_dir,
+        runtime_dir => $runtime_dir,
         api_key     => $api_key,
         tools       => $tools,
         verbose     => $prefs->get('diagnosticMode') ? 1 : 0,
         on_update   => \&_on_instance_update,
-        on_status   => sub { },
+        on_status   => sub {
+            my ($status, $snapshot) = @_;
+            $log->info("Soloist device \"$device_name\" is running")
+                if $status eq 'running' && $log->is_info;
+        },
         on_error    => sub {
             my ($failed_instance, $code, $message) = @_;
             $last_error = {
@@ -405,6 +479,8 @@ sub _ensure_instance {
                 message  => $message,
                 playerId => $failed_instance->client_id(),
             };
+            _register_failure($failed_instance, $code, $message)
+                if $failed_instance->state() eq 'failed';
         },
     );
     $instances{$id} = $instance;
@@ -413,6 +489,96 @@ sub _ensure_instance {
         return;
     }
     return $instance;
+}
+
+# The per-player data directory keeps the full player hash so Soloist's stored
+# Spotify session survives upgrades.  The runtime tree holding the PulseAudio
+# socket is kept short instead: a packaged LMS cache directory such as
+# /var/lib/squeezeboxserver/cache plus the full hash exceeds sun_path.
+sub _runtime_dir_for {
+    my ($hash) = @_;
+    my $short = substr($hash, 0, 12);
+    my $dir = catdir(baseDir(), 'run', $short);
+    return $dir if length(catfile($dir, 'native')) <= MAX_SOCKET_PATH;
+
+    my $fallback = catdir(File::Spec->tmpdir(), "spoton-soloist-$>");
+    _secure_directory($fallback);
+    return catdir($fallback, $short);
+}
+
+sub _register_failure {
+    my ($instance, $code, $message) = @_;
+    my $id = $instance->client_id();
+    my $failure = $failures{$id} ||= { count => 0 };
+    $failure->{count}++;
+    $code = '' unless defined $code;
+
+    my $delay = RETRY_BASE * 2 ** ($failure->{count} - 1);
+    $delay = RETRY_MAX if $delay > RETRY_MAX;
+    $delay = RETRY_EXPIRED if $code eq 'runtime_soloist_build_expired';
+    $failure->{code} = $code;
+    $failure->{next_try} = Time::HiRes::time() + $delay;
+
+    $log->warn(sprintf(
+        'Soloist device "%s" failed (%s: %s); retrying in %d s',
+        $instance->device_name(),
+        $code,
+        _clean_message($message),
+        $delay,
+    )) if $log;
+}
+
+sub _retry_pending {
+    my ($id) = @_;
+    my $failure = $failures{$id} or return 0;
+    return $failure->{next_try} > Time::HiRes::time() ? 1 : 0;
+}
+
+sub _expect_echo {
+    my ($instance, $action) = @_;
+    $lms_echo{ $instance->client_id() } = {
+        action => $action,
+        until  => Time::HiRes::time() + ECHO_WINDOW,
+    };
+}
+
+sub _consume_echo {
+    my ($instance, $action) = @_;
+    my $echo = $lms_echo{ $instance->client_id() } or return 0;
+    if ($echo->{until} < Time::HiRes::time()) {
+        delete $lms_echo{ $instance->client_id() };
+        return 0;
+    }
+    return 0 unless $echo->{action} eq $action;
+    delete $lms_echo{ $instance->client_id() };
+    return 1;
+}
+
+sub _soloist_status {
+    my ($instance) = @_;
+    my $snapshot = $instance->session_snapshot() || {};
+    return (($snapshot->{playback} || {})->{status}) || '';
+}
+
+# True while the attached LMS player is still on this runtime's live stream.
+# The user may have stopped it or started other content in the meantime.
+sub _player_on_stream {
+    my ($instance) = @_;
+    my $token = $instance->stream_token() or return 0;
+    my $client = _get_client($instance->player_id()) or return 0;
+    $client = _canonical_client($client) || $client;
+    return 0 if $client->can('isStopped') && eval { $client->isStopped() };
+    my $song = eval { $client->playingSong() } or return 0;
+    my $url = eval { $song->track->url() } || eval { $song->streamUrl() } || '';
+    return index($url, $token) >= 0 ? 1 : 0;
+}
+
+sub _needs_attach {
+    my ($instance) = @_;
+    return 1 unless $instance->player_id();
+    my $attached_at = $instance->attached_at() || 0;
+    return 0 if Time::HiRes::time() - $attached_at < REATTACH_GRACE;
+    return _player_on_stream($instance) ? 0 : 1;
 }
 
 sub _on_instance_update {
@@ -429,10 +595,19 @@ sub _on_instance_update {
         return;
     }
 
-    if (($kind eq 'state' || $kind eq 'playback' || $kind eq 'item')
+    # Attach on activation, and re-attach when Spotify plays while the LMS
+    # player was stopped or switched to other content in the meantime.  A
+    # track change carries no status of its own: its snapshot can still say
+    # "playing" just after LMS asked Soloist to pause, so it may only perform
+    # a first attach and never reclaim a player the user just took over.
+    my $attach_event = $kind eq 'state' || $kind eq 'playback'
+        || ($kind eq 'item'
+            && !$instance->player_id()
+            && ($attach_block{ $instance->client_id() } || 0) <= Time::HiRes::time());
+    if ($attach_event
         && $playback->{is_active}
         && ($playback->{status} || '') eq 'playing'
-        && !$instance->player_id()) {
+        && _needs_attach($instance)) {
         my $client = _get_client($instance->client_id());
         if ($client) {
             my $meta = _metadata_from_snapshot($instance, $snapshot);
@@ -544,10 +719,18 @@ sub _apply_playback_status {
     return unless $instance->player_id();
     return unless defined $status && ($status eq 'playing' || $status eq 'paused');
     my $client = _get_client($instance->player_id()) or return;
-    my $is_playing = eval { $client->isPlaying() } ? 1 : 0;
-    return if ($status eq 'playing' && $is_playing)
-        || ($status eq 'paused' && !$is_playing);
+    $client = _canonical_client($client) || $client;
 
+    # Only resume a paused player and only pause a playing one.  A stopped
+    # player is restarted by the attach path, never by "pause 0".
+    if ($status eq 'playing') {
+        return unless eval { $client->isPaused() };
+    }
+    else {
+        return unless eval { $client->isPlaying() };
+    }
+
+    _expect_echo($instance, $status eq 'paused' ? 'pause' : 'play');
     require Slim::Control::Request;
     my $request = Slim::Control::Request->new(
         $client->id,
@@ -620,10 +803,20 @@ sub _subscribe {
         my $instance = __PACKAGE__->instanceForClient($client) or return;
         return unless $instance->player_id();
         my $newvalue = eval { $request->getParam('_newvalue') };
-        my $unpause = eval {
-            $request->isCommand([['playlist'], ['pause']]) && !$newvalue
-        };
-        $instance->send_action($unpause ? 'play' : 'pause');
+        my $is_pause = eval { $request->isCommand([['playlist'], ['pause']]) };
+        my $action = !$is_pause ? 'stop' : $newvalue ? 'pause' : 'play';
+        return if _consume_echo($instance, $action);
+
+        # Forward only real state changes to Soloist.
+        my $status = _soloist_status($instance);
+        if ($action eq 'play') {
+            return if $status eq 'playing';
+            $instance->send_action('play');
+        }
+        else {
+            return unless $status eq 'playing' || $status eq 'buffering';
+            $instance->send_action('pause');
+        }
     };
     Slim::Control::Request::subscribe(
         $pause,
@@ -648,6 +841,24 @@ sub _subscribe {
         [['playlist'], ['jump', 'index']],
     );
     push @subscriptions, $jump;
+
+    # Playing other content on the LMS player releases it from Spotify.  Pause
+    # Soloist as well; otherwise the app keeps showing it as playing into the
+    # private null sink with nobody listening.
+    my $newsong = sub {
+        my ($request) = @_;
+        my $client = eval { $request->client() } or return;
+        my $instance = __PACKAGE__->instanceForClient($client) or return;
+        return unless $instance->player_id();
+        return if _player_on_stream($instance);
+        $instance->detach_player(silent => 1);
+        $attach_block{ $instance->client_id() } = Time::HiRes::time() + REATTACH_GRACE;
+        my $status = _soloist_status($instance);
+        $instance->send_action('pause')
+            if $status eq 'playing' || $status eq 'buffering';
+    };
+    Slim::Control::Request::subscribe($newsong, [['playlist'], ['newsong']]);
+    push @subscriptions, $newsong;
 }
 
 sub _schedule_reconcile {
@@ -739,10 +950,14 @@ sub _preflight {
 
 sub _manager_fail {
     my ($code, $message) = @_;
+    $code ||= 'managed_failed';
+    my $repeated = $last_error && ($last_error->{code} || '') eq $code;
     $last_error = {
-        code    => $code || 'managed_failed',
+        code    => $code,
         message => _clean_message($message),
     };
+    $log->warn("Soloist backend: $code - $last_error->{message}")
+        if $log && !$repeated;
     return 0;
 }
 

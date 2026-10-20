@@ -61,6 +61,35 @@ state layers deliberately have no LMS runtime dependency:
   fixed owner-only cache file, validates required executables, and defers
   topology/name changes while a Spotify session is active.
 
+### Runtime layout and recovery
+
+Per player, SpotOn keeps Soloist's persistent data (including the stored
+Spotify session), cache and logs below
+`<cachedir>/spoton/soloist-managed/players/<md5 of player id>/`. The ephemeral
+PulseAudio runtime tree (Unix socket, cookie, `XDG_*` directories) lives below
+`<cachedir>/spoton/soloist-managed/run/<first 12 hex digits>/` because a Unix
+socket path must stay below roughly 108 bytes. Only if even that path would be
+too long does SpotOn use a private `/tmp/spoton-soloist-<uid>/` directory,
+which must be owned by the LMS service user with mode `0700`.
+
+Every runtime start first terminates leftovers of a crashed LMS that still own
+the player's Pulse socket or Soloist data directory and removes stale
+`ws.addr`, `ws.port`, `soloist.pid` and socket files. A failed runtime is
+restarted with exponential backoff (15 s, 30 s, ... up to 10 minutes); two
+minutes of stable operation clear the failure history. Soloist's documented
+exit code 10 (expired build) is reported as `runtime_soloist_build_expired` and
+retried hourly; `managed_start` resets the backoff after replacing the binary.
+Each failure is logged once to the LMS log with the error code, retry delay and
+the last lines of the private `soloist.log` or `pulse.log`.
+
+The local WebSocket connection is probed with `get_auth_state` after 30 seconds
+without a frame and reconnected if no answer arrives within 15 seconds.
+
+LMS and Spotify transport state are kept in step: pause/resume requests that
+SpotOn applies to LMS for Spotify are not echoed back to Soloist, a stopped LMS
+player is restarted on the live stream when Spotify plays again, and starting
+other LMS content on the player releases it and pauses Soloist.
+
 When the protected API-key file exists, SpotOn enables and starts the managed
 Soloist backend automatically after the LMS player list is available. Each
 standalone player appears separately in Spotify; a synchronized set appears once

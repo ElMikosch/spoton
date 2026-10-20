@@ -5,6 +5,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-10-20
+
+### Fixed
+- **Soloist failed to start on packaged Linux LMS installations** — since 3.6.0 the private PulseAudio socket lived below `players/<full player hash>/runtime/`, which under `/var/lib/squeezeboxserver/cache` is 110 characters long and exceeds the Unix socket path limit. Every player runtime was rejected before PulseAudio started. The runtime tree now lives below `soloist-managed/run/<short hash>/` (78 characters on packaged LMS) and falls back to a private `/tmp/spoton-soloist-<uid>/` directory only for unusually long cache paths. Soloist's data directory and stored Spotify session are unchanged.
+- **Recovery after an LMS crash or `kill -9`** — orphaned PulseAudio, capture and Soloist processes that still hold a player's private socket or data directory are terminated before the runtime starts again, and stale `ws.addr`, `ws.port`, `soloist.pid` and Pulse socket files are removed. Previously Soloist refused the still-held data directory and readiness checks could succeed against the dead endpoint.
+- **Endless restart loop for failing runtimes** — failed Soloist runtimes are restarted with exponential backoff (15 s doubling to 10 min) instead of every 15 s, and the history resets after two minutes of stable operation. An expired Soloist build (documented exit code 10) is reported as `soloist_build_expired` and retried hourly; `managed_start` retries immediately after a new binary is installed.
+- **Silently dead Soloist WebSocket** — an idle connection is probed with `get_auth_state` after 30 s of silence and reconnected if the probe is not answered within 15 s. LMS's WebSocket client stops polling without reporting an error when a frame read fails, which previously left playback control and metadata frozen while the status still read "connected".
+- **LMS and Spotify app fighting over pause/play** — LMS echoes of pause/resume requests that SpotOn applied on Spotify's behalf are ignored, and only real state changes are forwarded to Soloist. A quick pause → play in the Spotify app can no longer be undone by the delayed LMS echo.
+- **No audio after stopping the LMS player and pressing play in Spotify** — when Spotify plays while the attached LMS player is stopped or no longer on the Soloist stream, SpotOn starts the live stream on the player again instead of sending a no-op `pause 0`.
+- **Spotify kept "playing" after starting other music on the player** — starting other LMS content on a Spotify-attached player now releases the player without interrupting the new content and pauses Soloist, so the Spotify app reflects that nobody is listening.
+- **Supervision stopped after a transient key-file problem** — reconciliation keeps running when the API key file is briefly unreadable, and automatic startup retries every 60 s when the key or a host dependency appears after LMS has started.
+
+### Changed
+- **Actionable Soloist diagnostics in the LMS log** — runtime failures are logged once per failure with the device name, stable error code, retry delay, Soloist exit code and the last lines of the private `soloist.log`/`pulse.log` (API key redacted). `managed_status` additionally reports per-player `retries`.
+
 ## [3.6.0] - 2026-08-17
 
 ### Added
