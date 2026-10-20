@@ -118,17 +118,48 @@ SKIP: {
         PLUGIN_SPOTON_PKCE_OPENING
         PLUGIN_SPOTON_PKCE_SUCCESS
         PLUGIN_SPOTON_PKCE_ERROR
-        PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
         PLUGIN_SPOTON_PKCE_MANUAL_TITLE
         PLUGIN_SPOTON_PKCE_MANUAL_DESC
         PLUGIN_SPOTON_PKCE_MANUAL_BTN
-        PLUGIN_SPOTON_PKCE_REDIRECT_NOTE
         PLUGIN_SPOTON_SETUP_PKCE_TITLE
         PLUGIN_SPOTON_SETUP_PKCE_DESC
         PLUGIN_SPOTON_REAUTH_REQUIRED
         PLUGIN_SPOTON_REAUTH_REQUIRED_SETTINGS
         PLUGIN_SPOTON_NEW_SEARCH
         PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY
+        PLUGIN_SPOTON_PLAYER_AUTH_TITLE
+        PLUGIN_SPOTON_PLAYER_AUTH_DESC
+        PLUGIN_SPOTON_PLAYER_AUTH_BANNER
+        PLUGIN_SPOTON_PLAYER_AUTH_STATUS_OK
+        PLUGIN_SPOTON_PLAYER_AUTH_STATUS_REQUIRED
+        PLUGIN_SPOTON_PLAYER_AUTH_INSTRUCTIONS
+        PLUGIN_SPOTON_PLAYER_AUTH_START_BTN
+        PLUGIN_SPOTON_PLAYER_AUTH_CANCEL_BTN
+        PLUGIN_SPOTON_PLAYER_AUTH_WAITING
+        PLUGIN_SPOTON_PLAYER_AUTH_SUCCESS
+        PLUGIN_SPOTON_PLAYER_AUTH_FAILED
+        PLUGIN_SPOTON_PLAYER_AUTH_TIMEOUT
+        PLUGIN_SPOTON_PLAYER_AUTH_MISMATCH
+        PLUGIN_SPOTON_PLAYBACK_AUTH_REQUIRED
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_TITLE
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_DESC
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_START_BTN
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_PASTE_HINT
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_SUBMIT_BTN
+        PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_FAILED
+        PLUGIN_SPOTON_CUSTOM_APP_TITLE
+        PLUGIN_SPOTON_CUSTOM_APP_SETUP
+        PLUGIN_SPOTON_BUNDLED_SHARED_QUOTA_HINT
+        PLUGIN_SPOTON_CUSTOM_QUOTA_OK
+        PLUGIN_SPOTON_PKCE_REAUTH_BANNER
+        PLUGIN_SPOTON_CLIENT_ID_REAUTH_HINT
+        PLUGIN_SPOTON_SETTINGS_ACCOUNT_SECTION
+        PLUGIN_SPOTON_SETUP_SPDC_TITLE
+        PLUGIN_SPOTON_SETUP_SPDC_DESC
+        PLUGIN_SPOTON_SETUP_PATHFINDER_TITLE
+        PLUGIN_SPOTON_SETUP_PATHFINDER_DESC
+        PLUGIN_SPOTON_PLAYER_AUTH_SOURCE_ZEROCONF
+        PLUGIN_SPOTON_PLAYER_AUTH_SOURCE_BROWSER
     );
 
     # Obsolete keys that must NOT be present
@@ -204,6 +235,38 @@ SKIP: {
     # Verify PKCE/OAuth keys removed in Plan 04.3-03
     for my $key (@pkce_removed_keys) {
         ok(!$has_en{$key} && !$has_de{$key}, "$key is removed (PKCE flow removed in Plan 04.3-03)");
+    }
+
+    # Plan 65-04: the bundled-mode info line is obsolete — the default PKCE
+    # identity is no longer a shared community Client ID, and the template
+    # now shows PLUGIN_SPOTON_DEFAULT_AUTH_INFO instead.
+    ok(!$has_en{'PLUGIN_SPOTON_BUNDLED_MODE_INFO'} && !$has_de{'PLUGIN_SPOTON_BUNDLED_MODE_INFO'},
+        'PLUGIN_SPOTON_BUNDLED_MODE_INFO is removed (Keymaster default, Plan 65-04)');
+
+    # Plan 66-03: the 66-02 Settings reorg removed the standalone Browse-setup
+    # and Made-For-You-setup guide steps and the custom-Developer-App title
+    # (the reworded guide now covers account + playback + sp_dc + Pathfinder
+    # in four steps; the Custom App section is header-less inside details).
+    my @phase66_removed_keys = qw(
+        PLUGIN_SPOTON_SETUP_BROWSE_TITLE
+        PLUGIN_SPOTON_SETUP_BROWSE_DESC
+        PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
+        PLUGIN_SPOTON_MADE_FOR_YOU_SECTION
+        PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
+    );
+    for my $key (@phase66_removed_keys) {
+        ok(!$has_en{$key} && !$has_de{$key},
+            "$key is removed (Settings reorg, Plan 66-03)");
+    }
+
+    # Phase 67: removed strings
+    for my $key (qw(
+        PLUGIN_SPOTON_DEFAULT_AUTH_INFO
+        PLUGIN_SPOTON_DEVMODE_QUOTA_WARNING
+        PLUGIN_SPOTON_PKCE_REDIRECT_NOTE
+    )) {
+        ok(!$has_en{$key} && !$has_de{$key},
+            "$key is removed (Phase 67 Client ID UX cleanup)");
     }
 
     # Verify correct indentation: lines must use Tab, not spaces

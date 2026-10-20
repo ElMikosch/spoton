@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.2] - 2026-10-20
+
+### Changed
+- **Fork now tracks upstream SpotOn 3.5.8 plus the Soloist backend** — merges all upstream changes since 3.4.0 (two-step playback authorization, Spotify 429 rate-limit handling, librespot audio-key retry, bounded pagination, Material Skin home icons, settings reorganization) with the managed Soloist Connect backend and the 3.6.1 stability fixes. See the upstream 3.5.0–3.5.8 entries below.
+
+### Fixed
+- **Release archive ships the `spoton` helper binaries again** — the fork's 3.5.5–3.6.1 archives were assembled from the plugin source only and contained no `Bin/` directory, so Browse/library playback had no helper to start. 3.6.2 is built by the release workflow and bundles the binaries for all platforms.
+
 ## [3.6.1] - 2026-10-20
 
 ### Fixed
@@ -33,13 +41,95 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sync-group changes preserve active Spotify playback** — Soloist now uses SpotOn's static localized group suffix and one-runtime-per-master topology from the v3.3.4 grouping fix. Name/process changes are deferred while Spotify is active, an active member remains authoritative if LMS changes the sync master, and idle slave endpoints are reconciled without interrupting the live session.
 - **Direct-stream metadata lookup** — token metadata and artwork resolve from both the logical `spoton://soloist-pcm:` URL and the low-latency LMS HTTP route.
 
-## [3.5.6] - 2026-08-17
+## [3.5.8] - 2026-08-22
+
+### Fixed
+- **"Recently Played" and "Made For You" home icons now theme-aware on Material Skin** — icons use the Material Skin `MTL_icon_` convention (`history`, `auto_awesome`) for automatic light/dark theme adaptation, matching the Top Tracks icon (`trophy` via icon-map.json). PNG fallbacks remain for non-Material skins. ([#124](https://github.com/stiefenm/spoton/issues/124))
+- **JiveLite / piCorePlayer lists no longer show empty rows past the first API page** — all Browse, Library, Search, and Add-to-Playlist menus now fill JiveLite's fixed 200-item blocks with bounded multi-page fetches, instead of stalling at Spotify's single-page API limit (10-100 items depending on endpoint) and leaving trailing positions permanently empty. Partial failures during a multi-page fetch now report a truncated-but-consistent item count instead of an unfillable total. ([#157](https://github.com/stiefenm/spoton/issues/157))
+- **Rate-limit state cleared on Client ID switch** — switching Client IDs no longer carries stale rate-limit cooldown from the previous ID.
+
+## [3.5.7] - 2026-08-18
+
+### Fixed
+- **Concurrent Browse requests during a 429 window no longer show empty pages** — when one request triggers a 429, other Browse (GET) requests arriving during the Retry-After window are now deferred and retried automatically after the window closes (with jitter to prevent bursts), instead of returning an instant "No results" page with no log trace. Write requests (play/pause/seek/volume) keep fail-fast behavior. ([#155](https://github.com/stiefenm/spoton/issues/155))
+- **Rate-limit short-circuits now visible in server.log** — upgraded from debug to info level across all three API pipelines, making the "invisible empty page" pattern diagnosable at normal log verbosity.
+- **"Temporarily rate limited" message instead of "No results"** — when a request is rate-limited and cannot be deferred, the OPML menu now shows a localized explanation (11 languages) instead of the confusing generic "No results".
+
+## [3.5.6] - 2026-08-18
+
+### Fixed
+- **Transparent auto-retry on 429 rate limits** — when Spotify returns a 429 with a short Retry-After (≤30s), SpotOn now waits and retries once automatically instead of showing an instant "no result" page. Covers all three API pipelines (Browse, Pathfinder Home, Web Player Playlists). A second consecutive 429 still fails fast as before. ([#155](https://github.com/stiefenm/spoton/issues/155))
+
+## [3.5.5] - 2026-08-18
+
+### Changed
+- **Settings UX polish** — Client ID section is now the first item in Account Settings. Removed redundant nested details section (single wizard remains). Removed devmode quota warning and redundant Redirect URI hint from the auth section. "Default mode" relabeled to "bundled ID" in the remove link.
+- **Re-authorization banner** — after changing the Client ID, a prominent orange banner appears at the top of Settings linking to the Connect Account section, matching the playback auth banner style.
+
+## [3.5.4] - 2026-08-18
+
+### Fixed
+- **Client ID section moved to top of Account Settings** — the shared-quota warning and custom ID input are now the first item users see, instead of being buried below Pathfinder Hash.
+
+## [3.5.3] - 2026-08-18
+
+### Fixed
+- **`/login` handler no longer returns 404** — the handler registration used a regex object as a hash key, which stringified to `(?^:^login$)` instead of matching `login`. Now uses a plain string key. ([D-01](https://github.com/stiefenm/spoton/issues/147))
+- **Local rate-limit short-circuits now distinguishable from real 429s** — a single Spotify 429 no longer cascades into phantom 429s on unrelated endpoints. Local cache-based short-circuits are tagged as `rate_limited_local` with debug logging, making the Status page's 429 count accurate. ([#152](https://github.com/stiefenm/spoton/issues/152))
+- **Classic Skin Settings page reloads after OAuth** — the PKCE success popup now redirects the opener tab back to Settings, so the connected account state is immediately visible without a manual page reload.
+
+### Changed
+- **Bundled Client ID skips startup limit probe** — SpotOn no longer sends 8 API requests to detect endpoint limits on every LMS restart when using the bundled Client ID. The limits are known constants for the shared ncspot Extended Quota app. Saves API quota across 138+ installations. The `force` re-probe option remains available.
+- **Settings UX clearly communicates shared vs. private API quota** — bundled mode shows an amber shared-quota warning recommending a personal Client ID; custom mode shows a green private-quota confirmation. The Client ID input is now directly visible (not inside a collapsed section), and a re-authorization hint appears when accounts are already connected.
+- **Client ID description reframed** — bundled mode is presented as "works out of the box but shared", custom mode as "recommended for the best experience" (previously: bundled as default, custom as "advanced").
+- **i18n: 4 new + 3 reworded string keys** across all 11 languages (CS, DA, DE, EN, ES, FR, IT, NL, NO, PL, SV) with genuine translations.
+
+### Added
+- **TROUBLESHOOTING.md: rate-limit section** — explains the shared-bucket cause of frequent 429s and recommends creating a personal Spotify Developer App.
+
+## [3.5.2] - 2026-08-17
+
+### Fixed
+- **Audio key timeout no longer drops the session** — librespot now retries audio key requests up to 2 times on timeout after AP reconnects, and fails the track cleanly instead of feeding encrypted bytes to the decoder. Previously, a single 1500ms timeout after an access-point reconnect would cause "continuing without decryption" → decoder failure → session drop. Binary rebuilt with patched librespot (`spoton v3.0.2`). ([#150](https://github.com/stiefenm/spoton/issues/150), upstream [librespot#1742](https://github.com/librespot-org/librespot/pull/1742))
+
+## [3.5.1] - 2026-08-17
+
+### Fixed
+- **Health check no longer restarts daemon mid-playback on AP drops** — Signal 1 (`session_valid=false`) now defers daemon restart while actively playing (`idle_secs ≤ 30`). Transient Spotify access-point reconnects no longer kill active Connect sessions. ([#149](https://github.com/stiefenm/spoton/issues/149))
+- **Audio key response timeout now detected by Auth Health** — `classifyAudioKeyError` recognizes client-side key timeouts after AP reconnects and surfaces them in the Status page. Previously these failures were invisible to all monitoring. ([#150](https://github.com/stiefenm/spoton/issues/150))
+
+## [3.5.0] - 2026-08-16
+
+### Added
+- **Authorize Playback (ZeroConf pairing)** — a new "Authorize Playback" section in Settings lets you pair SpotOn with the Spotify app via mDNS discovery. Start pairing, then select the shown device in your Spotify app. This replaces the previous auto-derivation approach and is required once per account for playback and Spotify Connect. ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Browser fallback for playback authorization** — for networks where the Spotify app can't discover SpotOn via mDNS (Docker, VLANs), a browser-based authorization flow is available as a nested option inside the Authorize Playback section.
+- **Auth Health dashboard** — the Status page now shows "Web API Token" and "Playback Credentials" as separate rows with credential source (Spotify app pairing / browser authorization) and clear remediation guidance when either is missing.
+- **Provenance migration** — existing accounts from pre-3.5 are automatically tagged with their credential source on first startup; no re-authorization needed.
+- **`--get-token` mode restored in librespot binary** — the capability manifest now includes `get_token: true` for integrations that need Web API tokens from librespot.
+- **OPML playback-auth hint** — when playback credentials are missing, the browse menu shows a non-blocking hint directing the user to SpotOn Settings instead of failing silently.
+
+### Changed
+- **Settings page reorganized into three sections** — Account (authorization, pairing, sp_dc, Pathfinder, Custom App), Global Settings, Diagnostics. The Custom Developer App control is always visible as a collapsed details element (no longer hidden behind a preference). ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Two-step authorization model** — step 1 connects your Spotify account (Web API), step 2 authorizes playback via pairing. All UI text across 11 languages reflects this model. ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Default PKCE identity switched to ncspot Extended Quota Client ID** — the previous default shared a global rate-limit bucket with all librespot and Spotify Desktop users, causing 429 errors. The new default has its own dedicated bucket. ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Onboarding guide updated** — four steps: Connect Account, Authorize Playback, optional sp_dc cookie, optional Pathfinder hash. The Developer App step was removed (not needed for default mode).
+
+### Fixed
+- **429 rate limiting on /me and Web API calls** — eliminated by switching from the shared Keymaster Client ID to the ncspot Extended Quota ID with its own rate-limit bucket. ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Credential crash-loop auto-derivation removed** — daemon credential crashes now escalate to a playback-auth flag with exponential backoff instead of silently re-deriving credentials in a loop. ([#147](https://github.com/stiefenm/spoton/issues/147))
+- **Limit probe no longer competes with user requests after 429** — the endpoint limit detection now checks for active rate-limit state before firing and retries after 30s, preventing probe calls from extending a 429 window.
+- **Pairing status poll no longer runs forever on server reset** — the polling JS now handles the `idle` state as a terminal condition, resetting the UI instead of polling indefinitely.
+- **Browser fallback 30-minute cooldown cleared on fresh authorization** — a new OAuth round-trip now resets the derive rate limiter so users aren't stuck waiting after transient failures.
+- **`/login` raw handler anchored** — the LMS raw function handler now uses an anchored regex (`qr{^login$}`) preventing it from hijacking unrelated URLs containing "login" in their path.
+- **Pairing cleanup on plugin shutdown** — `cancelPairing()` is now called during `shutdownPlugin` to stop the mDNS helper and polling timer.
+
+## [3.5.6-soloist] - 2026-08-17
 
 ### Fixed
 - **Stable low-latency Soloist playback on hardware** — raises the Soloist-only LMS startup reserve from 20 KB to 128 KB after hardware testing showed that the nearly instant start repeatedly underruns a real-time PCM stream. This is about 743 ms of audio and remains half the previous 255 KB ceiling.
 - **Spotify decode jitter reserve** — requests a 400 ms PulseAudio playback queue instead of the unstable 100 ms value. The measured pre-3.5.5 default was roughly 1.02 seconds, so control latency remains substantially lower while avoiding the buffer growth and audible stutter caused by underruns.
 
-## [3.5.5] - 2026-08-17
+## [3.5.5-soloist] - 2026-08-17
 
 ### Changed
 - **Measured low-latency PulseAudio request for Soloist** — the managed Soloist process now exports `PULSE_LATENCY_MSEC=100`. PulseAudio applies this directly to playback stream buffer attributes, reducing the measured Soloist sink-input queue from roughly 1.02 seconds toward 100 ms without changing the private null sink, capture process, or original SpotOn backend.
@@ -48,7 +138,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **Original SpotOn buffering remains unchanged** — Browse and legacy Connect streams retain LMS's normal bitrate-derived buffering, including OGG passthrough and PCM fallback; the lower threshold is restricted to tokenized Soloist PCM URLs.
 
-## [3.5.4] - 2026-08-17
+## [3.5.4-soloist] - 2026-08-17
 
 ### Changed
 - **Lower-latency Soloist PCM for individual players** — after LMS selects the existing `soc -> pcm` identity profile, an unsynchronized Squeezebox now pulls the tokenized live stream directly from the plugin, matching original SpotOn Connect's streaming topology and removing the extra LMS relay buffer.
@@ -57,18 +147,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **Safe fallback retained for proxy playback and sync groups** — explicit proxy mode and synchronized players continue to use the stable direct capture pipe introduced in 3.5.3, so one group member is never handed a private direct stream.
 
-## [3.5.3] - 2026-08-15
+## [3.5.3-soloist] - 2026-08-15
 
 ### Fixed
 - **Managed Soloist PCM failed after a 15-second LMS timeout** — playback now hands the nonblocking PulseAudio capture pipe directly to LMS while retaining the existing `soc -> pcm` identity profile. This removes the synchronous request from LMS back into its own single-threaded web server, which started `pacat` successfully but could not serve HTTP headers until `Song::open` had already timed out.
 - **Capture cleanup for direct PCM playback** — ownership of the pipeline output handle is transferred explicitly to a dedicated LMS protocol stream; closing or replacing playback also terminates and reaps the associated capture process.
 
-## [3.5.2] - 2026-08-15
+## [3.5.2-soloist] - 2026-08-15
 
 ### Fixed
 - **LMS rejected the translated Soloist PCM stream** — the internal HTTP route now uses SpotOn's `.soc` wire suffix while continuing to serve unmodified S16LE PCM. This prevents LMS from reclassifying the translated stream as generic `pcm` and preserves the existing `soc -> pcm` identity profile through command selection. The former `.pcm` route remains accepted as a diagnostic alias.
 
-## [3.5.1] - 2026-08-15
+## [3.5.1-soloist] - 2026-08-15
 
 ### Fixed
 - **Soloist PCM playback on Squeezebox hardware** — routes managed PCM through SpotOn's existing logical `spoton://` protocol and `soc -> pcm` conversion profile instead of handing the raw HTTP endpoint directly to the player. This restores audible low-latency PCM playback while retaining FLAC as a fallback.
@@ -77,7 +167,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 - **Managed PCM route validation** — logical playback URLs resolve only while their exact 24-character token belongs to the currently running managed Soloist session; stale or guessed playlist URLs fail closed.
 
-## [3.5.0] - 2026-08-15
+## [3.5.0-soloist] - 2026-08-15
 
 ### Added
 - **Experimental official Spotify Soloist backend** — managed Soloist and private PulseAudio runtime, WebSocket playback-state handling, tokenized LMS audio streams, preflight diagnostics, and player attachment while retaining all existing SpotOn Browse and playback functionality.

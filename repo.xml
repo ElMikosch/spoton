@@ -4,7 +4,7 @@
 
     USERS: Add the raw GitHub URL of this file to:
       LMS Settings → Plugins → Additional Repositories
-      URL: https://raw.githubusercontent.com/ElMikosch/spoton/agent/soloist-backend/repo.xml
+      URL: https://raw.githubusercontent.com/ElMikosch/spoton/main/repo.xml
 
     MAINTAINERS: When publishing a new version, update sha (sha1sum of zip)
     and url (versioned ZIP stored in this fork).
@@ -17,12 +17,12 @@
     <plugins>
         <plugin
             name="SpotOn"
-            version="3.6.1"
+            version="3.5.8"
             target="unix|mac|windows"
             minTarget="8.0"
             maxTarget="*"
-            sha="245b7eb0be6e177647c41e6f54ee61baf296763c"
-            url="https://raw.githubusercontent.com/ElMikosch/spoton/agent/soloist-backend/releases/SpotOn-v3.6.1.zip"
+            sha="a1f73ceeb9310cb5fc3cfc72fbc7ed51dec9a10c"
+            url="https://github.com/stiefenm/spoton/releases/download/v3.5.8/SpotOn-v3.5.8.zip"
             category="musicservices"
             creator="Marek Stiefenhofer"
             email="sti@posteo.de"

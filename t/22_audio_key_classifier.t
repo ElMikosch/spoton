@@ -146,6 +146,19 @@ sub to_json   { JSON::PP::encode_json($_[0]) }
 1;
 END
 
+# Stub: Slim::Utils::Cache (GH #147: Credentials.pm stores the persistent
+# playback-auth flag here -- must shadow any system-installed Slim)
+write_stub($stub_dir, 'Slim::Utils::Cache', <<'END');
+package Slim::Utils::Cache;
+my %_store;
+sub new    { bless {}, shift }
+sub get    { $_store{$_[1]} }
+sub set    { $_store{$_[1]} = $_[2]; 1 }
+sub remove { delete $_store{$_[1]} }
+sub clear  { %_store = () }
+1;
+END
+
 # ============================================================
 # main:: constants (TRANSCODING, WEBUI, SCANNER, INFOLOG, etc.)
 # ============================================================
@@ -158,6 +171,15 @@ BEGIN {
     *main::ISWINDOWS   = sub () { 0 };
     *main::ISMAC       = sub () { 0 };
     *main::PERFMON     = sub () { 0 };
+}
+
+# M5: SPOTON_CACHE_VERSION is defined in Plugin.pm (single source of truth);
+# Credentials.pm resolves it via a fully-qualified call at load time (GH #147
+# playback-auth flag cache). Production always compiles Plugin.pm first --
+# provide the constant for standalone loads (same pattern as t/16).
+BEGIN {
+    package Plugins::SpotOn::Plugin;
+    use constant SPOTON_CACHE_VERSION => 4;
 }
 
 # ============================================================
@@ -208,5 +230,17 @@ is(Plugins::SpotOn::API::Credentials->classifyAudioKeyError(''),
 is(Plugins::SpotOn::API::Credentials->classifyAudioKeyError("error audio key 0 1\nerror audio key 0 2"),
     'denied',
     'Test 7: when both signatures are present, permanent denial takes priority');
+
+is(Plugins::SpotOn::API::Credentials->classifyAudioKeyError('Audio key response timeout'),
+    'timeout',
+    'Test 8: exact "Audio key response timeout" classifies as timeout');
+
+is(Plugins::SpotOn::API::Credentials->classifyAudioKeyError("reconnect output\nERROR librespot_core::audio_key] Audio key response timeout\nmore output"),
+    'timeout',
+    'Test 9: "Audio key response timeout" embedded in stderr noise classifies as timeout');
+
+is(Plugins::SpotOn::API::Credentials->classifyAudioKeyError("error audio key 0 1\nAudio key response timeout"),
+    'denied',
+    'Test 10: denied takes priority over timeout');
 
 done_testing();

@@ -7,9 +7,11 @@ package Plugins::SpotOn::API::Credentials;
 # Plugins::SpotOn::Unified::Daemon's _pollPortFile shape -- Pitfall 2: never
 # use blocking backticks/system() here, LMS is single-threaded).
 #
-# Consumed by both the Settings-eager call site (immediately after PKCE auth)
-# and the DaemonManager-lazy call site (safety-net before daemon start) --
-# wired in plans 02/03.
+# GH #147 / CONTEXT D-04: since the Aug 10, 2026 Login5 provenance blockade,
+# PKCE-derived stored credentials are rejected by Spotify. ALL automatic
+# call sites of the derivation path have been removed (Settings eager,
+# DaemonManager crash-repair and lazy safety-net). The sub itself is
+# retained for plan 65-03's Keymaster browser-fallback token path.
 
 use strict;
 use warnings;
@@ -17,12 +19,20 @@ use warnings;
 use File::Spec::Functions qw(catdir catfile);
 use JSON::XS::VersionOneAndTwo;
 
+use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
 use Time::HiRes;
 
 use constant CREDENTIALS_FILE => 'credentials.json';
+
+# GH #147: persistent per-account "needs playback authorization" flag.
+# Deliberately a SEPARATE flag from TokenManager's REAUTH_FLAG_PREFIX --
+# needsReauth short-circuits TokenManager->getToken and would break the
+# still-working Web API (Browse/Search/Library). Playback is broken; the
+# Web API is not.
+use constant PLAYBACK_AUTH_FLAG_PREFIX => 'spoton_needs_playback_auth_';
 
 # M12-style async poll: 0.1s interval, 100 attempts (10s cap) -- mirrors
 # Daemon.pm's PORT_POLL_INTERVAL/PORT_POLL_MAX_ATTEMPTS.
@@ -38,9 +48,31 @@ use constant MAX_DERIVE_FAILURES    => 3;
 use constant DERIVE_FAILURE_WINDOW  => 300;   # 5 minutes
 use constant DERIVE_COOLDOWN_SECONDS => 1800; # 30 minutes
 
+# GH #147 plan 65-02: ZeroConf pairing (D-02 primary path). The user picks
+# the announced "SpotOn Authorization (<library>)" device in their Spotify
+# app while playing a track; the official app hands over Keymaster-provenance
+# credentials that Login5 accepts. Poll every 2s; the Rust binary exits on
+# its own after 900s (--discover-once self-timeout), 930s is our backstop
+# margin before we force-kill a hung helper.
+use constant PAIRING_POLL_INTERVAL   => 2;
+use constant PAIRING_TIMEOUT_SECONDS => 930;
+use constant PAIRING_STAGING_SUBDIR  => 'pairing-tmp';
+
+# GH #147 plan 65-03: staging subdir for the Keymaster browser-fallback
+# token derivation (deriveCredentialsFromToken). Separate from the pairing
+# staging dir -- both flows isolate output from the live credentials.json
+# until D-01 username validation passes (_installPairedCredentials).
+use constant DERIVE_STAGING_SUBDIR => 'derive-tmp';
+
 my $log         = logger('plugin.spoton');
 my $prefs       = preferences('plugin.spoton');
 my $serverPrefs = preferences('server');
+
+# Cache instance for the playback-auth flag (GH #147). M5: cache version
+# lives in Plugin.pm (single source of truth). Plugin.pm is always compiled
+# first in production (this module is runtime-require'd) -- same pattern as
+# PKCE.pm's own cache instantiation.
+my $cache = Slim::Utils::Cache->new('spoton', Plugins::SpotOn::Plugin::SPOTON_CACHE_VERSION());
 
 # H3-style in-flight coalescing (Pitfall 3) -- keyed by accountId. Each value
 # is an arrayref of pending callbacks. Concurrent Eager/Lazy derivation
@@ -51,6 +83,12 @@ my %_deriveInflight;
 my %_deriveFailures;      # accountId => arrayref of failure epochs
 my %_deriveCooldownUntil; # accountId => epoch until which derivation is blocked
 
+# GH #147 plan 65-02: single global pairing slot -- only ONE ZeroConf mDNS
+# announcement at a time (one pairing name on the LAN). Keys:
+#   proc, accountId, stagingDir, state, startedAt
+# state: idle | waiting | success | failed | mismatch | timeout
+my %_pairing;
+
 # ============================================================
 # Public class methods
 # ============================================================
@@ -59,6 +97,12 @@ my %_deriveCooldownUntil; # accountId => epoch until which derivation is blocked
 # cb signature: ($ok, $reason). $reason is undef on success, else one of:
 #   no_token | no_binary | binary_too_old | spawn_failed | derivation_failed
 #   | rate_limited
+#
+# GH #147 / CONTEXT D-04: retained for the plan 65-03 token-path refactor
+# (Keymaster browser fallback reuses the shared spawn/poll machinery). This
+# sub has ZERO production callers and MUST NOT be re-wired to automatic call
+# sites -- PKCE-provenance credentials are rejected by Spotify Login5, so an
+# automatic re-derive only re-arms the crash loop.
 sub deriveCredentials {
     my ($class, $accountId, $cb) = @_;
 
@@ -116,72 +160,136 @@ sub deriveCredentials {
             return;
         }
 
-        # 5. Spawn: ensure the account dir exists (mirrors PKCE::storeTokens).
+        # 5+6. Spawn + poll via the shared token-login core (GH #147 plan
+        # 65-03 refactor). Derivation goes straight into the live account
+        # dir (legacy contract: the token IS the account's own PKCE token,
+        # so no staging/username re-validation is needed here); completion
+        # handling below is byte-compatible with the pre-refactor behavior.
         my $accountDir = _accountDir($accountId);
-        unless (-d $accountDir) {
-            require File::Path;
-            # IN-02: restrict directory permissions to owner-only (0700) for
-            # defense-in-depth. mode param is advisory on Windows (silently
-            # ignored), which is fine. Mirrors the chmod(0700) in
-            # Settings.pm _pkceStoreAccount (T-04.3-07 pattern).
-            File::Path::make_path($accountDir, { mode => 0700 });
-        }
+        my $spawned = _spawnTokenLogin($accountId, $token, $accountDir, sub {
+            # Success detection is FILE-BASED ONLY -- never rely on
+            # subprocess stdout (Windows stdout-piping precedent, commit
+            # 9874835).
+            my $creds = $class->verifyCredentials($accountId);
 
-        # WR-04: unlink any pre-existing credentials.json before spawning
-        # so verifyCredentials after exit can only succeed against a file
-        # the subprocess actually wrote. Without this, the eager Settings
-        # path (re-auth of an existing account) could detect the OLD file
-        # as a successful derivation even when the subprocess wrote nothing.
-        my $credFile = $class->credentialsPathFor($accountId);
-        unlink $credFile if -f $credFile;
+            if ($creds) {
+                # The Rust binary controls the file's creation mode --
+                # enforce restrictive perms Perl-side as defense-in-depth
+                # (T-51-03).
+                my $credFile = $class->credentialsPathFor($accountId);
+                chmod(0600, $credFile) if -f $credFile;
 
-        require Proc::Background;
+                _clearFailures($accountId);
+                $resolve->(1, undef);
+            } else {
+                _recordFailure($accountId);
+                $resolve->(0, 'derivation_failed');
+            }
+        });
 
-        # CR-01 / H10: prefer SPOTON_TOKEN env var over --token argv when
-        # the binary supports it (capability 'token-env'). argv is world-
-        # readable via /proc/<pid>/cmdline and `ps`; the env var is set just
-        # for the spawn and deleted immediately after (same pattern as
-        # SPOTON_LMS_AUTH in Daemon.pm lines 186-189). --token argv is
-        # retained as fallback for older binaries.
-        my $useTokenEnv = Plugins::SpotOn::Helper->getCapability('token-env');
-        my @tokenArgs = $useTokenEnv ? () : ('--token', $token);
-        $ENV{SPOTON_TOKEN} = $token if $useTokenEnv;
-
-        my $proc = eval {
-            Proc::Background->new(
-                { 'die_upon_destroy' => 1 },
-                $helperPath, '-n', 'SpotOn',
-                '--token-login', @tokenArgs,
-                '--cache', $accountDir,
-            );
-        };
-        delete $ENV{SPOTON_TOKEN} if $useTokenEnv;  # immediately after spawn
-        if ($@ || !$proc) {
-            # CRITICAL (T-29-07/T-51-05): never log the spawn command line or
-            # the token value -- log only the masked accountId and cache dir.
-            $log->error("Credentials: spawn failed for account " . _mask($accountId)
-                . " (cache=$accountDir)");
+        unless ($spawned) {
             _recordFailure($accountId);
             $resolve->(0, 'spawn_failed');
-            return;
+        }
+    });
+}
+
+# deriveCredentialsFromToken($class, $accountId, $accessToken, $cb)
+# GH #147 plan 65-03 (D-02 secondary path): derive stored credentials from a
+# CALLER-SUPPLIED access token -- the Keymaster browser fallback's token,
+# minted with KEYMASTER_CLIENT_ID and scope=streaming, which carries the
+# provenance Login5 accepts. cb->($ok, $reason); reasons:
+#   no_binary | binary_too_old | spawn_failed | derivation_failed |
+#   rate_limited | account_mismatch | invalid_credentials | install_failed
+#
+# Unlike deriveCredentials, the subprocess writes into a staging dir first:
+# the token's Spotify user might not match the account, so the result only
+# reaches the live credentials.json after _installPairedCredentials passes
+# D-01 username validation (T-65-12). The access token is used once for the
+# spawn and never logged or persisted anywhere (T-29-07/T-51-05, T-65-09).
+sub deriveCredentialsFromToken {
+    my ($class, $accountId, $accessToken, $cb) = @_;
+
+    # Coalescing guard FIRST (Pitfall 3) -- shares %_deriveInflight with
+    # deriveCredentials, so the two entry points can never run concurrent
+    # subprocesses for the same account.
+    if ($_deriveInflight{$accountId}) {
+        main::INFOLOG && $log->info(
+            "Credentials: coalescing token derivation for account " . _mask($accountId));
+        push @{ $_deriveInflight{$accountId} }, $cb;
+        return;
+    }
+    $_deriveInflight{$accountId} = [$cb];
+
+    my $resolve = sub {
+        my ($ok, $reason) = @_;
+        _resolveInflight($accountId, $ok, $reason);
+    };
+
+    # Rate-limit gate (D-05, T-65-14): a browser-fallback retry loop must
+    # not hammer the AP either -- same per-account cooldown state as
+    # deriveCredentials.
+    if (_inCooldown($accountId)) {
+        $log->warn("Credentials: token derivation rate-limited for account " . _mask($accountId));
+        $resolve->(0, 'rate_limited');
+        return;
+    }
+
+    # Binary gates (same as deriveCredentials).
+    require Plugins::SpotOn::Helper;
+    unless (Plugins::SpotOn::Helper->get()) {
+        $log->warn("Credentials: no SpotOn helper binary found for account " . _mask($accountId));
+        $resolve->(0, 'no_binary');
+        return;
+    }
+    unless (Plugins::SpotOn::Helper->getCapability('token-login')) {
+        $log->warn("Credentials: SpotOn binary lacks token-login capability -- "
+            . "please update the SpotOn binary (account " . _mask($accountId) . ")");
+        $resolve->(0, 'binary_too_old');
+        return;
+    }
+
+    unless (defined $accessToken && length $accessToken) {
+        # Defensive: callers pass exchangeCode-validated tokens; never spawn
+        # without one. No _recordFailure -- the AP was never contacted.
+        $resolve->(0, 'derivation_failed');
+        return;
+    }
+
+    # Staging isolation (D-01): NOT the live account dir -- the token's user
+    # might not match the account.
+    my $stagingDir = catdir(_accountDir($accountId), DERIVE_STAGING_SUBDIR);
+
+    my $spawned = _spawnTokenLogin($accountId, $accessToken, $stagingDir, sub {
+        my $stagingFile = catfile($stagingDir, CREDENTIALS_FILE);
+        my ($ok, $reason);
+
+        if (-f $stagingFile) {
+            # Shared finalizer (plan 65-02): validates, D-01 username check,
+            # atomic install, provenance marker, flag clear, scheduleInit.
+            ($ok, $reason) = _installPairedCredentials($accountId, $stagingDir, 'keymaster');
+        } else {
+            # Subprocess exited without writing credentials: AP rejection or
+            # binary failure. Counts toward the D-05 cooldown.
+            _recordFailure($accountId);
+            ($ok, $reason) = (0, 'derivation_failed');
         }
 
-        main::INFOLOG && $log->info(
-            "Credentials: derivation started for account " . _mask($accountId)
-            . " (cache=$accountDir)");
+        # Leftover staging must never be mistaken for live credentials.
+        _purgeStagingDir($stagingDir);
 
-        # 6. Async poll for completion (mirrors Daemon::_pollPortFile).
-        my $state = {
-            proc      => $proc,
-            accountId => $accountId,
-            resolve   => $resolve,
-            attempts  => 0,
-        };
-        # IN-03: removed no-op killTimers($state, \&_pollDerivation) — $state
-        # was just created above and no timer exists on it. The in-flight
-        # coalescing guard already prevents concurrent polls per account.
-        Slim::Utils::Timers::setTimer($state, Time::HiRes::time() + DERIVE_POLL_INTERVAL, \&_pollDerivation);
+        if ($ok) {
+            _clearFailures($accountId);
+            $resolve->(1, undef);
+        } else {
+            $resolve->(0, $reason);
+        }
     });
+
+    unless ($spawned) {
+        _recordFailure($accountId);
+        $resolve->(0, 'spawn_failed');
+    }
 }
 
 # clearRateLimit($class, $accountId)
@@ -244,15 +352,71 @@ sub accountMismatch {
     return ($data->{username} ne $expectedUserId) ? 1 : 0;
 }
 
-# isCredentialError($class, $stderrText) (D-03)
+# isCredentialError($class, $stderrText) (D-03/D-05)
 # Matches the exact librespot-core error strings verified against the
 # vendored librespot-core source (connection/mod.rs::login_error_message()).
 # Assumption A2: recheck these strings on any librespot-core dependency bump.
+#
+# INVALID_CREDENTIALS / "Login request was denied" are the Login5 provenance
+# blockade signatures observed since Aug 10, 2026 (GH #147): Spotify's Login5
+# endpoint rejects stored credentials that were not minted with the Keymaster
+# client_id. Same runtime-detection strings Music Assistant matches on
+# (commit ec639766).
 sub isCredentialError {
     my ($class, $stderrText) = @_;
     return 0 unless defined $stderrText;
-    return $stderrText =~ /Bad credentials|Could not validate credentials|No cached credentials in/
+    return $stderrText =~ /Bad credentials|Could not validate credentials|No cached credentials in|INVALID_CREDENTIALS|Login request was denied/
         ? 1 : 0;
+}
+
+# ============================================================
+# Playback-auth flag API (GH #147)
+# Persistent per-account flag: the account's stored playback credentials
+# were rejected by Spotify Login5 (or are known wrong-provenance) and the
+# user must re-authorize playback (ZeroConf pairing / Keymaster browser
+# fallback, plans 65-02/65-03). Mirrors TokenManager's _markNeedsReauth
+# 'never'-TTL discipline but uses its OWN cache key prefix -- see the
+# PLAYBACK_AUTH_FLAG_PREFIX comment above for why needsReauth must NOT be
+# reused here.
+# ============================================================
+
+# markNeedsPlaybackAuth($class, $accountId, $reason)
+# Known reasons: 'credential_error' (Login5 rejection at daemon crash),
+# 'legacy_token_derived' (plan 65-03 upgrade migration).
+sub markNeedsPlaybackAuth {
+    my ($class, $accountId, $reason) = @_;
+    return unless defined $accountId && length $accountId;
+    $cache->set(PLAYBACK_AUTH_FLAG_PREFIX . $accountId,
+        { reason => ($reason // ''), ts => time() }, 'never');
+    main::INFOLOG && $log->info(
+        "Credentials: account " . _mask($accountId)
+        . " flagged as needing playback authorization (" . ($reason // '') . ")");
+}
+
+# needsPlaybackAuth($class, $accountId) -> 0|1
+sub needsPlaybackAuth {
+    my ($class, $accountId) = @_;
+    return 0 unless defined $accountId && length $accountId;
+    return $cache->get(PLAYBACK_AUTH_FLAG_PREFIX . $accountId) ? 1 : 0;
+}
+
+# playbackAuthReason($class, $accountId) -> reason string or ''
+sub playbackAuthReason {
+    my ($class, $accountId) = @_;
+    return '' unless defined $accountId && length $accountId;
+    my $flag = $cache->get(PLAYBACK_AUTH_FLAG_PREFIX . $accountId);
+    return (ref $flag eq 'HASH' && defined $flag->{reason}) ? $flag->{reason} : '';
+}
+
+# clearNeedsPlaybackAuth($class, $accountId)
+# Called by the plans 65-02/65-03 provisioning flows once the user has
+# completed a playback re-authorization.
+sub clearNeedsPlaybackAuth {
+    my ($class, $accountId) = @_;
+    return unless defined $accountId && length $accountId;
+    $cache->remove(PLAYBACK_AUTH_FLAG_PREFIX . $accountId);
+    main::INFOLOG && $log->info(
+        "Credentials: playback-auth flag cleared for account " . _mask($accountId));
 }
 
 # classifyAudioKeyError($class, $stderrText) (D-02)
@@ -271,22 +435,233 @@ sub classifyAudioKeyError {
 
     return 'denied'   if $stderrText =~ /error audio key 0 1/;
     return 'throttled' if $stderrText =~ /error audio key 0 2/;
+    return 'timeout'  if $stderrText =~ /Audio key response timeout/;
     return undef;
+}
+
+# ============================================================
+# ZeroConf pairing engine (GH #147 plan 65-02, D-02 primary path)
+# All async -- Proc::Background + Slim::Utils::Timers, never blocking
+# (LMS is single-threaded; mirrors the _pollTokenLogin shape below).
+# Success detection is FILE-BASED ONLY: the username is read from the
+# staging credentials.json, never from subprocess stdout (Windows
+# stdout-piping precedent, commit 9874835).
+# ============================================================
+
+# pairingDeviceName($class)
+# Gotcha 1: the pairing device name must differ from every Connect player
+# name so the user cannot pick a regular player by mistake. Computed here
+# (single source of truth) and reused by Settings.pm for the on-page
+# instructions so the user sees the exact label to look for.
+sub pairingDeviceName {
+    my ($class) = @_;
+
+    my $libraryName = eval {
+        require Slim::Utils::Misc;
+        Slim::Utils::Misc::getLibraryName();
+    };
+    $libraryName = 'LMS' unless defined $libraryName && length $libraryName;
+
+    my $name = 'SpotOn Authorization (' . $libraryName . ')';
+    $name = substr($name, 0, 60) if length($name) > 60;
+    return $name;
+}
+
+# startPairing($class, $accountId)
+# -> (1) on started, or (0, $reason) with reason in:
+#    already_running | unknown_account | no_binary | no_capability | spawn_failed
+sub startPairing {
+    my ($class, $accountId) = @_;
+
+    # Single global slot: one mDNS announcement at a time.
+    if (($_pairing{state} // '') eq 'waiting') {
+        return (0, 'already_running');
+    }
+
+    my $accounts = $prefs->get('accounts') || {};
+    unless (defined $accountId && length $accountId && $accounts->{$accountId}) {
+        $log->warn("Credentials: pairing requested for unknown account " . _mask($accountId));
+        return (0, 'unknown_account');
+    }
+
+    require Plugins::SpotOn::Helper;
+    my $helperPath = Plugins::SpotOn::Helper->get();
+    unless ($helperPath) {
+        $log->warn("Credentials: no SpotOn helper binary found for pairing (account " . _mask($accountId) . ")");
+        return (0, 'no_binary');
+    }
+    unless (Plugins::SpotOn::Helper->getCapability('discover-once')) {
+        $log->warn("Credentials: SpotOn binary lacks discover-once capability -- "
+            . "please update the SpotOn binary (account " . _mask($accountId) . ")");
+        return (0, 'no_capability');
+    }
+
+    my $name = $class->pairingDeviceName();
+
+    # D-01 isolation: pairing output lands in a staging dir first -- a wrong
+    # user's pairing must never touch the live credentials.json.
+    my $stagingDir = catdir(_accountDir($accountId), PAIRING_STAGING_SUBDIR);
+    unless (-d $stagingDir) {
+        require File::Path;
+        # IN-02: owner-only perms; mode is advisory on Windows (ignored).
+        File::Path::make_path($stagingDir, { mode => 0700 });
+    }
+    my $staleFile = catfile($stagingDir, CREDENTIALS_FILE);
+    unlink $staleFile if -f $staleFile;
+
+    require Proc::Background;
+    my $proc = eval {
+        Proc::Background->new(
+            { 'die_upon_destroy' => 1 },
+            $helperPath, '-n', $name,
+            '--cache', $stagingDir,
+            '--discover-once',
+        );
+    };
+    if ($@ || !$proc) {
+        # T-29-07/T-51-05 discipline: masked accountId only, never the
+        # command line.
+        $log->error("Credentials: pairing spawn failed for account " . _mask($accountId));
+        return (0, 'spawn_failed');
+    }
+
+    %_pairing = (
+        proc       => $proc,
+        accountId  => $accountId,
+        stagingDir => $stagingDir,
+        state      => 'waiting',
+        startedAt  => time(),
+    );
+
+    main::INFOLOG && $log->info(
+        "Credentials: ZeroConf pairing started for account " . _mask($accountId)
+        . " (device name '$name')");
+
+    Slim::Utils::Timers::setTimer(\%_pairing, Time::HiRes::time() + PAIRING_POLL_INTERVAL, \&_pollPairing);
+    return (1);
+}
+
+# pairingStatus($class)
+# -> { state => 'idle'|'waiting'|'success'|'failed'|'mismatch'|'timeout',
+#      accountId => $id_or_undef }
+# Exposes symbolic state only (T-65-07) -- never stderr or usernames.
+sub pairingStatus {
+    my ($class) = @_;
+    return {
+        state     => $_pairing{state} || 'idle',
+        accountId => $_pairing{accountId},
+    };
+}
+
+# cancelPairing($class)
+# Kill + cleanup, state -> idle. Idempotent when idle, so Plugin shutdown
+# paths and the Settings pagehide handler can call it unconditionally
+# (gotcha 6; the binary's own 900s self-timeout is the backstop if this is
+# never reached).
+sub cancelPairing {
+    my ($class) = @_;
+
+    Slim::Utils::Timers::killTimers(\%_pairing, \&_pollPairing);
+
+    if ($_pairing{proc} && eval { $_pairing{proc}->alive }) {
+        eval { $_pairing{proc}->die };
+    }
+    _cleanupPairingStaging();
+
+    if (($_pairing{state} // 'idle') ne 'idle') {
+        main::INFOLOG && $log->info(
+            "Credentials: pairing cancelled (account " . _mask($_pairing{accountId}) . ")");
+    }
+    %_pairing = ( state => 'idle' );
+    return 1;
 }
 
 # ============================================================
 # Private helpers
 # ============================================================
 
-# _pollDerivation($state)
-# Timer callback -- completion continuation for the --token-login subprocess.
-# Copies Daemon::_pollPortFile's poll-again-vs-complete branch structure.
-sub _pollDerivation {
+# _spawnTokenLogin($accountId, $token, $targetDir, $onExit)
+# Shared spawn-and-poll core for the two --token-login entry points (GH #147
+# plan 65-03 refactor): dir prep (0700), stale credentials.json unlink,
+# SPOTON_TOKEN env vs --token argv fallback, Proc::Background spawn, async
+# poll. $onExit->() fires once the subprocess has exited (or was killed at
+# the poll cap) -- completion semantics (live-dir verification vs staging
+# install) belong to the caller. Returns 1 when the subprocess was spawned,
+# 0 on spawn failure (already logged; caller resolves spawn_failed).
+sub _spawnTokenLogin {
+    my ($accountId, $token, $targetDir, $onExit) = @_;
+
+    require Plugins::SpotOn::Helper;
+    my $helperPath = Plugins::SpotOn::Helper->get();
+
+    unless (-d $targetDir) {
+        require File::Path;
+        # IN-02: restrict directory permissions to owner-only (0700) for
+        # defense-in-depth. mode param is advisory on Windows (silently
+        # ignored), which is fine. Mirrors the chmod(0700) in
+        # Settings.pm _pkceStoreAccount (T-04.3-07 pattern).
+        File::Path::make_path($targetDir, { mode => 0700 });
+    }
+
+    # WR-04: unlink any pre-existing credentials.json before spawning so
+    # completion detection can only succeed against a file the subprocess
+    # actually wrote. Without this, a re-derivation could detect the OLD
+    # file as a successful run even when the subprocess wrote nothing.
+    my $staleFile = catfile($targetDir, CREDENTIALS_FILE);
+    unlink $staleFile if -f $staleFile;
+
+    require Proc::Background;
+
+    # CR-01 / H10: prefer SPOTON_TOKEN env var over --token argv when
+    # the binary supports it (capability 'token-env'). argv is world-
+    # readable via /proc/<pid>/cmdline and `ps`; the env var is set just
+    # for the spawn and deleted immediately after (same pattern as
+    # SPOTON_LMS_AUTH in Daemon.pm lines 186-189). --token argv is
+    # retained as fallback for older binaries.
+    my $useTokenEnv = Plugins::SpotOn::Helper->getCapability('token-env');
+    my @tokenArgs = $useTokenEnv ? () : ('--token', $token);
+    $ENV{SPOTON_TOKEN} = $token if $useTokenEnv;
+
+    my $proc = eval {
+        Proc::Background->new(
+            { 'die_upon_destroy' => 1 },
+            $helperPath, '-n', 'SpotOn',
+            '--token-login', @tokenArgs,
+            '--cache', $targetDir,
+        );
+    };
+    delete $ENV{SPOTON_TOKEN} if $useTokenEnv;  # immediately after spawn
+    if ($@ || !$proc) {
+        # CRITICAL (T-29-07/T-51-05): never log the spawn command line or
+        # the token value -- log only the masked accountId and cache dir.
+        $log->error("Credentials: spawn failed for account " . _mask($accountId)
+            . " (cache=$targetDir)");
+        return 0;
+    }
+
+    main::INFOLOG && $log->info(
+        "Credentials: derivation started for account " . _mask($accountId)
+        . " (cache=$targetDir)");
+
+    # Async poll for completion (mirrors Daemon::_pollPortFile).
+    my $state = {
+        proc      => $proc,
+        accountId => $accountId,
+        onExit    => $onExit,
+        attempts  => 0,
+    };
+    Slim::Utils::Timers::setTimer($state, Time::HiRes::time() + DERIVE_POLL_INTERVAL, \&_pollTokenLogin);
+    return 1;
+}
+
+# _pollTokenLogin($state)
+# Timer callback -- generic completion continuation for a _spawnTokenLogin
+# subprocess. Copies Daemon::_pollPortFile's poll-again-vs-complete branch
+# structure; file inspection happens in the caller-supplied onExit closure.
+sub _pollTokenLogin {
     my ($state) = @_;
 
-    my $proc      = $state->{proc};
-    my $accountId = $state->{accountId};
-    my $resolve   = $state->{resolve};
+    my $proc = $state->{proc};
 
     my $attempts = ($state->{attempts} || 0) + 1;
     $state->{attempts} = $attempts;
@@ -294,7 +669,7 @@ sub _pollDerivation {
     my $procAlive = $proc && $proc->alive;
 
     if ($procAlive && $attempts < DERIVE_POLL_MAX_ATTEMPTS) {
-        Slim::Utils::Timers::setTimer($state, Time::HiRes::time() + DERIVE_POLL_INTERVAL, \&_pollDerivation);
+        Slim::Utils::Timers::setTimer($state, Time::HiRes::time() + DERIVE_POLL_INTERVAL, \&_pollTokenLogin);
         return;
     }
 
@@ -303,23 +678,162 @@ sub _pollDerivation {
         eval { $proc->die };
     }
 
-    # Success detection is FILE-BASED ONLY -- never rely on subprocess stdout
-    # (Windows stdout-piping precedent, commit 9874835).
-    my $credsClass = __PACKAGE__;
-    my $creds = $credsClass->verifyCredentials($accountId);
+    $state->{onExit}->();
+}
 
-    if ($creds) {
-        # The Rust binary controls the file's creation mode -- enforce
-        # restrictive perms Perl-side as defense-in-depth (T-51-03).
-        my $credFile = $credsClass->credentialsPathFor($accountId);
-        chmod(0600, $credFile) if -f $credFile;
+# _purgeStagingDir($dir)
+# Removes a staging credentials.json (if still present, e.g. after a
+# mismatch) and the staging dir itself. Generic sibling of
+# _cleanupPairingStaging (which is bound to the %_pairing slot).
+sub _purgeStagingDir {
+    my ($dir) = @_;
+    return unless defined $dir && length $dir;
 
-        _clearFailures($accountId);
-        $resolve->(1, undef);
-    } else {
-        _recordFailure($accountId);
-        $resolve->(0, 'derivation_failed');
+    my $file = catfile($dir, CREDENTIALS_FILE);
+    unlink $file if -f $file;
+    rmdir $dir;  # only succeeds when empty -- exactly what we want
+}
+
+# _pollPairing()
+# Timer callback -- completion continuation for the --discover-once
+# subprocess. Re-arms every PAIRING_POLL_INTERVAL seconds while the helper
+# is alive and within the timeout window.
+sub _pollPairing {
+    # Guard against a stale timer firing after cancelPairing already reset
+    # the slot (killTimers should prevent this, belt-and-braces).
+    return unless ($_pairing{state} // '') eq 'waiting';
+
+    my $proc    = $_pairing{proc};
+    my $elapsed = time() - ($_pairing{startedAt} || 0);
+    my $alive   = $proc && eval { $proc->alive };
+
+    if ($alive && $elapsed < PAIRING_TIMEOUT_SECONDS) {
+        Slim::Utils::Timers::setTimer(\%_pairing, Time::HiRes::time() + PAIRING_POLL_INTERVAL, \&_pollPairing);
+        return;
     }
+
+    if ($alive) {
+        # Past the binary's own 900s self-timeout plus margin and it is
+        # still alive -- force-kill the hung helper.
+        eval { $proc->die };
+        $log->warn("Credentials: pairing timed out for account " . _mask($_pairing{accountId}));
+        $_pairing{state} = 'timeout';
+        _cleanupPairingStaging();
+        return;
+    }
+
+    # Helper exited. FILE-BASED success detection only (never stdout).
+    my $stagingFile = catfile($_pairing{stagingDir}, CREDENTIALS_FILE);
+    if (-f $stagingFile) {
+        my ($ok, $reason) = _installPairedCredentials(
+            $_pairing{accountId}, $_pairing{stagingDir}, 'zeroconf');
+        $_pairing{state} = $ok                                       ? 'success'
+                         : ($reason && $reason eq 'account_mismatch') ? 'mismatch'
+                         :                                              'failed';
+    } else {
+        # Exit without a credentials file: binary failure or its own
+        # 15-minute timeout (both exit 1, both leave no file).
+        main::INFOLOG && $log->info(
+            "Credentials: pairing helper exited without credentials for account "
+            . _mask($_pairing{accountId}));
+        $_pairing{state} = 'failed';
+    }
+
+    # Leftover staging must never be mistaken for live credentials.
+    _cleanupPairingStaging();
+}
+
+# _installPairedCredentials($accountId, $stagingDir, $source)
+# Shared finalizer -- plan 65-03 reuses it for the Keymaster token path, so
+# it carries no ZeroConf-specific assumptions. $source: 'zeroconf' | 'keymaster'.
+# -> (1) or (0, 'account_mismatch'|'invalid_credentials'|'install_failed')
+sub _installPairedCredentials {
+    my ($accountId, $stagingDir, $source) = @_;
+
+    my $stagingFile = catfile($stagingDir, CREDENTIALS_FILE);
+
+    # Validate with the same rules as verifyCredentials: never trust the
+    # subprocess exit code alone (Security V5/T-51-02).
+    my $data = eval {
+        open(my $fh, '<', $stagingFile) or die "open failed: $!";
+        local $/;
+        my $json = <$fh>;
+        close($fh);
+        from_json($json);
+    };
+    if ($@ || !$data
+        || ($data->{auth_type} // -1) != 1
+        || !($data->{username}  && length $data->{username})
+        || !($data->{auth_data} && length $data->{auth_data})) {
+        $log->warn("Credentials: staged pairing credentials invalid for account "
+            . _mask($accountId) . " -- not installed");
+        return (0, 'invalid_credentials');
+    }
+
+    # D-01 username validation: a wrong Spotify user's pairing must never
+    # persist into this account. Fail-closed when the expected user ID is
+    # unknown. Same comparison accountMismatch uses.
+    my $accounts = $prefs->get('accounts') || {};
+    my $expected = $accounts->{$accountId} ? $accounts->{$accountId}{spotifyUserId} : undef;
+    unless (defined $expected && length $expected && $data->{username} eq $expected) {
+        $log->warn("Credentials: paired Spotify user " . _maskUser($data->{username})
+            . " does not match account " . _mask($accountId)
+            . " (expected " . _maskUser($expected) . ") -- credentials NOT installed (D-01)");
+        return (0, 'account_mismatch');
+    }
+
+    # Install atomically into the per-account layout (Pitfall 4: never the
+    # legacy flat dir).
+    my $accountDir = _accountDir($accountId);
+    unless (-d $accountDir) {
+        require File::Path;
+        File::Path::make_path($accountDir, { mode => 0700 });
+    }
+    my $target = __PACKAGE__->credentialsPathFor($accountId);
+    # Windows rename does not overwrite -- unlink the target first.
+    unlink $target if -f $target;
+    unless (rename($stagingFile, $target)) {
+        # Cross-volume edge (staging and target on different filesystems).
+        require File::Copy;
+        unless (File::Copy::move($stagingFile, $target)) {
+            $log->error("Credentials: failed to install paired credentials for account "
+                . _mask($accountId) . ": $!");
+            return (0, 'install_failed');
+        }
+    }
+    # T-51-03 defense-in-depth: the Rust binary controls the creation mode.
+    chmod(0600, $target) if -f $target;
+
+    # Record provenance: plan 65-03's migration treats accounts WITHOUT this
+    # marker as legacy token-derived.
+    $accounts->{$accountId}{playbackCredSource} = $source;
+    $prefs->set('accounts', $accounts);
+
+    __PACKAGE__->clearNeedsPlaybackAuth($accountId);
+
+    # Daemons start within ~2s instead of waiting for the 60s watchdog.
+    require Plugins::SpotOn::Unified::DaemonManager;
+    Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
+    main::INFOLOG && $log->info(
+        "Credentials: paired credentials installed for account " . _mask($accountId)
+        . " (source=$source)");
+    return (1);
+}
+
+# _cleanupPairingStaging()
+# Removes the staging credentials.json (if still present, e.g. after a
+# mismatch) and the staging dir itself. Leftover staging must never be
+# mistaken for live credentials.
+sub _cleanupPairingStaging {
+    my $dir = $_pairing{stagingDir} or return;
+
+    my $file = catfile($dir, CREDENTIALS_FILE);
+    unlink $file if -f $file;
+    rmdir $dir;  # only succeeds when empty -- exactly what we want
+
+    delete $_pairing{stagingDir};
+    delete $_pairing{proc};
 }
 
 # _resolveInflight($accountId, $ok, $reason)
@@ -425,6 +939,15 @@ sub _mask {
     my ($accountId) = @_;
     return 'unknown' unless defined $accountId && length $accountId;
     return substr($accountId, 0, 4) . '****';
+}
+
+# _maskUser($username)
+# T-65-07: masked Spotify username for the D-01 mismatch warn line --
+# first 3 chars + '****', never the full username.
+sub _maskUser {
+    my ($username) = @_;
+    return 'unknown' unless defined $username && length $username;
+    return substr($username, 0, 3) . '****';
 }
 
 1;

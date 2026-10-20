@@ -257,34 +257,34 @@
 
 ### Phase 58: Connect Position Sync Fix
 
-- [ ] **Phase 58: Connect Position Sync Fix**
+- [x] **Phase 58: Connect Position Sync Fix** (completed 2026-08-18)
   **Goal**: Fix mid-song Connect resume position (Rust: needs_position_sync cleared too early in TrackChanged Some→Some) and relocate the change-handler notification to _fetchTrackMetadata failure paths (Perl: avoid pushing position=0 before real position is known). Fixes regression from #126 fix.
   Depends on: Phase 57 (completed), #126 fix (commit 5d91cd8)
-  **Plans:** 2 plans
+  **Plans:** 2/2 plans complete
   Plans:
 
-  - [ ] 58-01-PLAN.md — Perl hotfix: relocate change-handler newmetadata notify to _fetchTrackMetadata failure paths (Wave 1)
-  - [ ] 58-02-PLAN.md — Rust root-cause fix: preserve needs_position_sync across TrackChanged Some→Some, consume in Playing Some→Some (Wave 1, triggers CI binary rebuild)
+  - [x] 58-01-PLAN.md — Perl hotfix: relocate change-handler newmetadata notify to _fetchTrackMetadata failure paths (Wave 1)
+  - [x] 58-02-PLAN.md — Rust root-cause fix: preserve needs_position_sync across TrackChanged Some→Some, consume in Playing Some→Some (Wave 1, triggers CI binary rebuild)
   See: `.planning/phases/58-connect-position-sync-fix/`
 
 ### Phase 59: Connect & Search Fixes
 
-- [ ] **Phase 59: Connect & Search Fixes (GH #129 + #130)**
+- [x] **Phase 59: Connect & Search Fixes (GH #129 + #130)** (completed 2026-08-18)
   **Goal**: Two v3.2.3 bugfixes reported by woorszt. #129: enable seek from JiveLite/LMS UIs during Spotify Connect playback — remove the `canSeek` Connect guard, but suppress the LMS-side stream restart (`getSeekData` returns undef when Connect active) and read the seek target from the request's `_newvalue` instead of stale `songTime`. #130: `_searchTypeFeed` pagination — map LMS `index` to API offset and return `offset`/`total` (same pattern as `_artistAlbumsFeed`, #121).
   Depends on: none (independent of Phase 58)
-  **Plans:** 1/2 plans executed
+  **Plans:** 2/2 plans complete
   Plans:
 
   - [x] 59-01-PLAN.md — Connect seek (ProtocolHandler.pm + Connect.pm) + search pagination (Plugin.pm) + CHANGELOG (Wave 1)
-  - [ ] 59-02-PLAN.md — Review finding fixes: R-1 canDoAction 'rew' guard, R-2 pause-seek-unpause documented + UAT, R-4 ignore-placeholders, R-5 error offset/total + 1000-cap; R-3 accepted as known limitation, no code fix (Wave 2)
+  - [x] 59-02-PLAN.md — Review finding fixes: R-1 canDoAction 'rew' guard, R-2 pause-seek-unpause documented + UAT, R-4 ignore-placeholders, R-5 error offset/total + 1000-cap; R-3 accepted as known limitation, no code fix (Wave 2)
   See: `.planning/phases/59-connect-search-fixes/`
 
 ### Phase 60: Search Single-Type & Podcast Pagination
 
-- [ ] **Phase 60: Search Single-Type & Podcast Pagination (GH #130)**
+- [x] **Phase 60: Search Single-Type & Podcast Pagination (GH #130)** (completed 2026-08-18)
   **Goal**: Fix search total-count discrepancy and podcast search pagination. (1) Switch `_searchFeed` and `_podcastSearchFeed` from combined multi-type API calls to parallel single-type calls so overview totals match drill-in totals (woorszt #130 observation). (2) Add full pagination to `_podcastSearchTypeFeed` (currently hardcoded offset=0, no total). (3) Backport R-4 (nameless ignore placeholders) and R-5 (1000 offset cap) to podcast search. (4) Fix duplicate `$offset` declaration in `_searchTypeFeed`.
   Depends on: Phase 59 (search pagination foundation)
-  **Plans:** 1/1 plans executed
+  **Plans:** 1/1 plans complete
   Plans:
 
   - [x] 60-01-PLAN.md — _multiTypeSearch aggregator (single-type overview totals) + podcast search pagination with R-4/R-5 backport + duplicate $offset fix + CHANGELOG (Wave 1)
@@ -352,14 +352,12 @@ Plans:
 **Goal:** Fix account switcher confirmation page behavior across all LMS client types (#136). Prevent unnecessary Connect daemon restarts when sync group membership changes (#143).
 **Requirements**: GH #136, #143
 **Depends on:** None (independent UX/stability fixes)
-**Plans:** 2/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 
 - [x] 63-01-PLAN.md
 - [x] 63-02-PLAN.md
-
-- [ ] TBD (run /gsd-plan-phase 63 to break down)
 
 ### Phase 64: PassthroughMixer + Upstream Merge
 
@@ -373,6 +371,89 @@ Plans:
 - [x] 64-01-PLAN.md — Rust: PassthroughMixer in unified.rs + --check capability + librespot dev pin refresh (#1722 verified included)
 - [x] 64-02-PLAN.md — Perl: capability-gated Daemon.pm volume arg simplification + CHANGELOG + live volume verification on dev LMS
 
+### Phase 65: ZeroConf Credential Provenance Fix (Login5 Outage)
+
+**Goal:** Restore playback after Spotify's Login5 StoredCredential blockade (Aug 10, 2026) by switching credential provisioning from PKCE-derived `--token-login` to ZeroConf-paired `--discover-once`. Stop the daemon crash-loop caused by unrecognized INVALID_CREDENTIALS errors. Provide browser-based fallback for environments where mDNS is unavailable (Docker, VLANs).
+**Requirements**: GH #147
+**Depends on:** None (hotfix, independent of v2.3 Library Integration)
+**Plans:** 5/8 plans complete
+
+Plans:
+
+- [x] 65-01-PLAN.md — Crash-loop fix: extend isCredentialError, playback-auth flag, restart backoff, defuse all PKCE auto-derive paths
+- [x] 65-02-PLAN.md — ZeroConf pairing: --discover-once engine, Authorize Playback Settings UI with 2s polling, strings (11 languages)
+- [x] 65-03-PLAN.md — Browser fallback (Keymaster PKCE + --token-login), upgrade migration, OPML hint, strings (11 languages)
+- [x] 65-04-PLAN.md — Keymaster PKCE unification: one auth step yields Web API tokens + auto-derived playback credentials; loopback-to-LMS redirect; Custom App collapsed to advanced; strings (11 languages)
+- [x] 65-05-PLAN.md — ZeroConf-only auth, gate: restore --get-token (revert d7fd566) + live hypothesis test (Keymaster Mercury token from ZeroConf creds vs api.spotify.com) — STOP gate for 06-08
+- [~] 65-06-PLAN.md — CANCELLED (65-05 STOP gate: Mercury Keymaster 403 disproves the PKCE-elimination hypothesis)
+- [~] 65-07-PLAN.md — CANCELLED (65-05 STOP gate) — Settings reorg scope superseded by Phase 66
+- [~] 65-08-PLAN.md — CANCELLED (65-05 STOP gate)
+
+### Phase 66: Two-Step Auth Revert + Settings Reorganization
+
+**Goal:** Eliminate the severe 429 rate limiting introduced by 65-04's Keymaster PKCE default (shared global rate-limit bucket) by reverting to the ncspot Extended Quota Client ID for Web API tokens, making ZeroConf pairing the required playback-credential step again (two-step auth), reverting the 65-05-session /me workarounds at the source, reorganizing the Settings page into clear Onboarding/Account/Global/Diagnostics sections, and updating the Auth Health dashboard to show Web API token and playback credential status separately.
+**Requirements**: GH #147
+**Depends on:** Phase 65 (plans 65-01..65-05)
+**Plans:** 3/3 plans complete
+
+Plans:
+
+- [x] 66-01-PLAN.md — Auth revert: ncspot Extended Quota ID as PKCE default, zero derivation from account tokens, 65-05 workaround revert, TokenManager fallback, test gates
+- [x] 66-02-PLAN.md — Settings UI reorganization (4-step onboarding, Account/Global/Diagnostics sections, always-visible pairing, collapsed Custom App) + Auth Health playback indicators
+- [x] 66-03-PLAN.md — Strings: two-step auth messaging, new section/guide/source keys, obsolete key removal (11 languages)
+
+### Phase 67: Bundled ID & Auth Redirect UX
+
+**Goal:** Fix /login redirect handler bug (qr{} regex-as-hash-key → 404), overhaul bundled ID UX to communicate shared-bucket degradation, recommend custom Client ID as primary path
+**Requirements**: GH #147 (rate-limit root cause), D-01..D-05
+**Depends on:** Phase 66
+**Plans:** 2/2 plans complete
+
+Plans:
+
+- [x] 67-02-PLAN.md
+
+- [x] 67-01-PLAN.md — /login fix, probe skip for bundled ID, Settings UX reframing, i18n (11 langs), TROUBLESHOOTING.md, forum reply
+
+### ~~Phase 68: OGG Metadata Strip (Passthrough)~~ DROPPED
+
+**Dropped:** 2026-08-21 — librespot's PassthroughDecoder re-serializes the OGG container from scratch (only standard headers 0x01/0x03/0x05 + audio data). Spotify's proprietary 0x81 page is never present in the output. Verified via source analysis, confirmed by urknall (#156). No strip logic needed.
+
+### Phase 70: JiveLite Pagination Fill (GH #157)
+
+**Goal:** Fix JiveLite empty rows by implementing bounded multi-page fill in all 11 affected feed functions. Generalize _fetchAllPages to _fetchPages with startOffset/maxItems, swap else-branch single API calls for multi-page fills, clamp total on partial errors. Covers saved tracks/albums/shows, playlists, artist albums, album tracks, search, podcast search, and add-to-playlist.
+**Depends on:** None (independent side phase)
+**Plans:** 5/5 plans complete
+
+Requirements:
+
+- JVL-01: _fetchPages helper with startOffset + maxItems params (generalization of _fetchAllPages)
+- JVL-02: 8 tripartite feeds else-branch converted to _fetchPages fill
+- JVL-03: _searchTypeFeed + _podcastSearchTypeFeed converted with extractTotal for nested keys
+- JVL-04: SpotOnAddToPlaylist converted
+- JVL-05: _albumFeed embedded-seed + continuation fill
+- JVL-06: Total-clamping safety on partial fill (mid-fill error → total = offset + count)
+- JVL-07: pageLimit=0 guard (blocked endpoints)
+- JVL-08: Existing play-all + Material Skin + Classic Skin behavior preserved
+- JVL-09: Icon contrast fix from reverted Phase 69 (GH #124) — recently.png + madeforyou.png grey-gradient regeneration
+
+Plans:
+
+- [x] 70-05-PLAN.md
+
+**Wave 1**
+
+- [x] 70-01-PLAN.md — _fetchPages generalized paginator + _fetchAllPages wrapper + _savedTracksFeed tracer conversion + t/25 unit test (Wave 1)
+- [x] 70-04-PLAN.md — Icon contrast fix: cherry-pick 30f8b7b + CHANGELOG (Wave 1, parallel)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 70-02-PLAN.md — Convert 6 tripartite feeds: savedAlbums, savedShows, userPlaylists, showFeed, artistAlbums, playlistFeed (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 70-03-PLAN.md — Convert search + podcast search (extractTotal), SpotOnAddToPlaylist, _albumFeed seed+continuation + CHANGELOG (Wave 3)
+
 ---
 *Roadmap created: 2026-05-26*
-*Last updated: 2026-08-08 — Phase 64 complete*
+*Last updated: 2026-08-22 — Phase 70 added (JiveLite Pagination Fill, GH #157)*

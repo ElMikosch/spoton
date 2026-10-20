@@ -83,6 +83,8 @@ my %_detectedLimits = (
 my %_blockedEndpoints;
 my $_limitsProbed = 0;
 my $_limitsLastProbed = 0;
+my $_probeInflight = 0;
+my @_retryTimers;
 use constant REPROBE_COOLDOWN_S => 3600 * 6;
 
 # ============================================================
@@ -102,8 +104,14 @@ sub reset {
     );
     %_blockedEndpoints = ();
     $_limitsProbed      = 0;
+    $_probeInflight     = 0;
     $_limitsLastProbed  = 0;
-    main::INFOLOG && $log->info("Client: counters and limit detection reset");
+    Slim::Utils::Timers::killTimers(undef, \&_probeRetry);
+    for my $t (@_retryTimers) { Slim::Utils::Timers::killTimers($t, \&_429retry); }
+    @_retryTimers = ();
+    $cache->remove('spoton_rate_limit');
+    $cache->remove(WP_RATE_LIMIT_KEY);
+    main::INFOLOG && $log->info("Client: counters, rate-limit flags, and limit detection reset");
 }
 
 sub getLimit {
@@ -114,11 +122,50 @@ sub getLimit {
 
 sub limitsProbed { return $_limitsProbed }
 
+sub _probeRetry {
+    my ($class, $accountId) = @_;
+    $class->probeEndpointLimits($accountId, sub {}) unless $_limitsProbed;
+}
+
+# GH #155: Named timer callback for 429 auto-retry — killable via reset().
+# setTimer passes ($obj, $retryCb) where $retryCb is the closure from the 429 handler.
+sub _429retry {
+    my ($obj, $retryCb) = @_;
+    @_retryTimers = grep { $_ != $obj } @_retryTimers;
+    $retryCb->() if $retryCb;
+}
+
 sub probeEndpointLimits {
     my ($class, $accountId, $doneCb, %opts) = @_;
     return $doneCb->() if $_limitsProbed && !$opts{force};
+    return $doneCb->() if $_probeInflight && !$opts{force};
+
+    # D-04: the bundled Client ID has known, stable Extended Quota limits --
+    # skip the probe entirely and hardcode them. Saves 8 API requests from
+    # the shared ncspot bucket on every LMS restart across all bundled-ID
+    # installations. force => 1 (manual re-probe) bypasses this guard.
+    if (!$prefs->get('clientId') && !$opts{force}) {
+        %_detectedLimits = (
+            search => 50, library => 50, artist_albums => 50,
+            album_tracks => 50, playlist_items => 100,
+        );
+        $_limitsProbed     = 1;
+        $_limitsLastProbed = time();
+        main::INFOLOG && $log->info("Client: bundled ID — using known limits (probe skipped)");
+        return $doneCb->();
+    }
+
+    # Skip probe while rate-limited — probe calls would 429 and extend the window.
+    # Retry after 30s so the probe eventually runs.
+    if ($cache->get('spoton_rate_limit') && !$opts{force}) {
+        main::INFOLOG && $log->info("Client: limit probe deferred (rate-limited), retry in 30s");
+        Slim::Utils::Timers::killTimers(undef, \&_probeRetry);
+        Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + 30, \&_probeRetry, $class, $accountId);
+        return $doneCb->();
+    }
     # C1: clear blocked endpoints on forced re-probe so healed endpoints are re-discovered
     %_blockedEndpoints = () if $opts{force};
+    $_probeInflight = 1;
     $_limitsProbed = 0;
 
     my @classes = (
@@ -139,6 +186,7 @@ sub probeEndpointLimits {
     $probeNext = sub {
         if ($probeIdx >= scalar @classes) {
             $_limitsProbed = 1;
+            $_probeInflight = 0;
             $_limitsLastProbed = time();
             main::INFOLOG && $log->info(sprintf(
                 "Client: API limits detected — search=%d library=%d artist_albums=%d album_tracks=%d playlist_items=%d",
@@ -201,6 +249,7 @@ sub probeEndpointLimits {
                 main::INFOLOG && $log->info("Client: limit probe aborted (401 unauthorized), keeping defaults for remaining classes");
                 # C2: restore probed state so lazy re-probe remains functional
                 $_limitsProbed = 1;
+                $_probeInflight = 0;
                 undef $probeNext;
                 $doneCb->();
                 return;
@@ -763,8 +812,9 @@ sub pathfinderHome {
 
     # Isolated Web-Player rate pool (Pitfall 5, T-52-04) -- never the shared
     # 'spoton_rate_limit' key checked by _request().
-    if ($cache->get(WP_RATE_LIMIT_KEY)) {
-        $cb->(undef, { error => 'rate_limited', code => 429 });
+    if (!$params->{_retryAttempt} && $cache->get(WP_RATE_LIMIT_KEY)) {
+        main::INFOLOG && $log->info('Client: pathfinderHome short-circuited (cached rate limit)');
+        $cb->(undef, { error => 'rate_limited_local', code => 429 });
         return;
     }
 
@@ -851,6 +901,19 @@ sub pathfinderHome {
                         Plugins::SpotOn::Status->recordError('warn', 'API', '429 on pathfinder/v2/query');
                     }
                     $log->warn("Client: pathfinderHome 429 rate limited for ${retryAfter}s (Web-Player pool)");
+
+                    # GH #155: Auto-retry once after Retry-After delay (short windows only)
+                    if (!$params->{_retryAttempt} && $retryAfter <= 30) {
+                        $params->{_retryAttempt} = 1;
+                        $log->warn("Client: pathfinderHome auto-retry in ${retryAfter}s (GH #155)");
+                        my $obj = {};
+                        push @_retryTimers, $obj;
+                        Slim::Utils::Timers::setTimer($obj, Time::HiRes::time() + $retryAfter + 1, \&_429retry, sub {
+                            $class->pathfinderHome($accountId, $params, $cb);
+                        });
+                        return;
+                    }
+
                     $cb->(undef, { error => 'rate_limited', code => 429 });
                     return;
                 }
@@ -1090,8 +1153,9 @@ sub getWebPlayerPlaylistItems {
     return $cb->(undef, { error => 'invalid_id' })
         unless $playlistId && $playlistId =~ /^[A-Za-z0-9]{1,40}$/;
 
-    if ($cache->get(WP_RATE_LIMIT_KEY)) {
-        $cb->(undef, { error => 'rate_limited', code => 429 });
+    if (!$params->{_retryAttempt} && $cache->get(WP_RATE_LIMIT_KEY)) {
+        main::INFOLOG && $log->info('Client: getWebPlayerPlaylistItems short-circuited (cached rate limit)');
+        $cb->(undef, { error => 'rate_limited_local', code => 429 });
         return;
     }
 
@@ -1169,6 +1233,19 @@ sub getWebPlayerPlaylistItems {
                         Plugins::SpotOn::Status->recordError('warn', 'API', '429 on pathfinder fetchPlaylistContents');
                     }
                     $log->warn("Client: getWebPlayerPlaylistItems 429 rate limited for ${retryAfter}s (Web-Player pool)");
+
+                    # GH #155: Auto-retry once after Retry-After delay (short windows only)
+                    if (!$params->{_retryAttempt} && $retryAfter <= 30) {
+                        $params->{_retryAttempt} = 1;
+                        $log->warn("Client: getWebPlayerPlaylistItems auto-retry in ${retryAfter}s (GH #155)");
+                        my $obj = {};
+                        push @_retryTimers, $obj;
+                        Slim::Utils::Timers::setTimer($obj, Time::HiRes::time() + $retryAfter + 1, \&_429retry, sub {
+                            $class->getWebPlayerPlaylistItems($accountId, $playlistId, $params, $cb);
+                        });
+                        return;
+                    }
+
                     $cb->(undef, { error => 'rate_limited', code => 429 });
                     return;
                 }
@@ -1286,8 +1363,24 @@ sub _request {
     $cleanPath =~ s{^/}{};
 
     # Step 2: Rate-limit check — single key, no flavor suffix (D-04).
-    if ($cache->get('spoton_rate_limit')) {
-        $cb->(undef, { error => 'rate_limited', code => 429 });
+    # GH #155 follow-up: defer concurrent requests until the rate-limit
+    # window closes instead of returning an empty page immediately.
+    # The cache value is the expiry timestamp (set in the 429 handler).
+    if (my $retryUntil = $cache->get('spoton_rate_limit')) {
+        my $remaining = $retryUntil - Time::HiRes::time();
+        if ($remaining > 0 && $remaining <= 30 && !$params->{_deferred}
+            && lc($method) eq 'get' && !$params->{_probeCall}) {
+            $params->{_deferred} = 1;
+            main::INFOLOG && $log->info(sprintf("Client: request to %s deferred %.1fs (rate-limited, GH #155)", $cleanPath, $remaining));
+            my $obj = {};
+            push @_retryTimers, $obj;
+            Slim::Utils::Timers::setTimer($obj, $retryUntil + 1 + rand(2), \&_429retry, sub {
+                $class->_request($method, $path, $params, $cb);
+            });
+            return;
+        }
+        main::INFOLOG && $log->info("Client: request to $cleanPath short-circuited (cached rate limit)");
+        $cb->(undef, { error => 'rate_limited_local', code => 429 });
         return;
     }
 
@@ -1446,13 +1539,35 @@ sub _doRequest {
                     $retryAfter = 300 if $retryAfter > 300;
 
                     # Single rate-limit key — no flavor suffix (D-04).
-                    $cache->set('spoton_rate_limit', 1, $retryAfter);
+                    # Value is the expiry timestamp so _request() can defer
+                    # concurrent requests to retry after the window closes.
+                    $cache->set('spoton_rate_limit', Time::HiRes::time() + $retryAfter, $retryAfter);
                     $api429Count++;
                     if ($INC{'Plugins/SpotOn/Status.pm'}) {
                         Plugins::SpotOn::Status->recordError('warn', 'API', "429 on $cleanPath");
                     }
                     $log->warn("Client: 429 rate limited for ${retryAfter}s on $cleanPath");
                     $log->warn("[DIAG] api_429: endpoint=$cleanPath retry_after=${retryAfter}s") if $prefs->get('diagnosticMode');
+
+                    # GH #155: Auto-retry once after Retry-After delay (short windows only, skip probes)
+                    if (!$params->{_retryAttempt} && !$params->{_probeCall} && $retryAfter <= 30) {
+                        $params->{_retryAttempt} = 1;
+                        $apiRequestCount++;
+                        $log->warn("Client: auto-retry $cleanPath in ${retryAfter}s (GH #155)");
+                        my $obj = {};
+                        push @_retryTimers, $obj;
+                        Slim::Utils::Timers::setTimer($obj, Time::HiRes::time() + $retryAfter + 1, \&_429retry, sub {
+                            eval {
+                                $class->_doRequest($method, $cleanPath, $params, $userCb);
+                                1;
+                            } or do {
+                                $log->error("Client: 429 retry failed for $cleanPath: $@");
+                                $userCb->(undef, { error => 'internal_error' });
+                            };
+                        });
+                        return;
+                    }
+
                     $userCb->(undef, { error => 'rate_limited', code => 429 });
                     return;
                 }

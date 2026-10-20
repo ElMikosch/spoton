@@ -121,6 +121,7 @@ sub initPlugin {
         soloistEnabled       => 0,     # official Connect backend; Browse remains on the Unified daemon
         soloistConfigured    => 0,     # one-time migration marker for existing API-key installs
         recentSearches => [],
+        credProvenanceMigrated => 0,   # GH #147 plan 65-03: one-shot legacy-credential provenance migration marker
     });
 
     # D-02: cacheSchemaVersion guard — log when cache namespace version was bumped
@@ -295,6 +296,10 @@ sub shutdownPlugin {
     }
     %_pauseRequestedAt = ();
 
+    if ($INC{'Plugins/SpotOn/API/Credentials.pm'}) {
+        Plugins::SpotOn::API::Credentials->cancelPairing();
+    }
+
     if ($INC{'Plugins/SpotOn/Unified/DaemonManager.pm'}) {
         require Plugins::SpotOn::Unified::DaemonManager;
         Plugins::SpotOn::Unified::DaemonManager->shutdown();
@@ -371,6 +376,30 @@ sub _startUnifiedDaemons {
     # should advertise their legacy Connect devices. Browse remains enabled.
     require Plugins::SpotOn::Soloist::Manager;
     Plugins::SpotOn::Soloist::Manager->init();
+
+    # GH #147 plan 65-03 (scope item 6): one-shot provenance migration.
+    # Runs exactly once, and BEFORE the first DaemonManager->init() below --
+    # ordering matters: the playback-auth flags must exist before the first
+    # startHelper evaluation, so no daemon ever launches against blockaded
+    # legacy credentials (zero doomed starts on first boot after upgrade).
+    # A credentials.json WITHOUT the playbackCredSource marker (written only
+    # by the plan 65-02/65-03 install paths) is provably legacy token-derived
+    # -- wrong provenance, rejected by Login5 since Aug 10, 2026. Accounts
+    # without any credentials.json are skipped (nothing to invalidate; the
+    # plan 65-01 startHelper missing-file path already handles them).
+    if ( !$prefs->get('credProvenanceMigrated') ) {
+        require Plugins::SpotOn::API::Credentials;
+        my $accounts = $prefs->get('accounts') || {};
+        for my $id (keys %{$accounts}) {
+            next unless -f Plugins::SpotOn::API::Credentials->credentialsPathFor($id);
+            next if $accounts->{$id}{playbackCredSource};
+            Plugins::SpotOn::API::Credentials->markNeedsPlaybackAuth($id, 'legacy_token_derived');
+            $log->info("Provenance migration: account " . substr($id, 0, 4) . '****'
+                . " has legacy token-derived playback credentials -- flagged for re-authorization (GH #147)");
+        }
+        $prefs->set('credProvenanceMigrated', 1);
+    }
+
     require Plugins::SpotOn::Unified::DaemonManager;
     Plugins::SpotOn::Unified::DaemonManager->init();
 }
@@ -513,6 +542,29 @@ sub handleFeed {
             name => cstring($client, 'PLUGIN_SPOTON_REAUTH_REQUIRED'),
             type => 'textarea',
         };
+    }
+
+    # GH #147 plan 65-03 (scope item 7): playback-authorization hint -- shown
+    # when the ACTIVE account has working PKCE tokens (Browse/Search/Library
+    # keep working) but its playback credentials are flagged (crash escalation
+    # or legacy provenance migration) or missing entirely (fresh PKCE auth
+    # after the D-04 eager-derivation removal). Follows the precedence
+    # discipline above: never stacks with the migration hint (a migration
+    # account has no PKCE tokens yet, so the loadTokens gate also excludes it).
+    # The rest of the menu stays -- only playback is affected, and the hint
+    # says so.
+    if ( !$showingMigrationHint && $activeAccountId ) {
+        require Plugins::SpotOn::API::Credentials;
+        require Plugins::SpotOn::API::PKCE;
+        if ( Plugins::SpotOn::API::PKCE::loadTokens($activeAccountId)
+            && ( Plugins::SpotOn::API::Credentials->needsPlaybackAuth($activeAccountId)
+                || !-f Plugins::SpotOn::API::Credentials->credentialsPathFor($activeAccountId) ) )
+        {
+            push @items, {
+                name => cstring($client, 'PLUGIN_SPOTON_PLAYBACK_AUTH_REQUIRED'),
+                type => 'textarea',
+            };
+        }
     }
 
     # Rate-limit hint (D-12): show when the API is throttled
@@ -944,6 +996,9 @@ sub _followCacheKey {
 # Add to Playlist (Phase 34)
 # ============================================================
 
+# SpotOnAddToPlaylist($client, $cb, $params, $args)
+# GH #157: bounded multi-page fill so the picker lists up to a full
+# JiveLite 210-item block instead of stalling at one API page (JVL-04).
 sub SpotOnAddToPlaylist {
     my ($client, $cb, $params, $args) = @_;
 
@@ -953,33 +1008,39 @@ sub SpotOnAddToPlaylist {
 
     my $offset = $params->{index} || 0;
     my $qty    = $params->{quantity} || 200;
-    my $limit  = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
-    Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
-        offset => $offset,
-        limit  => $limit,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data && $data->{items}) {
-            $cb->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
-            return;
-        }
+    _fetchPages({
+        accountId   => $accountId,
+        apiFn       => sub {
+            my ($acct, $params2, $cb2) = @_;
+            Plugins::SpotOn::API::Client->getUserPlaylists($acct, $params2, $cb2);
+        },
+        pageLimit   => Plugins::SpotOn::API::Client->getLimit('library'),
+        startOffset => $offset,
+        maxItems    => $qty,
+        done        => sub {
+            my ($allItems, $err, $total) = @_;
+            if (!@$allItems && $err) {
+                $cb->({ items => [{ name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' }] });
+                return;
+            }
 
-        my @items;
-        for my $pl (@{ $data->{items} }) {
-            next unless $pl && $pl->{id};
-            next if _isMadeForYou($pl);
-            push @items, {
-                name        => $pl->{name} // '',
-                url         => \&_doAddToPlaylist,
-                passthrough => [{ playlistId => $pl->{id}, playlistName => $pl->{name}, spotifyUri => $spotifyUri, accountId => $accountId }],
-                image       => _largestImage($pl->{images}) || 'html/images/playlists.png',
-                line2       => ($pl->{owner} || {})->{display_name} // '',
-                type        => 'link',
-            };
-        }
+            my @items;
+            for my $pl (@$allItems) {
+                next unless $pl && $pl->{id};
+                next if _isMadeForYou($pl);
+                push @items, {
+                    name        => $pl->{name} // '',
+                    url         => \&_doAddToPlaylist,
+                    passthrough => [{ playlistId => $pl->{id}, playlistName => $pl->{name}, spotifyUri => $spotifyUri, accountId => $accountId }],
+                    image       => _largestImage($pl->{images}) || 'html/images/playlists.png',
+                    line2       => ($pl->{owner} || {})->{display_name} // '',
+                    type        => 'link',
+                };
+            }
 
-        $cb->({ items => \@items, offset => $offset, total => $data->{total} || 0 });
+            $cb->({ items => \@items, offset => $offset, total => $total });
+        },
     });
 }
 
@@ -1193,12 +1254,22 @@ sub _trackItem {
 # old hardcoded PLUGIN_SPOTON_NO_RESULTS item construction. Distinguishes
 # "authentication required" (v2.x migration pending OR PKCE refresh
 # rejected) from a genuine empty result set.
-# SECURITY (T-53-05, mirrors T-51-10/T-52-02): $err is accepted but NEVER
-# interpolated into the returned name/string -- only fixed, pre-translated
-# cstring() keys are returned. $err is reserved for future server-side
-# logging only.
+# SECURITY (T-53-05, mirrors T-51-10/T-52-02): $err->{error} is matched
+# against known constants (rate_limited*), never interpolated into the
+# returned name/string -- only fixed, pre-translated cstring() keys are
+# returned.
 sub _authRequiredItem {
     my ($client, $accountId, $err) = @_;
+
+    # GH #155: surface rate-limit errors as a clear message instead of
+    # the confusing "No results" that gives zero diagnostic clue.
+    if ($err && ref $err eq 'HASH' && ($err->{error} || '') =~ /^rate_limited/) {
+        return {
+            name => cstring($client, 'PLUGIN_SPOTON_RATE_LIMITED'),
+            type => 'textarea',
+        };
+    }
+
     require Plugins::SpotOn::API::TokenManager;
 
     my $needsAuth = Plugins::SpotOn::API::TokenManager->accountNeedsMigration($accountId)
@@ -1309,7 +1380,7 @@ sub _homeFeed {
             name  => cstring($client, 'PLUGIN_SPOTON_RECENTLY_PLAYED'),
             url   => \&_recentlyPlayedFeed,
             type  => 'link',
-            image => 'plugins/SpotOn/html/images/recently.png',
+            image => 'plugins/SpotOn/html/images/MTL_icon_history.png',
         },
     );
 
@@ -1330,14 +1401,14 @@ sub _homeFeed {
             name  => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
             url   => \&_madeForYouExpiredFeed,
             type  => 'link',
-            image => 'plugins/SpotOn/html/images/madeforyou.png',
+            image => 'plugins/SpotOn/html/images/MTL_icon_auto_awesome.png',
         };
     } else {
         push @items, {
             name  => cstring($client, 'PLUGIN_SPOTON_MADE_FOR_YOU'),
             url   => \&_madeForYouFeed,
             type  => 'link',
-            image => 'plugins/SpotOn/html/images/madeforyou.png',
+            image => 'plugins/SpotOn/html/images/MTL_icon_auto_awesome.png',
         };
     }
 
@@ -1546,26 +1617,30 @@ sub _libraryFeed {
 # Play-all detection: if quantity is undef (CLI/Material Skin "Play now") OR
 # $qty >= 500 (Classic/Web UI "Play All"), AND $offset == 0, fetches ALL tracks
 # via _fetchAllPages (Option D, Phase 54 Plan 04).
+# Else-branch: bounded multi-page fill via _fetchPages honoring the requested
+# (offset, quantity) so JiveLite's ~210-item block requests get filled across
+# multiple Spotify API pages instead of stalling at the 50-item API cap (GH #157).
 sub _savedTracksFeed {
     my ($client, $callback, $args) = @_;
 
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify Library max = 50
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "savedTracks:$accountId";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getSavedTracks($acct, $params, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all liked tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getSavedTracks($acct, $params, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -1597,20 +1672,30 @@ sub _savedTracksFeed {
         delete $_playAllItemCache{$cacheKey};
         goto &_savedTracksFeed;  # re-enter with same @_ after cache eviction
     } else {
-        Plugins::SpotOn::API::Client->getSavedTracks($accountId, {
-            offset => $offset,
-            limit  => $limit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            my @items = map  { _trackItem($client, $_->{track}) }
-                        grep { defined $_->{track} }
-                        map  { _normalizeLibraryItem($_, 'track') }
-                        @{ $data->{items} || [] };
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                # FIX-01: defer metadata cache writes to avoid blocking event loop
+                # with N synchronous SQLite INSERTs before callback fires.
+                my @deferredMeta;
+                my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
+                            grep { defined $_->{track} }
+                            map  { _normalizeLibraryItem($_, 'track') }
+                            @{$allItems};
+                $callback->({ items => \@items, offset => $offset, total => $total });
+                # Flush deferred metadata cache writes in background (50 per event-loop tick).
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
+            },
         });
     }
 }
@@ -1625,19 +1710,20 @@ sub _savedAlbumsFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "savedAlbums:$accountId";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getSavedAlbums($acct, $params, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getSavedAlbums($acct, $params, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -1664,20 +1750,26 @@ sub _savedAlbumsFeed {
         delete $_playAllItemCache{$cacheKey};
         goto &_savedAlbumsFeed;
     } else {
-        Plugins::SpotOn::API::Client->getSavedAlbums($accountId, {
-            offset => $offset,
-            limit  => $limit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            my @items = map  { _albumItem($client, $_->{album}) }
-                        grep { defined $_->{album} }
-                        map  { _normalizeLibraryItem($_, 'album') }
-                        @{ $data->{items} || [] };
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                my @items = map  { _albumItem($client, $_->{album}) }
+                            grep { defined $_->{album} }
+                            map  { _normalizeLibraryItem($_, 'album') }
+                            @{$allItems};
+                $callback->({ items => \@items, offset => $offset, total => $total });
+            },
         });
     }
 }
@@ -1732,21 +1824,34 @@ sub _fetchAllFollowedArtists {
 }
 
 # ============================================================
-# Reusable Async Paginator (Play-All Full Pagination)
+# Reusable Async Paginator (Play-All Full Pagination + Bounded Fill)
 # ============================================================
 
-# _fetchAllPages($args)
-# Reusable async paginator for offset-based Spotify API endpoints.
-# Fetches all pages recursively and calls $args->{done} with the full accumulated items.
+# _fetchPages($args)
+# Generalized async paginator for offset-based Spotify API endpoints.
+# Fetches pages recursively starting at $args->{startOffset}, stopping once
+# $args->{maxItems} items are accumulated (or the API list is exhausted),
+# and calls $args->{done} with the accumulated items.
 #
 # $args keys:
 #   accountId    - Spotify account ID
 #   apiFn        - coderef: $apiFn->($accountId, $params, $cb)
-#                  $params contains offset and limit; $cb receives ($data)
-#   pageLimit    - max items per API page (50 for tracks/albums/episodes, 100 for playlist items)
+#                  $params contains offset and limit; $cb receives ($data, $err)
+#   pageLimit    - max items per API page (50 for tracks/albums/episodes, 100 for
+#                  playlist items). A falsy value (e.g. 0 from a blocked-endpoint
+#                  Client->getLimit()) never reaches the API — falls back to 50 (JVL-07).
 #   extractItems - coderef: $extractItems->($data) returns arrayref of raw items
 #                  Default: sub { $_[0]->{items} || [] }
-#   done         - callback: $done->(\@accumulated) called when all pages fetched
+#   extractTotal - coderef: $extractTotal->($data) returns the API's reported total
+#                  Default: sub { $_[0]->{total} // 0 } -- override for endpoints
+#                  whose total lives under a nested type key (e.g. search feeds).
+#   startOffset  - offset to begin fetching from (default 0)
+#   maxItems     - stop once this many items are accumulated (default undef = unbounded,
+#                  i.e. play-all behavior identical to the former _fetchAllPages)
+#   done         - callback: $done->(\@accumulated, $err, $safeTotal)
+#                  $safeTotal is pre-clamped: on any partial/error/exhausted stop it
+#                  never exceeds startOffset + scalar(@accumulated), so callers can pass
+#                  it straight through to JiveLite without risking nil cache slots (JVL-06).
 #
 # T-25-01: Guards against infinite recursion — stops when current page returns 0 items,
 # regardless of what the total field says. Prevents infinite loop on API inconsistencies.
@@ -1755,44 +1860,84 @@ sub _fetchAllFollowedArtists {
 # from a genuine empty result set (Plan 03 Task 2 -- this shared paginator
 # has no inline NO_RESULTS item of its own to substitute at its unless($data)
 # site, unlike the 15 standard call sites).
-sub _fetchAllPages {
+sub _fetchPages {
     my ($args) = @_;
 
     _evictPlayAllCache();
 
     my $accountId    = $args->{accountId};
     my $apiFn        = $args->{apiFn};
-    my $pageLimit    = $args->{pageLimit}    || 50;
+    my $pageLimit    = $args->{pageLimit} || 50;    # JVL-07: never request limit=0
     my $extractItems = $args->{extractItems} || sub { $_[0]->{items} || [] };
+    my $extractTotal = $args->{extractTotal} || sub { $_[0]->{total} // 0 };
+    my $startOffset  = $args->{startOffset} // 0;
+    my $maxItems     = $args->{maxItems};
     my $done         = $args->{done};
 
+    if (defined $maxItems && $maxItems <= 0) {
+        $done->([], undef, $startOffset);
+        return;
+    }
+
     my @accumulated;
+    my $lastTotal = 0;
 
     my $fetchPage;
     $fetchPage = sub {
-        my ($offset) = @_;
-        $apiFn->($accountId, { offset => $offset, limit => $pageLimit }, sub {
+        my $requestOffset = $startOffset + scalar(@accumulated);
+        my $requestLimit  = $pageLimit;
+        if (defined $maxItems) {
+            my $remaining = $maxItems - scalar(@accumulated);
+            $requestLimit = $remaining if $remaining < $requestLimit;
+        }
+        $apiFn->($accountId, { offset => $requestOffset, limit => $requestLimit }, sub {
             my ($data, $err) = @_;
             unless ($data) {
                 undef $fetchPage;
-                $done->(\@accumulated, $err);
+                $done->(\@accumulated, $err, $startOffset + scalar(@accumulated));
                 return;
             }
             my $items = $extractItems->($data);
+            my $itemCount = scalar(@{$items});
             push @accumulated, @{$items};
 
-            my $total = $data->{total} // 0;
+            # Overshoot trim: API may ignore a shrunk limit and return a full page.
+            if (defined $maxItems && scalar(@accumulated) > $maxItems) {
+                splice(@accumulated, $maxItems);
+            }
+
+            $lastTotal = $extractTotal->($data) // 0;
+
+            my $reachedMax = defined($maxItems) && scalar(@accumulated) >= $maxItems;
             # T-25-01: stop if current page returned no items (prevents infinite loop)
-            if (scalar(@accumulated) < $total && @{$items} > 0) {
-                $fetchPage->(scalar(@accumulated));
+            if (!$reachedMax && $itemCount > 0 && ($startOffset + scalar(@accumulated)) < $lastTotal) {
+                $fetchPage->();
             } else {
                 undef $fetchPage;
-                $done->(\@accumulated);
+                my $safeTotal;
+                if ($reachedMax) {
+                    # Advertise the true API total (if larger) so JiveLite requests the next block.
+                    my $filled = $startOffset + scalar(@accumulated);
+                    $safeTotal = $lastTotal > $filled ? $lastTotal : $filled;
+                } else {
+                    # List exhausted, empty page, or shrunken list: clamp to what was delivered (JVL-06).
+                    $safeTotal = $startOffset + scalar(@accumulated);
+                }
+                $done->(\@accumulated, undef, $safeTotal);
             }
         });
     };
 
-    $fetchPage->(0);
+    $fetchPage->();
+}
+
+# _fetchAllPages($args)
+# Backward-compatible wrapper around _fetchPages for the 7 existing play-all
+# call sites (unbounded fetch, 2-arg done callback -- the extra 3rd $safeTotal
+# arg is simply ignored by callers that only destructure ($allItems, $err)).
+sub _fetchAllPages {
+    my ($args) = @_;
+    _fetchPages($args);
 }
 
 # _userPlaylistsFeed($client, $callback, $args)
@@ -1807,19 +1952,20 @@ sub _userPlaylistsFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "userPlaylists:$accountId";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getUserPlaylists($acct, $params, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getUserPlaylists($acct, $params, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -1844,19 +1990,25 @@ sub _userPlaylistsFeed {
         delete $_playAllItemCache{$cacheKey};
         goto &_userPlaylistsFeed;
     } else {
-        Plugins::SpotOn::API::Client->getUserPlaylists($accountId, {
-            offset => $offset,
-            limit  => $limit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            # D-03: Exclude Made-For-You playlists from Library Playlists
-            my @user  = grep { !_isMadeForYou($_) } @{ $data->{items} || [] };
-            my @items = map  { _playlistItem($client, $_) } @user;
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                # D-03: Exclude Made-For-You playlists from Library Playlists
+                my @user  = grep { !_isMadeForYou($_) } @{$allItems};
+                my @items = map  { _playlistItem($client, $_) } @user;
+                $callback->({ items => \@items, offset => $offset, total => $total });
+            },
         });
     }
 }
@@ -1901,19 +2053,20 @@ sub _savedShowsFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;    # Spotify /me/shows max = 50
 
     my $accountId = _getAccountId($client);
 
     my $cacheKey = "savedShows:$accountId";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getSavedShows($acct, { %$params, _noCache => 1 }, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getSavedShows($acct, { %$params, _noCache => 1 }, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -1940,23 +2093,28 @@ sub _savedShowsFeed {
         delete $_playAllItemCache{$cacheKey};
         goto &_savedShowsFeed;
     } else {
-        Plugins::SpotOn::API::Client->getSavedShows($accountId, {
-            offset   => $offset,
-            limit    => $limit,
-            _noCache => 1,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
-            # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
-            my @items = map  { _showItem($client, $_->{show}) }
-                        grep { defined $_->{show} }
-                        map  { _normalizeLibraryItem($_, 'show') }
-                        @{ $data->{items} || [] };
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} });
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                # Pitfall 1: items are [{ added_at: "...", show: {...} }] — must unwrap {show}
+                # CR-01: null-show guard — same pattern as _playlistFeed (line 1719-1721)
+                my @items = map  { _showItem($client, $_->{show}) }
+                            grep { defined $_->{show} }
+                            map  { _normalizeLibraryItem($_, 'show') }
+                            @{$allItems};
+                $callback->({ items => \@items, offset => $offset, total => $total });
+            },
         });
     }
 }
@@ -2004,22 +2162,23 @@ sub _showFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('library') ? Plugins::SpotOn::API::Client->getLimit('library') : $qty;
 
     my $accountId = _getAccountId($client);
     my $hasFollowItem = ($accountId && $showUri =~ /^spotify:show:[A-Za-z0-9]+$/) ? 1 : 0;
 
     my $showCacheKey = "showEpisodes:$accountId:$showId";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getShowEpisodes($acct, $showId, $params, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all episodes via full pagination, no Follow button
         my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getShowEpisodes($acct, $showId, $params, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => 50,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -2043,37 +2202,43 @@ sub _showFeed {
         delete $_playAllItemCache{$showCacheKey};
         goto &_showFeed;  # re-enter with same @_ after cache eviction
     } else {
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
         # Offset correction: index 0 = Follow button, index N (N>0) = episode at API offset N-1
-        my $apiOffset = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
-        my $apiLimit  = ($hasFollowItem && $offset == 0 && $limit > 1) ? $limit - 1 : $limit;
+        my $apiOffset  = ($hasFollowItem && $offset > 0) ? $offset - 1 : $offset;
+        my $wantItems  = ($hasFollowItem && $offset == 0 && $qty > 1) ? $qty - 1 : $qty;
 
-        Plugins::SpotOn::API::Client->getShowEpisodes($accountId, $showId, {
-            offset => $apiOffset,
-            limit  => $apiLimit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
-            my @items = map { _episodeItem($client, $_, $showCtx) } @{ $data->{items} || [] };
-            if (!@items && !$hasFollowItem) {
-                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-            }
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('library'),
+            startOffset  => $apiOffset,
+            maxItems     => $wantItems,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                my $showCtx = { images => $showImages, id => $showId, uri => $showUri, name => $passthrough->{showName} // '' };
+                my @items = map { _episodeItem($client, $_, $showCtx) } @{$allItems};
+                if (!@items && !$hasFollowItem) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
 
-            if ($hasFollowItem && $offset == 0) {
-                unshift @items, {
-                    name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
-                    url         => \&SpotOnManageFollow,
-                    passthrough => [{ showUri => $showUri, accountId => $accountId }],
-                    type        => 'link',
-                    icon        => '/html/images/playlistadd.png',
-                };
-            }
+                if ($hasFollowItem && $offset == 0) {
+                    unshift @items, {
+                        name        => cstring($client, 'PLUGIN_SPOTON_MANAGE_FOLLOW'),
+                        url         => \&SpotOnManageFollow,
+                        passthrough => [{ showUri => $showUri, accountId => $accountId }],
+                        type        => 'link',
+                        icon        => '/html/images/playlistadd.png',
+                    };
+                }
 
-            my $total = ($data->{total} // 0) + ($hasFollowItem ? 1 : 0);
-            $callback->({ items => \@items, offset => $offset, total => $total });
+                my $advertisedTotal = ($total // 0) + ($hasFollowItem ? 1 : 0);
+                $callback->({ items => \@items, offset => $offset, total => $advertisedTotal });
+            },
         });
     }
 }
@@ -2419,55 +2584,70 @@ sub _podcastSearchFeed {
 # pagination (GH #130).
 # Per D-12: limit capped at 10 (Dev Mode). Dispatches to _showItem or _episodeItem.
 # Per Pitfall 4: episode search results use $episode->{show}{images} as artwork fallback.
+# _podcastSearchTypeFeed($client, $callback, $args, $passthrough)
+# GH #157: bounded multi-page fill for fixed-size JiveLite blocks — a
+# 210-item block against Spotify's dev-mode search limit (10) needs up to
+# 21 sequential calls; accepted per T-70-05, throttled by Client.pm's
+# inflight=1 sequencing.
 sub _podcastSearchTypeFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'show';
     my $offset = $args->{index}        // 0;
+    my $qty    = $args->{quantity} || 200;
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->search($accountId, {
-        q      => $query,
-        type   => $type,
-        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => $offset,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
-            return;
-        }
+    my %typeToKey = (show => 'shows', episode => 'episodes');
+    my $key       = $typeToKey{$type} // "${type}s";
 
-        my %typeToKey = (show => 'shows', episode => 'episodes');
-        my $key      = $typeToKey{$type} // "${type}s";
-        my $typeData = $data->{$key} || {};
-        my $resultItems = $typeData->{items} || [];
-
-        # R-4: map nameless entries to { ignore => 1 } placeholders instead of
-        # filtering them out — XMLBrowser skips ignore-items and decrements
-        # totalCount, so offset/total stay aligned with the API's paging.
-        my @items = map {
-            if (defined $_->{name} && $_->{name} =~ /\S/) {
-                ($type eq 'show') ? _showItem($client, $_) : _episodeItem($client, $_, undef);
-            } else {
-                { ignore => 1 };
+    _fetchPages({
+        accountId    => $accountId,
+        apiFn        => sub {
+            my ($acct, $params, $cb) = @_;
+            Plugins::SpotOn::API::Client->search($acct, {
+                q      => $query,
+                type   => $type,
+                limit  => $params->{limit},
+                offset => $params->{offset},
+            }, $cb);
+        },
+        pageLimit    => Plugins::SpotOn::API::Client->getLimit('search'),
+        startOffset  => $offset,
+        maxItems     => $qty,
+        extractItems => sub { ($_[0]->{$key} || {})->{items} || [] },
+        extractTotal => sub { ($_[0]->{$key} || {})->{total} },
+        done         => sub {
+            my ($allItems, $err, $total) = @_;
+            if (!@$allItems && $err) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
+                return;
             }
-        } @{$resultItems};
 
-        my $realCount = grep { !$_->{ignore} } @items;
-        if (!$realCount && !$offset) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
+            # R-4: map nameless entries to { ignore => 1 } placeholders instead of
+            # filtering them out — XMLBrowser skips ignore-items and decrements
+            # totalCount, so offset/total stay aligned with the API's paging.
+            my @items = map {
+                if (defined $_->{name} && $_->{name} =~ /\S/) {
+                    ($type eq 'show') ? _showItem($client, $_) : _episodeItem($client, $_, undef);
+                } else {
+                    { ignore => 1 };
+                }
+            } @{$allItems};
 
-        # R-5: Spotify rejects offset >= 1000 for tracks/albums/artists/playlists,
-        # but only >= 50 for shows/episodes in Dev Mode.
-        my $maxOffset = ($type eq 'show' || $type eq 'episode') ? 50 : 1000;
-        my $total = $typeData->{total} // 0;
-        $total = $maxOffset if $total > $maxOffset;
+            my $realCount = grep { !$_->{ignore} } @items;
+            if (!$realCount && !$offset) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
 
-        $callback->({ items => \@items, offset => $offset, total => $total });
+            # R-5: Spotify rejects offset >= 1000 for tracks/albums/artists/playlists,
+            # but only >= 50 for shows/episodes in Dev Mode.
+            my $maxOffset = ($type eq 'show' || $type eq 'episode') ? 50 : 1000;
+            $total = $maxOffset if $total > $maxOffset;
+
+            $callback->({ items => \@items, offset => $offset, total => $total });
+        },
     });
 }
 
@@ -2768,62 +2948,77 @@ sub _searchFeed {
 # _searchTypeFeed($client, $callback, $args, $passthrough)
 # Paginated drill-down into a single search type (track, album, artist, or playlist).
 # Per NAV-11: limit capped at 10 (Dev Mode). Maps LMS index/quantity to offset/limit.
+# _searchTypeFeed($client, $callback, $args, $passthrough)
+# GH #157: bounded multi-page fill for fixed-size JiveLite blocks — a
+# 210-item block against Spotify's dev-mode search limit (10) needs up to
+# 21 sequential calls; accepted per T-70-05, throttled by Client.pm's
+# inflight=1 sequencing.
 sub _searchTypeFeed {
     my ($client, $callback, $args, $passthrough) = @_;
 
     my $query  = $passthrough->{query} // '';
     my $type   = $passthrough->{type}  // 'track';
     my $offset = $args->{index}        // 0;
+    my $qty    = $args->{quantity} || 200;
 
     my $accountId = _getAccountId($client);
 
-    Plugins::SpotOn::API::Client->search($accountId, {
-        q      => $query,
-        type   => $type,
-        limit  => Plugins::SpotOn::API::Client->getLimit('search'),
-        offset => $offset,
-    }, sub {
-        my ($data, $err) = @_;
-        unless ($data) {
-            $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
-            return;
-        }
+    my %typeToKey = (
+        track    => 'tracks',
+        album    => 'albums',
+        artist   => 'artists',
+        playlist => 'playlists',
+    );
+    my $key = $typeToKey{$type} // "${type}s";
 
-        my %typeToKey = (
-            track    => 'tracks',
-            album    => 'albums',
-            artist   => 'artists',
-            playlist => 'playlists',
-        );
-        my $key       = $typeToKey{$type} // "${type}s";
-        my $typeData  = $data->{$key} || {};
-        my $resultItems = $typeData->{items} || [];
+    _fetchPages({
+        accountId    => $accountId,
+        apiFn        => sub {
+            my ($acct, $params, $cb) = @_;
+            Plugins::SpotOn::API::Client->search($acct, {
+                q      => $query,
+                type   => $type,
+                limit  => $params->{limit},
+                offset => $params->{offset},
+            }, $cb);
+        },
+        pageLimit    => Plugins::SpotOn::API::Client->getLimit('search'),
+        startOffset  => $offset,
+        maxItems     => $qty,
+        extractItems => sub { ($_[0]->{$key} || {})->{items} || [] },
+        extractTotal => sub { ($_[0]->{$key} || {})->{total} },
+        done         => sub {
+            my ($allItems, $err, $total) = @_;
+            if (!@$allItems && $err) {
+                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ], offset => $offset, total => 0 });
+                return;
+            }
 
-        # R-4: map nameless entries to { ignore => 1 } placeholders instead of
-        # filtering them out — XMLBrowser skips ignore-items and decrements
-        # totalCount, so offset/total stay aligned with the API's paging.
-        my %typeToItem = (
-            track    => \&_trackItem,
-            album    => \&_albumItem,
-            artist   => \&_artistItem,
-            playlist => \&_playlistItem,
-        );
-        my $itemFn = $typeToItem{$type} // \&_trackItem;
+            # R-4: map nameless entries to { ignore => 1 } placeholders instead of
+            # filtering them out — XMLBrowser skips ignore-items and decrements
+            # totalCount, so offset/total stay aligned with the API's paging.
+            my %typeToItem = (
+                track    => \&_trackItem,
+                album    => \&_albumItem,
+                artist   => \&_artistItem,
+                playlist => \&_playlistItem,
+            );
+            my $itemFn = $typeToItem{$type} // \&_trackItem;
 
-        my @items = map {
-            (defined $_->{name} && $_->{name} =~ /\S/) ? $itemFn->($client, $_) : { ignore => 1 }
-        } @{$resultItems};
+            my @items = map {
+                (defined $_->{name} && $_->{name} =~ /\S/) ? $itemFn->($client, $_) : { ignore => 1 }
+            } @{$allItems};
 
-        my $realCount = grep { !$_->{ignore} } @items;
-        if (!$realCount && !$offset) {
-            push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-        }
+            my $realCount = grep { !$_->{ignore} } @items;
+            if (!$realCount && !$offset) {
+                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+            }
 
-        # R-5: Spotify search rejects offset >= 1000 — cap advertised total.
-        my $total = $typeData->{total} // 0;
-        $total = 1000 if $total > 1000;
+            # R-5: Spotify search rejects offset >= 1000 — cap advertised total.
+            $total = 1000 if $total > 1000;
 
-        $callback->({ items => \@items, offset => $offset, total => $total });
+            $callback->({ items => \@items, offset => $offset, total => $total });
+        },
     });
 }
 
@@ -2889,22 +3084,23 @@ sub _artistAlbumsFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('artist_albums') ? Plugins::SpotOn::API::Client->getLimit('artist_albums') : $qty;
 
     my $accountId = _getAccountId($client);
     my $cacheKey  = "artistAlbums:$accountId:$artistId:$includeGroups";
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getArtistAlbums($acct, $artistId, {
+            include_groups => $includeGroups,
+            offset         => $params->{offset},
+            limit          => $params->{limit},
+        }, $cb);
+    };
+
     if ($isPlayAll && $offset == 0) {
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                Plugins::SpotOn::API::Client->getArtistAlbums($acct, $artistId, {
-                    include_groups => $includeGroups,
-                    offset         => $params->{offset},
-                    limit          => $params->{limit},
-                }, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => Plugins::SpotOn::API::Client->getLimit('artist_albums'),
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -2928,21 +3124,26 @@ sub _artistAlbumsFeed {
         delete $_playAllItemCache{$cacheKey};
         goto &_artistAlbumsFeed;
     } else {
-        Plugins::SpotOn::API::Client->getArtistAlbums($accountId, $artistId, {
-            include_groups => $includeGroups,
-            offset         => $offset,
-            limit          => $limit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
-            my @items = map { _albumItem($client, $_) } @{ $data->{items} || [] };
-            if (!@items) {
-                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-            }
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('artist_albums'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+                my @items = map { _albumItem($client, $_) } @{$allItems};
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+                $callback->({ items => \@items, offset => $offset, total => $total // 0 });
+            },
         });
     }
 }
@@ -2973,10 +3174,17 @@ sub _albumFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > Plugins::SpotOn::API::Client->getLimit('album_tracks') ? Plugins::SpotOn::API::Client->getLimit('album_tracks') : $qty;
 
     my $accountId = _getAccountId($client);
     my $albumCacheKey = "album:$accountId:$albumId";
+
+    # GH #157: hoisted getAlbumTracks apiFn closure, shared by both browse
+    # branches below (offset==0 continuation seed + offset>0 pages). The
+    # play-all branch's inline paginator stays independent/untouched (JVL-08).
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        Plugins::SpotOn::API::Client->getAlbumTracks($acct, $albumId, $params, $cb);
+    };
 
     if ($isPlayAll && $offset == 0) {
         # Play-all mode: first fetch full album for metadata + seed tracks, then paginate remaining
@@ -3071,6 +3279,8 @@ sub _albumFeed {
         goto &_albumFeed;  # re-enter with same @_ after cache eviction
     } elsif ($offset == 0) {
         # Initial browse load: fetch full album (includes first page of tracks in tracks.items).
+        # GH #157: if quantity exceeds the embedded seed tracks and the album has
+        # more, continue fetching via getAlbumTracks (embedded-seed + continuation).
         Plugins::SpotOn::API::Client->getAlbum($accountId, $albumId, sub {
             my $album = shift;
             unless ($album) {
@@ -3078,38 +3288,83 @@ sub _albumFeed {
                 return;
             }
 
-            my $images   = $album->{images}           || [];
-            my $artist0  = ($album->{artists} && @{$album->{artists}}) ? $album->{artists}[0]{name} : '';
-            my $total    = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
-            my $tracks   = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
+            my $images    = $album->{images}           || [];
+            my $artist0   = ($album->{artists} && @{$album->{artists}}) ? $album->{artists}[0]{name} : '';
+            my $total     = ($album->{tracks} && $album->{tracks}{total}) ? $album->{tracks}{total} : 0;
+            my $tracks    = ($album->{tracks} && $album->{tracks}{items}) ? $album->{tracks}{items} : [];
+            my $seedCount = scalar(@$tracks);
 
-            my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}, { albumReleaseDate => $album->{release_date} // '' }) } @{$tracks};
+            if ($total <= $seedCount || $qty <= $seedCount) {
+                # Embedded seed already covers the request -- no getAlbumTracks call needed.
+                # WR-03: deliver at most $qty items (bounded-fill contract); total stays
+                # the real album total so JiveLite can request the next block.
+                my $deliver = ($qty < $seedCount) ? $qty : $seedCount;
+                my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}, { albumReleaseDate => $album->{release_date} // '' }) } @{$tracks}[0 .. $deliver - 1];
 
-            if (!@items) {
-                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-            }
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
 
-            $callback->({ items => \@items, offset => 0, total => $total });
-        });
-    } else {
-        # Subsequent browse pages: use getAlbumTracks with correct offset.
-        Plugins::SpotOn::API::Client->getAlbumTracks($accountId, $albumId, {
-            offset => $offset,
-            limit  => $limit,
-        }, sub {
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                $callback->({ items => \@items, offset => 0, total => $total });
                 return;
             }
 
-            my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist, $albumName, { albumReleaseDate => $albumReleaseDate }) } @{ $data->{items} || [] };
+            # JiveLite case: quantity (up to 210) exceeds the <=50 embedded tracks
+            # and the album has more -- continue from where the seed left off.
+            my @deferredMeta;
+            _fetchPages({
+                accountId   => $accountId,
+                apiFn       => $apiFn,
+                pageLimit   => Plugins::SpotOn::API::Client->getLimit('album_tracks'),
+                startOffset => $seedCount,
+                maxItems    => $qty - $seedCount,
+                done        => sub {
+                    my ($fetched, $err, $combinedTotal) = @_;
+                    # WR-01: the embedded seed (@$tracks) is always non-empty here, so
+                    # test the continuation result itself -- surface auth errors only
+                    # when the getAlbumTracks fill failed and delivered nothing.
+                    if (!@$fetched && $err) {
+                        $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                        return;
+                    }
+                    # FIX-01: defer metadata cache writes.
+                    my @items = map { _albumTrackItem($client, $_, $images, $artist0, $album->{name}, { defer_cache => \@deferredMeta, albumReleaseDate => $album->{release_date} // '' }) } (@$tracks, @$fetched);
 
-            if (!@items) {
-                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-            }
+                    if (!@items) {
+                        push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                    }
 
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+                    $callback->({ items => \@items, offset => 0, total => $combinedTotal });
+                    _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
+                },
+            });
+        });
+    } else {
+        # Subsequent browse pages: bounded multi-page fill via getAlbumTracks (GH #157).
+        _fetchPages({
+            accountId   => $accountId,
+            apiFn       => $apiFn,
+            pageLimit   => Plugins::SpotOn::API::Client->getLimit('album_tracks'),
+            startOffset => $offset,
+            maxItems    => $qty,
+            done        => sub {
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
+
+                # FIX-01: defer metadata cache writes.
+                my @deferredMeta;
+                my @items = map { _albumTrackItem($client, $_, $albumImages, $albumArtist, $albumName, { defer_cache => \@deferredMeta, albumReleaseDate => $albumReleaseDate }) } @$allItems;
+
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
+
+                $callback->({ items => \@items, offset => $offset, total => $total });
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
+            },
         });
     }
 }
@@ -3260,7 +3515,6 @@ sub _playlistFeed {
     my $offset    = $args->{index}    // 0;
     my $isPlayAll = !defined($args->{quantity}) || ($args->{quantity} >= 500);
     my $qty       = $args->{quantity} || 200;
-    my $limit     = $qty > 100 ? 100 : $qty;    # Spotify playlist items max = 100
 
     my $accountId = _getAccountId($client);
 
@@ -3268,16 +3522,18 @@ sub _playlistFeed {
         ? sub { Plugins::SpotOn::API::Client->getWebPlayerPlaylistItems(@_) }
         : sub { Plugins::SpotOn::API::Client->getPlaylistItems(@_) };
 
+    my $apiFn = sub {
+        my ($acct, $params, $cb) = @_;
+        $fetchItems->($acct, $playlistId, $params, $cb);
+    };
+
     my $plCacheKey = ($webPlayer ? 'mfyplaylist:' : 'playlist:') . "$accountId:$playlistId";
 
     if ($isPlayAll && $offset == 0) {
         # Play-all mode: fetch all playlist tracks via full pagination
         _fetchAllPages({
             accountId    => $accountId,
-            apiFn        => sub {
-                my ($acct, $params, $cb) = @_;
-                $fetchItems->($acct, $playlistId, $params, $cb);
-            },
+            apiFn        => $apiFn,
             pageLimit    => 100,
             extractItems => sub { $_[0]->{items} || [] },
             done         => sub {
@@ -3308,33 +3564,42 @@ sub _playlistFeed {
         delete $_playAllItemCache{$plCacheKey};
         goto &_playlistFeed;  # re-enter with same @_ after cache eviction
     } else {
-        $fetchItems->($accountId, $playlistId, {
-            offset => $offset,
-            limit  => $limit,
-        }, sub {
-            # NON-UNIFORM site (review finding #4): error source may be
-            # sp_dc/Pathfinder (webPlayer mode) rather than PKCE.
-            # _authRequiredItem still works correctly here -- it checks
-            # accountNeedsMigration/needsReauth state, not the error source.
-            # Existing graceful-degradation behavior (no partial-cache
-            # fallback at this site) is otherwise unchanged.
-            my ($data, $err) = @_;
-            unless ($data) {
-                $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
-                return;
-            }
+        # Bounded multi-page fill for fixed-size block clients (GH #157).
+        _fetchPages({
+            accountId    => $accountId,
+            apiFn        => $apiFn,
+            pageLimit    => Plugins::SpotOn::API::Client->getLimit('playlist_items'),
+            startOffset  => $offset,
+            maxItems     => $qty,
+            extractItems => sub { $_[0]->{items} || [] },
+            done         => sub {
+                # NON-UNIFORM site (review finding #4): error source may be
+                # sp_dc/Pathfinder (webPlayer mode) rather than PKCE.
+                # _authRequiredItem still works correctly here -- it checks
+                # accountNeedsMigration/needsReauth state, not the error source.
+                # Existing graceful-degradation behavior (no partial-cache
+                # fallback at this site) is otherwise unchanged.
+                my ($allItems, $err, $total) = @_;
+                if (!@$allItems && $err) {
+                    $callback->({ items => [ _authRequiredItem($client, $accountId, $err) ] });
+                    return;
+                }
 
-            # T-03-10: Skip null track entries (local files in playlists return null track objects).
-            my @items = map  { _trackItem($client, $_->{track}) }
-                        grep { defined $_->{track} }
-                        map  { _normalizeLibraryItem($_, 'track') }
-                        @{ $data->{items} || [] };
+                # T-03-10: Skip null track entries (local files in playlists return null track objects).
+                # FIX-01: defer metadata cache writes to avoid blocking event loop with up to 210 SQLite INSERTs.
+                my @deferredMeta;
+                my @items = map  { _trackItem($client, $_->{track}, { defer_cache => \@deferredMeta }) }
+                            grep { defined $_->{track} }
+                            map  { _normalizeLibraryItem($_, 'track') }
+                            @{$allItems};
 
-            if (!@items) {
-                push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
-            }
+                if (!@items) {
+                    push @items, { name => cstring($client, 'PLUGIN_SPOTON_NO_RESULTS'), type => 'textarea' };
+                }
 
-            $callback->({ items => \@items, offset => $offset, total => $data->{total} // 0 });
+                $callback->({ items => \@items, offset => $offset, total => $total // 0 });
+                _flushDeferredMeta(undef, \@deferredMeta, 0) if @deferredMeta;
+            },
         });
     }
 }

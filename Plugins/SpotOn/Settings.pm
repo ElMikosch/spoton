@@ -53,6 +53,40 @@ sub new {
         'plugins/SpotOn/settings/pkce/manual',
         \&_pkceManualHandler
     );
+    # Spotify loopback redirect URIs use the `/login` path (both the bundled
+    # default identity and the playerauth Keymaster fallback whitelist only
+    # this path). Route it to the PKCE callback handler.
+    Slim::Web::Pages->addRawFunction(
+        'login',
+        \&_pkceCallbackHandler
+    );
+
+    # Register ZeroConf playback-authorization pairing endpoints
+    # (GH #147 plan 65-02, D-02 primary path)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/playerauth/start',
+        \&_playerAuthStartHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/playerauth/status',
+        \&_playerAuthStatusHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/playerauth/cancel',
+        \&_playerAuthCancelHandler
+    );
+
+    # Keymaster browser-fallback playback authorization for mDNS-unreachable
+    # environments -- Docker, VLANs, pCP/IPv6 (GH #147 plan 65-03, D-02
+    # secondary path)
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/playerauth/browser/start',
+        \&_playerAuthBrowserStartHandler
+    );
+    Slim::Web::Pages->addRawFunction(
+        'plugins/SpotOn/settings/playerauth/browser/manual',
+        \&_playerAuthBrowserManualHandler
+    );
 
     return $self;
 }
@@ -298,6 +332,47 @@ sub handler {
     # the template shows.
     $paramRef->{pkceConfigured} = _isPkceConfigured();
 
+    # Accounts exist but no PKCE tokens → user changed Client ID and needs
+    # to re-authorize.  Drives a prominent orange banner at the top.
+    $paramRef->{needsPkceReauth} =
+        (keys %{$paramRef->{accounts}} && !$paramRef->{pkceConfigured}) ? 1 : 0;
+
+    # GH #147 plan 65-02: playback-authorization state for the ACTIVE account.
+    # 'none'     -- no accounts at all (setup guide handles this case)
+    # 'required' -- flagged by the crash escalation (plan 65-01), OR the
+    #               account has PKCE tokens but no credentials.json yet
+    #               (fresh auth after the D-04 eager-derivation removal)
+    # 'ok'       -- otherwise
+    require Plugins::SpotOn::API::Credentials;
+    require Plugins::SpotOn::API::PKCE;
+    {
+        my $activeId = $paramRef->{activeAccount};
+        if (!$activeId) {
+            $paramRef->{playbackAuthState} = 'none';
+        }
+        elsif (Plugins::SpotOn::API::Credentials->needsPlaybackAuth($activeId)
+            || (!-f Plugins::SpotOn::API::Credentials->credentialsPathFor($activeId)
+                && Plugins::SpotOn::API::PKCE::loadTokens($activeId))) {
+            $paramRef->{playbackAuthState} = 'required';
+        }
+        else {
+            $paramRef->{playbackAuthState} = 'ok';
+        }
+
+        # 66-02 D-08: source of the active account's playback credentials
+        # ('zeroconf' | 'keymaster' | '' when unset/legacy) -- lets the
+        # template show which pairing path last provisioned playback,
+        # without a second Credentials.pm round-trip (the marker lives on
+        # the accounts pref entry itself, written by _installPairedCredentials).
+        $paramRef->{playbackCredSource} =
+            ($activeId && $paramRef->{accounts}{$activeId})
+            ? ($paramRef->{accounts}{$activeId}{playbackCredSource} || '')
+            : '';
+    }
+    # Computed by the same single source of truth startPairing uses, so the
+    # on-page instructions show the exact device label the user must pick.
+    $paramRef->{pairingDeviceName} = Plugins::SpotOn::API::Credentials->pairingDeviceName();
+
     # D-04 Channel 2 (AUTH-07, Plan 03 Task 3): Settings migration banner --
     # global check across ALL known accounts (deliberate asymmetry vs.
     # Plugin.pm's OPML hint, which checks only the active account since
@@ -356,17 +431,24 @@ sub _pkceStartHandler {
 
     return unless _csrfCheck($httpClient, $response);
 
-    # D-01: bundled (ncspot) Client-ID is now a full-access default — no
-    # gate. clientId pref empty => bundled mode, filled => custom mode.
+    # clientId pref empty => default (bundled ncspot Extended-Quota identity)
+    # mode, filled => custom mode (GH #147 plan 66-01, D-01).
     my $clientId  = _pkceClientId();
     my $isBundled = $prefs->get('clientId') ? 0 : 1;
 
     require Plugins::SpotOn::API::PKCE;
 
-    # D-02: bundled mode uses the fixed loopback redirect URI (copy-paste
-    # primary path, D-03); custom mode keeps the existing GitHub Pages relay.
+    # Default mode uses the dynamic loopback redirect pointing at LMS's own
+    # pkce/callback endpoint: the redirect CAN reach LMS when the browser
+    # runs on the LMS host; copy-paste remains the path for remote browsers.
+    # Custom mode keeps the GitHub Pages relay (custom Developer Apps
+    # register it as their redirect URI, per user decision). Scopes stay the
+    # full PKCE_SCOPES default -- the 'streaming' scope is still required by
+    # the playerauth browser fallback's derive path (D-03), not by this flow;
+    # this account-PKCE flow never derives playback credentials from its own
+    # token (D-02).
     my $redirectUri = $isBundled
-        ? Plugins::SpotOn::API::PKCE::LOOPBACK_REDIRECT_URI()
+        ? Plugins::SpotOn::API::PKCE::loopbackCallbackRedirectUri()
         : Plugins::SpotOn::API::PKCE::GITHUB_PAGES_REDIRECT_URI();
 
     my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
@@ -399,8 +481,10 @@ sub _pkceStartHandler {
         "Settings: PKCE auth flow started [nonce=" . substr($nonce, 0, 8) . "..."
         . ", mode=" . ($isBundled ? 'bundled' : 'custom') . "]");
 
-    # D-03: bundled flag tells the JS to skip the 30s auto-reload timer --
-    # the loopback redirect never reaches LMS, so copy-paste is the only path.
+    # 'bundled' means the ncspot Extended-Quota default identity again
+    # (D-01). The dynamic loopback redirect CAN reach LMS (browser on the
+    # LMS host), so the JS always arms the reload timer and no longer
+    # branches on this flag -- kept for payload compatibility only.
     _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce, bundled => ($isBundled ? 1 : 0) });
 }
 
@@ -443,6 +527,18 @@ sub _pkceCallbackHandler {
         $log->warn("Settings: PKCE callback — no verifier found for state (expired/reused)");
         _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
             'Authorization session expired or already used. Please try again from the Settings page.', 1);
+        return;
+    }
+
+    # T-65-11/T-65-13 (plan 65-03): reject purpose-tagged nonces -- a
+    # playerauth (Keymaster browser fallback) authorization must never
+    # complete through the account PKCE flow, whose finish path would
+    # overwrite the account's working Web API token file with the
+    # streaming-only Keymaster token pair.
+    if (($verifierData->{purpose} // '') ne '') {
+        $log->warn("Settings: PKCE callback — nonce belongs to the playback-authorization flow, rejected");
+        _renderPkceResultPage($httpClient, $response, string('PLUGIN_SPOTON_PKCE_ERROR'),
+            'This authorization belongs to the playback-authorization flow. Please paste it into the Authorize Playback section instead.', 1);
         return;
     }
 
@@ -510,6 +606,16 @@ sub _pkceManualHandler {
         return;
     }
 
+    # T-65-11/T-65-13 (plan 65-03): reject purpose-tagged nonces -- see the
+    # matching guard in _pkceCallbackHandler. Without this, pasting the
+    # playerauth loopback URL into THIS field would store the streaming-only
+    # Keymaster token pair over the account's working Web API tokens.
+    if (($verifierData->{purpose} // '') ne '') {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', message => 'This URL belongs to the playback-authorization flow — paste it into the Authorize Playback section instead' });
+        return;
+    }
+
     # D-04: read verifier/client_id/redirect_uri from the enriched cache
     # entry (stored at /pkce/start), not from live prefs -- race-free if the
     # user toggled bundled/custom mode mid-flow.
@@ -527,6 +633,245 @@ sub _pkceManualHandler {
         }
 
         _pkceFinishAuth($httpClient, $response, $tokenData, $clientId, 1);
+    });
+}
+
+# ============================================================
+# ZeroConf playback-authorization pairing (GH #147 plan 65-02)
+# /plugins/SpotOn/settings/playerauth/start (POST, CSRF-guarded)
+# Starts a --discover-once pairing helper for the given (or active) account.
+# accountId is validated with the same WR-03 discipline as removeAccount:
+# 8-char hex AND existence in the accounts pref, before it reaches any
+# filesystem path construction. Responses carry the symbolic reason enum
+# only, never raw stderr (T-65-07).
+# ============================================================
+sub _playerAuthStartHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::Credentials;
+
+    my $accountId = _postParam($response->request, 'accountId');
+    $accountId = $prefs->get('activeAccount')
+        unless defined $accountId && length $accountId;
+
+    my $accounts = $prefs->get('accounts') || {};
+    unless (defined $accountId
+        && $accountId =~ /\A[0-9a-f]{8}\z/
+        && exists $accounts->{$accountId}) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'unknown_account' });
+        return;
+    }
+
+    my ($ok, $reason) = Plugins::SpotOn::API::Credentials->startPairing($accountId);
+
+    if ($ok) {
+        _jsonResponse($httpClient, $response, {
+            status     => 'ok',
+            deviceName => Plugins::SpotOn::API::Credentials->pairingDeviceName(),
+        });
+    } else {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => $reason });
+    }
+}
+
+# ============================================================
+# /plugins/SpotOn/settings/playerauth/status (GET, read-only)
+# JSON passthrough of Credentials->pairingStatus(). Same unguarded class as
+# diagnosticBundle: read-only, exposes symbolic state only (T-65-07).
+# ============================================================
+sub _playerAuthStatusHandler {
+    my ($httpClient, $response) = @_;
+
+    require Plugins::SpotOn::API::Credentials;
+    _jsonResponse($httpClient, $response,
+        Plugins::SpotOn::API::Credentials->pairingStatus());
+}
+
+# ============================================================
+# /plugins/SpotOn/settings/playerauth/cancel (POST, CSRF-guarded)
+# Cancels a running pairing (idempotent when idle). Also the target of the
+# pagehide keepalive request in basic.html (gotcha 6).
+# ============================================================
+sub _playerAuthCancelHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::Credentials;
+    Plugins::SpotOn::API::Credentials->cancelPairing();
+
+    _jsonResponse($httpClient, $response, { status => 'ok' });
+}
+
+# ============================================================
+# Keymaster browser fallback (GH #147 plan 65-03, D-02 secondary path)
+# /plugins/SpotOn/settings/playerauth/browser/start (POST, CSRF-guarded)
+# For environments where mDNS pairing cannot work (Docker, VLANs, pCP/IPv6):
+# starts a PKCE authorization against Spotify's Keymaster client_id with
+# scope=streaming ONLY (the MA-verified recipe -- the 15 Web API scopes
+# belong to the account's own PKCE flow, not this one) and the loopback
+# redirect URI (gotcha 4: Spotify rejects non-loopback redirect URIs for
+# the Keymaster client_id, so the GitHub Pages relay is unusable here by
+# design). The resulting access token has the provenance Login5 accepts,
+# so --token-login derivation works again (deriveCredentialsFromToken).
+# ============================================================
+sub _playerAuthBrowserStartHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::PKCE;
+
+    # Resolve target account like playerauth/start: validated param or
+    # activeAccount (WR-03 discipline -- 8-char hex AND existence check
+    # before the id reaches any downstream use).
+    my $accountId = _postParam($response->request, 'accountId');
+    $accountId = $prefs->get('activeAccount')
+        unless defined $accountId && length $accountId;
+
+    my $accounts = $prefs->get('accounts') || {};
+    unless (defined $accountId
+        && $accountId =~ /\A[0-9a-f]{8}\z/
+        && exists $accounts->{$accountId}) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'unknown_account' });
+        return;
+    }
+
+    # WR-04 discipline: cryptographic randomness for verifier and nonce --
+    # the nonce->verifier binding is the CSRF guard for the manual endpoint.
+    my $verifier  = Plugins::SpotOn::API::PKCE::generateCodeVerifier();
+    my $challenge = Plugins::SpotOn::API::PKCE::generateCodeChallenge($verifier);
+
+    require Crypt::OpenSSL::Random;
+    my $nonce = unpack('H16', Crypt::OpenSSL::Random::random_bytes(8));
+
+    # State only needs to round-trip the nonce back through the pasted URL;
+    # the embedded callback_url is never navigated to (the loopback redirect
+    # never reaches LMS -- copy-paste is the only completion path).
+    my $request = $response->request;
+    my $host    = ($request && $request->header('Host')) || 'localhost';
+    my $scheme  = ($request && $request->header('X-Forwarded-Proto')) || 'http';
+    my $callbackUrl = $scheme . '://' . $host . '/plugins/SpotOn/settings/pkce/callback';
+    my $state = Plugins::SpotOn::API::PKCE::buildState($callbackUrl, $nonce);
+
+    # purpose='playerauth' tags this nonce for the browser/manual handler
+    # ONLY (T-65-11): the regular PKCE flow's handlers reject it, and the
+    # manual handler below rejects untagged (regular-PKCE) nonces -- one-time
+    # verifiers can never be replayed across the two flows.
+    Plugins::SpotOn::API::PKCE::storeVerifier($nonce, {
+        verifier     => $verifier,
+        redirect_uri => Plugins::SpotOn::API::PKCE::LOOPBACK_REDIRECT_URI(),
+        client_id    => Plugins::SpotOn::API::PKCE::KEYMASTER_CLIENT_ID(),
+        account_id   => $accountId,
+        purpose      => 'playerauth',
+    });
+
+    my $authUrl = Plugins::SpotOn::API::PKCE::buildAuthorizationUrl(
+        Plugins::SpotOn::API::PKCE::KEYMASTER_CLIENT_ID(),
+        $challenge,
+        $state,
+        Plugins::SpotOn::API::PKCE::LOOPBACK_REDIRECT_URI(),
+        ['streaming'],
+    );
+
+    main::INFOLOG && $log->is_info && $log->info(
+        "Settings: playerauth browser fallback started [nonce=" . substr($nonce, 0, 8) . "...]");
+
+    _jsonResponse($httpClient, $response, { url => $authUrl, nonce => $nonce });
+}
+
+# ============================================================
+# /plugins/SpotOn/settings/playerauth/browser/manual (POST, CSRF-guarded)
+# Completion endpoint for the browser fallback: the user pastes the
+# 127.0.0.1 URL their browser landed on after approving. The pasted URL is
+# only ever parsed for its code/state query parameters -- never fetched or
+# redirected to (T-49-10). Exchanges the code with the cached Keymaster
+# client_id/verifier/redirect_uri, then derives Login5-accepted credentials
+# via deriveCredentialsFromToken.
+#
+# CRITICAL (T-65-13): the Keymaster token pair is used once for derivation
+# and discarded -- it must NEVER be persisted to the account's token file,
+# which holds the still-working Web API refresh token. There is deliberately
+# no token-persistence call anywhere in this handler (region gate in
+# t/09_settings.t / plan verify enforces this).
+# ============================================================
+sub _playerAuthBrowserManualHandler {
+    my ($httpClient, $response) = @_;
+
+    return unless _csrfCheck($httpClient, $response);
+
+    require Plugins::SpotOn::API::PKCE;
+
+    my $callbackUrl = _postParam($response->request, 'callback_url');
+    unless ($callbackUrl) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'missing_url' });
+        return;
+    }
+
+    my %params = eval { URI->new($callbackUrl)->query_form };
+    if ($@ || !%params) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'parse_error' });
+        return;
+    }
+
+    my $code  = $params{code};
+    my $state = $params{state};
+
+    unless ($code && $state) {
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'missing_code' });
+        return;
+    }
+
+    my $verifierData = _pkceLoadVerifierDataFromState($state);
+
+    # REQUIRE purpose eq 'playerauth' (T-65-11): a nonce minted by the
+    # regular PKCE flow must never complete through this endpoint -- the two
+    # flows' one-time verifiers cannot be replayed across purposes.
+    unless ($verifierData && ($verifierData->{purpose} // '') eq 'playerauth') {
+        $log->warn("Settings: playerauth browser/manual -- no matching verifier for state "
+            . "(expired/reused/wrong flow)");
+        _jsonResponse($httpClient, $response,
+            { status => 'error', reason => 'session_expired' });
+        return;
+    }
+
+    my $verifier    = $verifierData->{verifier};
+    my $clientId    = $verifierData->{client_id};      # KEYMASTER_CLIENT_ID, cached at browser/start
+    my $redirectUri = $verifierData->{redirect_uri};   # loopback, cached at browser/start
+    my $accountId   = $verifierData->{account_id};
+
+    Plugins::SpotOn::API::PKCE::exchangeCode($code, $clientId, $verifier, $redirectUri, sub {
+        my ($tokenData, $err) = @_;
+
+        unless ($tokenData) {
+            $log->error("Settings: playerauth browser token exchange failed: " . ($err || 'unknown'));
+            _jsonResponse($httpClient, $response,
+                { status => 'error', reason => 'exchange_failed' });
+            return;
+        }
+
+        require Plugins::SpotOn::API::Credentials;
+        Plugins::SpotOn::API::Credentials->clearRateLimit($accountId);
+        Plugins::SpotOn::API::Credentials->deriveCredentialsFromToken(
+            $accountId, $tokenData->{access_token}, sub {
+                my ($ok, $reason) = @_;
+
+                if ($ok) {
+                    _jsonResponse($httpClient, $response, { status => 'ok' });
+                } else {
+                    # Symbolic reason enum only (T-65-07) -- never stderr.
+                    _jsonResponse($httpClient, $response,
+                        { status => 'error', reason => $reason });
+                }
+            });
     });
 }
 
@@ -656,74 +1001,61 @@ sub _pkceStoreAccount {
         # intentionally not signaled — rows carry no daemon-derived content.
         Plugins::SpotOn::HomeExtras::refresh() if $INC{'Plugins/SpotOn/HomeExtras.pm'};
 
-        # D-01: eagerly derive librespot credentials right here, while the
-        # PKCE access token is guaranteed fresh (it was exchanged seconds
-        # ago) -- this is the primary, user-facing trigger for AUTH-03
-        # credential derivation (RESEARCH Pitfall 6 / Open Question 2).
+        # scheduleInit stays: harmless without playback credentials
+        # (startHelper skips accounts without a usable credentials.json),
+        # and required so an account that ALREADY has valid ZeroConf-paired
+        # credentials gets its daemon after a token re-auth (D-06/D-07:
+        # unconditional trigger, never the first-account-only
+        # $needsDaemonStart conditional in _storeAccountPrefs; Pitfall 6).
+        require Plugins::SpotOn::Unified::DaemonManager;
+        Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
+
+        require Plugins::SpotOn::API::Client;
+        unless (Plugins::SpotOn::API::Client->limitsProbed()) {
+            Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
+        }
+
+        # D-02 (the core of phase 66): account-PKCE tokens are NEVER
+        # derivation input, for any client_id -- an account-PKCE token has
+        # the wrong provenance for Login5, so ZeroConf pairing (65-02) is the
+        # REQUIRED second auth step (the 65-05 hypothesis test proved this
+        # restriction is server-side and client_id-based, not fixable by
+        # picking a "better" client_id). The playerauth browser fallback
+        # (65-03) remains the alternate playback path for mDNS-unreachable
+        # networks (D-03). The response reports honest, already-known state:
+        # a re-auth of an already-paired account reports ready; a fresh
+        # account reports playback authorization required. The access token
+        # appears in no log line and is persisted nowhere beyond the
+        # storeTokens call above (T-65-09).
         require Plugins::SpotOn::API::Credentials;
-        # WR-02: clear D-05 rate-limit cooldown before deriving -- a fresh
-        # user-initiated PKCE exchange is exactly the event the cooldown
-        # should yield to. Without this, 3 prior derivation failures would
-        # block the re-auth's eager derivation for up to 30 minutes.
-        Plugins::SpotOn::API::Credentials->clearRateLimit($accountId);
-        Plugins::SpotOn::API::Credentials->deriveCredentials($accountId, sub {
-            my ($ok, $reason) = @_;
+        my $hasPlayback = (-f Plugins::SpotOn::API::Credentials->credentialsPathFor($accountId))
+            && !Plugins::SpotOn::API::Credentials->needsPlaybackAuth($accountId);
 
-            if ($ok) {
-                # D-06: trigger the daemon start unconditionally on
-                # derivation success -- do NOT rely on
-                # _storeAccountPrefs's $needsDaemonStart conditional above,
-                # which only fires for the very first account ever
-                # configured. Without this, "Add Another Account" and
-                # re-auth flows would otherwise wait up to 60s for the
-                # watchdog to notice the new credentials (Pitfall 6). This
-                # also covers D-07: DaemonManager's existing account-change
-                # detection in initHelpers/startHelper restarts any daemon
-                # already running with stale credentials.
-                require Plugins::SpotOn::Unified::DaemonManager;
-                Plugins::SpotOn::Unified::DaemonManager->scheduleInit();
-
-                require Plugins::SpotOn::API::Client;
-                unless (Plugins::SpotOn::API::Client->limitsProbed()) {
-                    Plugins::SpotOn::API::Client->probeEndpointLimits($accountId, sub {});
-                }
-
-                if ($isJson) {
-                    _jsonResponse($httpClient, $response,
-                        { status => 'ok', accountId => $accountId, connectReady => 1 });
-                } else {
-                    _renderPkceResultPage($httpClient, $response,
-                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
-                        string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
-                }
-            } else {
-                # D-02: a derivation failure is a warning, not a blocking
-                # error -- tokens are already stored and Browse/Search work
-                # via the PKCE access token (Phase 50). Never reflect the
-                # raw $reason into the user-facing page (T-51-10); log only
-                # a masked accountId.
-                $log->warn("Settings: PKCE credential derivation failed for account "
-                    . "$maskedId ($reason) -- Connect unavailable, account creation not blocked");
-
-                if ($isJson) {
-                    _jsonResponse($httpClient, $response,
-                        { status => 'ok', accountId => $accountId, connectReady => 0,
-                          warning => string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED') });
-                } else {
-                    _renderPkceResultPage($httpClient, $response,
-                        string('PLUGIN_SPOTON_PKCE_SUCCESS'),
-                        string('PLUGIN_SPOTON_CONNECT_DERIVE_FAILED'), 1);
-                }
-            }
-        });
+        if ($isJson) {
+            _jsonResponse($httpClient, $response,
+                { status => 'ok', accountId => $accountId,
+                  connectReady => ($hasPlayback ? 1 : 0),
+                  playbackAuthRequired => ($hasPlayback ? 0 : 1) });
+        } else {
+            _renderPkceResultPage($httpClient, $response,
+                string('PLUGIN_SPOTON_PKCE_SUCCESS'),
+                string('PLUGIN_SPOTON_PKCE_SUCCESS'), 0);
+        }
     });
 }
 
 # ============================================================
 # _pkceClientId()
 # Resolves the Client-ID to use for PKCE requests: the user's own Spotify
-# Developer App Client-ID if configured, otherwise SpotOn's bundled default
-# (same fallback logic as the rest of the codebase, e.g. TokenManager.pm).
+# Developer App Client-ID if configured, otherwise SpotOn's bundled
+# Extended-Quota Client ID (GH #147 plan 66-01, D-01). The bundled identity
+# has its OWN rate-limit bucket, unlike the previous default which shared
+# one global bucket with every librespot/Spotify Desktop user worldwide --
+# that shared bucket caused the severe 429 blockade this plan reverts.
+# Tokens minted with the bundled ID have the wrong provenance for Login5 and
+# are therefore never used for playback-credential derivation (phase-65 D-04
+# discipline re-instated) -- ZeroConf pairing (65-02) is the required second
+# auth step.
 # ============================================================
 sub _pkceClientId {
     my $custom = $prefs->get('clientId');
@@ -786,10 +1118,19 @@ sub _htmlEscape {
 # Renders a minimal centered-card HTML result page for the /pkce/callback
 # browser redirect flow. This page is opened via window.open() as a popup/
 # new tab and has no LMS navigation frame, so on success it self-closes
-# (window.close()) after 3 seconds instead of redirecting to Settings --
-# a redirect here would strand the user on a bare Settings page without the
-# Material Skin wrapper. Error pages show a link back to Settings instead
-# (the user may need to read the error before leaving).
+# (window.close()) after 2 seconds instead of redirecting itself to Settings
+# -- a self-redirect here would strand the user on a bare Settings page
+# without the Material Skin wrapper. Error pages show a link back to
+# Settings instead (the user may need to read the error before leaving).
+#
+# D-06 (forum #257): Classic Skin's ORIGINAL Settings tab (window.opener --
+# same-origin, since it's the LMS host that opened this popup) does not
+# auto-refresh after OAuth completes, leaving it showing stale
+# not-connected state until the user manually reloads. On success we
+# navigate window.opener to the Settings page (triggering a fresh render
+# with the new account state) before self-closing this popup. Material
+# Skin already refreshes its own Settings view via AJAX, so the extra
+# opener navigation is harmless there.
 # ============================================================
 sub _renderPkceResultPage {
     my ($httpClient, $response, $title, $message, $isError) = @_;
@@ -800,8 +1141,17 @@ sub _renderPkceResultPage {
 
     my $action = $isError
         ? qq{<p><a href="$settingsUrl">} . _htmlEscape(string('PLUGIN_SPOTON_NAME')) . qq{</a></p>}
-        : qq{<script>setTimeout(function(){ try { window.close(); } catch(e) {} }, 3000);</script>
-<p style="color:#b3b3b3; font-size:0.9em">This tab will close automatically. If not, close it manually and refresh your SpotOn Settings page.</p>};
+        : qq{<script>
+setTimeout(function() {
+    try {
+        if (window.opener && !window.opener.closed) {
+            window.opener.location.href = "$settingsUrl";
+        }
+    } catch (e) {}
+    try { window.close(); } catch (e) {}
+}, 2000);
+</script>
+<p style="color:#b3b3b3; font-size:0.9em">This tab will close automatically and your SpotOn Settings page will refresh. If not, close it manually and refresh Settings yourself.</p>};
 
     my $html = qq{<!DOCTYPE html>
 <html>

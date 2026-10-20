@@ -817,6 +817,19 @@ PLUGIN_SPOTON_NO_RESULTS
 	PL	Brak wyników
 	SV	Inga resultat
 
+PLUGIN_SPOTON_RATE_LIMITED
+	CS	Dočasně omezeno — zkuste to prosím za chvíli znovu
+	DA	Midlertidigt hastighedsbegrænset — prøv venligst igen om lidt
+	DE	Vorübergehend gedrosselt — bitte in Kürze erneut versuchen
+	EN	Temporarily rate limited — please try again shortly
+	ES	Temporalmente limitado — por favor, inténtelo de nuevo en breve
+	FR	Temporairement limité — veuillez réessayer dans un instant
+	IT	Temporaneamente limitato — riprovare tra poco
+	NL	Tijdelijk beperkt — probeer het zo opnieuw
+	NO	Midlertidig hastighetsbegrenset — prøv igjen om litt
+	PL	Tymczasowo ograniczono — spróbuj ponownie za chwilę
+	SV	Tillfälligt hastighetsbegränsad — försök igen om en stund
+
 PLUGIN_SPOTON_ARTIST_VIEW
 	CS	SpotOn: Zobrazit interpreta
 	DA	SpotOn: Vis kunstner
@@ -1000,17 +1013,17 @@ PLUGIN_SPOTON_CLIENT_ID_SETTINGS
 	SV	Anpassad Spotify App
 
 PLUGIN_SPOTON_CLIENT_ID_DESC
-	CS	Volitelné: Zadejte vlastní Client ID Spotify Developer App pro vyhrazený limit API požadavků. Bez vlastního ID SpotOn používá sdílené Client ID se sdíleným přístupem Extended Quota.
-	DA	Valgfrit: Indtast dit eget Spotify Developer App Client-ID for en dedikeret API-hastighedsgrænse. Uden et brugerdefineret ID bruger SpotOn det medfølgende Client-ID med delt Extended Quota-adgang.
-	DE	Empfohlen: Gib die Client-ID deiner eigenen Spotify Developer App für ein dediziertes API-Ratenlimit ein. Bei Dev-Mode-Einschränkungen (HTTP 400/403) kannst du das Feld leer lassen — SpotOn nutzt dann eine geteilte Community-Client-ID als Notlösung (ohne explizite Zustimmung des Projekt-Maintainers).
-	EN	Recommended: Enter your own Spotify Developer App Client ID for a dedicated API rate limit. If your app has Dev Mode restrictions (HTTP 400/403), you can leave this empty to use the bundled fallback — a shared community Client ID used without explicit permission from its maintainer.
-	ES	Opcional: Introduce el Client ID de tu propia App de Spotify Developer para un límite de solicitudes de API dedicado. Sin un ID personalizado, SpotOn usa el Client ID incluido con acceso Extended Quota compartido.
-	FR	Facultatif : saisissez le Client ID de votre propre application Spotify Developer pour une limite de requêtes API dédiée. Sans ID personnalisé, SpotOn utilise le Client ID intégré avec un accès Extended Quota partagé.
-	IT	Facoltativo: inserisci il Client ID della tua Spotify Developer App per un limite di richieste API dedicato. Senza un ID personalizzato, SpotOn utilizza il Client ID incluso con accesso Extended Quota condiviso.
-	NL	Optioneel: voer het Client-ID van uw eigen Spotify Developer App in voor een toegewezen API-snelheidslimiet. Zonder een eigen ID gebruikt SpotOn het meegeleverde Client-ID met gedeelde Extended Quota-toegang.
-	NO	Valgfritt: Skriv inn Client-ID-en til din egen Spotify Developer App for en dedikert API-hastighetsgrense. Uten en egendefinert ID bruker SpotOn det medfølgende Client-ID-et med delt Extended Quota-tilgang.
-	PL	Opcjonalnie: wpisz Client ID własnej aplikacji Spotify Developer, aby uzyskać dedykowany limit zapytań API. Bez własnego ID SpotOn korzysta z wbudowanego Client ID ze współdzielonym dostępem Extended Quota.
-	SV	Valfritt: Ange Client-ID:t för din egen Spotify Developer App för en dedikerad API-hastighetsgräns. Utan ett anpassat ID använder SpotOn det medföljande Client-ID:t med delad Extended Quota-åtkomst.
+	CS	SpotOn je dodáván s vestavěným Client ID, které funguje bez dalšího nastavení. Vytvoření vlastní Spotify Developer App vám poskytne soukromou kvótu API bez sdílených limitů požadavků.
+	DA	SpotOn leveres med et indbygget Client-ID, der fungerer med det samme. Hvis du opretter din egen Spotify Developer App, får du en privat API-kvote uden delte hastighedsgrænser.
+	DE	SpotOn wird mit einer integrierten Client-ID ausgeliefert, die sofort funktioniert. Wenn du deine eigene Spotify Developer App erstellst, erhältst du ein privates API-Kontingent ohne geteilte Ratenlimits.
+	EN	SpotOn ships a bundled Client ID that works out of the box. Creating your own Spotify Developer App gives you a private API quota with no shared rate limits.
+	ES	SpotOn incluye un Client ID integrado que funciona desde el primer momento. Crear tu propia App de Spotify Developer te da una cuota de API privada sin límites de solicitudes compartidos.
+	FR	SpotOn est livré avec un Client ID intégré qui fonctionne immédiatement. Créer votre propre application Spotify Developer vous donne un quota d'API privé, sans limites de requêtes partagées.
+	IT	SpotOn include un Client ID integrato che funziona subito. Creare la tua Spotify Developer App ti offre una quota API privata senza limiti di richieste condivisi.
+	NL	SpotOn wordt geleverd met een ingebouwd Client-ID dat direct werkt. Als u uw eigen Spotify Developer App aanmaakt, krijgt u een privé API-quotum zonder gedeelde snelheidslimieten.
+	NO	SpotOn leveres med en innebygd Client-ID som fungerer med en gang. Hvis du oppretter din egen Spotify Developer App, får du en privat API-kvote uten delte hastighetsgrenser.
+	PL	SpotOn jest dostarczany z wbudowanym Client ID, które działa od razu. Utworzenie własnej aplikacji Spotify Developer daje ci prywatny limit API bez współdzielonych limitów zapytań.
+	SV	SpotOn levereras med ett inbyggt Client-ID som fungerar direkt. Om du skapar din egen Spotify Developer App får du en privat API-kvot utan delade hastighetsgränser.
 
 PLUGIN_SPOTON_CLIENT_ID_PLACEHOLDER
 	CS	Spotify Client-ID (32 znaků, alfanumerické)
@@ -1051,31 +1064,97 @@ PLUGIN_SPOTON_REGISTER_APP_LINK
 	PL	Zarejestruj własną aplikację
 	SV	Registrera din egen app
 
-PLUGIN_SPOTON_BUNDLED_MODE_INFO
-	CS	Používá se sdílené Client ID s přístupem Extended Quota. Všechny funkce API jsou dostupné bez vlastní Spotify Developer App.
-	DA	Bruger det medfølgende Client-ID med Extended Quota-adgang. Alle API-funktioner er tilgængelige uden en personlig Spotify Developer App.
-	DE	Notlösung: Verwendet eine geteilte Community-Client-ID (ohne explizite Zustimmung des Maintainers). Bitte registriere eine eigene Spotify Developer App für ein dediziertes Ratenlimit.
-	EN	Fallback mode: Using a shared community Client ID (without explicit permission from its maintainer). Consider registering your own Spotify Developer App for a dedicated rate limit.
-	ES	Usando el Client ID incluido con acceso Extended Quota. Todas las funciones de la API están disponibles sin una App de Spotify Developer personal.
-	FR	Utilisation du Client ID intégré avec accès Extended Quota. Toutes les fonctionnalités de l'API sont disponibles sans application Spotify Developer personnelle.
-	IT	Utilizzo del Client ID incluso con accesso Extended Quota. Tutte le funzionalità API sono disponibili senza una Spotify Developer App personale.
-	NL	Gebruikt het meegeleverde Client-ID met Extended Quota-toegang. Alle API-functies zijn beschikbaar zonder een eigen Spotify Developer App.
-	NO	Bruker det medfølgende Client-ID-et med Extended Quota-tilgang. Alle API-funksjoner er tilgjengelige uten en personlig Spotify Developer App.
-	PL	Używane jest wbudowane Client ID z dostępem Extended Quota. Wszystkie funkcje API są dostępne bez własnej aplikacji Spotify Developer.
-	SV	Använder det medföljande Client-ID:t med Extended Quota-åtkomst. Alla API-funktioner är tillgängliga utan en egen Spotify Developer App.
+PLUGIN_SPOTON_CUSTOM_APP_TITLE
+	CS	Spravovat vlastní Spotify App
+	DA	Administrer brugerdefineret Spotify App
+	DE	Eigene Spotify App verwalten
+	EN	Manage Custom Spotify App
+	ES	Gestionar App de Spotify personalizada
+	FR	Gérer l'application Spotify personnalisée
+	IT	Gestisci app Spotify personalizzata
+	NL	Aangepaste Spotify App beheren
+	NO	Administrer egendefinert Spotify App
+	PL	Zarządzaj własną aplikacją Spotify
+	SV	Hantera anpassad Spotify App
 
-PLUGIN_SPOTON_DEVMODE_QUOTA_WARNING
-	CS	Vaše Spotify Developer App je v režimu Dev Mode s omezeným přístupem k API (méně výsledků vyhledávání, některé endpointy nedostupné). Odstraňte výše uvedené Client ID a použijte místo toho vestavěný režim Extended Quota.
-	DA	Din Spotify Developer App er i Dev Mode med begrænset API-adgang (færre søgeresultater, nogle endpoints utilgængelige). Fjern dit Client-ID ovenfor for i stedet at bruge den medfølgende Extended Quota-tilstand.
-	DE	Deine Spotify Developer App befindet sich im Dev Mode mit eingeschränktem API-Zugriff (reduzierte Suchergebnisse, manche Endpunkte nicht verfügbar). Entferne oben deine Client-ID, um stattdessen den integrierten Extended-Quota-Modus zu nutzen.
-	EN	Your Spotify Developer App is in Dev Mode with restricted API access (reduced search results, some endpoints unavailable). Remove your Client ID above to use the bundled Extended Quota mode instead.
-	ES	Tu App de Spotify Developer está en Dev Mode con acceso API restringido (resultados de búsqueda reducidos, algunos endpoints no disponibles). Elimina tu Client ID arriba para usar en su lugar el modo Extended Quota incluido.
-	FR	Votre application Spotify Developer est en Dev Mode avec un accès API restreint (résultats de recherche réduits, certains endpoints indisponibles). Supprimez votre Client ID ci-dessus pour utiliser à la place le mode Extended Quota intégré.
-	IT	La tua Spotify Developer App è in Dev Mode con accesso API limitato (risultati di ricerca ridotti, alcuni endpoint non disponibili). Rimuovi il Client ID sopra per usare invece la modalità Extended Quota inclusa.
-	NL	Uw Spotify Developer App staat in Dev Mode met beperkte API-toegang (minder zoekresultaten, sommige endpoints niet beschikbaar). Verwijder uw Client-ID hierboven om in plaats daarvan de meegeleverde Extended Quota-modus te gebruiken.
-	NO	Din Spotify Developer App er i Dev Mode med begrenset API-tilgang (færre søkeresultater, enkelte endepunkter utilgjengelige). Fjern Client-ID-en din ovenfor for å bruke den medfølgende Extended Quota-modusen i stedet.
-	PL	Twoja aplikacja Spotify Developer działa w trybie Dev Mode z ograniczonym dostępem do API (mniej wyników wyszukiwania, niektóre endpointy niedostępne). Usuń powyższe Client ID, aby zamiast tego korzystać z wbudowanego trybu Extended Quota.
-	SV	Din Spotify Developer App är i Dev Mode med begränsad API-åtkomst (färre sökresultat, vissa endpoints otillgängliga). Ta bort ditt Client-ID ovan för att istället använda det medföljande Extended Quota-läget.
+PLUGIN_SPOTON_CUSTOM_APP_SETUP
+	CS	Doporučeno: Vytvořte si vlastní Spotify Developer App
+	DA	Anbefalet: Opret din egen Spotify Developer App
+	DE	Empfohlen: Eigene Spotify Developer App erstellen
+	EN	Recommended: Create your own Spotify Developer App
+	ES	Recomendado: Crea tu propia App de Spotify Developer
+	FR	Recommandé : créez votre propre application Spotify Developer
+	IT	Consigliato: crea la tua Spotify Developer App
+	NL	Aanbevolen: maak uw eigen Spotify Developer App aan
+	NO	Anbefalt: Opprett din egen Spotify Developer App
+	PL	Zalecane: Utwórz własną aplikację Spotify Developer
+	SV	Rekommenderas: Skapa din egen Spotify Developer App
+
+PLUGIN_SPOTON_PKCE_REAUTH_BANNER
+	CS	Client ID bylo změněno — pro obnovení přístupu k API znovu připojte svůj účet.
+	DA	Client-ID er blevet ændret — forbind din konto igen for at gendanne API-adgang.
+	DE	Die Client-ID wurde geändert — verbinde dein Konto erneut, um den API-Zugriff wiederherzustellen.
+	EN	Client ID was changed — reconnect your account to restore API access.
+	ES	El Client ID ha cambiado — vuelve a conectar tu cuenta para restaurar el acceso a la API.
+	FR	Le Client ID a été modifié — reconnectez votre compte pour rétablir l'accès à l'API.
+	IT	Il Client ID è stato modificato — ricollega il tuo account per ripristinare l'accesso API.
+	NL	De Client-ID is gewijzigd — verbind uw account opnieuw om de API-toegang te herstellen.
+	NO	Client-ID ble endret — koble til kontoen din på nytt for å gjenopprette API-tilgangen.
+	PL	Client ID zostało zmienione — połącz ponownie swoje konto, aby przywrócić dostęp do API.
+	SV	Client-ID har ändrats — anslut ditt konto igen för att återställa API-åtkomst.
+
+PLUGIN_SPOTON_CLIENT_ID_REAUTH_HINT
+	CS	Změna Client ID vyžaduje opětovnou autorizaci všech připojených účtů.
+	DA	Ændring af Client-ID kræver ny godkendelse af alle tilknyttede konti.
+	DE	Eine Änderung der Client-ID erfordert eine erneute Autorisierung aller verbundenen Konten.
+	EN	Changing the Client ID requires re-authorization of all connected accounts.
+	ES	Cambiar el Client ID requiere una nueva autorización de todas las cuentas conectadas.
+	FR	La modification du Client ID nécessite une nouvelle autorisation de tous les comptes connectés.
+	IT	La modifica del Client ID richiede una nuova autorizzazione di tutti gli account collegati.
+	NL	Het wijzigen van de Client-ID vereist opnieuw autoriseren van alle verbonden accounts.
+	NO	Endring av Client-ID krever ny autorisering av alle tilkoblede kontoer.
+	PL	Zmiana Client ID wymaga ponownej autoryzacji wszystkich połączonych kont.
+	SV	Ändring av Client-ID kräver ny auktorisering av alla anslutna konton.
+
+PLUGIN_SPOTON_CUSTOM_APP_REMOVE
+	CS	Odebrat vlastní App ID a použít integrované ID
+	DA	Fjern tilpasset App-ID og brug det integrerede ID
+	DE	Eigene App-ID entfernen und integrierte ID verwenden
+	EN	Remove custom App ID and use bundled ID
+	ES	Eliminar App ID personalizado y usar el ID integrado
+	FR	Supprimer l'ID d'app personnalisé et utiliser l'ID intégré
+	IT	Rimuovi l'ID app personalizzato e usa l'ID integrato
+	NL	Aangepaste App-ID verwijderen en ingebouwde ID gebruiken
+	NO	Fjern tilpasset App-ID og bruk det integrerte ID-et
+	PL	Usuń niestandardowe App ID i użyj wbudowanego ID
+	SV	Ta bort anpassat App-ID och använd det inbyggda ID:t
+
+PLUGIN_SPOTON_BUNDLED_SHARED_QUOTA_HINT
+	CS	Vestavěné Client ID je sdíleno napříč všemi instalacemi SpotOn. Během špičkového vytížení může docházet k omezování rychlosti požadavků. Pro nejlepší zážitek si níže vytvořte vlastní Spotify Developer App.
+	DA	Det medfølgende Client-ID deles på tværs af alle SpotOn-installationer. Der kan forekomme hastighedsbegrænsning i spidsbelastningsperioder. For den bedste oplevelse bør du oprette din egen Spotify Developer App nedenfor.
+	DE	Die integrierte Client-ID wird von allen SpotOn-Installationen gemeinsam genutzt. Bei Spitzenlast kann es zu Ratenbegrenzungen kommen. Für die beste Erfahrung erstelle unten deine eigene Spotify Developer App.
+	EN	The bundled Client ID is shared across all SpotOn installations. Rate limiting may occur during peak usage. For the best experience, create your own Spotify Developer App below.
+	ES	El Client ID incluido se comparte entre todas las instalaciones de SpotOn. Puede producirse limitación de velocidad durante horas de máximo uso. Para la mejor experiencia, crea tu propia App de Spotify Developer a continuación.
+	FR	Le Client ID intégré est partagé entre toutes les installations de SpotOn. Une limitation du débit peut survenir en période de forte affluence. Pour une meilleure expérience, créez votre propre application Spotify Developer ci-dessous.
+	IT	Il Client ID incluso è condiviso tra tutte le installazioni di SpotOn. Durante i picchi di utilizzo può verificarsi una limitazione della velocità. Per la migliore esperienza, crea la tua Spotify Developer App qui sotto.
+	NL	Het meegeleverde Client-ID wordt gedeeld door alle SpotOn-installaties. Tijdens piekgebruik kan snelheidsbeperking optreden. Voor de beste ervaring maakt u hieronder uw eigen Spotify Developer App aan.
+	NO	Det medfølgende Client-ID-et deles på tvers av alle SpotOn-installasjoner. Hastighetsbegrensning kan forekomme ved høy belastning. For den beste opplevelsen bør du opprette din egen Spotify Developer App nedenfor.
+	PL	Wbudowane Client ID jest współdzielone przez wszystkie instalacje SpotOn. W okresach szczytowego obciążenia może wystąpić ograniczanie liczby żądań. Aby uzyskać najlepsze wrażenia, utwórz poniżej własną aplikację Spotify Developer.
+	SV	Det medföljande Client-ID:t delas mellan alla SpotOn-installationer. Hastighetsbegränsning kan förekomma vid hög belastning. För bästa upplevelse, skapa din egen Spotify Developer App nedan.
+
+PLUGIN_SPOTON_CUSTOM_QUOTA_OK
+	CS	Používáte vlastní Client ID — soukromá kvóta API, žádné sdílené limity požadavků.
+	DA	Du bruger dit eget Client-ID — privat API-kvote, ingen delte hastighedsgrænser.
+	DE	Du verwendest deine eigene Client-ID — privates API-Kontingent, keine geteilten Ratenlimits.
+	EN	Using your own Client ID — private API quota, no shared rate limits.
+	ES	Estás usando tu propio Client ID — cuota de API privada, sin límites de solicitudes compartidos.
+	FR	Vous utilisez votre propre Client ID — quota d'API privé, sans limites de requêtes partagées.
+	IT	Stai usando il tuo Client ID — quota API privata, senza limiti di richieste condivisi.
+	NL	U gebruikt uw eigen Client-ID — privé API-quotum, geen gedeelde snelheidslimieten.
+	NO	Du bruker din egen Client-ID — privat API-kvote, ingen delte hastighetsgrenser.
+	PL	Używasz własnego Client ID — prywatny limit API, bez współdzielonych limitów zapytań.
+	SV	Du använder ditt eget Client-ID — privat API-kvot, inga delade hastighetsgränser.
+
 
 PLUGIN_SPOTON_BUNDLED_ID_REVOKED
 	CS	Sdílené Spotify Client ID již není k dispozici. Vytvořte prosím vlastní Spotify Developer App a zadejte její Client ID výše pro obnovení přístupu.
@@ -1310,6 +1389,19 @@ PLUGIN_SPOTON_SETTINGS_PLAYER_HINT
 	NO	Velg en spiller ovenfor for å endre innstillingene.
 	PL	Wybierz odtwarzacz powyżej, aby zmienić jego ustawienia.
 	SV	Välj en spelare ovan för att ändra dess inställningar.
+
+PLUGIN_SPOTON_SETTINGS_ACCOUNT_SECTION
+	CS	Účet
+	DA	Konto
+	DE	Konto
+	EN	Account
+	ES	Cuenta
+	FR	Compte
+	IT	Account
+	NL	Account
+	NO	Konto
+	PL	Konto
+	SV	Konto
 
 PLUGIN_SPOTON_SETTINGS_GLOBAL_SECTION
 	CS	Globální nastavení
@@ -1649,32 +1741,6 @@ PLUGIN_SPOTON_SETUP_TROUBLESHOOT_LINK
 	PL	Zobacz przewodnik rozwiązywania problemów
 	SV	Se felsökningsguiden
 
-PLUGIN_SPOTON_SETUP_BROWSE_TITLE
-	CS	Hotovo — Spotify Browse je připraven
-	DA	Færdig — Spotify Browse er klar
-	DE	Fertig — Spotify Browse ist bereit
-	EN	Done — Spotify Browse is ready
-	ES	Listo — Spotify Browse está listo
-	FR	Terminé — Spotify Browse est prêt
-	IT	Fatto — Spotify Browse è pronto
-	NL	Klaar — Spotify Browse is gereed
-	NO	Ferdig — Spotify Browse er klar
-	PL	Gotowe — Spotify Browse jest gotowy
-	SV	Klart — Spotify Browse är redo
-
-PLUGIN_SPOTON_SETUP_BROWSE_DESC
-	CS	Po propojení účtu můžete Spotify používat přímo v LMS: vyhledávání, knihovna, playlisty a další.
-	DA	Efter kontotilknytningen kan du bruge Spotify direkte i LMS: søgning, bibliotek, playlister og mere.
-	DE	Nach der Kontoeinrichtung kannst du Spotify direkt in LMS nutzen: Suche, Bibliothek, Playlists und mehr.
-	EN	After connecting your account you can use Spotify directly in LMS: search, library, playlists and more.
-	ES	Después de conectar tu cuenta puedes usar Spotify directamente en LMS: búsqueda, biblioteca, playlists y más.
-	FR	Après la connexion de votre compte, vous pouvez utiliser Spotify directement dans LMS : recherche, bibliothèque, playlists et plus.
-	IT	Dopo aver collegato il tuo account puoi usare Spotify direttamente in LMS: ricerca, libreria, playlist e altro.
-	NL	Na het koppelen van uw account kunt u Spotify direct in LMS gebruiken: zoeken, bibliotheek, playlists en meer.
-	NO	Etter kontotilkoblingen kan du bruke Spotify direkte i LMS: søk, bibliotek, spillelister og mer.
-	PL	Po połączeniu konta możesz korzystać ze Spotify bezpośrednio w LMS: wyszukiwanie, biblioteka, playlisty i więcej.
-	SV	Efter kontoanslutningen kan du använda Spotify direkt i LMS: sök, bibliotek, spellistor och mer.
-
 PLUGIN_SPOTON_SETUP_PLAYBACK_TITLE
 	CS	Spotify Connect (volitelné)
 	DA	Spotify Connect (valgfrit)
@@ -1689,43 +1755,82 @@ PLUGIN_SPOTON_SETUP_PLAYBACK_TITLE
 	SV	Spotify Connect (valfritt)
 
 PLUGIN_SPOTON_SETUP_PLAYBACK_DESC
-	CS	Pro streamování hudby z aplikace Spotify na přehrávač se připojte k příslušnému přehrávači (ne serveru). Connect se nastavuje zvlášť pro každý přehrávač — viz Nastavení přehrávače.
-	DA	For at streame musik fra Spotify-appen til en afspiller skal du oprette forbindelse til den pågældende afspiller (ikke serveren). Connect opsættes separat per afspiller — se Afspillerindstillinger.
-	DE	Um Musik von der Spotify App an einen Player zu streamen, verbinde dich mit dem jeweiligen Player (nicht dem Server). Connect wird pro Player separat eingerichtet — siehe Player-Einstellungen.
-	EN	To stream music from the Spotify app to a player, connect to the specific player (not the server). Connect is set up separately per player — see Player Settings.
-	ES	Para transmitir música desde la app de Spotify a un reproductor, conéctate al reproductor específico (no al servidor). Connect se configura por separado para cada reproductor — consulta Ajustes del reproductor.
-	FR	Pour diffuser de la musique depuis l'application Spotify vers un lecteur, connectez-vous au lecteur concerné (pas au serveur). Connect est configuré séparément par lecteur — voir Paramètres du lecteur.
-	IT	Per trasmettere musica dall'app Spotify a un player, connettiti al player specifico (non al server). Connect viene configurato separatamente per ogni player — vedi Impostazioni player.
-	NL	Om muziek van de Spotify-app naar een speler te streamen, verbind met de betreffende speler (niet de server). Connect wordt per speler apart ingesteld — zie Spelerinstellingen.
-	NO	For å strømme musikk fra Spotify-appen til en spiller, koble til den aktuelle spilleren (ikke serveren). Connect settes opp separat per spiller — se Spillerinnstillinger.
-	PL	Aby przesyłać muzykę z aplikacji Spotify do odtwarzacza, połącz się z konkretnym odtwarzaczem (nie serwerem). Connect jest konfigurowany osobno dla każdego odtwarzacza — zobacz Ustawienia odtwarzacza.
-	SV	För att strömma musik från Spotify-appen till en spelare, anslut till den specifika spelaren (inte servern). Connect konfigureras separat per spelare — se Spelarinställningar.
+	CS	Klikněte na „Autorizovat přehrávání" a v aplikaci Spotify vyberte zobrazené párovací zařízení. Tím se zapne přehrávání a Spotify Connect. Nutné jednou pro každý účet.
+	DA	Klik på "Godkend afspilning", og vælg den viste parringsenhed i din Spotify-app. Dette aktiverer afspilning og Spotify Connect. Kræves én gang pr. konto.
+	DE	Klicke auf „Wiedergabe autorisieren" und wähle das angezeigte Kopplungsgerät in deiner Spotify App aus. Dadurch werden Wiedergabe und Spotify Connect aktiviert. Einmal pro Konto erforderlich.
+	EN	Click "Authorize Playback" and pick the shown pairing device in your Spotify app. This enables playback and Spotify Connect. Required once per account.
+	ES	Haz clic en "Autorizar reproducción" y elige el dispositivo de emparejamiento mostrado en tu app de Spotify. Esto habilita la reproducción y Spotify Connect. Necesario una vez por cuenta.
+	FR	Cliquez sur « Autoriser la lecture » et choisissez l'appareil d'appairage affiché dans votre application Spotify. Cela active la lecture et Spotify Connect. Nécessaire une fois par compte.
+	IT	Fai clic su "Autorizza la riproduzione" e scegli il dispositivo di abbinamento mostrato nella tua app Spotify. Questo abilita la riproduzione e Spotify Connect. Necessario una volta per account.
+	NL	Klik op "Afspelen autoriseren" en kies het getoonde koppelingsapparaat in uw Spotify-app. Dit schakelt afspelen en Spotify Connect in. Eenmalig vereist per account.
+	NO	Klikk på «Autoriser avspilling» og velg den viste paringsenheten i Spotify-appen din. Dette aktiverer avspilling og Spotify Connect. Kreves én gang per konto.
+	PL	Kliknij „Autoryzuj odtwarzanie" i wybierz pokazane urządzenie parowania w aplikacji Spotify. To włącza odtwarzanie i Spotify Connect. Wymagane raz na konto.
+	SV	Klicka på "Auktorisera uppspelning" och välj den visade parkopplingsenheten i din Spotify-app. Detta aktiverar uppspelning och Spotify Connect. Krävs en gång per konto.
 
-PLUGIN_SPOTON_SETUP_DEVAPP_TITLE
-	CS	Vlastní Developer App-ID (volitelné, pouze starší aplikace)
-	DA	Eget Developer App-ID (valgfrit, kun ældre apps)
-	DE	Eigene Developer App-ID (optional, nur ältere Apps)
-	EN	Custom Developer App ID (optional, older apps only)
-	ES	ID de Developer App personalizada (opcional, solo apps antiguas)
-	FR	ID d'application Developer personnalisée (optionnel, anciennes apps uniquement)
-	IT	ID Developer App personalizzato (opzionale, solo app più vecchie)
-	NL	Aangepast Developer App-ID (optioneel, alleen oudere apps)
-	NO	Egendefinert Developer App-ID (valgfritt, kun eldre apper)
-	PL	Własne Developer App ID (opcjonalnie, tylko starsze aplikacje)
-	SV	Anpassat Developer App-ID (valfritt, bara äldre appar)
+PLUGIN_SPOTON_SETUP_SPDC_TITLE
+	CS	Volitelné: Playlisty Vytvořeno pro vás
+	DA	Valgfrit: Lavet til dig-playlister
+	DE	Optional: Für dich gemacht-Playlists
+	EN	Optional: Made For You playlists
+	ES	Opcional: Playlists Hecho para ti
+	FR	Optionnel : Playlists Fait pour vous
+	IT	Facoltativo: Playlist Fatto per te
+	NL	Optioneel: Gemaakt voor jou-afspeellijsten
+	NO	Valgfritt: Laget for deg-spillelister
+	PL	Opcjonalnie: Playlisty Stworzone dla Ciebie
+	SV	Valfritt: Gjort för dig-spellistor
+
+PLUGIN_SPOTON_SETUP_SPDC_DESC
+	CS	Chcete-li procházet své Daily Mixy a další playlisty Vytvořeno pro vás, přidejte níže v sekci Účet svůj prohlížečový cookie sp_dc. Můžete to udělat kdykoli později.
+	DA	For at gennemse dine Daily Mixes og andre Lavet til dig-playlister skal du tilføje din sp_dc-browsercookie i afsnittet Konto nedenfor. Du kan gøre dette når som helst senere.
+	DE	Um deine Daily Mixes und andere Für dich gemacht-Playlists zu durchsuchen, füge unten im Bereich Konto deinen sp_dc-Browser-Cookie hinzu. Das kannst du auch jederzeit später nachholen.
+	EN	To browse your Daily Mixes and other Made For You playlists, add your sp_dc browser cookie in the Account section below. You can do this anytime later.
+	ES	Para explorar tus Daily Mixes y otras playlists Hecho para ti, añade tu cookie de navegador sp_dc en la sección Cuenta de abajo. Puedes hacerlo en cualquier momento más adelante.
+	FR	Pour parcourir vos Daily Mixes et autres playlists Fait pour vous, ajoutez votre cookie de navigateur sp_dc dans la section Compte ci-dessous. Vous pouvez le faire à tout moment plus tard.
+	IT	Per esplorare i tuoi Daily Mix e altre playlist Fatto per te, aggiungi il tuo cookie del browser sp_dc nella sezione Account qui sotto. Puoi farlo in qualsiasi momento più avanti.
+	NL	Om uw Daily Mixes en andere Gemaakt voor jou-afspeellijsten te bekijken, voegt u hieronder in de sectie Account uw sp_dc-browsercookie toe. U kunt dit ook later altijd nog doen.
+	NO	For å bla gjennom Daily Mixes og andre Laget for deg-spillelister, legg til sp_dc-nettleserinformasjonskapselen din i seksjonen Konto nedenfor. Du kan gjøre dette når som helst senere.
+	PL	Aby przeglądać swoje Daily Mix i inne playlisty Stworzone dla Ciebie, dodaj poniżej w sekcji Konto swoje ciasteczko przeglądarki sp_dc. Możesz to zrobić w dowolnym momencie później.
+	SV	För att bläddra bland dina Daily Mixes och andra Gjort för dig-spellistor, lägg till din sp_dc-webbläsarcookie i avsnittet Konto nedan. Du kan göra det när som helst senare.
+
+PLUGIN_SPOTON_SETUP_PATHFINDER_TITLE
+	CS	Volitelné: Přístup k playlistům Web Player
+	DA	Valgfrit: Adgang til playlister via Web Player
+	DE	Optional: Playlist-Zugriff über den Web Player
+	EN	Optional: Web Player playlist access
+	ES	Opcional: Acceso a playlists del Web Player
+	FR	Optionnel : Accès aux playlists du Web Player
+	IT	Facoltativo: Accesso alle playlist tramite Web Player
+	NL	Optioneel: Toegang tot afspeellijsten via Web Player
+	NO	Valgfritt: Tilgang til spillelister via Web Player
+	PL	Opcjonalnie: Dostęp do playlist przez Web Player
+	SV	Valfritt: Åtkomst till spellistor via Web Player
+
+PLUGIN_SPOTON_SETUP_PATHFINDER_DESC
+	CS	Některé redakční playlisty vyžadují Pathfinder query hash z webového přehrávače Spotify. Přidejte jej pouze v případě, že se určité playlisty nenačítají — viz nápovědu vedle pole níže.
+	DA	Nogle redaktionelle playlister kræver en Pathfinder-forespørgselshash fra Spotifys webafspiller. Tilføj kun dette, hvis bestemte playlister ikke kan indlæses — se hjælpeteksten ved siden af feltet nedenfor.
+	DE	Manche redaktionellen Playlists benötigen einen Pathfinder-Query-Hash aus dem Spotify Web Player. Füge diesen nur hinzu, wenn bestimmte Playlists nicht geladen werden können — siehe den Hilfetext neben dem Feld unten.
+	EN	Some editorial playlists need a Pathfinder query hash from the Spotify Web Player. Only add this if certain playlists fail to load — see the help text next to the field below.
+	ES	Algunas playlists editoriales necesitan un hash de consulta Pathfinder del Web Player de Spotify. Añádelo solo si ciertas playlists no se cargan — consulta el texto de ayuda junto al campo de abajo.
+	FR	Certaines playlists éditoriales nécessitent un hash de requête Pathfinder provenant du Web Player Spotify. N'ajoutez ceci que si certaines playlists ne se chargent pas — consultez le texte d'aide à côté du champ ci-dessous.
+	IT	Alcune playlist editoriali richiedono un hash di query Pathfinder dal Web Player di Spotify. Aggiungilo solo se alcune playlist non si caricano — consulta il testo di aiuto accanto al campo qui sotto.
+	NL	Sommige redactionele afspeellijsten hebben een Pathfinder-queryhash van de Spotify Web Player nodig. Voeg dit alleen toe als bepaalde afspeellijsten niet laden — zie de helptekst naast het veld hieronder.
+	NO	Enkelte redaksjonelle spillelister trenger en Pathfinder-spørringshash fra Spotifys Web Player. Legg bare til dette hvis enkelte spillelister ikke lastes — se hjelpeteksten ved siden av feltet nedenfor.
+	PL	Niektóre playlisty redakcyjne wymagają hasha zapytania Pathfinder z Web Playera Spotify. Dodaj go tylko wtedy, gdy niektóre playlisty się nie ładują — zobacz tekst pomocy obok pola poniżej.
+	SV	Vissa redaktionella spellistor behöver en Pathfinder-frågehash från Spotifys webbspelare. Lägg bara till detta om vissa spellistor inte går att ladda — se hjälptexten bredvid fältet nedan.
 
 PLUGIN_SPOTON_SETUP_DEVAPP_DESC
-	CS	1. Otevřete developer.spotify.com/dashboard a přihlaste se. 2. Vytvořte novou aplikaci (na názvu nezáleží). 3. V nastavení aplikace přidejte Redirect URI zobrazené na stránce Nastavení SpotOn. 4. Zkopírujte Client-ID a vložte jej do pole Client-ID v Nastavení SpotOn.
-	DA	1. Gå til developer.spotify.com/dashboard og log ind. 2. Opret en ny app (navnet er ligegyldigt). 3. Tilføj i appens indstillinger den Redirect URI, der vises på SpotOns indstillingsside. 4. Kopiér Client-ID'et, og indsæt det i Client-ID-feltet i SpotOns indstillinger.
-	DE	1. Öffne developer.spotify.com/dashboard und melde dich an. 2. Erstelle eine neue App (der Name spielt keine Rolle). 3. Füge in den App-Einstellungen die Redirect-URI hinzu, die auf der SpotOn-Einstellungsseite angezeigt wird. 4. Kopiere die Client-ID und füge sie in das Client-ID-Feld in den SpotOn-Einstellungen ein.
-	EN	1. Go to developer.spotify.com/dashboard and log in. 2. Create a new app (any name works). 3. In the app's settings, add the Redirect URI shown in the SpotOn Settings page. 4. Copy the Client ID and paste it into the Client ID field in SpotOn Settings.
-	ES	1. Ve a developer.spotify.com/dashboard e inicia sesión. 2. Crea una nueva app (el nombre no importa). 3. En la configuración de la app, añade el Redirect URI que se muestra en la página de Ajustes de SpotOn. 4. Copia el Client ID y pégalo en el campo Client ID de los Ajustes de SpotOn.
-	FR	1. Rendez-vous sur developer.spotify.com/dashboard et connectez-vous. 2. Créez une nouvelle application (le nom importe peu). 3. Dans les paramètres de l'application, ajoutez le Redirect URI affiché sur la page Paramètres de SpotOn. 4. Copiez le Client ID et collez-le dans le champ Client ID des Paramètres de SpotOn.
-	IT	1. Vai su developer.spotify.com/dashboard ed effettua l'accesso. 2. Crea una nuova app (il nome non è importante). 3. Nelle impostazioni dell'app, aggiungi il Redirect URI mostrato nella pagina Impostazioni di SpotOn. 4. Copia il Client ID e incollalo nel campo Client ID nelle Impostazioni di SpotOn.
-	NL	1. Ga naar developer.spotify.com/dashboard en log in. 2. Maak een nieuwe app aan (de naam maakt niet uit). 3. Voeg in de app-instellingen de Redirect URI toe die wordt weergegeven op de SpotOn-instellingenpagina. 4. Kopieer het Client-ID en plak het in het Client-ID-veld in de SpotOn-instellingen.
-	NO	1. Gå til developer.spotify.com/dashboard og logg inn. 2. Opprett en ny app (navnet spiller ingen rolle). 3. Legg til Redirect URI-en som vises på SpotOn-innstillingssiden, i appens innstillinger. 4. Kopier Client-ID-en og lim den inn i Client-ID-feltet i SpotOn-innstillingene.
-	PL	1. Wejdź na developer.spotify.com/dashboard i zaloguj się. 2. Utwórz nową aplikację (nazwa nie ma znaczenia). 3. W ustawieniach aplikacji dodaj Redirect URI pokazany na stronie Ustawienia SpotOn. 4. Skopiuj Client ID i wklej je w pole Client ID w Ustawieniach SpotOn.
-	SV	1. Gå till developer.spotify.com/dashboard och logga in. 2. Skapa en ny app (namnet spelar ingen roll). 3. Lägg till den Redirect URI som visas på SpotOns inställningssida i appens inställningar. 4. Kopiera Client-ID och klistra in det i Client-ID-fältet i SpotOns inställningar.
+	CS	1. Otevřete developer.spotify.com/dashboard a přihlaste se. 2. Vytvořte novou aplikaci (na názvu nezáleží). 3. V nastavení aplikace přidejte níže uvedenou Redirect URI. 4. Zkopírujte Client ID a vložte jej do pole výše.
+	DA	1. Gå til developer.spotify.com/dashboard og log ind. 2. Opret en ny app (navnet er ligegyldigt). 3. Tilføj nedenstående Redirect URI i appens indstillinger. 4. Kopiér Client-ID'et, og indsæt det i feltet ovenfor.
+	DE	1. Öffne developer.spotify.com/dashboard und melde dich an. 2. Erstelle eine neue App (der Name spielt keine Rolle). 3. Füge in den App-Einstellungen die unten angezeigte Redirect-URI hinzu. 4. Kopiere die Client-ID und füge sie in das Feld oben ein.
+	EN	1. Go to developer.spotify.com/dashboard and log in. 2. Create a new app (any name works). 3. In the app's settings, add the Redirect URI shown below. 4. Copy the Client ID and paste it into the field above.
+	ES	1. Ve a developer.spotify.com/dashboard e inicia sesión. 2. Crea una nueva app (el nombre no importa). 3. En la configuración de la app, añade el Redirect URI que se muestra abajo. 4. Copia el Client ID y pégalo en el campo de arriba.
+	FR	1. Rendez-vous sur developer.spotify.com/dashboard et connectez-vous. 2. Créez une nouvelle application (le nom importe peu). 3. Dans les paramètres de l'application, ajoutez le Redirect URI affiché ci-dessous. 4. Copiez le Client ID et collez-le dans le champ ci-dessus.
+	IT	1. Vai su developer.spotify.com/dashboard ed effettua l'accesso. 2. Crea una nuova app (il nome non è importante). 3. Nelle impostazioni dell'app, aggiungi il Redirect URI mostrato qui sotto. 4. Copia il Client ID e incollalo nel campo qui sopra.
+	NL	1. Ga naar developer.spotify.com/dashboard en log in. 2. Maak een nieuwe app aan (de naam maakt niet uit). 3. Voeg in de app-instellingen de hieronder weergegeven Redirect URI toe. 4. Kopieer het Client-ID en plak het in het veld hierboven.
+	NO	1. Gå til developer.spotify.com/dashboard og logg inn. 2. Opprett en ny app (navnet spiller ingen rolle). 3. Legg til Redirect URI-en som vises nedenfor, i appens innstillinger. 4. Kopier Client-ID-en og lim den inn i feltet ovenfor.
+	PL	1. Wejdź na developer.spotify.com/dashboard i zaloguj się. 2. Utwórz nową aplikację (nazwa nie ma znaczenia). 3. W ustawieniach aplikacji dodaj Redirect URI pokazany poniżej. 4. Skopiuj Client ID i wklej je w pole powyżej.
+	SV	1. Gå till developer.spotify.com/dashboard och logga in. 2. Skapa en ny app (namnet spelar ingen roll). 3. Lägg till Redirect URI som visas nedan i appens inställningar. 4. Kopiera Client-ID och klistra in det i fältet ovan.
 
 PLUGIN_SPOTON_DSTM_HINT
 	CS	Tip: Automatické přehrávání (Don't Stop The Music) se konfiguruje v Nastavení přehrávače > Don't Stop The Music. Vyberte „SpotOn doporučení".
@@ -2560,17 +2665,17 @@ PLUGIN_SPOTON_PKCE_AUTH
 	SV	Spotify-kontoauktorisering
 
 PLUGIN_SPOTON_PKCE_AUTH_DESC
-	CS	Autorizujte SpotOn k přístupu k vašemu účtu Spotify pomocí zabezpečeného přihlášení OAuth. Nahrazuje způsob připojení přes aplikaci Spotify pro přístup k API.
-	DA	Giv SpotOn adgang til din Spotify-konto via sikker OAuth-login. Dette erstatter tilslutning via Spotify-appen for API-adgang.
-	DE	Autorisiere SpotOn für den Zugriff auf dein Spotify-Konto per sicherem OAuth-Login. Dies ersetzt die Verbindung über die Spotify App für den API-Zugriff.
-	EN	Authorize SpotOn to access your Spotify account via secure OAuth login. This replaces the Spotify App connection method for API access.
-	ES	Autoriza a SpotOn para acceder a tu cuenta de Spotify mediante un inicio de sesión OAuth seguro. Esto sustituye el método de conexión mediante la App de Spotify para el acceso a la API.
-	FR	Autorisez SpotOn à accéder à votre compte Spotify via une connexion OAuth sécurisée. Cela remplace la méthode de connexion par l'application Spotify pour l'accès à l'API.
-	IT	Autorizza SpotOn ad accedere al tuo account Spotify tramite login OAuth sicuro. Sostituisce il metodo di connessione tramite l'app Spotify per l'accesso alle API.
-	NL	Autoriseer SpotOn om toegang te krijgen tot uw Spotify-account via veilige OAuth-login. Dit vervangt de verbindingsmethode via de Spotify-app voor API-toegang.
-	NO	Autoriser SpotOn til å få tilgang til Spotify-kontoen din via sikker OAuth-pålogging. Dette erstatter tilkobling via Spotify-appen for API-tilgang.
-	PL	Autoryzuj SpotOn do dostępu do Twojego konta Spotify za pomocą bezpiecznego logowania OAuth. Zastępuje to metodę łączenia przez aplikację Spotify w dostępie do API.
-	SV	Auktorisera SpotOn att komma åt ditt Spotify-konto via säker OAuth-inloggning. Detta ersätter anslutning via Spotify-appen för API-åtkomst.
+	CS	Krok 1 ze 2: propojí váš účet Spotify pro procházení, vyhledávání a přístup ke knihovně. Přehrávání se autorizuje samostatně v dalším kroku.
+	DA	Trin 1 af 2: tilslutter din Spotify-konto til gennemsyn, søgning og biblioteksadgang. Afspilning godkendes separat i næste trin.
+	DE	Schritt 1 von 2: verbindet dein Spotify-Konto für Durchsuchen, Suche und Bibliothekszugriff. Die Wiedergabe wird im nächsten Schritt separat autorisiert.
+	EN	Step 1 of 2: connects your Spotify account for browsing, search and library access. Playback is authorized separately in the next step.
+	ES	Paso 1 de 2: conecta tu cuenta de Spotify para la navegación, la búsqueda y el acceso a la biblioteca. La reproducción se autoriza por separado en el siguiente paso.
+	FR	Étape 1 sur 2 : connecte votre compte Spotify pour la navigation, la recherche et l'accès à la bibliothèque. La lecture est autorisée séparément à l'étape suivante.
+	IT	Passo 1 di 2: collega il tuo account Spotify per navigazione, ricerca e accesso alla libreria. La riproduzione viene autorizzata separatamente nel passo successivo.
+	NL	Stap 1 van 2: verbindt uw Spotify-account voor bladeren, zoeken en bibliotheektoegang. Afspelen wordt in de volgende stap apart geautoriseerd.
+	NO	Trinn 1 av 2: kobler til Spotify-kontoen din for blaing, søk og bibliotekstilgang. Avspilling autoriseres separat i neste trinn.
+	PL	Krok 1 z 2: łączy Twoje konto Spotify na potrzeby przeglądania, wyszukiwania i dostępu do biblioteki. Odtwarzanie jest autoryzowane osobno w kolejnym kroku.
+	SV	Steg 1 av 2: ansluter ditt Spotify-konto för bläddring, sökning och biblioteksåtkomst. Uppspelning auktoriseras separat i nästa steg.
 
 PLUGIN_SPOTON_PKCE_CONNECT_BTN
 	CS	Připojit účet Spotify
@@ -2650,19 +2755,6 @@ PLUGIN_SPOTON_PKCE_POPUP_NOTE
 	PL	Uwaga: przeglądarka musi zezwalać na wyskakujące okna dla tej strony. Jeśli nic się nie dzieje, sprawdź blokowanie wyskakujących okien.
 	SV	Observera: din webbläsare måste tillåta popup-fönster för denna sida. Om inget händer, kontrollera din popup-blockerare.
 
-PLUGIN_SPOTON_CONNECT_DERIVE_FAILED
-	CS	Účet byl připojen, ale Spotify Connect zatím není k dispozici — zkuste to prosím znovu na stránce nastavení SpotOnu.
-	DA	Kontoen blev tilsluttet, men Spotify Connect er endnu ikke tilgængeligt — prøv venligst igen fra SpotOn-indstillingerne.
-	DE	Konto verbunden, aber Spotify Connect ist noch nicht verfügbar — bitte über die SpotOn-Einstellungen erneut versuchen.
-	EN	Account connected, but Spotify Connect is not available yet — please retry from the SpotOn settings page.
-	ES	Cuenta conectada, pero Spotify Connect aún no está disponible — inténtalo de nuevo desde la página de configuración de SpotOn.
-	FR	Compte connecté, mais Spotify Connect n'est pas encore disponible — veuillez réessayer depuis la page des paramètres de SpotOn.
-	IT	Account connesso, ma Spotify Connect non è ancora disponibile — riprova dalla pagina delle impostazioni di SpotOn.
-	NL	Account verbonden, maar Spotify Connect is nog niet beschikbaar — probeer het opnieuw via de SpotOn-instellingenpagina.
-	NO	Kontoen ble koblet til, men Spotify Connect er ikke tilgjengelig ennå — prøv igjen fra SpotOn-innstillingene.
-	PL	Konto zostało połączone, ale Spotify Connect nie jest jeszcze dostępne — spróbuj ponownie na stronie ustawień SpotOn.
-	SV	Kontot anslöts, men Spotify Connect är inte tillgängligt än — försök igen från SpotOns inställningssida.
-
 PLUGIN_SPOTON_PKCE_MANUAL_TITLE
 	CS	Ruční autorizace
 	DA	Manuel godkendelse
@@ -2677,17 +2769,17 @@ PLUGIN_SPOTON_PKCE_MANUAL_TITLE
 	SV	Manuell auktorisering
 
 PLUGIN_SPOTON_PKCE_MANUAL_DESC
-	CS	Pokud automatické přesměrování nefungovalo, vložte sem celou zpětnou (callback) URL adresu z prohlížeče:
-	DA	Hvis den automatiske omdirigering ikke virkede, så indsæt hele callback-URL'en fra din browser her:
-	DE	Falls die automatische Weiterleitung nicht funktioniert hat, füge hier die vollständige Callback-URL aus deinem Browser ein:
-	EN	If the automatic redirect did not work, paste the full callback URL from your browser here:
-	ES	Si la redirección automática no funcionó, pega aquí la URL de retorno completa de tu navegador:
-	FR	Si la redirection automatique n'a pas fonctionné, collez ici l'URL de rappel complète de votre navigateur :
-	IT	Se il reindirizzamento automatico non ha funzionato, incolla qui l'URL di callback completo dal tuo browser:
-	NL	Als de automatische doorverwijzing niet werkte, plak dan hier de volledige callback-URL uit uw browser:
-	NO	Hvis den automatiske omdirigeringen ikke fungerte, lim inn hele callback-URL-en fra nettleseren din her:
-	PL	Jeśli automatyczne przekierowanie nie zadziałało, wklej tutaj pełny adres URL zwrotny z przeglądarki:
-	SV	Om den automatiska omdirigeringen inte fungerade, klistra in hela callback-URL:en från din webbläsare här:
+	CS	Pokud váš prohlížeč po potvrzení skončí na nedostupné stránce 127.0.0.1, je to očekávané, když prohlížeč běží na jiném počítači než LMS: zkopírujte celou URL adresu z adresního řádku a vložte ji sem:
+	DA	Hvis din browser efter godkendelsen ender på en utilgængelig 127.0.0.1-side, er det forventet, når browseren kører på en anden maskine end LMS: Kopiér hele URL'en fra adresselinjen, og indsæt den her:
+	DE	Landet dein Browser nach dem Bestätigen auf einer nicht erreichbaren 127.0.0.1-Seite, ist das zu erwarten, wenn der Browser auf einem anderen Rechner als LMS läuft: Kopiere die vollständige URL aus der Adressleiste und füge sie hier ein:
+	EN	If your browser lands on an unreachable 127.0.0.1 page after approving, that is expected when the browser runs on a different machine than LMS: copy the full URL from the address bar and paste it here:
+	ES	Si tu navegador acaba en una página 127.0.0.1 inaccesible tras aprobar, es lo esperado cuando el navegador se ejecuta en una máquina distinta a LMS: copia la URL completa de la barra de direcciones y pégala aquí:
+	FR	Si votre navigateur aboutit sur une page 127.0.0.1 inaccessible après l'approbation, c'est normal lorsque le navigateur s'exécute sur une autre machine que LMS : copiez l'URL complète depuis la barre d'adresse et collez-la ici :
+	IT	Se dopo l'approvazione il browser finisce su una pagina 127.0.0.1 irraggiungibile, è normale quando il browser è su una macchina diversa da LMS: copia l'URL completo dalla barra degli indirizzi e incollalo qui:
+	NL	Als uw browser na goedkeuring op een onbereikbare 127.0.0.1-pagina belandt, is dat normaal wanneer de browser op een andere machine dan LMS draait: kopieer de volledige URL uit de adresbalk en plak deze hier:
+	NO	Hvis nettleseren din havner på en utilgjengelig 127.0.0.1-side etter godkjenning, er det forventet når nettleseren kjører på en annen maskin enn LMS: Kopier hele URL-en fra adressefeltet og lim den inn her:
+	PL	Jeśli po zatwierdzeniu przeglądarka trafi na niedostępną stronę 127.0.0.1, jest to oczekiwane, gdy przeglądarka działa na innym komputerze niż LMS: skopiuj pełny adres URL z paska adresu i wklej go tutaj:
+	SV	Om din webbläsare hamnar på en onåbar 127.0.0.1-sida efter godkännandet är det väntat när webbläsaren körs på en annan maskin än LMS: kopiera hela URL:en från adressfältet och klistra in den här:
 
 PLUGIN_SPOTON_PKCE_MANUAL_BTN
 	CS	Odeslat callback URL
@@ -2702,18 +2794,6 @@ PLUGIN_SPOTON_PKCE_MANUAL_BTN
 	PL	Wyślij adres URL zwrotny
 	SV	Skicka callback-URL
 
-PLUGIN_SPOTON_PKCE_REDIRECT_NOTE
-	CS	Důležité: Přidejte https://stiefenm.github.io/spoton/auth/ jako Redirect URI v nastavení vaší Spotify Developer App.
-	DA	Vigtigt: Tilføj https://stiefenm.github.io/spoton/auth/ som Redirect URI i indstillingerne for din Spotify Developer App.
-	DE	Wichtig: Füge https://stiefenm.github.io/spoton/auth/ als Redirect-URI in den Einstellungen deiner Spotify Developer App hinzu.
-	EN	Important: Add https://stiefenm.github.io/spoton/auth/ as a Redirect URI in your Spotify Developer App settings.
-	ES	Importante: añade https://stiefenm.github.io/spoton/auth/ como Redirect URI en la configuración de tu App de Desarrollador de Spotify.
-	FR	Important : ajoutez https://stiefenm.github.io/spoton/auth/ comme URI de redirection dans les paramètres de votre application développeur Spotify.
-	IT	Importante: aggiungi https://stiefenm.github.io/spoton/auth/ come Redirect URI nelle impostazioni della tua Spotify Developer App.
-	NL	Belangrijk: voeg https://stiefenm.github.io/spoton/auth/ toe als Redirect URI in de instellingen van uw Spotify Developer App.
-	NO	Viktig: Legg til https://stiefenm.github.io/spoton/auth/ som Redirect URI i innstillingene for Spotify Developer-appen din.
-	PL	Ważne: dodaj https://stiefenm.github.io/spoton/auth/ jako Redirect URI w ustawieniach swojej aplikacji Spotify Developer.
-	SV	Viktigt: Lägg till https://stiefenm.github.io/spoton/auth/ som Redirect URI i inställningarna för din Spotify Developer App.
 
 PLUGIN_SPOTON_SETUP_PKCE_TITLE
 	CS	Připojte svůj účet Spotify
@@ -2729,30 +2809,17 @@ PLUGIN_SPOTON_SETUP_PKCE_TITLE
 	SV	Anslut ditt Spotify-konto
 
 PLUGIN_SPOTON_SETUP_PKCE_DESC
-	CS	Klikněte níže na „Připojit účet Spotify“ a autorizujte SpotOn pomocí svého účtu Spotify Premium.
-	DA	Klik på "Tilslut Spotify-konto" nedenfor for at godkende SpotOn med din Spotify Premium-konto.
-	DE	Klicke unten auf „Spotify-Konto verbinden“, um SpotOn mit deinem Spotify-Premium-Konto zu autorisieren.
-	EN	Click "Connect Spotify Account" below to authorize SpotOn with your Spotify Premium account.
-	ES	Haz clic en «Conectar cuenta de Spotify» abajo para autorizar SpotOn con tu cuenta de Spotify Premium.
-	FR	Cliquez sur « Connecter le compte Spotify » ci-dessous pour autoriser SpotOn avec votre compte Spotify Premium.
-	IT	Fai clic su "Connetti account Spotify" qui sotto per autorizzare SpotOn con il tuo account Spotify Premium.
-	NL	Klik hieronder op "Spotify-account verbinden" om SpotOn te autoriseren met uw Spotify Premium-account.
-	NO	Klikk på «Koble til Spotify-konto» nedenfor for å autorisere SpotOn med Spotify Premium-kontoen din.
-	PL	Kliknij poniżej „Połącz konto Spotify”, aby autoryzować SpotOn za pomocą swojego konta Spotify Premium.
-	SV	Klicka på "Anslut Spotify-konto" nedan för att auktorisera SpotOn med ditt Spotify Premium-konto.
-
-PLUGIN_SPOTON_MADE_FOR_YOU_SECTION
-	CS	Nastavení Vytvořeno pro vás
-	DA	Opsætning af Lavet til dig
-	DE	Für dich gemacht – Einrichtung
-	EN	Made For You Setup
-	ES	Configuración de Hecho para ti
-	FR	Configuration de Fait pour vous
-	IT	Configurazione di Fatto per te
-	NL	Instellingen voor Gemaakt voor jou
-	NO	Oppsett av Laget for deg
-	PL	Konfiguracja Stworzone dla Ciebie
-	SV	Inställningar för Gjort för dig
+	CS	Klikněte na „Připojit účet Spotify" a potvrďte v okně prohlížeče. Tím se zpřístupní procházení, vyhledávání a vaše knihovna.
+	DA	Klik på "Tilslut Spotify-konto", og godkend i browservinduet. Dette aktiverer gennemsyn, søgning og dit bibliotek.
+	DE	Klicke auf „Spotify-Konto verbinden" und bestätige im Browserfenster. Dadurch werden Durchsuchen, Suche und deine Bibliothek aktiviert.
+	EN	Click "Connect Spotify Account" and approve in the browser window. This enables browsing, search and your library.
+	ES	Haz clic en "Conectar cuenta de Spotify" y aprueba en la ventana del navegador. Esto habilita la navegación, la búsqueda y tu biblioteca.
+	FR	Cliquez sur « Connecter le compte Spotify » et approuvez dans la fenêtre du navigateur. Cela active la navigation, la recherche et votre bibliothèque.
+	IT	Fai clic su "Connetti account Spotify" e approva nella finestra del browser. Questo abilita navigazione, ricerca e la tua libreria.
+	NL	Klik op "Spotify-account verbinden" en keur goed in het browservenster. Dit schakelt bladeren, zoeken en uw bibliotheek in.
+	NO	Klikk på «Koble til Spotify-konto» og godkjenn i nettleservinduet. Dette aktiverer blaing, søk og biblioteket ditt.
+	PL	Kliknij „Połącz konto Spotify" i zatwierdź w oknie przeglądarki. To włącza przeglądanie, wyszukiwanie i Twoją bibliotekę.
+	SV	Klicka på "Anslut Spotify-konto" och godkänn i webbläsarfönstret. Detta aktiverar bläddring, sökning och ditt bibliotek.
 
 PLUGIN_SPOTON_SP_DC
 	CS	Cookie Spotify sp_dc
@@ -2962,3 +3029,289 @@ PLUGIN_SPOTON_CLEAR_SEARCH_HISTORY
 	NO	Tøm søkehistorikk
 	PL	Wyczyść historię wyszukiwania
 	SV	Rensa sökhistorik
+
+PLUGIN_SPOTON_PLAYER_AUTH_TITLE
+	CS	Autorizovat přehrávání
+	DA	Godkend afspilning
+	DE	Wiedergabe autorisieren
+	EN	Authorize Playback
+	ES	Autorizar reproducción
+	FR	Autoriser la lecture
+	IT	Autorizza la riproduzione
+	NL	Afspelen autoriseren
+	NO	Autoriser avspilling
+	PL	Autoryzuj odtwarzanie
+	SV	Auktorisera uppspelning
+
+PLUGIN_SPOTON_PLAYER_AUTH_DESC
+	CS	Povinný krok 2: přehrávání a Spotify Connect potřebují přihlašovací údaje z aplikace Spotify. Spusťte párování a poté v aplikaci Spotify v telefonu nebo počítači vyberte zobrazené zařízení.
+	DA	Påkrævet trin 2: afspilning og Spotify Connect kræver legitimation fra Spotify-appen. Start parring, og vælg derefter den viste enhed i Spotify-appen på din telefon eller computer.
+	DE	Erforderlicher Schritt 2: Wiedergabe und Spotify Connect benötigen Anmeldedaten aus der Spotify App. Starte die Kopplung und wähle dann das angezeigte Gerät in der Spotify App auf deinem Handy oder Computer aus.
+	EN	Required step 2: playback and Spotify Connect need credentials from the Spotify app. Start pairing, then select the shown device in the Spotify app on your phone or computer.
+	ES	Paso 2 obligatorio: la reproducción y Spotify Connect necesitan credenciales de la app de Spotify. Inicia el emparejamiento y luego selecciona el dispositivo mostrado en la app de Spotify en tu teléfono u ordenador.
+	FR	Étape 2 obligatoire : la lecture et Spotify Connect ont besoin d'identifiants provenant de l'application Spotify. Démarrez l'appairage, puis sélectionnez l'appareil affiché dans l'application Spotify sur votre téléphone ou ordinateur.
+	IT	Passo 2 obbligatorio: riproduzione e Spotify Connect richiedono credenziali dall'app Spotify. Avvia l'abbinamento, quindi seleziona il dispositivo mostrato nell'app Spotify sul tuo telefono o computer.
+	NL	Vereiste stap 2: afspelen en Spotify Connect hebben referenties van de Spotify-app nodig. Start de koppeling en selecteer vervolgens het getoonde apparaat in de Spotify-app op uw telefoon of computer.
+	NO	Obligatorisk trinn 2: avspilling og Spotify Connect trenger legitimasjon fra Spotify-appen. Start paringen, og velg deretter enheten som vises i Spotify-appen på telefonen eller datamaskinen din.
+	PL	Wymagany krok 2: odtwarzanie i Spotify Connect wymagają poświadczeń z aplikacji Spotify. Rozpocznij parowanie, a następnie wybierz pokazane urządzenie w aplikacji Spotify na telefonie lub komputerze.
+	SV	Obligatoriskt steg 2: uppspelning och Spotify Connect behöver inloggningsuppgifter från Spotify-appen. Starta parkopplingen och välj sedan den visade enheten i Spotify-appen på din telefon eller dator.
+
+PLUGIN_SPOTON_PLAYER_AUTH_BANNER
+	CS	Je vyžadována autorizace přehrávání: váš účet je připojen, ale přehrávání zatím není autorizováno. Použijte níže „Autorizovat přehrávání".
+	DA	Afspilningsgodkendelse påkrævet: din konto er tilsluttet, men afspilning er endnu ikke godkendt. Brug "Godkend afspilning" nedenfor.
+	DE	Wiedergabe-Autorisierung erforderlich: dein Konto ist verbunden, aber die Wiedergabe ist noch nicht autorisiert. Nutze unten „Wiedergabe autorisieren".
+	EN	Playback authorization required: your account is connected, but playback is not yet authorized. Use "Authorize Playback" below.
+	ES	Se requiere autorización de reproducción: tu cuenta está conectada, pero la reproducción aún no está autorizada. Usa "Autorizar reproducción" abajo.
+	FR	Autorisation de lecture requise : votre compte est connecté, mais la lecture n'est pas encore autorisée. Utilisez « Autoriser la lecture » ci-dessous.
+	IT	Autorizzazione alla riproduzione richiesta: il tuo account è connesso, ma la riproduzione non è ancora autorizzata. Usa "Autorizza la riproduzione" qui sotto.
+	NL	Afspeelautorisatie vereist: uw account is verbonden, maar afspelen is nog niet geautoriseerd. Gebruik hieronder "Afspelen autoriseren".
+	NO	Avspillingsautorisasjon kreves: kontoen din er tilkoblet, men avspilling er ikke autorisert ennå. Bruk «Autoriser avspilling» nedenfor.
+	PL	Wymagana autoryzacja odtwarzania: Twoje konto jest połączone, ale odtwarzanie nie jest jeszcze autoryzowane. Użyj poniżej „Autoryzuj odtwarzanie".
+	SV	Uppspelningsauktorisering krävs: ditt konto är anslutet, men uppspelning är ännu inte auktoriserad. Använd "Auktorisera uppspelning" nedan.
+
+PLUGIN_SPOTON_PLAYER_AUTH_STATUS_OK
+	CS	Přehrávání autorizováno
+	DA	Afspilning godkendt
+	DE	Wiedergabe autorisiert
+	EN	Playback authorized
+	ES	Reproducción autorizada
+	FR	Lecture autorisée
+	IT	Riproduzione autorizzata
+	NL	Afspelen geautoriseerd
+	NO	Avspilling autorisert
+	PL	Odtwarzanie autoryzowane
+	SV	Uppspelning auktoriserad
+
+PLUGIN_SPOTON_PLAYER_AUTH_STATUS_REQUIRED
+	CS	Je vyžadována autorizace přehrávání
+	DA	Afspilningsgodkendelse påkrævet
+	DE	Wiedergabe-Autorisierung erforderlich
+	EN	Playback authorization required
+	ES	Se requiere autorización de reproducción
+	FR	Autorisation de lecture requise
+	IT	Autorizzazione alla riproduzione richiesta
+	NL	Afspeelautorisatie vereist
+	NO	Avspillingsautorisasjon kreves
+	PL	Wymagana autoryzacja odtwarzania
+	SV	Uppspelningsauktorisering krävs
+
+PLUGIN_SPOTON_PLAYER_AUTH_INSTRUCTIONS
+	CS	1) Otevřete aplikaci Spotify na telefonu nebo počítači ve stejné síti jako tento server. 2) Spusťte přehrávání libovolné skladby — seznam zařízení se zobrazí pouze při aktivním přehrávání. 3) Otevřete nabídku zařízení a vyberte zařízení zobrazené níže.
+	DA	1) Åbn Spotify-appen på en telefon eller computer på samme netværk som denne server. 2) Start afspilning af et vilkårligt nummer — enhedslisten vises kun under aktiv afspilning. 3) Åbn enhedsmenuen, og vælg enheden, der vises nedenfor.
+	DE	1) Öffne die Spotify-App auf einem Handy oder Computer im selben Netzwerk wie dieser Server. 2) Starte die Wiedergabe eines beliebigen Titels — die Geräteliste erscheint nur bei aktiver Wiedergabe. 3) Öffne das Gerätemenü und wähle das unten angezeigte Gerät.
+	EN	1) Open the Spotify app on a phone or computer on the same network as this server. 2) Start playing any track — the device list only appears during active playback. 3) Open the devices menu and select the device shown below.
+	ES	1) Abra la aplicación de Spotify en un teléfono u ordenador en la misma red que este servidor. 2) Comience a reproducir cualquier canción — la lista de dispositivos solo aparece durante la reproducción activa. 3) Abra el menú de dispositivos y seleccione el dispositivo que se muestra a continuación.
+	FR	1) Ouvrez l'application Spotify sur un téléphone ou un ordinateur du même réseau que ce serveur. 2) Lancez la lecture d'un titre quelconque — la liste des appareils n'apparaît que pendant une lecture active. 3) Ouvrez le menu des appareils et sélectionnez l'appareil affiché ci-dessous.
+	IT	1) Apri l'app di Spotify su un telefono o computer nella stessa rete di questo server. 2) Avvia la riproduzione di un brano qualsiasi — l'elenco dei dispositivi appare solo durante la riproduzione attiva. 3) Apri il menu dei dispositivi e seleziona il dispositivo mostrato qui sotto.
+	NL	1) Open de Spotify-app op een telefoon of computer in hetzelfde netwerk als deze server. 2) Start het afspelen van een willekeurig nummer — de apparatenlijst verschijnt alleen tijdens actief afspelen. 3) Open het apparatenmenu en selecteer het hieronder getoonde apparaat.
+	NO	1) Åpne Spotify-appen på en telefon eller datamaskin i samme nettverk som denne serveren. 2) Start avspilling av et hvilket som helst spor — enhetslisten vises bare under aktiv avspilling. 3) Åpne enhetsmenyen, og velg enheten som vises nedenfor.
+	PL	1) Otwórz aplikację Spotify na telefonie lub komputerze w tej samej sieci co ten serwer. 2) Rozpocznij odtwarzanie dowolnego utworu — lista urządzeń pojawia się tylko podczas aktywnego odtwarzania. 3) Otwórz menu urządzeń i wybierz urządzenie pokazane poniżej.
+	SV	1) Öppna Spotify-appen på en telefon eller dator i samma nätverk som den här servern. 2) Starta uppspelning av valfri låt — enhetslistan visas bara under aktiv uppspelning. 3) Öppna enhetsmenyn och välj enheten som visas nedan.
+
+PLUGIN_SPOTON_PLAYER_AUTH_START_BTN
+	CS	Zahájit párování
+	DA	Start parring
+	DE	Kopplung starten
+	EN	Start Pairing
+	ES	Iniciar emparejamiento
+	FR	Démarrer l'appairage
+	IT	Avvia abbinamento
+	NL	Koppeling starten
+	NO	Start paring
+	PL	Rozpocznij parowanie
+	SV	Starta parkoppling
+
+PLUGIN_SPOTON_PLAYER_AUTH_CANCEL_BTN
+	CS	Zrušit
+	DA	Annullér
+	DE	Abbrechen
+	EN	Cancel
+	ES	Cancelar
+	FR	Annuler
+	IT	Annulla
+	NL	Annuleren
+	NO	Avbryt
+	PL	Anuluj
+	SV	Avbryt
+
+PLUGIN_SPOTON_PLAYER_AUTH_WAITING
+	CS	Čekání na aplikaci Spotify… vyberte zařízení zobrazené výše a nechte tuto stránku otevřenou.
+	DA	Venter på Spotify-appen … vælg enheden, der vises ovenfor, og hold denne side åben.
+	DE	Warte auf die Spotify-App … wähle das oben angezeigte Gerät und lasse diese Seite geöffnet.
+	EN	Waiting for the Spotify app… select the device shown above, then keep this page open.
+	ES	Esperando la aplicación de Spotify… seleccione el dispositivo que se muestra arriba y mantenga esta página abierta.
+	FR	En attente de l'application Spotify… sélectionnez l'appareil affiché ci-dessus, puis laissez cette page ouverte.
+	IT	In attesa dell'app di Spotify… seleziona il dispositivo mostrato sopra e tieni aperta questa pagina.
+	NL	Wachten op de Spotify-app… selecteer het hierboven getoonde apparaat en houd deze pagina open.
+	NO	Venter på Spotify-appen … velg enheten som vises ovenfor, og hold denne siden åpen.
+	PL	Oczekiwanie na aplikację Spotify… wybierz urządzenie pokazane powyżej i pozostaw tę stronę otwartą.
+	SV	Väntar på Spotify-appen … välj enheten som visas ovan och håll den här sidan öppen.
+
+PLUGIN_SPOTON_PLAYER_AUTH_SUCCESS
+	CS	Přehrávání autorizováno — přehrávače se restartují.
+	DA	Afspilning godkendt — afspillere genstartes.
+	DE	Wiedergabe autorisiert — Player werden neu gestartet.
+	EN	Playback authorized — restarting players.
+	ES	Reproducción autorizada — reiniciando reproductores.
+	FR	Lecture autorisée — redémarrage des lecteurs.
+	IT	Riproduzione autorizzata — riavvio dei lettori in corso.
+	NL	Afspelen geautoriseerd — spelers worden opnieuw gestart.
+	NO	Avspilling autorisert — spillere startes på nytt.
+	PL	Odtwarzanie autoryzowane — trwa ponowne uruchamianie odtwarzaczy.
+	SV	Uppspelning auktoriserad — spelare startas om.
+
+PLUGIN_SPOTON_PLAYER_AUTH_FAILED
+	CS	Párování se nezdařilo. Zkontrolujte, zda jsou tento server a vaše aplikace Spotify ve stejné síti, a zkuste to znovu.
+	DA	Parring mislykkedes. Kontrollér, at denne server og din Spotify-app er på samme netværk, og prøv igen.
+	DE	Kopplung fehlgeschlagen. Prüfe, ob dieser Server und deine Spotify-App im selben Netzwerk sind, und versuche es erneut.
+	EN	Pairing failed. Check that this server and your Spotify app are on the same network, then try again.
+	ES	El emparejamiento falló. Compruebe que este servidor y su aplicación de Spotify estén en la misma red e inténtelo de nuevo.
+	FR	Échec de l'appairage. Vérifiez que ce serveur et votre application Spotify sont sur le même réseau, puis réessayez.
+	IT	Abbinamento non riuscito. Verifica che questo server e la tua app di Spotify siano nella stessa rete, quindi riprova.
+	NL	Koppeling mislukt. Controleer of deze server en uw Spotify-app zich in hetzelfde netwerk bevinden en probeer het opnieuw.
+	NO	Paring mislyktes. Kontroller at denne serveren og Spotify-appen din er i samme nettverk, og prøv igjen.
+	PL	Parowanie nie powiodło się. Sprawdź, czy ten serwer i aplikacja Spotify są w tej samej sieci, a następnie spróbuj ponownie.
+	SV	Parkopplingen misslyckades. Kontrollera att den här servern och din Spotify-app är i samma nätverk och försök igen.
+
+PLUGIN_SPOTON_PLAYER_AUTH_TIMEOUT
+	CS	Časový limit párování vypršel po 15 minutách. Až budete připraveni, spusťte je znovu.
+	DA	Parringen fik timeout efter 15 minutter. Start igen, når du er klar.
+	DE	Zeitüberschreitung bei der Kopplung nach 15 Minuten. Starte sie erneut, wenn du bereit bist.
+	EN	Pairing timed out after 15 minutes. Start again when ready.
+	ES	El emparejamiento expiró después de 15 minutos. Inícielo de nuevo cuando esté listo.
+	FR	L'appairage a expiré après 15 minutes. Relancez-le quand vous êtes prêt.
+	IT	L'abbinamento è scaduto dopo 15 minuti. Riavvialo quando sei pronto.
+	NL	De koppeling is na 15 minuten verlopen. Start opnieuw wanneer u er klaar voor bent.
+	NO	Paringen fikk tidsavbrudd etter 15 minutter. Start på nytt når du er klar.
+	PL	Limit czasu parowania upłynął po 15 minutach. Rozpocznij ponownie, gdy będziesz gotowy.
+	SV	Parkopplingen fick timeout efter 15 minuter. Starta igen när du är redo.
+
+PLUGIN_SPOTON_PLAYER_AUTH_MISMATCH
+	CS	Účet Spotify ve vaší aplikaci neodpovídá vybranému účtu SpotOn. Přepněte účet v aplikaci Spotify nebo v SpotOn a zkuste to znovu.
+	DA	Spotify-kontoen i din app stemmer ikke overens med den valgte SpotOn-konto. Skift konto i Spotify-appen eller i SpotOn, og prøv igen.
+	DE	Das Spotify-Konto in deiner App stimmt nicht mit dem ausgewählten SpotOn-Konto überein. Wechsle das Konto in der Spotify-App oder in SpotOn und versuche es erneut.
+	EN	The Spotify account in your app does not match the selected SpotOn account. Switch accounts in the Spotify app or in SpotOn, then retry.
+	ES	La cuenta de Spotify en su aplicación no coincide con la cuenta de SpotOn seleccionada. Cambie de cuenta en la aplicación de Spotify o en SpotOn e inténtelo de nuevo.
+	FR	Le compte Spotify de votre application ne correspond pas au compte SpotOn sélectionné. Changez de compte dans l'application Spotify ou dans SpotOn, puis réessayez.
+	IT	L'account Spotify nella tua app non corrisponde all'account SpotOn selezionato. Cambia account nell'app di Spotify o in SpotOn, quindi riprova.
+	NL	Het Spotify-account in uw app komt niet overeen met het geselecteerde SpotOn-account. Wissel van account in de Spotify-app of in SpotOn en probeer het opnieuw.
+	NO	Spotify-kontoen i appen din samsvarer ikke med den valgte SpotOn-kontoen. Bytt konto i Spotify-appen eller i SpotOn, og prøv igjen.
+	PL	Konto Spotify w Twojej aplikacji nie zgadza się z wybranym kontem SpotOn. Przełącz konto w aplikacji Spotify lub w SpotOn, a następnie spróbuj ponownie.
+	SV	Spotify-kontot i din app matchar inte det valda SpotOn-kontot. Byt konto i Spotify-appen eller i SpotOn och försök igen.
+
+PLUGIN_SPOTON_PLAYER_AUTH_SOURCE_ZEROCONF
+	CS	Spárováno přes aplikaci Spotify
+	DA	Parret via Spotify-appen
+	DE	Gekoppelt über die Spotify App
+	EN	Paired via Spotify app
+	ES	Emparejado a través de la app de Spotify
+	FR	Appairé via l'application Spotify
+	IT	Abbinato tramite l'app Spotify
+	NL	Gekoppeld via de Spotify-app
+	NO	Paret via Spotify-appen
+	PL	Sparowano przez aplikację Spotify
+	SV	Parkopplad via Spotify-appen
+
+PLUGIN_SPOTON_PLAYER_AUTH_SOURCE_BROWSER
+	CS	Spárováno pomocí autorizace v prohlížeči
+	DA	Parret via browsergodkendelse
+	DE	Gekoppelt über Browser-Autorisierung
+	EN	Paired via browser authorization
+	ES	Emparejado mediante autorización del navegador
+	FR	Appairé via l'autorisation du navigateur
+	IT	Abbinato tramite autorizzazione del browser
+	NL	Gekoppeld via browserautorisatie
+	NO	Paret via nettleserautorisasjon
+	PL	Sparowano przez autoryzację w przeglądarce
+	SV	Parkopplad via webbläsarauktorisering
+
+PLUGIN_SPOTON_PLAYBACK_AUTH_REQUIRED
+	CS	Přehrávání zatím není autorizováno — otevřete Nastavení SpotOn a dokončete „Autorizovat přehrávání"; procházení funguje dál.
+	DA	Afspilning er endnu ikke godkendt — åbn SpotOn-indstillingerne, og gennemfør "Godkend afspilning"; gennemsyn fortsætter med at virke.
+	DE	Wiedergabe noch nicht autorisiert — öffne die SpotOn-Einstellungen und schließe „Wiedergabe autorisieren" ab; Durchsuchen funktioniert weiterhin.
+	EN	Playback not yet authorized — open SpotOn Settings and complete "Authorize Playback"; browsing keeps working.
+	ES	Reproducción aún no autorizada — abre los Ajustes de SpotOn y completa "Autorizar reproducción"; la navegación sigue funcionando.
+	FR	Lecture pas encore autorisée — ouvrez les Paramètres SpotOn et terminez « Autoriser la lecture » ; la navigation continue de fonctionner.
+	IT	Riproduzione non ancora autorizzata — apri le Impostazioni di SpotOn e completa "Autorizza la riproduzione"; la navigazione continua a funzionare.
+	NL	Afspelen nog niet geautoriseerd — open de SpotOn-instellingen en voltooi "Afspelen autoriseren"; bladeren blijft werken.
+	NO	Avspilling er ikke autorisert ennå — åpne SpotOn-innstillingene og fullfør «Autoriser avspilling»; blaing fungerer fortsatt.
+	PL	Odtwarzanie nie jest jeszcze autoryzowane — otwórz Ustawienia SpotOn i dokończ „Autoryzuj odtwarzanie"; przeglądanie nadal działa.
+	SV	Uppspelning är ännu inte auktoriserad — öppna SpotOn-inställningarna och slutför "Auktorisera uppspelning"; bläddring fortsätter att fungera.
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_TITLE
+	CS	Záložní řešení přes prohlížeč (Docker / VLAN / bez mDNS)
+	DA	Browser-nødløsning (Docker / VLAN / ingen mDNS)
+	DE	Browser-Fallback (Docker / VLAN / kein mDNS)
+	EN	Browser fallback (Docker / VLAN / no mDNS)
+	ES	Alternativa por navegador (Docker / VLAN / sin mDNS)
+	FR	Solution de repli par navigateur (Docker / VLAN / pas de mDNS)
+	IT	Alternativa tramite browser (Docker / VLAN / senza mDNS)
+	NL	Browser-alternatief (Docker / VLAN / geen mDNS)
+	NO	Nettleser-reserveløsning (Docker / VLAN / ingen mDNS)
+	PL	Rozwiązanie awaryjne przez przeglądarkę (Docker / VLAN / brak mDNS)
+	SV	Reservlösning via webbläsare (Docker / VLAN / ingen mDNS)
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_DESC
+	CS	Použijte, když aplikace Spotify nevidí párovací zařízení (Docker, VLAN nebo jiná síťová nastavení): autorizujte místo toho v prohlížeči.
+	DA	Brug denne, når Spotify-appen ikke kan se parringsenheden (Docker, VLAN eller andre netværksopsætninger): godkend i browseren i stedet.
+	DE	Verwende dies, wenn die Spotify-App das Kopplungsgerät nicht sehen kann (Docker, VLAN oder andere Netzwerk-Setups): autorisiere stattdessen im Browser.
+	EN	Use this when the Spotify app cannot see the pairing device (Docker, VLAN or other network setups): authorize in the browser instead.
+	ES	Úselo cuando la aplicación de Spotify no pueda ver el dispositivo de emparejamiento (Docker, VLAN u otras configuraciones de red): autorice en el navegador en su lugar.
+	FR	À utiliser lorsque l'application Spotify ne voit pas l'appareil d'appairage (Docker, VLAN ou autres configurations réseau) : autorisez dans le navigateur à la place.
+	IT	Da usare quando l'app di Spotify non riesce a vedere il dispositivo di abbinamento (Docker, VLAN o altre configurazioni di rete): autorizza invece nel browser.
+	NL	Gebruik dit wanneer de Spotify-app het koppelingsapparaat niet kan zien (Docker, VLAN of andere netwerkconfiguraties): autoriseer in plaats daarvan in de browser.
+	NO	Bruk dette når Spotify-appen ikke kan se paringsenheten (Docker, VLAN eller andre nettverksoppsett): autoriser i nettleseren i stedet.
+	PL	Użyj, gdy aplikacja Spotify nie widzi urządzenia parującego (Docker, VLAN lub inne konfiguracje sieci): zamiast tego autoryzuj w przeglądarce.
+	SV	Använd detta när Spotify-appen inte kan se parkopplingsenheten (Docker, VLAN eller andra nätverkskonfigurationer): auktorisera i webbläsaren i stället.
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_START_BTN
+	CS	Autorizovat v prohlížeči
+	DA	Godkend i browser
+	DE	Im Browser autorisieren
+	EN	Authorize in Browser
+	ES	Autorizar en el navegador
+	FR	Autoriser dans le navigateur
+	IT	Autorizza nel browser
+	NL	Autoriseren in browser
+	NO	Autoriser i nettleser
+	PL	Autoryzuj w przeglądarce
+	SV	Auktorisera i webbläsaren
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_PASTE_HINT
+	CS	Po schválení prohlížeč zobrazí nedostupnou stránku 127.0.0.1 — to je očekávané. Zkopírujte celou adresu z adresního řádku a vložte ji níže.
+	DA	Efter godkendelsen viser browseren en utilgængelig 127.0.0.1-side — det er forventet. Kopiér hele adressen fra adresselinjen, og indsæt den nedenfor.
+	DE	Nach der Bestätigung zeigt der Browser eine nicht erreichbare 127.0.0.1-Seite — das ist so vorgesehen. Kopiere die vollständige Adresse aus der Adressleiste und füge sie unten ein.
+	EN	After approving, the browser shows an unreachable 127.0.0.1 page — that is expected. Copy the full address from the address bar and paste it below.
+	ES	Tras aprobar, el navegador muestra una página 127.0.0.1 inaccesible — es lo esperado. Copie la dirección completa de la barra de direcciones y péguela abajo.
+	FR	Après l'approbation, le navigateur affiche une page 127.0.0.1 inaccessible — c'est normal. Copiez l'adresse complète depuis la barre d'adresse et collez-la ci-dessous.
+	IT	Dopo l'approvazione, il browser mostra una pagina 127.0.0.1 irraggiungibile — è previsto. Copia l'indirizzo completo dalla barra degli indirizzi e incollalo qui sotto.
+	NL	Na goedkeuring toont de browser een onbereikbare 127.0.0.1-pagina — dat is de bedoeling. Kopieer het volledige adres uit de adresbalk en plak het hieronder.
+	NO	Etter godkjenning viser nettleseren en utilgjengelig 127.0.0.1-side — det er forventet. Kopier hele adressen fra adresselinjen, og lim den inn nedenfor.
+	PL	Po zatwierdzeniu przeglądarka wyświetli niedostępną stronę 127.0.0.1 — tak ma być. Skopiuj pełny adres z paska adresu i wklej go poniżej.
+	SV	Efter godkännandet visar webbläsaren en onåbar 127.0.0.1-sida — det är väntat. Kopiera hela adressen från adressfältet och klistra in den nedan.
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_SUBMIT_BTN
+	CS	Dokončit autorizaci
+	DA	Fuldfør godkendelse
+	DE	Autorisierung abschließen
+	EN	Complete Authorization
+	ES	Completar autorización
+	FR	Terminer l'autorisation
+	IT	Completa l'autorizzazione
+	NL	Autorisatie voltooien
+	NO	Fullfør autorisering
+	PL	Zakończ autoryzację
+	SV	Slutför auktorisering
+
+PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_FAILED
+	CS	Autorizace se nezdařila. Zkuste to znovu, nebo použijte párování ZeroConf výše.
+	DA	Godkendelse mislykkedes. Prøv igen, eller brug ZeroConf-parring ovenfor.
+	DE	Autorisierung fehlgeschlagen. Bitte versuche es erneut oder nutze die ZeroConf-Kopplung oben.
+	EN	Authorization failed. Please try again, or use ZeroConf pairing above.
+	ES	La autorización falló. Inténtelo de nuevo o use el emparejamiento ZeroConf de arriba.
+	FR	Échec de l'autorisation. Réessayez, ou utilisez l'appairage ZeroConf ci-dessus.
+	IT	Autorizzazione non riuscita. Riprova, oppure usa l'abbinamento ZeroConf qui sopra.
+	NL	Autorisatie mislukt. Probeer het opnieuw of gebruik de ZeroConf-koppeling hierboven.
+	NO	Autorisering mislyktes. Prøv igjen, eller bruk ZeroConf-paring ovenfor.
+	PL	Autoryzacja nie powiodła się. Spróbuj ponownie lub użyj parowania ZeroConf powyżej.
+	SV	Auktoriseringen misslyckades. Försök igen eller använd ZeroConf-parkoppling ovan.

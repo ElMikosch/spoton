@@ -47,7 +47,7 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 
 **Common causes and fixes:**
 - **Popup blocked** — browsers block `window.open()` popups unless they're triggered directly by a click. Allow pop-ups for your LMS host and try again (SpotOn shows a reminder about this next to the auth button).
-- **No Client ID configured** — PKCE requires your own Spotify Developer App Client ID (see [README Requirements](README.md#requirements)). Enter it in SpotOn Settings before starting the auth flow; the setup wizard walks you through creating one.
+- **No Client ID configured** — SpotOn ships a bundled Client ID that works out of the box. If you prefer your own, enter it in SpotOn Settings before starting the auth flow; the setup wizard walks you through creating one at [developer.spotify.com](https://developer.spotify.com/dashboard).
 - **Redirect doesn't reach LMS** — SpotOn bounces the browser back to your LMS server via a GitHub Pages relay (`https://stiefenm.github.io/spoton/auth/`). If your phone/browser can't reach your LMS host directly (different network, VPN, restrictive firewall), the relay page falls back to a "copy this URL" box — paste it into the manual auth field on the SpotOn Settings page to complete the flow.
 - **Redirect URI mismatch** — the Client ID's app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) must have `https://stiefenm.github.io/spoton/auth/` registered as an allowed Redirect URI, exactly as shown by the setup wizard.
 
@@ -57,12 +57,11 @@ If the issue persists, collect a diagnostic bundle and include your Docker setup
 
 **Cause:** SpotOn refreshes your PKCE access token automatically in the background using the stored refresh token. If that refresh token becomes invalid (access revoked in your Spotify account, a corrupted token file, or an old v2.x account that never migrated), SpotOn can no longer refresh it and flags the account for re-authentication.
 
-**What SpotOn already does automatically:** if the *Connect* credentials (used by librespot) get corrupted — e.g. after a crash or an abrupt Docker restart — SpotOn deletes and re-derives them from the stored PKCE tokens on its own, no action needed. Only a genuinely invalid/expired refresh token escalates to "needs re-authentication."
-
 **Solution:**
-1. Open **SpotOn Settings** and check the Auth Health Dashboard (also shown on the Status page) for the affected account
-2. If it shows "needs re-authentication," follow the reconnect prompt and complete the PKCE flow again (see above)
-3. If the account still fails after re-auth, clear its cache and start fresh:
+1. Open **SpotOn Settings** and check the Auth Health Dashboard (also shown on the Status page) for the affected account — it shows Web API Token and Playback Credentials status separately
+2. If the **Web API Token** shows "needs re-authentication," complete the PKCE flow again via "Connect Spotify Account"
+3. If **Playback Credentials** are missing, run "Authorize Playback" — select SpotOn in the Spotify app to pair
+4. If the account still fails after both steps, clear its cache and start fresh:
 
 ```bash
 # 1. Stop LMS
@@ -92,6 +91,19 @@ rm -rf /config/cache/spoton/<accountId>/
 3. **Check Redirect URI** — ensure `https://stiefenm.github.io/spoton/auth/` is listed as a Redirect URI in your app settings (the setup wizard shows this).
 
 If the Status page shows `API Limits: Search 10 | Library 10 | Playlists 20` (or similarly low values), your app has restricted limits — SpotOn will still work, just with smaller page sizes.
+
+### Frequent rate limiting (HTTP 429)
+
+**Symptoms:** OPML menus show "Spotify requests throttled -- please wait", the Status page shows a nonzero 429 count, or playback/browsing is intermittently interrupted.
+
+**Cause:** By default SpotOn uses a bundled Client ID (`d420a117...`) borrowed from the open-source ncspot project. This ID is shared across all SpotOn installations and all ncspot users worldwide. Under peak usage across that shared population, the aggregate API quota can be exhausted, triggering Spotify's 429 rate limiter — even if your own individual usage is light. A/B testing (same account, same library, identical request pattern) confirmed the bundled ID produces 429s under load where a private Client ID does not.
+
+**Solutions:**
+
+1. **Recommended: Create your own Spotify Developer App.** Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), create an app, and enter its Client ID in SpotOn Settings. Your own app has a private rate-limit bucket that is not shared with anyone else. The setup wizard in SpotOn Settings walks through the required steps (Redirect URI, Client ID entry).
+2. **If 429s are intermittent and brief**, SpotOn automatically backs off and retries — waiting a few seconds usually resolves it without any action needed.
+
+**Note:** Recent versions of SpotOn skip the startup API-limit probe when using the bundled Client ID (the limits are known constants), saving 8 requests from the shared quota on every LMS restart.
 
 ### "Made For You" playlists missing or empty
 
@@ -125,18 +137,24 @@ If the Status page shows `API Limits: Search 10 | Library 10 | Playlists 20` (or
 - **Update to v2.1.6 or later** — includes an upgraded librespot with CDN fallback (automatically tries the next CDN URL on 404) plus SpotOn's own 404 retry layer (3 attempts with 2s delay)
 - If errors persist after updating, you can block specific bad CDN hosts via `/etc/hosts` — see the [forum thread](https://forums.lyrion.org/forum/user-forums/3rd-party-software/1826188-announce-spoton) for known problematic hosts
 
-## mDNS / ZeroConf: Guest Connect Discovery Only
+## mDNS / ZeroConf and Playback Authorization
 
-Since v3.0, account authentication no longer uses mDNS at all — the PKCE flow runs entirely through the browser and SpotOn Settings, with no local-network requirement. This means setup behind Docker, VLANs, or a remote LMS install now just works, without the manual credential-transfer steps older SpotOn versions required.
+SpotOn uses mDNS (ZeroConf) for two purposes:
 
-mDNS (ZeroConf) is only still used for **guest Spotify Connect discovery**: it lets someone else on your LAN see your LMS player in their Spotify app's device list and hand off playback to it, without needing a SpotOn account of their own. This is optional and unrelated to your own account setup or normal Connect control, both of which go through Spotify's cloud regardless of network topology.
+1. **Authorize Playback (setup step 2)** — after connecting your Spotify account via browser login, you need to authorize playback by selecting SpotOn's pairing device in the Spotify app. This uses mDNS so the Spotify app can discover the pairing device on your local network. This is a one-time step per account.
 
-Guest discovery via mDNS won't work if:
-- LMS runs in a **Docker container** (isolated network namespace) — use `--network host` if you want guest discovery to work
-- LMS and the guest's phone are on **different VLANs/subnets**
-- A **firewall** blocks mDNS (UDP port 5353)
+2. **Guest Spotify Connect discovery** — lets someone else on your LAN see your LMS player in their Spotify app's device list and hand off playback to it, without needing a SpotOn account of their own.
 
-None of the above affects setting up or using your own SpotOn account — only a guest trying to spontaneously discover your player via ZeroConf.
+### If the Spotify app can't find the pairing device
+
+This happens when mDNS doesn't work between your phone/computer and the LMS host:
+- **Docker** — use `--network host`, or use the **browser fallback** (nested inside the Authorize Playback section in SpotOn Settings)
+- **Different VLANs/subnets** — use the browser fallback
+- **Firewall** blocks mDNS (UDP port 5353) — open it, or use the browser fallback
+
+The browser fallback authorizes playback without mDNS by opening a browser window on the LMS host. It works in any network topology.
+
+**Note:** Step 1 (Connect Spotify Account) never needs mDNS — it runs entirely through the browser, regardless of network setup.
 
 ## Windows: Daemon Timeout or "Binary not found"
 
