@@ -31,6 +31,7 @@ sub build_server_spec {
     my $runtime_dir = dirname($socket);
     my $config_dir = File::Spec->catdir($runtime_dir, 'config');
     my $cookie_path = File::Spec->catfile($config_dir, 'pulse', 'cookie');
+    my $daemon_conf = File::Spec->catfile($config_dir, 'pulse', 'daemon.conf');
     my $sink = _sink_name($args{sink_name});
     my $rate = _sample_rate($args{sample_rate});
     my $channels = _channels($args{channels});
@@ -59,11 +60,15 @@ sub build_server_spec {
             PULSE_COOKIE    => $cookie_path,
             XDG_CONFIG_HOME => $config_dir,
             XDG_RUNTIME_DIR => $runtime_dir,
+            # An explicit daemon.conf keeps host settings such as
+            # flat-volumes out of the private server.
+            PULSE_CONFIG    => $daemon_conf,
         },
         socket_path  => $socket,
         runtime_dir  => $runtime_dir,
         config_dir   => $config_dir,
         cookie_path  => $cookie_path,
+        daemon_conf  => $daemon_conf,
         sink_name    => $sink,
         monitor      => "$sink.monitor",
         sample_rate  => $rate,

@@ -526,7 +526,7 @@ footer {
         }
 
         var tools = s.tools || {};
-        var names = ['soloist', 'pulseaudio', 'parec', 'ffmpeg'];
+        var names = ['soloist', 'pulseaudio', 'parec', 'pactl', 'ffmpeg'];
         for (var t = 0; t < names.length; t++) {
             var path = tools[names[t]];
             body.appendChild(createMetricRow(names[t], path || 'not found', path ? 'mono' : 'dot-dead'));

@@ -89,6 +89,25 @@ installs a new build when they change. A managed binary takes precedence over
 `soloist` in `PATH`. Whenever the binary in use changes, idle devices restart
 with it on the next reconcile pass and active devices once playback has ended.
 
+### Volume
+
+Soloist sets its volume with `pa_context_set_sink_input_volume`, i.e. as
+PulseAudio stream volume, and both the sink monitor and a per-stream monitor
+capture the already attenuated audio. SpotOn therefore reads the newest
+sink input's volume with `pactl` (C locale, private server) whenever Soloist
+reports a volume or full state and every five seconds while the device is
+active, and sets the private sink to `65536² / stream volume`. PulseAudio
+multiplies both volumes in a single mixing step, so the captured PCM is at
+full scale while Soloist still sees its own stream volume. This requires
+`flat-volumes = no`, which the private server's own `daemon.conf`
+(`PULSE_CONFIG`) enforces.
+
+The Spotify volume is mirrored to the attached LMS player with `mixer volume`,
+and LMS `mixer volume` changes of that player are sent to Soloist with
+`set_volume`; echoes within two seconds are ignored, and a muted player is
+left muted. On attach the LMS volume is pushed to Soloist, so selecting a
+speaker in the Spotify app never makes it louder.
+
 ### Runtime layout and recovery
 
 Per player, SpotOn keeps Soloist's persistent data (including the stored

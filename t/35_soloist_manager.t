@@ -104,6 +104,10 @@ BEGIN {
             $client->{playing} = $self->{command}[1] ? 0 : 1;
             $client->{paused} = $self->{command}[1] ? 1 : 0;
         }
+        elsif ($client && $self->{command}[0] eq 'mixer'
+            && $self->{command}[1] eq 'volume') {
+            $client->{volume} = $self->{command}[2];
+        }
         elsif ($client && $self->{command}[0] eq 'stop') {
             $client->{playing} = 0;
             $client->{paused} = 0;
@@ -194,6 +198,7 @@ use Plugins::SpotOn::Soloist::StreamServer;
     sub model { 'squeezebox' }
     sub isPlaying { $_[0]{playing} }
     sub isPaused { $_[0]{paused} }
+    sub volume { defined $_[0]{volume} ? $_[0]{volume} : 50 }
     sub isStopped { !$_[0]{playing} && !$_[0]{paused} }
     sub playingSong { $_[0]{song} }
     sub songElapsedSeconds { $_[0]{elapsed} || 0 }
@@ -231,6 +236,7 @@ use Plugins::SpotOn::Soloist::StreamServer;
         { state => $_[0]{state}, soloistArgv => ['--api-key', '[REDACTED]'] }
     }
     sub new_stream_pipeline { bless {}, 'Local::Pipeline' }
+    sub compensate_volume { $_[0]{compensated}++; 1 }
 
     package Local::Session;
     our @instances;
@@ -296,6 +302,7 @@ my $token_index = 0;
             soloist    => '/usr/local/bin/soloist',
             pulseaudio => '/usr/bin/pulseaudio',
             parec      => '/usr/bin/parec',
+            pactl      => '/usr/bin/pactl',
             ffmpeg     => '/usr/bin/ffmpeg',
         } };
     };
@@ -447,13 +454,13 @@ my $token_index = 0;
     } @Slim::Control::Request::requests;
     is($plays_after, $plays_before, 'track change does not reopen the audio stream');
 
-    # Once inactive, reconciliation is free to replace the process with the
-    # stable localized group name.
-    $snapshot->{playback}{is_active} = 0;
+    # Spotify keeps a paused device "active" indefinitely.  Once playback is
+    # paused, reconciliation replaces the process with the group name.
+    $snapshot->{playback}{status} = 'paused';
     $instance->{session}{snapshot} = $snapshot;
     Plugins::SpotOn::Soloist::Manager->reconcile();
     my $group_instance = Plugins::SpotOn::Soloist::Manager->instanceForClient($kitchen);
-    isnt($group_instance, $instance, 'idle name transition creates a fresh group runtime');
+    isnt($group_instance, $instance, 'paused but still active device is renamed for the group');
     is($group_instance->device_name, 'Kitchen (Group)', 'group runtime uses static suffix');
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops all runtimes');
@@ -580,6 +587,7 @@ my $token_index = 0;
     # The user starts other content on the player: release it and pause Spotify.
     $clock += 10;
     $kitchen->{song} = Local::Song->new('file:///music/local.flac');
+    $session->{actions} = [];
     $subscribers{'newsong'}->(
         Slim::Control::Request->notification($kitchen, 'playlist', 'newsong'),
     );
@@ -591,6 +599,46 @@ my $token_index = 0;
     is($kitchen->playingSong->track->url, 'file:///music/local.flac',
         'stale track change does not reclaim the player the user took over');
     is($runtime->player_id, undef, 'player stays released after a stale track change');
+
+
+    # ---- Volume: Spotify and LMS share one volume, LMS attenuates. ----
+    {
+        my $runtime_obj = $runtime->{runtime};
+        $kitchen->{volume} = 35;
+        $session->{actions} = [];
+        $runtime->detach_player(silent => 1);
+        $clock += 10;
+        $session->emit({ kind => 'state', event_type => 'playback_state' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 80 } });
+        ok($runtime->player_id, 'player attaches for volume checks');
+        ok(grep({ $_->[0] eq 'volume' && $_->[1]{volume} == 35 } @{ $session->{actions} }),
+            'on attach the LMS volume is pushed to the Spotify slider');
+        is($kitchen->{volume}, 35, 'attaching never changes the speaker volume');
+
+        my $compensated = $runtime_obj->{compensated} || 0;
+        $session->{actions} = [];
+        $session->emit({ kind => 'volume', event_type => 'volume_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 60 } });
+        is($kitchen->{volume}, 60, 'Spotify volume change sets the LMS player volume');
+        cmp_ok($runtime_obj->{compensated}, '>', $compensated, 'Soloist attenuation is compensated');
+
+        $session->{snapshot}{playback}{volume} = 60;
+        $subscribers{'volume'}->(Slim::Control::Request->notification($kitchen, 'mixer', 'volume', 60));
+        is_deeply($session->{actions}, [], 'LMS echo of a Spotify volume change is not sent back');
+
+        $kitchen->{volume} = 25;
+        $subscribers{'volume'}->(Slim::Control::Request->notification($kitchen, 'mixer', 'volume', 25));
+        is_deeply($session->{actions}, [['volume', { volume => 25 }]], 'LMS volume change moves the Spotify slider');
+
+        $session->{actions} = [];
+        $kitchen->{volume} = -25;
+        $subscribers{'volume'}->(Slim::Control::Request->notification($kitchen, 'mixer', 'muting'));
+        is_deeply($session->{actions}, [], 'muted LMS player does not change the Spotify volume');
+        $session->emit({ kind => 'volume', event_type => 'volume_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 70 } });
+        is($kitchen->{volume}, -25, 'Spotify volume change keeps a muted LMS player muted');
+        $kitchen->{volume} = 50;
+    }
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops after control checks');
 
@@ -661,7 +709,7 @@ my $token_index = 0;
         };
         my $missing = $M->setupStatus();
         is($missing->{state}, 'missing_tools', 'missing host programs take precedence in the status');
-        is_deeply($missing->{missing}, ['parec', 'ffmpeg'], 'missing programs are listed');
+        is_deeply($missing->{missing}, ['parec', 'pactl', 'ffmpeg'], 'missing programs are listed');
     }
     ok($M->stop(), 'manager stops after API key checks');
 
@@ -676,7 +724,7 @@ my $token_index = 0;
         local *Plugins::SpotOn::Soloist::AudioPreflight::inspect = sub {
             return { tools => {
                 soloist => $fake_bin, pulseaudio => '/usr/bin/pulseaudio',
-                parec => '/usr/bin/parec', ffmpeg => '/usr/bin/ffmpeg',
+                parec => '/usr/bin/parec', pactl => '/usr/bin/pactl', ffmpeg => '/usr/bin/ffmpeg',
             } };
         };
         use warnings 'redefine';

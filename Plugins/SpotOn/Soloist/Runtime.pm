@@ -21,6 +21,15 @@ use constant COOKIE_BYTES          => 256;
 use constant PULSE_START_TIMEOUT   => 10;
 use constant SOLOIST_START_TIMEOUT => 15;
 use constant ORPHAN_TERM_TIMEOUT   => 3;
+use constant COMMAND_TIMEOUT       => 3;
+
+# PulseAudio volumes: 100% and the largest accepted value.
+use constant PA_VOLUME_NORM        => 0x10000;
+use constant PA_VOLUME_MAX         => 0x7fffffff;
+
+# Private PulseAudio configuration.  Volume compensation multiplies the sink
+# volume with Soloist's stream volume, which only holds without flat volumes.
+use constant PULSE_DAEMON_CONF     => "flat-volumes = no\n";
 use constant LOG_TAIL_BYTES        => 600;
 
 # Documented Soloist daemon exit code for a build past its 90-day lifetime.
@@ -41,11 +50,13 @@ my %SUPPORTED_OPTIONS = map { $_ => 1 } qw(
     ffmpeg_binary
     initial_volume
     log_dir
+    pactl_binary
     parec_binary
     proc_root
     pulseaudio_binary
     pulse_start_timeout
     random_bytes
+    run_command
     runtime_dir
     signal_process
     sink_name
@@ -76,6 +87,7 @@ sub new {
         ffmpeg_binary        => _optional_text($args{ffmpeg_binary}, 'ffmpeg_binary'),
         initial_volume       => exists $args{initial_volume} ? $args{initial_volume} : 100,
         log_dir              => _absolute_path($args{log_dir}, 'log_dir'),
+        pactl_binary         => _optional_text($args{pactl_binary}, 'pactl_binary'),
         parec_binary         => _optional_text($args{parec_binary}, 'parec_binary'),
         proc_root            => defined $args{proc_root} ? $args{proc_root} : '/proc',
         pulseaudio_binary    => _required_text($args{pulseaudio_binary}, 'pulseaudio_binary'),
@@ -85,6 +97,7 @@ sub new {
             'pulse_start_timeout',
         ),
         random_bytes         => $args{random_bytes} || \&_random_bytes,
+        run_command          => $args{run_command} || \&_run_command,
         runtime_dir          => _absolute_path($args{runtime_dir}, 'runtime_dir'),
         signal_process       => $args{signal_process} || sub { kill($_[0], $_[1]) },
         sleep                => $args{sleep} || sub { Time::HiRes::sleep($_[0]) },
@@ -254,7 +267,7 @@ sub stop {
 
     _terminate($self->{soloist_proc});
     _terminate($self->{pulse_proc});
-    delete @$self{qw(soloist_proc pulse_proc endpoint deadline)};
+    delete @$self{qw(soloist_proc pulse_proc endpoint deadline sink_volume)};
     $self->_close_logs();
     $self->{state} = 'stopped';
     return 1;
@@ -342,7 +355,111 @@ sub _prepare_layout {
         'cookie',
     );
     _secure_cookie($cookie, $self->{random_bytes});
+    _write_private_file(
+        File::Spec->catfile($self->{runtime_dir}, 'config', 'pulse', 'daemon.conf'),
+        PULSE_DAEMON_CONF,
+    );
     return 1;
+}
+
+# Soloist applies its volume as PulseAudio stream volume, so the captured
+# audio would be attenuated before LMS applies the player volume as well.
+# Setting the private sink to the inverse of the stream volume cancels that
+# attenuation exactly (PulseAudio multiplies both in one step) while
+# Soloist still sees its own stream volume unchanged.  LMS is then the only
+# attenuator, and the Spotify volume is mirrored to the LMS player instead.
+sub compensate_volume {
+    my ($self) = @_;
+    return 0 unless $self->{state} eq 'running' && $self->{pactl_binary};
+
+    my %env = (
+        PULSE_SERVER => "unix:$self->{socket_path}",
+        PULSE_COOKIE => File::Spec->catfile($self->{runtime_dir}, 'config', 'pulse', 'cookie'),
+        LC_ALL       => 'C',
+    );
+    my $listing = $self->{run_command}->(
+        [$self->{pactl_binary}, 'list', 'sink-inputs'],
+        \%env,
+    );
+    return 0 unless defined $listing;
+
+    my $stream_volume = _latest_sink_input_volume($listing);
+    my $target = !defined $stream_volume ? PA_VOLUME_NORM
+               : $stream_volume > 0     ? int(PA_VOLUME_NORM * PA_VOLUME_NORM / $stream_volume + 0.5)
+               :                          PA_VOLUME_NORM;
+    $target = PA_VOLUME_MAX if $target > PA_VOLUME_MAX;
+    return 1 if defined $self->{sink_volume} && $self->{sink_volume} == $target;
+
+    my $set = $self->{run_command}->(
+        [$self->{pactl_binary}, 'set-sink-volume', $self->{sink_name}, $target],
+        \%env,
+    );
+    return 0 unless defined $set;
+    $self->{sink_volume} = $target;
+    return 1;
+}
+
+sub _latest_sink_input_volume {
+    my ($listing) = @_;
+    my ($index, $volume);
+    for my $block (split /^(?=Sink Input #)/m, $listing) {
+        next unless $block =~ /\ASink Input #(\d+)/;
+        my $current = $1;
+        next unless $block =~ /^\s*Volume:\s*(.+)$/m;
+        my @channels = $1 =~ /:\s*(\d+)\s*\//g;
+        next unless @channels;
+        my $sum = 0;
+        $sum += $_ for @channels;
+        ($index, $volume) = ($current, int($sum / @channels + 0.5))
+            if !defined $index || $current > $index;
+    }
+    return $volume;
+}
+
+sub _write_private_file {
+    my ($path, $content) = @_;
+    if (-e $path || -l $path) {
+        my @stat = lstat($path);
+        croak "Unable to inspect $path" unless @stat;
+        croak "$path must not be a symlink" if -l _;
+        croak "$path has the wrong owner" unless $stat[4] == $>;
+    }
+    my $tmp = "$path.new";
+    unlink($tmp) if -e $tmp || -l $tmp;
+    sysopen(my $fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600)
+        or croak "Unable to write $path: $!";
+    print {$fh} $content;
+    close($fh) or croak "Unable to write $path: $!";
+    rename($tmp, $path) or croak "Unable to install $path: $!";
+    return 1;
+}
+
+# Run a short helper (pactl) synchronously with a hard timeout and return its
+# standard output, or undef on failure.
+sub _run_command {
+    my ($argv, $env) = @_;
+    my ($output, $pid);
+    my $ok = eval {
+        local %ENV = (%ENV, %{ $env || {} });
+        local $SIG{ALRM} = sub { die "timeout\n" };
+        alarm(COMMAND_TIMEOUT);
+        $pid = open(my $fh, '-|', @$argv) or die "Unable to run $argv->[0]: $!";
+        local $/;
+        $output = <$fh>;
+        my $closed = close($fh);
+        alarm(0);
+        die "$argv->[0] failed\n" unless $closed;
+        1;
+    };
+    alarm(0);
+    unless ($ok) {
+        if ($pid && kill(0, $pid)) {
+            kill('KILL', $pid);
+            waitpid($pid, 0);
+        }
+        return undef;
+    }
+    return defined $output ? $output : '';
 }
 
 sub _cleanup_previous_run {

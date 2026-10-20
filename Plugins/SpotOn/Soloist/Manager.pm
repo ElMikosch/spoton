@@ -47,7 +47,7 @@ use constant VERSION_TIMEOUT       => 5;
 use constant UPDATE_CHECK_FIRST    => 600;
 use constant UPDATE_CHECK_INTERVAL => 86_400;
 
-my @REQUIRED_TOOLS = qw(soloist pulseaudio parec ffmpeg);
+my @REQUIRED_TOOLS = qw(soloist pulseaudio parec pactl ffmpeg);
 
 my ($log, $prefs, $server_prefs);
 my %instances;
@@ -61,6 +61,7 @@ my %lms_echo;
 my %attach_block;
 my %version_cache;
 my %instance_binary;
+my %volume_echo;
 my $installer;
 
 sub init {
@@ -160,6 +161,7 @@ sub stop {
     %lms_echo = ();
     %attach_block = ();
     %instance_binary = ();
+    %volume_echo = ();
     return 1;
 }
 
@@ -213,7 +215,7 @@ sub reconcile {
     my $current_binary = _binary_identity($tools->{soloist});
     for my $id (keys %instances) {
         my $instance = $instances{$id};
-        next if $instance->is_active() || $instance->state() eq 'failed';
+        next if _is_playing($instance) || $instance->state() eq 'failed';
         next unless defined $current_binary && defined $instance_binary{$id}
             && $instance_binary{$id} ne $current_binary;
         $log->info('Soloist device "' . $instance->device_name()
@@ -231,7 +233,7 @@ sub reconcile {
     for my $id (keys %instances) {
         next if $desired{$id};
         my $instance = $instances{$id};
-        next if $instance->is_active();
+        next if _is_playing($instance);
         $instance->stop();
         delete $instances{$id};
     }
@@ -709,9 +711,9 @@ sub _ensure_instance {
 
     my $instance = $instances{$id};
     if ($instance && $instance->device_name() ne $device_name) {
-        if ($instance->is_active()) {
+        if (_is_playing($instance)) {
             $log->is_info && $log->info(
-                "Soloist name change for $id deferred while playback is active"
+                "Soloist name change for $id deferred while playback is running"
             );
             return $instance;
         }
@@ -831,6 +833,55 @@ sub _consume_echo {
     return 1;
 }
 
+# Spotify keeps a paused Connect device "active" until another device is
+# chosen, so only a session that is actually playing is protected from
+# restarts for renames, regrouping or a new Soloist build.
+sub _is_playing {
+    my ($instance) = @_;
+    return 0 unless $instance->is_active();
+    my $status = _soloist_status($instance);
+    return $status eq 'playing' || $status eq 'buffering' ? 1 : 0;
+}
+
+# Mirror the Spotify volume to the attached LMS player.  The audio itself is
+# kept at full scale by the runtime's volume compensation, so LMS remains
+# the only attenuator and 100% in Spotify equals 100% on the player.
+sub _apply_volume {
+    my ($instance, $volume) = @_;
+    return unless $instance->player_id();
+    return unless defined $volume && $volume =~ /\A\d+(?:\.\d+)?\z/;
+    $volume = int($volume + 0.5);
+    $volume = 100 if $volume > 100;
+    my $client = _get_client($instance->player_id()) or return;
+    my $current = eval { $client->volume() };
+    # A muted player keeps its mute; LMS reports it as a negative volume.
+    return if !defined $current || $current < 0;
+    return if int($current + 0.5) == $volume;
+
+    $volume_echo{ $instance->client_id() } = {
+        value => $volume,
+        until => Time::HiRes::time() + ECHO_WINDOW,
+    };
+    require Slim::Control::Request;
+    my $request = Slim::Control::Request->new($client->id, ['mixer', 'volume', $volume])
+        or return;
+    $request->source(__PACKAGE__) if $request->can('source');
+    $request->execute();
+}
+
+# On attach the player's current LMS volume wins: the Spotify slider moves to
+# it instead of the speaker jumping to Soloist's last volume.
+sub _push_lms_volume {
+    my ($instance) = @_;
+    my $client = _get_client($instance->player_id()) or return;
+    my $volume = eval { $client->volume() };
+    return unless defined $volume && $volume >= 0;
+    $volume = int($volume + 0.5);
+    my $current = ((($instance->session_snapshot() || {})->{playback}) || {})->{volume};
+    return if defined $current && int($current + 0.5) == $volume;
+    $instance->send_action('volume', volume => $volume);
+}
+
 sub _soloist_status {
     my ($instance) = @_;
     my $snapshot = $instance->session_snapshot() || {};
@@ -865,6 +916,11 @@ sub _on_instance_update {
     my $playback = $snapshot->{playback} || {};
     my $kind = $event->{kind} || '';
 
+    if ($kind eq 'volume' || ($kind eq 'state' && defined $playback->{volume})) {
+        $instance->compensate_volume();
+        _apply_volume($instance, $playback->{volume});
+    }
+
     if (($kind eq 'state' || $kind eq 'device')
         && defined $playback->{is_active}
         && !$playback->{is_active}) {
@@ -893,6 +949,7 @@ sub _on_instance_update {
                 format => DEFAULT_STREAM_FORMAT,
                 title  => $meta ? _display_title($meta) : $instance->device_name(),
             );
+            _push_lms_volume($instance) if $instance->player_id();
         }
     }
 
@@ -1136,6 +1193,28 @@ sub _subscribe {
     };
     Slim::Control::Request::subscribe($newsong, [['playlist'], ['newsong']]);
     push @subscriptions, $newsong;
+
+    # LMS volume changes (remote, knob, web UI) move the Spotify slider.
+    my $mixer = sub {
+        my ($request) = @_;
+        return if eval { $request->source() }
+            && $request->source() eq __PACKAGE__;
+        my $client = eval { $request->client() } or return;
+        my $instance = __PACKAGE__->instanceForClient($client) or return;
+        return unless ($instance->player_id() || '') eq $client->id;
+        my $volume = eval { $client->volume() };
+        return unless defined $volume && $volume >= 0;
+        $volume = int($volume + 0.5);
+
+        my $echo = $volume_echo{ $instance->client_id() };
+        return if $echo && $echo->{until} >= Time::HiRes::time()
+            && $echo->{value} == $volume;
+        my $current = ((($instance->session_snapshot() || {})->{playback}) || {})->{volume};
+        return if defined $current && int($current + 0.5) == $volume;
+        $instance->send_action('volume', volume => $volume);
+    };
+    Slim::Control::Request::subscribe($mixer, [['mixer'], ['volume']]);
+    push @subscriptions, $mixer;
 }
 
 sub _schedule_reconcile {
@@ -1221,7 +1300,7 @@ sub _preflight {
         ($managed ? (soloist_binary => $managed) : ()),
     );
     my $found = $preflight->{tools} || {};
-    for my $required (qw(soloist pulseaudio parec ffmpeg)) {
+    for my $required (@REQUIRED_TOOLS) {
         return (undef, "missing_$required") unless $found->{$required};
     }
     return ({ %$found }, undef);

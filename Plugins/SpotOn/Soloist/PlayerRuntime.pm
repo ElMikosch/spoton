@@ -52,6 +52,7 @@ sub start {
             soloist_binary    => $tools->{soloist},
             pulseaudio_binary => $tools->{pulseaudio},
             parec_binary      => $tools->{parec},
+            pactl_binary      => $tools->{pactl},
             ffmpeg_binary     => $tools->{ffmpeg},
             runtime_dir       => $self->{runtime_dir}
                 || catdir($self->{base_dir}, 'runtime'),
@@ -137,6 +138,9 @@ sub poll_now {
             if $self->{session}->can('check_liveness');
         eval { $self->{session}->refresh() }
             unless $self->{session}->connected();
+        # Catch stream volume changes whose event was missed or that came
+        # with a new Soloist output stream.
+        $self->compensate_volume() if $self->is_active();
     }
 
     $self->_schedule_poll(
@@ -279,6 +283,13 @@ sub new_stream_pipeline {
     return unless defined $format && $format =~ /\A(?:flac|pcm)\z/;
     my $pipeline = eval { $self->{runtime}->new_stream_pipeline($format) };
     return blessed($pipeline) ? $pipeline : undef;
+}
+
+sub compensate_volume {
+    my ($self) = @_;
+    return 0 unless $self->{runtime} && $self->{state} eq 'running';
+    return 0 unless $self->{runtime}->can('compensate_volume');
+    return eval { $self->{runtime}->compensate_volume() } ? 1 : 0;
 }
 
 sub set_metadata {

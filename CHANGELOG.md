@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.6] - 2026-10-20
+
+### Changed
+- **One volume for Spotify and the speaker** — Soloist applies its volume as PulseAudio stream volume, so the audio reaching LMS was attenuated twice: 100% in the Spotify app only reached the volume set on the speaker. SpotOn now sets the private sink to the exact inverse of Soloist's stream volume (verified bit-exact down to 1%), so LMS is the only attenuator. The Spotify slider and the LMS player volume follow each other in both directions; when a speaker is picked in the Spotify app, the slider moves to the speaker's current volume instead of the speaker jumping to Soloist's last volume. A muted player stays muted. The private PulseAudio server now reads only its own `daemon.conf` (`flat-volumes = no`), independent of host settings. `pactl` (from `pulseaudio-utils`, like `parec`) is now a listed requirement.
+
+### Fixed
+- **Group name "(Group)" did not appear after grouping speakers** — renames, regrouping and restarts for a new Soloist build were deferred while the device was the *active* Spotify device. Spotify keeps a paused device active until another one is chosen, so the rename never happened. Only a device that is actually playing is now protected; a paused one is renamed (and its group members removed) on the next reconcile pass.
+
+
 ## [3.6.5] - 2026-10-20
 
 ### Fixed

@@ -202,6 +202,46 @@ like(
     'runtime rejects unsupported stream formats',
 );
 
+my $daemon_conf = catfile($runtime_dir, 'config', 'pulse', 'daemon.conf');
+open(my $conf_fh, '<', $daemon_conf) or die "daemon.conf missing: $!";
+like(do { local $/; <$conf_fh> }, qr/^flat-volumes = no$/m, 'private PulseAudio disables flat volumes');
+close($conf_fh);
+is(mode_of($daemon_conf), 0600, 'private daemon.conf is owner-only');
+
+# Volume compensation: the sink gets the inverse of Soloist's stream volume.
+{
+    my @commands;
+    my $listing = join('',
+        "Sink Input #3\n\tDriver: protocol-native.c\n\tVolume: front-left: 65536 / 100% / 0.00 dB,   front-right: 65536 / 100% / 0.00 dB\n",
+        "Sink Input #7\n\tDriver: protocol-native.c\n\tVolume: front-left: 19660 /  30% / -31.37 dB,   front-right: 19660 /  30% / -31.37 dB\n",
+    );
+    local $runtime->{pactl_binary} = '/usr/bin/pactl';
+    local $runtime->{run_command} = sub {
+        my ($argv, $env) = @_;
+        push @commands, [[@$argv], {%$env}];
+        return $argv->[1] eq 'list' ? $listing : '';
+    };
+    ok($runtime->compensate_volume(), 'volume compensation succeeds');
+    is_deeply($commands[-1][0], ['/usr/bin/pactl', 'set-sink-volume', 'spoton_soloist', 218462],
+        'sink volume is the inverse of the newest Soloist stream volume');
+    is($commands[0][1]{LC_ALL}, 'C', 'pactl output is parsed in the C locale');
+    is($commands[0][1]{PULSE_SERVER}, 'unix:' . catfile($runtime_dir, 'native'), 'pactl uses the private server');
+
+    @commands = ();
+    $runtime->compensate_volume();
+    is(scalar @commands, 1, 'unchanged stream volume does not touch the sink again');
+
+    $listing = "Sink Input #8\n\tVolume: front-left: 0 /   0% / -inf dB,   front-right: 0 /   0% / -inf dB\n";
+    @commands = ();
+    $runtime->compensate_volume();
+    is($commands[-1][0][3], 65536, 'muted stream resets the sink to 100%');
+
+    $listing = '';
+    @commands = ();
+    $runtime->compensate_volume();
+    is(scalar @commands, 1, 'no stream keeps the current sink volume');
+}
+
 @Local::Process::terminated = ();
 ok($runtime->stop(), 'runtime stops cleanly');
 is_deeply(

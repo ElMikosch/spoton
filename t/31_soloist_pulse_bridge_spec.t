@@ -27,6 +27,8 @@ my $server = build_server_spec(
 
 is($server->{monitor}, 'spoton_soloist.monitor', 'null sink monitor name is deterministic');
 is($server->{env}{PULSE_SERVER}, "unix:$socket", 'server exports the isolated socket address');
+like($server->{env}{PULSE_CONFIG}, qr{/config/pulse/daemon\.conf\z},
+    'server reads only its private daemon.conf, never host settings');
 is(
     $server->{env}{PULSE_COOKIE},
     '/var/cache/lyrion/spoton/pulse/config/pulse/cookie',

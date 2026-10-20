@@ -352,7 +352,7 @@
 
 		<div style="margin-top:12px; font-size:0.9em">
 			<div style="opacity:0.85">[% 'PLUGIN_SPOTON_SOLOIST_REQUIREMENTS' | string %]</div>
-			[% FOREACH tool IN ['soloist', 'pulseaudio', 'parec', 'ffmpeg'] %]
+			[% FOREACH tool IN ['soloist', 'pulseaudio', 'parec', 'pactl', 'ffmpeg'] %]
 			<div style="margin-left:12px">
 				[% IF soloist.tools.$tool %]
 				<span style="color: green">&#10003;</span> [% tool %] <span class="mono" style="opacity:0.7">[% soloist.tools.$tool | html %]</span>
