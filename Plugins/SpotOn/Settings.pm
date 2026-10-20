@@ -299,7 +299,29 @@ sub handler {
             $mode = 'direct' unless $mode =~ /^(?:direct|proxy)$/;
             $prefs->set('streamingMode', $mode);
         }
+
+        # Spotify Soloist API key. Never a pref: the Manager writes the
+        # owner-only key file and the value is dropped from $paramRef so the
+        # page can never echo it back. An empty field keeps the stored key.
+        require Plugins::SpotOn::Soloist::Manager;
+        my $soloistKey = delete $paramRef->{pref_soloistApiKey};
+        my ($soloistOk, $soloistError) = (1);
+        if ($paramRef->{pref_soloistRemoveKey}) {
+            ($soloistOk, $soloistError) = Plugins::SpotOn::Soloist::Manager->removeApiKey();
+        }
+        elsif (defined $soloistKey && $soloistKey =~ /\S/) {
+            ($soloistOk, $soloistError) = Plugins::SpotOn::Soloist::Manager->saveApiKey($soloistKey);
+        }
+        elsif (Plugins::SpotOn::Soloist::Manager->enabled()) {
+            # Saving the page retries failed devices immediately, e.g. after
+            # an expired Soloist build was replaced.
+            my $soloistState = eval { Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{state} } || '';
+            Plugins::SpotOn::Soloist::Manager->start() if $soloistState eq 'failed';
+        }
+        $soloistKey = undef;
+        $paramRef->{soloistKeyError} = $soloistError unless $soloistOk;
     }
+    delete $paramRef->{pref_soloistApiKey};
 
     my $serverPrefs = preferences('server');
 
@@ -403,6 +425,12 @@ sub handler {
 
     # Global streaming mode default status for template (COMPAT-01, GH #96 scope extension)
     $paramRef->{globalStreamingMode} = $prefs->get('streamingMode') || 'direct';
+
+    # Spotify Soloist setup state: key presence (never the key), required
+    # host programs, build version/expiry and one entry per Spotify device.
+    require Plugins::SpotOn::Soloist::Manager;
+    $paramRef->{soloist} = eval { Plugins::SpotOn::Soloist::Manager->setupStatus() } || {};
+    $log->warn("Settings: Soloist setup status failed: $@") if $@;
 
     my $logTotal = 0;
     my $spotonDir = catdir($serverPrefs->get('cachedir'), 'spoton');

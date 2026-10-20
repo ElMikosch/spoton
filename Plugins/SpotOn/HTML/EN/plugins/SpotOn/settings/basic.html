@@ -295,6 +295,95 @@
 		[% END %]
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_SPOTON_SOLOIST_TITLE" desc="PLUGIN_SPOTON_SOLOIST_DESC" %]
+		<div style="margin-bottom:10px; font-weight:bold">
+		[% SWITCH soloist.state %]
+		[% CASE 'running' %]
+			<span style="color: green">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_RUNNING' | string %]</span>
+		[% CASE 'starting' %]
+			<span style="color: orange">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_STARTING' | string %]</span>
+		[% CASE 'waiting_players' %]
+			<span style="color: orange">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_WAITING' | string %]</span>
+		[% CASE 'disabled' %]
+			<span style="opacity:0.6">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_DISABLED' | string %]</span>
+		[% CASE 'no_key' %]
+			<span style="opacity:0.6">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_NO_KEY' | string %]</span>
+		[% CASE 'key_error' %]
+			<span style="color: red">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_KEY_ERROR' | string %] ([% soloist.apiKeyError | html %])</span>
+		[% CASE 'missing_tools' %]
+			<span style="color: red">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_MISSING_TOOLS' | string %]</span>
+		[% CASE 'expired' %]
+			<span style="color: red">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_EXPIRED' | string %]</span>
+		[% CASE %]
+			<span style="color: red">&#9679; [% 'PLUGIN_SPOTON_SOLOIST_STATE_FAILED' | string %]</span>
+		[% END %]
+		</div>
+
+		[% IF soloistKeyError %]
+		<div style="color: red; margin-bottom:10px">
+			[% IF soloistKeyError == 'api_key_invalid' %][% 'PLUGIN_SPOTON_SOLOIST_API_KEY_INVALID' | string %][% ELSE %][% 'PLUGIN_SPOTON_SOLOIST_API_KEY_FAILED' | string %][% END %]
+		</div>
+		[% END %]
+
+		[% IF soloist.devices.size %]
+		<div style="margin-bottom:10px">
+			<div style="opacity:0.85">[% 'PLUGIN_SPOTON_SOLOIST_DEVICES' | string %]</div>
+			[% FOREACH device IN soloist.devices %]
+			<div style="margin-left:12px">
+				[% IF device.state == 'running' %]<span style="color: green">&#9679;</span>[% ELSIF device.state == 'failed' %]<span style="color: red">&#9679;</span>[% ELSE %]<span style="color: orange">&#9679;</span>[% END %]
+				[% device.deviceName | html %]
+				[% IF device.active && device.track %]&mdash; &#9654; [% device.track | html %][% END %]
+				[% IF device.lastError %]<span style="opacity:0.7">&mdash; [% device.lastError.code | html %]</span>[% END %]
+			</div>
+			[% END %]
+		</div>
+		[% END %]
+
+		<label for="pref_soloistApiKey">[% 'PLUGIN_SPOTON_SOLOIST_API_KEY' | string %]</label><br/>
+		<input type="password" class="stdedit" name="pref_soloistApiKey" id="pref_soloistApiKey"
+		       value="" autocomplete="new-password" spellcheck="false"
+		       placeholder="[% IF soloist.apiKey %][% 'PLUGIN_SPOTON_SOLOIST_API_KEY_SAVED' | string | html %][% ELSE %][% 'PLUGIN_SPOTON_SOLOIST_API_KEY_NEW' | string | html %][% END %]"/>
+		[% IF soloist.apiKey %]
+		<div style="margin-top:6px">
+			<input type="checkbox" class="stdedit" name="pref_soloistRemoveKey" id="pref_soloistRemoveKey" value="1"/>
+			<label for="pref_soloistRemoveKey">[% 'PLUGIN_SPOTON_SOLOIST_API_KEY_REMOVE' | string %]</label>
+		</div>
+		[% END %]
+
+		<div style="margin-top:12px; font-size:0.9em">
+			<div style="opacity:0.85">[% 'PLUGIN_SPOTON_SOLOIST_REQUIREMENTS' | string %]</div>
+			[% FOREACH tool IN ['soloist', 'pulseaudio', 'parec', 'ffmpeg'] %]
+			<div style="margin-left:12px">
+				[% IF soloist.tools.$tool %]
+				<span style="color: green">&#10003;</span> [% tool %] <span class="mono" style="opacity:0.7">[% soloist.tools.$tool | html %]</span>
+				[% IF tool == 'soloist' && soloist.version %]<span style="opacity:0.7">([% soloist.version | html %])</span>[% END %]
+				[% ELSE %]
+				<span style="color: red">&#10007;</span> [% tool %] &mdash; [% 'PLUGIN_SPOTON_SOLOIST_NOT_FOUND' | string %]
+				[% END %]
+			</div>
+			[% END %]
+			[% IF soloist.missing.grep('^lms_simplews$').size %]
+			<div style="margin-left:12px"><span style="color: red">&#10007;</span> [% 'PLUGIN_SPOTON_SOLOIST_LMS_TOO_OLD' | string %]</div>
+			[% END %]
+			[% IF soloist.missing.grep('^linux$').size %]
+			<div style="margin-left:12px"><span style="color: red">&#10007;</span> [% 'PLUGIN_SPOTON_SOLOIST_LINUX_ONLY' | string %]</div>
+			[% END %]
+			[% IF soloist.expiresInDays.defined %]
+			<div style="margin-left:12px; [% IF soloist.expiresInDays < 14 %]color: orange[% ELSE %]opacity:0.85[% END %]">
+				[% 'PLUGIN_SPOTON_SOLOIST_EXPIRES_IN' | string %]: [% soloist.expiresInDays %] ([% soloist.buildDate | html %])
+			</div>
+			[% END %]
+		</div>
+
+		<details style="margin-top:10px">
+			<summary style="cursor:pointer">[% 'PLUGIN_SPOTON_SOLOIST_HOWTO_TITLE' | string %]</summary>
+			<p style="margin:8px 0 0 0; font-size:0.9em; opacity:0.85">[% 'PLUGIN_SPOTON_SOLOIST_HOWTO' | string | html %]</p>
+			<p style="margin:8px 0 0 0; font-size:0.9em">
+				<a href="https://developer.spotify.com/documentation/soloist" target="_blank" rel="noopener">developer.spotify.com/documentation/soloist</a>
+			</p>
+		</details>
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_SPOTON_BITRATE" desc="" %]
 		<select class="stdedit" name="pref_bitrate" id="pref_bitrate">
 			<option value="320" [% IF prefs.pref_bitrate == 320 %]selected[% END %]>320 kbps</option>

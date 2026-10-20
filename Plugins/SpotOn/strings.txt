@@ -3315,3 +3315,328 @@ PLUGIN_SPOTON_PLAYER_AUTH_BROWSER_FAILED
 	NO	Autorisering mislyktes. Prøv igjen, eller bruk ZeroConf-paring ovenfor.
 	PL	Autoryzacja nie powiodła się. Spróbuj ponownie lub użyj parowania ZeroConf powyżej.
 	SV	Auktoriseringen misslyckades. Försök igen eller använd ZeroConf-parkoppling ovan.
+
+PLUGIN_SPOTON_SOLOIST_TITLE
+	CS	Spotify Soloist (oficiální Connect)
+	DA	Spotify Soloist (officiel Connect)
+	DE	Spotify Soloist (offizielles Connect)
+	EN	Spotify Soloist (official Connect)
+	ES	Spotify Soloist (Connect oficial)
+	FR	Spotify Soloist (Connect officiel)
+	IT	Spotify Soloist (Connect ufficiale)
+	NL	Spotify Soloist (officiële Connect)
+	NO	Spotify Soloist (offisiell Connect)
+	PL	Spotify Soloist (oficjalny Connect)
+	SV	Spotify Soloist (officiell Connect)
+
+PLUGIN_SPOTON_SOLOIST_DESC
+	CS	Volitelné, pouze Linux. S API klíčem Soloist se každý přehrávač LMS (nebo skupina synchronizace) zobrazí jako samostatné oficiální zařízení Spotify Connect. Procházení a přehrávání knihovny tím není ovlivněno.
+	DA	Valgfrit, kun Linux. Med en Soloist-API-nøgle vises hver LMS-afspiller (eller synkroniseringsgruppe) som sin egen officielle Spotify Connect-enhed. Gennemsyn og afspilning fra biblioteket påvirkes ikke.
+	DE	Optional, nur Linux. Mit einem Soloist-API-Key erscheint jeder LMS-Player (oder jede Sync-Gruppe) als eigenes offizielles Spotify-Connect-Gerät. Durchsuchen und Wiedergabe aus der Bibliothek bleiben davon unberührt.
+	EN	Optional, Linux only. With a Soloist API key, every LMS player (or sync group) appears as its own official Spotify Connect device. Browsing and library playback are not affected.
+	ES	Opcional, solo Linux. Con una clave de API de Soloist, cada reproductor de LMS (o grupo sincronizado) aparece como su propio dispositivo oficial de Spotify Connect. La navegación y la reproducción de la biblioteca no se ven afectadas.
+	FR	Facultatif, Linux uniquement. Avec une clé API Soloist, chaque lecteur LMS (ou groupe synchronisé) apparaît comme son propre appareil Spotify Connect officiel. La navigation et la lecture de la bibliothèque ne sont pas affectées.
+	IT	Opzionale, solo Linux. Con una chiave API Soloist ogni lettore LMS (o gruppo sincronizzato) appare come un proprio dispositivo Spotify Connect ufficiale. La navigazione e la riproduzione dalla libreria non sono interessate.
+	NL	Optioneel, alleen Linux. Met een Soloist-API-sleutel verschijnt elke LMS-speler (of synchronisatiegroep) als een eigen officieel Spotify Connect-apparaat. Bladeren en afspelen uit de bibliotheek worden niet beïnvloed.
+	NO	Valgfritt, kun Linux. Med en Soloist-API-nøkkel vises hver LMS-spiller (eller synkroniseringsgruppe) som sin egen offisielle Spotify Connect-enhet. Blaing og avspilling fra biblioteket påvirkes ikke.
+	PL	Opcjonalne, tylko Linux. Z kluczem API Soloist każdy odtwarzacz LMS (lub grupa synchronizacji) pojawia się jako osobne oficjalne urządzenie Spotify Connect. Przeglądanie i odtwarzanie z biblioteki nie są zmieniane.
+	SV	Valfritt, endast Linux. Med en Soloist-API-nyckel visas varje LMS-spelare (eller synkgrupp) som en egen officiell Spotify Connect-enhet. Bläddring och uppspelning från biblioteket påverkas inte.
+
+PLUGIN_SPOTON_SOLOIST_STATE_RUNNING
+	CS	Běží
+	DA	Kører
+	DE	Läuft
+	EN	Running
+	ES	En ejecución
+	FR	En cours d'exécution
+	IT	In esecuzione
+	NL	Actief
+	NO	Kjører
+	PL	Działa
+	SV	Körs
+
+PLUGIN_SPOTON_SOLOIST_STATE_STARTING
+	CS	Spouští se
+	DA	Starter
+	DE	Startet
+	EN	Starting
+	ES	Iniciando
+	FR	Démarrage
+	IT	Avvio in corso
+	NL	Wordt gestart
+	NO	Starter
+	PL	Uruchamianie
+	SV	Startar
+
+PLUGIN_SPOTON_SOLOIST_STATE_WAITING
+	CS	Čeká na přehrávače LMS
+	DA	Venter på LMS-afspillere
+	DE	Wartet auf LMS-Player
+	EN	Waiting for LMS players
+	ES	Esperando reproductores de LMS
+	FR	En attente des lecteurs LMS
+	IT	In attesa dei lettori LMS
+	NL	Wacht op LMS-spelers
+	NO	Venter på LMS-spillere
+	PL	Oczekiwanie na odtwarzacze LMS
+	SV	Väntar på LMS-spelare
+
+PLUGIN_SPOTON_SOLOIST_STATE_DISABLED
+	CS	Vypnuto
+	DA	Slået fra
+	DE	Ausgeschaltet
+	EN	Switched off
+	ES	Desactivado
+	FR	Désactivé
+	IT	Disattivato
+	NL	Uitgeschakeld
+	NO	Slått av
+	PL	Wyłączone
+	SV	Avstängt
+
+PLUGIN_SPOTON_SOLOIST_STATE_NO_KEY
+	CS	Není uložen žádný API klíč
+	DA	Ingen API-nøgle gemt
+	DE	Kein API-Key gespeichert
+	EN	No API key stored
+	ES	No hay ninguna clave de API guardada
+	FR	Aucune clé API enregistrée
+	IT	Nessuna chiave API salvata
+	NL	Geen API-sleutel opgeslagen
+	NO	Ingen API-nøkkel lagret
+	PL	Brak zapisanego klucza API
+	SV	Ingen API-nyckel sparad
+
+PLUGIN_SPOTON_SOLOIST_STATE_KEY_ERROR
+	CS	Soubor s API klíčem nelze použít
+	DA	API-nøglefilen kan ikke bruges
+	DE	Die API-Key-Datei ist nicht verwendbar
+	EN	The API key file cannot be used
+	ES	No se puede usar el archivo de la clave de API
+	FR	Le fichier de clé API est inutilisable
+	IT	Il file della chiave API non è utilizzabile
+	NL	Het API-sleutelbestand is niet bruikbaar
+	NO	API-nøkkelfilen kan ikke brukes
+	PL	Nie można użyć pliku klucza API
+	SV	API-nyckelfilen kan inte användas
+
+PLUGIN_SPOTON_SOLOIST_STATE_MISSING_TOOLS
+	CS	Na tomto serveru chybí potřebné programy
+	DA	Nødvendige programmer mangler på denne server
+	DE	Auf diesem Server fehlen benötigte Programme
+	EN	Required programs are missing on this server
+	ES	Faltan programas necesarios en este servidor
+	FR	Des programmes requis manquent sur ce serveur
+	IT	Mancano programmi necessari su questo server
+	NL	Vereiste programma's ontbreken op deze server
+	NO	Nødvendige programmer mangler på denne serveren
+	PL	Na tym serwerze brakuje wymaganych programów
+	SV	Nödvändiga program saknas på den här servern
+
+PLUGIN_SPOTON_SOLOIST_STATE_EXPIRED
+	CS	Nainstalované sestavení Soloist vypršelo – nainstalujte aktuální sestavení
+	DA	Den installerede Soloist-build er udløbet – installer en aktuel build
+	DE	Der installierte Soloist-Build ist abgelaufen – bitte einen aktuellen Build installieren
+	EN	The installed Soloist build has expired – install a current build
+	ES	La versión instalada de Soloist ha caducado: instala una versión actual
+	FR	La version installée de Soloist a expiré – installez une version actuelle
+	IT	La build di Soloist installata è scaduta: installa una build aggiornata
+	NL	De geïnstalleerde Soloist-build is verlopen – installeer een actuele build
+	NO	Den installerte Soloist-builden er utløpt – installer en oppdatert build
+	PL	Zainstalowana wersja Soloist wygasła – zainstaluj aktualną wersję
+	SV	Den installerade Soloist-versionen har gått ut – installera en aktuell version
+
+PLUGIN_SPOTON_SOLOIST_STATE_FAILED
+	CS	Chyba – podrobnosti na stavové stránce
+	DA	Fejl – se statussiden
+	DE	Fehler – Details auf der Statusseite
+	EN	Error – see the status page
+	ES	Error: consulta la página de estado
+	FR	Erreur – voir la page d'état
+	IT	Errore: vedi la pagina di stato
+	NL	Fout – zie de statuspagina
+	NO	Feil – se statussiden
+	PL	Błąd – zobacz stronę stanu
+	SV	Fel – se statussidan
+
+PLUGIN_SPOTON_SOLOIST_API_KEY_INVALID
+	CS	Klíč nebyl uložen: musí to být jeden řádek bez mezer.
+	DA	Nøglen blev ikke gemt: den skal være én linje uden mellemrum.
+	DE	Der Key wurde nicht gespeichert: Er muss aus einer Zeile ohne Leerzeichen bestehen.
+	EN	The key was not saved: it must be a single line without spaces.
+	ES	La clave no se guardó: debe ser una sola línea sin espacios.
+	FR	La clé n'a pas été enregistrée : elle doit tenir sur une seule ligne sans espaces.
+	IT	La chiave non è stata salvata: deve essere una sola riga senza spazi.
+	NL	De sleutel is niet opgeslagen: deze moet uit één regel zonder spaties bestaan.
+	NO	Nøkkelen ble ikke lagret: den må være én linje uten mellomrom.
+	PL	Klucz nie został zapisany: musi to być jedna linia bez spacji.
+	SV	Nyckeln sparades inte: den måste vara en rad utan mellanslag.
+
+PLUGIN_SPOTON_SOLOIST_API_KEY_FAILED
+	CS	Klíč se nepodařilo uložit. Podrobnosti najdete v protokolu LMS.
+	DA	Nøglen kunne ikke gemmes. Se LMS-loggen for detaljer.
+	DE	Der Key konnte nicht gespeichert werden. Details stehen im LMS-Log.
+	EN	The key could not be saved. See the LMS log for details.
+	ES	No se pudo guardar la clave. Consulta el registro de LMS para más detalles.
+	FR	Impossible d'enregistrer la clé. Consultez le journal LMS pour plus de détails.
+	IT	Impossibile salvare la chiave. Consulta il log di LMS per i dettagli.
+	NL	De sleutel kon niet worden opgeslagen. Zie het LMS-logboek voor details.
+	NO	Nøkkelen kunne ikke lagres. Se LMS-loggen for detaljer.
+	PL	Nie udało się zapisać klucza. Szczegóły znajdziesz w dzienniku LMS.
+	SV	Nyckeln kunde inte sparas. Se LMS-loggen för detaljer.
+
+PLUGIN_SPOTON_SOLOIST_DEVICES
+	CS	Zařízení Spotify
+	DA	Spotify-enheder
+	DE	Spotify-Geräte
+	EN	Spotify devices
+	ES	Dispositivos de Spotify
+	FR	Appareils Spotify
+	IT	Dispositivi Spotify
+	NL	Spotify-apparaten
+	NO	Spotify-enheter
+	PL	Urządzenia Spotify
+	SV	Spotify-enheter
+
+PLUGIN_SPOTON_SOLOIST_API_KEY
+	CS	API klíč Soloist
+	DA	Soloist-API-nøgle
+	DE	Soloist-API-Key
+	EN	Soloist API key
+	ES	Clave de API de Soloist
+	FR	Clé API Soloist
+	IT	Chiave API Soloist
+	NL	Soloist-API-sleutel
+	NO	Soloist-API-nøkkel
+	PL	Klucz API Soloist
+	SV	Soloist-API-nyckel
+
+PLUGIN_SPOTON_SOLOIST_API_KEY_SAVED
+	CS	Klíč je uložen – ponechte prázdné pro zachování
+	DA	Nøgle gemt – lad feltet være tomt for at beholde den
+	DE	Key gespeichert – leer lassen, um ihn zu behalten
+	EN	Key stored – leave empty to keep it
+	ES	Clave guardada: déjalo vacío para conservarla
+	FR	Clé enregistrée – laissez vide pour la conserver
+	IT	Chiave salvata: lascia vuoto per mantenerla
+	NL	Sleutel opgeslagen – laat leeg om te behouden
+	NO	Nøkkel lagret – la feltet stå tomt for å beholde den
+	PL	Klucz zapisany – pozostaw puste, aby go zachować
+	SV	Nyckel sparad – lämna tomt för att behålla den
+
+PLUGIN_SPOTON_SOLOIST_API_KEY_NEW
+	CS	Vložte svůj API klíč Soloist
+	DA	Indsæt din Soloist-API-nøgle
+	DE	Soloist-API-Key hier einfügen
+	EN	Paste your Soloist API key
+	ES	Pega tu clave de API de Soloist
+	FR	Collez votre clé API Soloist
+	IT	Incolla la tua chiave API Soloist
+	NL	Plak uw Soloist-API-sleutel
+	NO	Lim inn Soloist-API-nøkkelen din
+	PL	Wklej swój klucz API Soloist
+	SV	Klistra in din Soloist-API-nyckel
+
+PLUGIN_SPOTON_SOLOIST_API_KEY_REMOVE
+	CS	Odstranit uložený klíč a vypnout Soloist
+	DA	Fjern den gemte nøgle og slå Soloist fra
+	DE	Gespeicherten Key entfernen und Soloist ausschalten
+	EN	Remove the stored key and switch Soloist off
+	ES	Eliminar la clave guardada y desactivar Soloist
+	FR	Supprimer la clé enregistrée et désactiver Soloist
+	IT	Rimuovi la chiave salvata e disattiva Soloist
+	NL	Opgeslagen sleutel verwijderen en Soloist uitschakelen
+	NO	Fjern den lagrede nøkkelen og slå av Soloist
+	PL	Usuń zapisany klucz i wyłącz Soloist
+	SV	Ta bort den sparade nyckeln och stäng av Soloist
+
+PLUGIN_SPOTON_SOLOIST_REQUIREMENTS
+	CS	Požadavky na tomto serveru
+	DA	Krav på denne server
+	DE	Voraussetzungen auf diesem Server
+	EN	Requirements on this server
+	ES	Requisitos en este servidor
+	FR	Prérequis sur ce serveur
+	IT	Requisiti su questo server
+	NL	Vereisten op deze server
+	NO	Krav på denne serveren
+	PL	Wymagania na tym serwerze
+	SV	Krav på den här servern
+
+PLUGIN_SPOTON_SOLOIST_NOT_FOUND
+	CS	nenalezeno
+	DA	ikke fundet
+	DE	nicht gefunden
+	EN	not found
+	ES	no encontrado
+	FR	introuvable
+	IT	non trovato
+	NL	niet gevonden
+	NO	ikke funnet
+	PL	nie znaleziono
+	SV	hittades inte
+
+PLUGIN_SPOTON_SOLOIST_LMS_TOO_OLD
+	CS	Vyžaduje Lyrion Music Server 9.1 nebo novější
+	DA	Kræver Lyrion Music Server 9.1 eller nyere
+	DE	Erfordert Lyrion Music Server 9.1 oder neuer
+	EN	Requires Lyrion Music Server 9.1 or newer
+	ES	Requiere Lyrion Music Server 9.1 o posterior
+	FR	Nécessite Lyrion Music Server 9.1 ou plus récent
+	IT	Richiede Lyrion Music Server 9.1 o successivo
+	NL	Vereist Lyrion Music Server 9.1 of nieuwer
+	NO	Krever Lyrion Music Server 9.1 eller nyere
+	PL	Wymaga Lyrion Music Server 9.1 lub nowszego
+	SV	Kräver Lyrion Music Server 9.1 eller senare
+
+PLUGIN_SPOTON_SOLOIST_LINUX_ONLY
+	CS	Soloist je k dispozici pouze v Linuxu
+	DA	Soloist er kun tilgængelig på Linux
+	DE	Soloist ist nur unter Linux verfügbar
+	EN	Soloist is only available on Linux
+	ES	Soloist solo está disponible en Linux
+	FR	Soloist n'est disponible que sous Linux
+	IT	Soloist è disponibile solo su Linux
+	NL	Soloist is alleen beschikbaar op Linux
+	NO	Soloist er bare tilgjengelig på Linux
+	PL	Soloist jest dostępny tylko w systemie Linux
+	SV	Soloist finns bara för Linux
+
+PLUGIN_SPOTON_SOLOIST_EXPIRES_IN
+	CS	Dní do vypršení sestavení
+	DA	Dage til build udløber
+	DE	Tage bis zum Ablauf des Builds
+	EN	Days until the build expires
+	ES	Días hasta que caduque la versión
+	FR	Jours avant l'expiration de la version
+	IT	Giorni alla scadenza della build
+	NL	Dagen tot de build verloopt
+	NO	Dager til builden utløper
+	PL	Dni do wygaśnięcia wersji
+	SV	Dagar tills versionen går ut
+
+PLUGIN_SPOTON_SOLOIST_HOWTO_TITLE
+	CS	Jak nastavit Soloist
+	DA	Sådan opsætter du Soloist
+	DE	So richtest du Soloist ein
+	EN	How to set up Soloist
+	ES	Cómo configurar Soloist
+	FR	Comment configurer Soloist
+	IT	Come configurare Soloist
+	NL	Zo stelt u Soloist in
+	NO	Slik konfigurerer du Soloist
+	PL	Jak skonfigurować Soloist
+	SV	Så konfigurerar du Soloist
+
+PLUGIN_SPOTON_SOLOIST_HOWTO
+	CS	1. Nainstalujte na server LMS balíčky pulseaudio, pulseaudio-utils a ffmpeg. 2. Stáhněte program soloist pro svou architekturu ze stránky Spotify for Developers a nainstalujte jej jako /usr/local/bin/soloist. 3. Vytvořte API klíč Soloist ve Spotify for Developers a vložte jej výše. Sestavení Soloist vyprší po 90 dnech: nahraďte program a znovu uložte tato nastavení, aby se zařízení ihned restartovala.
+	DA	1. Installer pakkerne pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Hent programmet soloist til din arkitektur fra Spotify for Developers og installer det som /usr/local/bin/soloist. 3. Opret en Soloist-API-nøgle i Spotify for Developers og indsæt den ovenfor. Soloist-builds udløber efter 90 dage: udskift programmet og gem disse indstillinger igen for at genstarte enhederne med det samme.
+	DE	1. Installiere auf dem LMS-Server die Pakete pulseaudio, pulseaudio-utils und ffmpeg. 2. Lade das Programm soloist für deine Architektur bei Spotify for Developers herunter und installiere es als /usr/local/bin/soloist. 3. Erstelle bei Spotify for Developers einen Soloist-API-Key und füge ihn oben ein. Soloist-Builds laufen nach 90 Tagen ab: Programm ersetzen und diese Einstellungen erneut speichern, damit die Geräte sofort neu starten.
+	EN	1. Install the pulseaudio, pulseaudio-utils and ffmpeg packages on the LMS server. 2. Download the soloist program for your architecture from Spotify for Developers and install it as /usr/local/bin/soloist. 3. Create a Soloist API key in Spotify for Developers and paste it above. Soloist builds expire after 90 days: replace the program and save these settings again to restart the devices immediately.
+	ES	1. Instala los paquetes pulseaudio, pulseaudio-utils y ffmpeg en el servidor LMS. 2. Descarga el programa soloist para tu arquitectura desde Spotify for Developers e instálalo como /usr/local/bin/soloist. 3. Crea una clave de API de Soloist en Spotify for Developers y pégala arriba. Las versiones de Soloist caducan a los 90 días: sustituye el programa y vuelve a guardar estos ajustes para reiniciar los dispositivos de inmediato.
+	FR	1. Installez les paquets pulseaudio, pulseaudio-utils et ffmpeg sur le serveur LMS. 2. Téléchargez le programme soloist pour votre architecture depuis Spotify for Developers et installez-le sous /usr/local/bin/soloist. 3. Créez une clé API Soloist dans Spotify for Developers et collez-la ci-dessus. Les versions de Soloist expirent après 90 jours : remplacez le programme et enregistrez à nouveau ces réglages pour redémarrer immédiatement les appareils.
+	IT	1. Installa sul server LMS i pacchetti pulseaudio, pulseaudio-utils e ffmpeg. 2. Scarica il programma soloist per la tua architettura da Spotify for Developers e installalo come /usr/local/bin/soloist. 3. Crea una chiave API Soloist in Spotify for Developers e incollala qui sopra. Le build di Soloist scadono dopo 90 giorni: sostituisci il programma e salva di nuovo queste impostazioni per riavviare subito i dispositivi.
+	NL	1. Installeer de pakketten pulseaudio, pulseaudio-utils en ffmpeg op de LMS-server. 2. Download het programma soloist voor uw architectuur via Spotify for Developers en installeer het als /usr/local/bin/soloist. 3. Maak een Soloist-API-sleutel aan in Spotify for Developers en plak deze hierboven. Soloist-builds verlopen na 90 dagen: vervang het programma en sla deze instellingen opnieuw op om de apparaten direct opnieuw te starten.
+	NO	1. Installer pakkene pulseaudio, pulseaudio-utils og ffmpeg på LMS-serveren. 2. Last ned programmet soloist for din arkitektur fra Spotify for Developers og installer det som /usr/local/bin/soloist. 3. Opprett en Soloist-API-nøkkel i Spotify for Developers og lim den inn ovenfor. Soloist-builds utløper etter 90 dager: bytt ut programmet og lagre disse innstillingene på nytt for å starte enhetene på nytt umiddelbart.
+	PL	1. Zainstaluj na serwerze LMS pakiety pulseaudio, pulseaudio-utils i ffmpeg. 2. Pobierz program soloist dla swojej architektury ze Spotify for Developers i zainstaluj go jako /usr/local/bin/soloist. 3. Utwórz klucz API Soloist w Spotify for Developers i wklej go powyżej. Wersje Soloist wygasają po 90 dniach: zastąp program i zapisz ponownie te ustawienia, aby od razu ponownie uruchomić urządzenia.
+	SV	1. Installera paketen pulseaudio, pulseaudio-utils och ffmpeg på LMS-servern. 2. Ladda ner programmet soloist för din arkitektur från Spotify for Developers och installera det som /usr/local/bin/soloist. 3. Skapa en Soloist-API-nyckel i Spotify for Developers och klistra in den ovan. Soloist-versioner går ut efter 90 dagar: byt ut programmet och spara inställningarna igen för att starta om enheterna direkt.

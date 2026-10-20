@@ -9,6 +9,7 @@ use File::Spec::Functions qw(catdir catfile);
 use File::Temp qw(tempdir);
 use FindBin qw($Bin);
 use Digest::MD5 ();
+use JSON::PP ();
 use File::Spec ();
 
 BEGIN {
@@ -592,10 +593,101 @@ my $token_index = 0;
     is($runtime->player_id, undef, 'player stays released after a stale track change');
 
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops after control checks');
+
+    # ---- API key management from the settings page. ----
+    my $M = 'Plugins::SpotOn::Soloist::Manager';
+    no warnings 'redefine';
+    local *Plugins::SpotOn::Soloist::Manager::_binary_version = sub {
+        return (version => 'soloist 1.4.2', build_date => '2026-10-01', expires_at => 1);
+    };
+    use warnings 'redefine';
+
+    ok(($M->removeApiKey())[0], 'stored API key can be removed');
+    ok(!-e $key_file, 'removing the key deletes the protected file');
+    is($Slim::Utils::Prefs::values{'plugin.spoton'}{soloistEnabled}, 0, 'removing the key switches Soloist off');
+    my $setup = $M->setupStatus();
+    is($setup->{state}, 'no_key', 'setup status reports a missing key');
+    is($setup->{apiKey}, 0, 'setup status flags the key as absent');
+
+    is_deeply([$M->saveApiKey("two words")], [0, 'api_key_invalid'], 'key with whitespace is rejected');
+    is_deeply([$M->saveApiKey("   ")], [0, 'api_key_invalid'], 'empty key is rejected');
+    ok(!-e $key_file, 'rejected keys are not written');
+
+    my $other = catfile($root, 'unrelated-file');
+    open(my $other_fh, '>', $other) or die $!;
+    print {$other_fh} 'keep me';
+    close($other_fh);
+    symlink($other, $key_file) or die "symlink fixture: $!";
+
+    my $before = scalar @Local::Runtime::instances;
+    ok(($M->saveApiKey("  settings-secret-key\n"))[0], 'valid key is stored from the settings page');
+    ok(!-l $key_file && -f $key_file, 'key replaces a symlinked key path with a regular file');
+    open(my $check, '<', $other) or die $!;
+    is(scalar(<$check>), 'keep me', 'symlink target is never written');
+    close($check);
+    is((stat($key_file))[2] & 07777, 0600, 'stored key file is owner-only');
+    open(my $stored, '<', $key_file) or die $!;
+    is(scalar(<$stored>), 'settings-secret-key', 'stored key is trimmed');
+    close($stored);
+    ok(!-e "$key_file.new", 'no temporary key file is left behind');
+    ok($M->enabled, 'storing a key enables Soloist');
+    is(scalar @Local::Runtime::instances, $before + 1, 'storing a key starts the player runtimes');
+    is($Local::Runtime::instances[-1]{args}{api_key}, 'settings-secret-key', 'runtime receives the stored key');
+
+    Plugins::SpotOn::Soloist::Manager::_poll();
+    $setup = $M->setupStatus();
+    is($setup->{state}, 'running', 'setup status reports running devices');
+    is($setup->{version}, 'soloist 1.4.2', 'setup status reports the Soloist version');
+    is($setup->{devices}[0]{deviceName}, 'Kitchen', 'setup status lists the Spotify device');
+    is($setup->{devices}[0]{playerName}, 'Kitchen', 'setup status names the LMS player');
+    my $json = JSON::PP->new->canonical->allow_blessed->encode($setup);
+    my $live = $M->instanceForClient($kitchen)->stream_token;
+    unlike($json, qr/settings-secret-key/, 'setup status never contains the API key');
+    unlike($json, qr/\Q$live\E/, 'setup status never contains the stream token');
+
+    $before = scalar @Local::Runtime::instances;
+    ok(($M->saveApiKey('settings-secret-key'))[0], 'saving the same key again succeeds');
+    is(scalar @Local::Runtime::instances, $before, 'unchanged key does not restart running devices');
+
+    my $old_runtime = $Local::Runtime::instances[-1];
+    ok(($M->saveApiKey('rotated-secret-key'))[0], 'a new key replaces the stored key');
+    ok($old_runtime->{stopped}, 'devices using the previous key are stopped');
+    is($Local::Runtime::instances[-1]{args}{api_key}, 'rotated-secret-key', 'devices restart with the new key');
+
+    {
+        no warnings 'redefine';
+        local *Plugins::SpotOn::Soloist::AudioPreflight::inspect = sub {
+            return { tools => { soloist => '/usr/local/bin/soloist', pulseaudio => '/usr/bin/pulseaudio' } };
+        };
+        my $missing = $M->setupStatus();
+        is($missing->{state}, 'missing_tools', 'missing host programs take precedence in the status');
+        is_deeply($missing->{missing}, ['parec', 'ffmpeg'], 'missing programs are listed');
+    }
+    ok($M->stop(), 'manager stops after API key checks');
 }
 
 unlink($key_file);
 ok(!Plugins::SpotOn::Soloist::Manager->start(), 'missing API key still fails closed');
+
+# soloist --version parsing: version line plus the 90-day build lifetime.
+{
+    my $bin = catfile($root, 'fake-soloist');
+    open(my $fh, '>', $bin) or die $!;
+    print {$fh} "#!/bin/sh\necho 'soloist 1.4.2 (built 2026-10-01)'\necho extra\n";
+    close($fh);
+    chmod 0755, $bin;
+    my %build = Plugins::SpotOn::Soloist::Manager::_binary_version($bin);
+    is($build{version}, 'soloist 1.4.2 (built 2026-10-01)', 'first version line is reported');
+    is($build{build_date}, '2026-10-01', 'ISO build date is recognized');
+    is($build{expires_at}, 1790812800 + 90 * 86400, 'expiry is 90 days after the build date');
+
+    open($fh, '>', $bin) or die $!;
+    print {$fh} "#!/bin/sh\necho 'soloist 1.5.0-dev'\n";
+    close($fh);
+    %build = Plugins::SpotOn::Soloist::Manager::_binary_version($bin);
+    is($build{version}, 'soloist 1.5.0-dev', 'replaced binary is detected without a restart');
+    ok(!exists $build{expires_at}, 'no expiry is guessed without a build date');
+}
 is(
     Plugins::SpotOn::Soloist::Manager->statusSnapshot()->{lastError}{code},
     'api_key_missing',

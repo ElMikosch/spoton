@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.3] - 2026-10-20
+
+### Added
+- **Soloist setup in SpotOn Settings** — a new "Spotify Soloist" section stores the Soloist API key from the browser (password field, never echoed back) in the protected owner-only key file and starts the per-player devices immediately. A checkbox removes the key and switches Soloist off. The section shows the overall state, each Spotify device, and a checklist of the required host programs (`soloist`, `pulseaudio`, `parec`, `ffmpeg`, LMS 9.1+) with their paths and the installed Soloist version. Saving the page retries failed devices immediately, e.g. after replacing an expired build. Available in all 11 languages.
+- **Soloist Connect card on the status page** — live state, API-key state, host programs, Soloist version and, when `soloist --version` reports an ISO build date, the days left before the 90-day build expiry. Per device: WebSocket connection, the playing Spotify track, whether the LMS player is attached, the last error and the next scheduled restart. Neither page exposes the API key, stream tokens or stream URLs.
+
+### Changed
+- **Release archives are built by the release workflow again** — `repo.xml` points at the GitHub release asset, which bundles the `spoton` helper binaries for all platforms.
+
+
 ## [3.6.2] - 2026-10-20
 
 ### Changed

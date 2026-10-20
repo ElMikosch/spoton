@@ -4,11 +4,13 @@ use strict;
 use warnings;
 
 use Digest::MD5 qw(md5_hex);
+use Fcntl qw(O_CREAT O_EXCL O_WRONLY);
 use File::Path qw(make_path);
 use File::Spec;
 use File::Spec::Functions qw(catdir catfile);
 use Scalar::Util qw(blessed);
 use Time::HiRes ();
+use Time::Local qw(timegm);
 
 use constant RECONCILE_DELAY       => 0.2;
 use constant RECONCILE_INTERVAL    => 15;
@@ -36,6 +38,12 @@ use constant REATTACH_GRACE        => 5;
 # Runtime rejects anything above this conservative limit.
 use constant MAX_SOCKET_PATH       => 100;
 
+# Spotify Soloist builds stop working 90 days after their build date.
+use constant BUILD_LIFETIME_DAYS   => 90;
+use constant VERSION_TIMEOUT       => 2;
+
+my @REQUIRED_TOOLS = qw(soloist pulseaudio parec ffmpeg);
+
 my ($log, $prefs, $server_prefs);
 my %instances;
 my $enabled = 0;
@@ -46,6 +54,7 @@ my @subscriptions;
 my %failures;
 my %lms_echo;
 my %attach_block;
+my %version_cache;
 
 sub init {
     _ensure_lms();
@@ -203,6 +212,145 @@ sub reconcile {
     _start_clients($api_key, @clients);
     $api_key = undef;
     return 1;
+}
+
+# Store the Soloist API key from the settings page.  The key is written to the
+# same protected file an administrator would create by hand (owner-only,
+# never a symlink) and is never placed in a preference, log or response.
+# Returns (1) or (0, $error_code).
+sub saveApiKey {
+    my ($class, $key) = @_;
+    _ensure_lms();
+    $key = '' unless defined $key && !ref($key);
+    $key =~ s/^\s+|\s+$//g;
+    return (0, 'api_key_invalid')
+        unless length($key) && length($key) <= MAX_API_KEY_BYTES
+            && $key =~ /\A[\x21-\x7e]+\z/;
+
+    my ($current) = _read_api_key(apiKeyFile());
+    my $unchanged = defined $current && $current eq $key;
+    $current = undef;
+    if ($unchanged) {
+        $key = undef;
+        # Saving the same key again is the way to retry a failed backend,
+        # for example after replacing an expired Soloist build.
+        $class->start();
+        return (1);
+    }
+
+    my $written = eval { _write_api_key($key); 1 };
+    my $error = $@;
+    $key = undef;
+    unless ($written) {
+        $log->warn('Soloist backend: unable to store API key - ' . _clean_message($error));
+        return (0, 'api_key_write_failed');
+    }
+    $log->info('Soloist backend: API key updated');
+
+    # Running devices hold the previous key; restart them with the new one.
+    $class->stop(keep_preference => 1) if $enabled;
+    $class->start();
+    return (1);
+}
+
+sub removeApiKey {
+    my ($class) = @_;
+    _ensure_lms();
+    $class->stop();
+    my $path = apiKeyFile();
+    if (-e $path || -l $path) {
+        unless (unlink($path)) {
+            $log->warn("Soloist backend: unable to remove API key file: $!");
+            return (0, 'api_key_remove_failed');
+        }
+    }
+    $last_error = undef;
+    $log->info('Soloist backend: API key removed, backend switched off');
+    return (1);
+}
+
+# Summary for the settings and status pages.  Contains no API key, stream
+# token or stream URL.
+sub setupStatus {
+    my ($class) = @_;
+    _ensure_lms();
+
+    my ($key, $key_error) = _read_api_key(apiKeyFile());
+    $key = undef;
+
+    require Plugins::SpotOn::Soloist::AudioPreflight;
+    require Plugins::SpotOn::Soloist::Transport;
+    my $websocket = Plugins::SpotOn::Soloist::Transport->websocket_available();
+    my $found = Plugins::SpotOn::Soloist::AudioPreflight->inspect(
+        websocket_available => $websocket,
+    )->{tools} || {};
+    my %tools = map { $_ => $found->{$_} } @REQUIRED_TOOLS;
+    my @missing = grep { !$tools{$_} } @REQUIRED_TOOLS;
+    push @missing, 'lms_simplews' unless $websocket;
+    unshift @missing, 'linux' unless $^O eq 'linux';
+
+    my %build;
+    %build = _binary_version($tools{soloist}) if $tools{soloist};
+
+    my $now = Time::HiRes::time();
+    my @devices;
+    for my $id (sort keys %instances) {
+        my $instance = $instances{$id};
+        my $snapshot = $instance->status_snapshot();
+        my $playback = (($snapshot->{session} || {})->{playback}) || {};
+        my $item = ref($playback->{item}) eq 'HASH' ? $playback->{item} : {};
+        my $client = _get_client($id);
+        my $failure = $failures{$id};
+        push @devices, {
+            playerId   => $id,
+            playerName => ($client && eval { $client->name() }) || $id,
+            deviceName => $instance->device_name(),
+            state      => $instance->state(),
+            connection => $snapshot->{sessionStatus},
+            active     => $playback->{is_active} ? 1 : 0,
+            playback   => $playback->{status},
+            track      => defined $item->{name}
+                ? _display_title(_item_summary($item))
+                : undef,
+            attached   => $instance->player_id() ? 1 : 0,
+            lastError  => $snapshot->{lastError},
+            retry      => $failure ? {
+                count => $failure->{count},
+                code  => $failure->{code},
+                in    => int(($failure->{next_try} > $now ? $failure->{next_try} - $now : 0) + 0.5),
+            } : undef,
+        };
+    }
+
+    my $expired = grep {
+        ($_->{retry} && ($_->{retry}{code} || '') eq 'runtime_soloist_build_expired')
+            || ($_->{lastError} && ($_->{lastError}{code} || '') eq 'runtime_soloist_build_expired')
+    } @devices;
+    my $overall = $class->statusSnapshot()->{state};
+    my $state = @missing                        ? 'missing_tools'
+              : ($key_error || '') eq 'api_key_missing' ? 'no_key'
+              : $key_error                      ? 'key_error'
+              : !$enabled                       ? 'disabled'
+              : $expired                        ? 'expired'
+              : $overall;
+
+    return {
+        state        => $state,
+        enabled      => $enabled ? 1 : 0,
+        apiKey       => $key_error ? 0 : 1,
+        apiKeyError  => $key_error,
+        apiKeyFile   => apiKeyFile(),
+        tools        => \%tools,
+        missing      => \@missing,
+        version      => $build{version},
+        buildDate    => $build{build_date},
+        expiresAt    => $build{expires_at},
+        expiresInDays => defined $build{expires_at}
+            ? int(($build{expires_at} - $now) / 86_400)
+            : undef,
+        devices      => \@devices,
+        lastError    => $last_error,
+    };
 }
 
 sub attachPlayer {
@@ -959,6 +1107,91 @@ sub _manager_fail {
     $log->warn("Soloist backend: $code - $last_error->{message}")
         if $log && !$repeated;
     return 0;
+}
+
+sub _item_summary {
+    my ($item) = @_;
+    return {} unless ref($item) eq 'HASH' && defined $item->{name};
+    return {
+        title  => $item->{name},
+        artist => join(', ', grep { length($_) } map {
+            ref($_) eq 'HASH' ? ($_->{name} || '') : ''
+        } @{ $item->{creators} || [] }),
+    };
+}
+
+sub _write_api_key {
+    my ($key) = @_;
+    my $base = baseDir();
+    _secure_directory($base);
+    my $path = apiKeyFile();
+    my $tmp = "$path.new";
+    unlink($tmp) if -e $tmp || -l $tmp;
+
+    sysopen(my $fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600)
+        or die "Unable to create API key file: $!";
+    binmode($fh);
+    my $written = syswrite($fh, $key);
+    my $closed = close($fh);
+    unless (defined $written && $written == length($key) && $closed) {
+        unlink($tmp);
+        die 'Unable to write API key file';
+    }
+    # rename() replaces a pre-existing api-key entry itself, including a
+    # symlink, rather than writing through it.
+    unless (chmod(0600, $tmp) && rename($tmp, $path)) {
+        my $error = "$!";
+        unlink($tmp);
+        die "Unable to install API key file: $error";
+    }
+    return 1;
+}
+
+# Version line of the installed Soloist binary and, when it carries an ISO
+# build date, the date the 90-day build lifetime ends.  Cached per binary
+# path, size and mtime so a replaced binary is picked up immediately.
+sub _binary_version {
+    my ($path) = @_;
+    my @stat = stat($path) or return ();
+    my $cache_key = join(':', $path, $stat[7], $stat[9]);
+    return %{ $version_cache{$cache_key} } if $version_cache{$cache_key};
+
+    my ($output, $pid) = ('');
+    my $ok = eval {
+        local $SIG{ALRM} = sub { die "timeout\n" };
+        alarm(VERSION_TIMEOUT);
+        $pid = open(my $fh, '-|', $path, '--version')
+            or die "Unable to run soloist --version: $!";
+        local $/;
+        $output = <$fh>;
+        close($fh);
+        alarm(0);
+        1;
+    };
+    alarm(0);
+    unless ($ok) {
+        if ($pid && kill(0, $pid)) {
+            kill('KILL', $pid);
+            waitpid($pid, 0);
+        }
+        return ();
+    }
+
+    my ($line) = grep { /\S/ } split /\r?\n/, (defined $output ? $output : '');
+    return () unless defined $line;
+    $line = _clean_message($line);
+    $line = substr($line, 0, 120);
+
+    my %build = (version => $line);
+    if ($output =~ /\b(20\d{2})-(\d{2})-(\d{2})\b/) {
+        my $date = eval { timegm(0, 0, 0, $3, $2 - 1, $1) };
+        if (defined $date) {
+            $build{build_date} = "$1-$2-$3";
+            $build{expires_at} = $date + BUILD_LIFETIME_DAYS * 86_400;
+        }
+    }
+    %version_cache = ($cache_key => { %build });
+    return %build;
 }
 
 sub _read_api_key {

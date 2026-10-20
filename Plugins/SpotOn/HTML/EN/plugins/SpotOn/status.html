@@ -87,6 +87,9 @@ header p {
 }
 .metric-value {
     font-weight: 400;
+    margin-left: 12px;
+    text-align: right;
+    overflow-wrap: anywhere;
 }
 .dot-alive { color: #1db954; }
 .dot-dead { color: #e53935; }
@@ -146,6 +149,10 @@ footer {
         <div class="card" id="card-api">
             <h2>API &amp; Tokens</h2>
             <div class="card-body" id="api-body"></div>
+        </div>
+        <div class="card" id="card-soloist">
+            <h2>Soloist Connect</h2>
+            <div class="card-body" id="soloist-body"></div>
         </div>
         <div class="card" id="card-daemon">
             <h2>Player Daemon Health</h2>
@@ -492,7 +499,94 @@ footer {
         }
     }
 
+    var SOLOIST_STATES = {
+        running:         ['Running', 'dot-alive'],
+        starting:        ['Starting', 'rate-limited'],
+        waiting_players: ['Waiting for LMS players', 'rate-limited'],
+        disabled:        ['Switched off', 'muted'],
+        no_key:          ['No API key stored (SpotOn Settings)', 'muted'],
+        key_error:       ['API key file cannot be used', 'dot-dead'],
+        missing_tools:   ['Required programs missing', 'dot-dead'],
+        expired:         ['Soloist build expired - install a current build', 'dot-dead'],
+        failed:          ['Error', 'dot-dead'],
+        stopped:         ['Stopped', 'muted']
+    };
+
+    function renderSoloist(data) {
+        var body = document.getElementById('soloist-body');
+        body.textContent = '';
+        var s = data.soloist || {};
+
+        var st = SOLOIST_STATES[s.state] || [val(s.state), ''];
+        body.appendChild(createMetricRow('State', st[0], st[1]));
+        if (s.apiKeyError) {
+            body.appendChild(createMetricRow('API Key', s.apiKeyError, 'dot-dead'));
+        } else {
+            body.appendChild(createMetricRow('API Key', s.apiKey ? 'stored' : 'missing', s.apiKey ? 'dot-alive' : 'muted'));
+        }
+
+        var tools = s.tools || {};
+        var names = ['soloist', 'pulseaudio', 'parec', 'ffmpeg'];
+        for (var t = 0; t < names.length; t++) {
+            var path = tools[names[t]];
+            body.appendChild(createMetricRow(names[t], path || 'not found', path ? 'mono' : 'dot-dead'));
+        }
+        (s.missing || []).forEach(function(m) {
+            if (m === 'lms_simplews') body.appendChild(createMetricRow('LMS', 'requires 9.1 or newer', 'dot-dead'));
+            if (m === 'linux') body.appendChild(createMetricRow('Platform', 'Linux only', 'dot-dead'));
+        });
+        if (s.version) body.appendChild(createMetricRow('Version', s.version));
+        if (s.expiresInDays !== null && s.expiresInDays !== undefined) {
+            var exp = s.expiresInDays + ' days (built ' + val(s.buildDate) + ')';
+            body.appendChild(createMetricRow('Build Expires', exp, s.expiresInDays < 14 ? 'rate-limited' : ''));
+        }
+        if (s.lastError && s.lastError.code) {
+            body.appendChild(createMetricRow('Last Error', s.lastError.code + (s.lastError.message ? ': ' + s.lastError.message : ''), 'dot-dead'));
+        }
+
+        var devices = s.devices || [];
+        for (var i = 0; i < devices.length; i++) {
+            var d = devices[i];
+            body.appendChild(document.createElement('hr'));
+
+            var nameRow = document.createElement('div');
+            nameRow.className = 'metric-row';
+            var nameLbl = document.createElement('span');
+            nameLbl.className = 'metric-label';
+            var dot = document.createElement('span');
+            dot.className = d.state === 'running' ? 'dot-alive' : (d.state === 'failed' ? 'dot-dead' : 'rate-limited');
+            dot.textContent = '● ';
+            nameLbl.appendChild(dot);
+            nameLbl.appendChild(document.createTextNode(d.deviceName || d.playerId));
+            var stateVal = document.createElement('span');
+            stateVal.className = 'metric-value';
+            stateVal.textContent = val(d.state);
+            nameRow.appendChild(nameLbl);
+            nameRow.appendChild(stateVal);
+            body.appendChild(nameRow);
+
+            if (d.playerName && d.playerName !== d.deviceName) {
+                body.appendChild(createMetricRow('LMS Player', d.playerName));
+            }
+            body.appendChild(createMetricRow('WebSocket', val(d.connection)));
+            if (d.active) {
+                var playText = (d.playback === 'playing' ? '▶ ' : '❚❚ ') + (d.track || val(d.playback));
+                var playRow = createMetricRow('Spotify', playText);
+                if (d.playback === 'playing') playRow.querySelector('.metric-value').style.color = '#1db954';
+                body.appendChild(playRow);
+                body.appendChild(createMetricRow('LMS Attached', d.attached ? 'Yes' : 'No'));
+            }
+            if (d.lastError && d.lastError.code) {
+                body.appendChild(createMetricRow('Error', d.lastError.code + (d.lastError.message ? ': ' + d.lastError.message : ''), 'dot-dead'));
+            }
+            if (d.retry) {
+                body.appendChild(createMetricRow('Restart', 'attempt ' + d.retry.count + ' in ' + formatDuration(d.retry.in), 'rate-limited'));
+            }
+        }
+    }
+
     function render(data) {
+        renderSoloist(data);
         renderDaemon(data);
         renderApi(data);
         renderErrors(data);

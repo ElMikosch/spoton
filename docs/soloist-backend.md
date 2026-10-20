@@ -61,6 +61,21 @@ state layers deliberately have no LMS runtime dependency:
   fixed owner-only cache file, validates required executables, and defers
   topology/name changes while a Spotify session is active.
 
+### Setup from the LMS web interface
+
+SpotOn Settings contains a "Spotify Soloist" section. Pasting the API key
+there writes the same protected file described below (owner-only, regular file,
+written to a temporary file and renamed into place so an existing symlink is
+replaced rather than followed) and starts the managed backend. The field is a
+password input and the stored key is never sent back to the browser; leaving it
+empty keeps the stored key. "Remove" deletes the file and switches Soloist off.
+The section and the "Soloist Connect" card on the SpotOn status page show the
+required host programs, the installed Soloist version (`soloist --version`,
+cached per binary path, size and modification time), the remaining build
+lifetime when the version output contains an ISO build date, and one entry per
+Spotify device with its connection, playback, LMS attachment, last error and
+next restart. Saving the settings page retries failed devices immediately.
+
 ### Runtime layout and recovery
 
 Per player, SpotOn keeps Soloist's persistent data (including the stored

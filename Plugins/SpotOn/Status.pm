@@ -126,6 +126,16 @@ sub _statusDataHandler {
     # require Client.pm for this.
     $data{madeForYou}{hashConfigured} = (length($prefs->get('pathfinderHash') || '') > 0) ? 1 : 0;
 
+    # --- Spotify Soloist backend: setup state and one entry per device.
+    # Contains no API key, stream token or stream URL.
+    $data{soloist} = eval {
+        require Plugins::SpotOn::Soloist::Manager;
+        Plugins::SpotOn::Soloist::Manager->setupStatus();
+    } // {};
+    if ($@) {
+        main::INFOLOG && $log->is_info && $log->info("Status: Soloist setupStatus failed: $@");
+    }
+
     # --- System info (D-05: cached, computed once) ---
     $data{system} = eval { _systemInfo() } // {};
     if ($@) {
