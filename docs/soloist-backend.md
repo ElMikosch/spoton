@@ -122,8 +122,12 @@ full scale while Soloist still sees its own stream volume. This requires
 The Spotify volume is mirrored to the attached LMS player with `mixer volume`,
 and LMS `mixer volume` changes of that player are sent to Soloist with
 `set_volume`; echoes within two seconds are ignored, and a muted player is
-left muted. On attach the LMS volume is pushed to Soloist, so selecting a
-speaker in the Spotify app never makes it louder.
+left muted. When a new Spotify session attaches a speaker (the player was not
+attached before), the configured start volume (`soloistStartVolume`, default
+30, `0` keeps the speaker volume) is applied to the LMS player and sent to
+Soloist; for four seconds a different volume reported by Soloist is answered
+with the start volume. Re-attaching an existing session pushes the current LMS
+volume to Soloist instead, so selecting a speaker never makes it louder.
 
 ### Runtime layout and recovery
 

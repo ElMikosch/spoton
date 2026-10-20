@@ -3757,3 +3757,42 @@ PLUGIN_SPOTON_SOLOIST_SOURCE_SYSTEM
 	NO	fra systemet
 	PL	z systemu
 	SV	från systemet
+
+PLUGIN_SPOTON_SOLOIST_START_VOLUME
+	CS	Hlasitost při spuštění
+	DA	Lydstyrke ved start
+	DE	Lautstärke beim Start
+	EN	Volume at start
+	ES	Volumen al iniciar
+	FR	Volume au démarrage
+	IT	Volume all'avvio
+	NL	Volume bij start
+	NO	Volum ved start
+	PL	Głośność przy uruchomieniu
+	SV	Volym vid start
+
+PLUGIN_SPOTON_SOLOIST_START_VOLUME_KEEP
+	CS	Zachovat hlasitost reproduktoru
+	DA	Behold højttalerens lydstyrke
+	DE	Lautstärke des Lautsprechers beibehalten
+	EN	Keep the speaker volume
+	ES	Mantener el volumen del altavoz
+	FR	Conserver le volume de l'enceinte
+	IT	Mantieni il volume dell'altoparlante
+	NL	Volume van de luidspreker behouden
+	NO	Behold høyttalerens volum
+	PL	Zachowaj głośność głośnika
+	SV	Behåll högtalarens volym
+
+PLUGIN_SPOTON_SOLOIST_START_VOLUME_DESC
+	CS	Když Spotify začne hrát na reproduktoru (také po přepnutí zpět z jiného zařízení), nastaví se reproduktor i posuvník ve Spotify na tuto hlasitost. Po pozastavení zůstane hlasitost zachována.
+	DA	Når Spotify begynder at spille på en højttaler (også efter at være skiftet tilbage fra en anden enhed), sættes højttaleren og skyderen i Spotify til denne lydstyrke. Efter en pause bevares lydstyrken.
+	DE	Wenn Spotify auf einem Lautsprecher zu spielen beginnt (auch nach dem Zurückwechseln von einem anderen Gerät), werden Lautsprecher und Spotify-Regler auf diese Lautstärke gesetzt. Nach einer Pause bleibt die Lautstärke erhalten.
+	EN	When Spotify starts playing on a speaker (also after switching back from another device), the speaker and the Spotify slider are set to this volume. After a pause the volume is kept.
+	ES	Cuando Spotify empieza a reproducir en un altavoz (también al volver desde otro dispositivo), el altavoz y el control de Spotify se ajustan a este volumen. Tras una pausa se mantiene el volumen.
+	FR	Lorsque Spotify commence à jouer sur une enceinte (également après être revenu d'un autre appareil), l'enceinte et le curseur Spotify sont réglés sur ce volume. Après une pause, le volume est conservé.
+	IT	Quando Spotify inizia a riprodurre su un altoparlante (anche dopo essere tornati da un altro dispositivo), l'altoparlante e il cursore di Spotify vengono impostati su questo volume. Dopo una pausa il volume viene mantenuto.
+	NL	Wanneer Spotify op een luidspreker begint te spelen (ook na terugschakelen vanaf een ander apparaat), worden de luidspreker en de Spotify-schuifregelaar op dit volume gezet. Na een pauze blijft het volume behouden.
+	NO	Når Spotify begynner å spille på en høyttaler (også etter å ha byttet tilbake fra en annen enhet), settes høyttaleren og Spotify-glidebryteren til dette volumet. Etter en pause beholdes volumet.
+	PL	Gdy Spotify zaczyna odtwarzać na głośniku (również po powrocie z innego urządzenia), głośnik i suwak w Spotify są ustawiane na tę głośność. Po pauzie głośność zostaje zachowana.
+	SV	När Spotify börjar spela på en högtalare (även efter att ha bytt tillbaka från en annan enhet) sätts högtalaren och Spotify-reglaget till den här volymen. Efter en paus behålls volymen.

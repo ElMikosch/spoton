@@ -332,6 +332,12 @@ sub handler {
         $soloistKey = undef;
         $paramRef->{soloistKeyError} = $soloistError unless $soloistOk;
 
+        if (defined $paramRef->{pref_soloistStartVolume}) {
+            my $startVolume = $paramRef->{pref_soloistStartVolume};
+            $startVolume = 0 unless $startVolume =~ /\A\d+\z/ && $startVolume <= 100;
+            $prefs->set('soloistStartVolume', 0 + $startVolume);
+        }
+
         my $autoUpdate = $paramRef->{pref_soloistAutoUpdate} ? 1 : 0;
         my $wasAutoUpdate = $prefs->get('soloistAutoUpdate') ? 1 : 0;
         $prefs->set('soloistAutoUpdate', $autoUpdate);
@@ -448,6 +454,8 @@ sub handler {
     # host programs, build version/expiry and one entry per Spotify device.
     require Plugins::SpotOn::Soloist::Manager;
     $paramRef->{soloist} = eval { Plugins::SpotOn::Soloist::Manager->setupStatus() } || {};
+    my $startVolume = $prefs->get('soloistStartVolume');
+    $paramRef->{soloistStartVolume} = defined $startVolume ? $startVolume : 30;
     $log->warn("Settings: Soloist setup status failed: $@") if $@;
 
     my $logTotal = 0;

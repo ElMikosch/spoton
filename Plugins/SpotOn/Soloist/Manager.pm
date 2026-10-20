@@ -35,6 +35,10 @@ use constant ECHO_WINDOW           => 2;
 # A freshly requested LMS stream needs a moment before playingSong reflects it.
 use constant REATTACH_GRACE        => 5;
 
+# After a start volume was applied, Spotify may still send the volume it
+# remembered for the device; hold the start volume for this long.
+use constant START_VOLUME_HOLD     => 4;
+
 # PulseAudio's Unix socket path must fit sockaddr_un.sun_path (108 bytes);
 # Runtime rejects anything above this conservative limit.
 use constant MAX_SOCKET_PATH       => 100;
@@ -62,6 +66,7 @@ my %attach_block;
 my %version_cache;
 my %instance_binary;
 my %volume_echo;
+my %volume_hold;
 my $installer;
 
 sub init {
@@ -163,6 +168,7 @@ sub stop {
     %attach_block = ();
     %instance_binary = ();
     %volume_echo = ();
+    %volume_hold = ();
     return 1;
 }
 
@@ -892,6 +898,47 @@ sub _stream_held {
     return eval { $client->isPaused() } ? 1 : 0;
 }
 
+sub _start_volume {
+    my $value = $prefs->get('soloistStartVolume');
+    return undef unless defined $value && $value =~ /\A\d+\z/;
+    return $value >= 1 && $value <= 100 ? 0 + $value : undef;
+}
+
+# Set the LMS player and the Spotify slider to the configured start volume.
+# Returns false when no start volume applies (disabled or muted player).
+sub _set_start_volume {
+    my ($instance) = @_;
+    my $volume = _start_volume();
+    return 0 unless defined $volume;
+    my $client = _get_client($instance->player_id()) or return 0;
+    my $current = eval { $client->volume() };
+    return 0 if defined $current && $current < 0;
+
+    $volume_hold{ $instance->client_id() } = {
+        value => $volume,
+        until => Time::HiRes::time() + START_VOLUME_HOLD,
+    };
+    _apply_volume($instance, $volume);
+    $instance->send_action('volume', volume => $volume);
+    return 1;
+}
+
+# While a start volume is held, a different volume reported by Soloist is the
+# volume Spotify remembered for the device: answer with the start volume
+# instead of applying it to the speaker.
+sub _enforce_start_volume {
+    my ($instance, $volume) = @_;
+    my $hold = $volume_hold{ $instance->client_id() } or return 0;
+    if ($hold->{until} < Time::HiRes::time()) {
+        delete $volume_hold{ $instance->client_id() };
+        return 0;
+    }
+    return 0 unless defined $volume && $volume =~ /\A\d+(?:\.\d+)?\z/;
+    return 1 if int($volume + 0.5) == $hold->{value};
+    $instance->send_action('volume', volume => $hold->{value});
+    return 1;
+}
+
 sub _soloist_status {
     my ($instance) = @_;
     my $snapshot = $instance->session_snapshot() || {};
@@ -928,7 +975,8 @@ sub _on_instance_update {
 
     if ($kind eq 'volume' || ($kind eq 'state' && defined $playback->{volume})) {
         $instance->compensate_volume();
-        _apply_volume($instance, $playback->{volume});
+        _apply_volume($instance, $playback->{volume})
+            unless _enforce_start_volume($instance, $playback->{volume});
     }
 
     if (($kind eq 'state' || $kind eq 'device' || $kind eq 'auth')
@@ -958,13 +1006,19 @@ sub _on_instance_update {
         && _needs_attach($instance)) {
         my $client = _get_client($instance->client_id());
         if ($client) {
+            my $fresh = !$instance->player_id();
             my $meta = _metadata_from_snapshot($instance, $snapshot);
             $instance->attach_player(
                 _canonical_client($client),
                 format => DEFAULT_STREAM_FORMAT,
                 title  => $meta ? _display_title($meta) : $instance->device_name(),
             );
-            _push_lms_volume($instance) if $instance->player_id();
+            if ($instance->player_id()) {
+                # A new Spotify session on this speaker starts at the
+                # configured start volume; resuming keeps the current one.
+                _push_lms_volume($instance)
+                    unless $fresh && _set_start_volume($instance);
+            }
         }
     }
 

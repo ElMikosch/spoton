@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.9] - 2026-10-20
+
+### Added
+- **Start volume for Spotify sessions** — SpotOn Settings → Spotify Soloist → "Volume at start" (default 30%, 5% steps, or "Keep the speaker volume"). When Spotify starts playing on a speaker — first play, switching back from another device, or after other LMS content — the speaker and the Spotify slider are set to that volume, so playback is neither inaudible nor at full volume. For four seconds after the start, a different volume reported by Spotify (the volume it remembered for the device) is answered with the start volume instead of being applied to the speaker. Resuming the same session keeps the current volume, and a muted speaker stays muted.
+
+
 ## [3.6.8] - 2026-10-20
 
 ### Fixed

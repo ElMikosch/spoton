@@ -693,6 +693,61 @@ my $token_index = 0;
         $kitchen->{volume} = 50;
     }
 
+    # ---- Start volume for a new Spotify session on a speaker. ----
+    {
+        $Slim::Utils::Prefs::values{'plugin.spoton'}{soloistStartVolume} = 30;
+        $kitchen->{volume} = 100;
+        $runtime->detach_player(silent => 1);
+        $session->{actions} = [];
+        $clock += 10;
+        $session->emit({ kind => 'playback', event_type => 'playback_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 100 } });
+        ok($runtime->player_id, 'new Spotify session attaches the player');
+        is($kitchen->{volume}, 30, 'a new session starts the speaker at the start volume');
+        is_deeply($session->{actions}[-1], ['volume', { volume => 30 }], 'the Spotify slider moves to the start volume');
+
+        $session->{actions} = [];
+        $session->emit({ kind => 'volume', event_type => 'volume_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 100 } });
+        is($kitchen->{volume}, 30, 'a remembered Spotify volume right after start does not blast the speaker');
+        is_deeply($session->{actions}, [['volume', { volume => 30 }]], 'the start volume is re-asserted to Spotify');
+
+        $clock += 10;
+        $session->emit({ kind => 'volume', event_type => 'volume_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 45 } });
+        is($kitchen->{volume}, 45, 'later Spotify volume changes apply normally');
+
+        # Resuming the same session keeps the chosen volume.
+        $kitchen->{playing} = 0;
+        $kitchen->{paused} = 0;
+        $clock += 10;
+        $session->emit({ kind => 'playback', event_type => 'playback_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 45 } });
+        ok($kitchen->isPlaying, 'stopped player is re-attached');
+        is($kitchen->{volume}, 45, 're-attaching an existing session keeps the volume');
+
+        # "Keep the speaker volume" restores the previous behaviour.
+        $Slim::Utils::Prefs::values{'plugin.spoton'}{soloistStartVolume} = 0;
+        $kitchen->{volume} = 70;
+        $runtime->detach_player(silent => 1);
+        $session->{actions} = [];
+        $clock += 10;
+        $session->emit({ kind => 'playback', event_type => 'playback_changed' },
+            { %$playing, playback => { %{ $playing->{playback} }, volume => 45 } });
+        is($kitchen->{volume}, 70, 'disabled start volume keeps the speaker volume');
+        is_deeply($session->{actions}[-1], ['volume', { volume => 70 }], 'and moves the Spotify slider to it');
+
+        # A muted speaker stays muted.
+        $Slim::Utils::Prefs::values{'plugin.spoton'}{soloistStartVolume} = 30;
+        $kitchen->{volume} = -60;
+        $runtime->detach_player(silent => 1);
+        $clock += 10;
+        $session->emit({ kind => 'playback', event_type => 'playback_changed' }, $playing);
+        is($kitchen->{volume}, -60, 'start volume never unmutes a muted speaker');
+        $kitchen->{volume} = 50;
+        delete $Slim::Utils::Prefs::values{'plugin.spoton'}{soloistStartVolume};
+    }
+
     ok(Plugins::SpotOn::Soloist::Manager->stop(), 'manager stops after control checks');
 
     # ---- API key management from the settings page. ----

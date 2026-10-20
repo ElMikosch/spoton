@@ -339,6 +339,17 @@
 		</div>
 		[% END %]
 
+		<div style="margin-bottom:12px">
+			<label for="pref_soloistStartVolume">[% 'PLUGIN_SPOTON_SOLOIST_START_VOLUME' | string %]</label><br/>
+			<select class="stdedit" name="pref_soloistStartVolume" id="pref_soloistStartVolume">
+				<option value="0" [% IF soloistStartVolume == 0 %]selected[% END %]>[% 'PLUGIN_SPOTON_SOLOIST_START_VOLUME_KEEP' | string %]</option>
+				[% FOREACH level IN [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100] %]
+				<option value="[% level %]" [% IF soloistStartVolume == level %]selected[% END %]>[% level %]%</option>
+				[% END %]
+			</select>
+			<div style="font-size:0.85em; opacity:0.75; margin-top:4px">[% 'PLUGIN_SPOTON_SOLOIST_START_VOLUME_DESC' | string %]</div>
+		</div>
+
 		<label for="pref_soloistApiKey">[% 'PLUGIN_SPOTON_SOLOIST_API_KEY' | string %]</label><br/>
 		<input type="password" class="stdedit" name="pref_soloistApiKey" id="pref_soloistApiKey"
 		       value="" autocomplete="new-password" spellcheck="false"

@@ -121,6 +121,7 @@ sub initPlugin {
         soloistEnabled       => 0,     # official Connect backend; Browse remains on the Unified daemon
         soloistConfigured    => 0,     # one-time migration marker for existing API-key installs
         soloistAutoUpdate    => 0,     # daily check for a newer SpotOn-managed Soloist build
+        soloistStartVolume   => 30,    # LMS/Spotify volume when a Spotify session starts on a speaker; 0 keeps the speaker volume
         recentSearches => [],
         credProvenanceMigrated => 0,   # GH #147 plan 65-03: one-shot legacy-credential provenance migration marker
     });
